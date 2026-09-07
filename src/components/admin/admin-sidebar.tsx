@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 // admin. Events, Trails, Staff are a later build step (build-order.md #4),
 // not listed here yet.
 const NAV_ITEMS = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null as const },
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null },
   { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const },
   { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const },
 ];

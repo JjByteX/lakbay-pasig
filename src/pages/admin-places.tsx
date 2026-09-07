@@ -47,7 +47,8 @@ export default function AdminPlacesPage() {
       .from("places")
       .select("id, name, category, verification_status, updated_at")
       .then(({ data }) => {
-        const sorted = [...(data ?? [])].sort((a, b) => {
+        const rows = (data ?? []) as PlaceRow[];
+        const sorted = [...rows].sort((a, b) => {
           const priorityDiff = STATUS_PRIORITY[a.verification_status] - STATUS_PRIORITY[b.verification_status];
           if (priorityDiff !== 0) return priorityDiff;
           return a.updated_at.localeCompare(b.updated_at);
