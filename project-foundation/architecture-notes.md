@@ -78,15 +78,38 @@ List the main modules or features and what each one is responsible for.
 **Key Dependencies Between Files:**
 Which files depend on which? What breaks if X changes?
 (This is the map the AI uses before touching anything)
-- [file/module] → depends on → [file/module]
-- [file/module] → depends on → [file/module]
+- src/lib/auth-context.tsx → depends on → src/lib/auth-types.ts, supabase/migrations/0001, 0002 (profiles columns)
+- Any future admin panel Places section → depends on → places, place_photos, place_reviews (0003)
+- Any future admin panel Businesses section → depends on → businesses, business_items, business_reviews, business_flags (0004)
+- Any future admin panel Trails section → depends on → routes, route_stops, discovery_content (0005)
+- Any future admin panel Events section → depends on → events (0006)
+- Public Trails tab, Saved tab → depends on → trail_credentials, user_credentials, completed_routes, saved_places, saved_routes (0007)
+- route_stops.stop_id and discovery_content.related_location_id → depends on → places.id or businesses.id, no foreign key enforces this, app layer must guarantee stop_type/related_location_type matches a real row
+
+**Database Schema (Build 2, Core Data Models):**
+
+Migrations 0001 to 0007, in `supabase/migrations/`. All tables have row level security enabled, no table grants unauthenticated write access.
+
+| Migration | Tables | Notes |
+|---|---|---|
+| 0001 | profiles | Base auth extension. role (resident, staff), staff_role (staff, admin) |
+| 0002 | profiles (extended) | Adds End User fields and staff fields (position, system_permission) |
+| 0003 | places, place_photos, place_reviews | Verification status pending/verified/rejected, review log required per admin-panel-spec.md |
+| 0004 | businesses, business_items, business_reviews, business_flags | business_items replaces the single Price Range field. business_flags covers both abuse flags and user reports |
+| 0005 | routes, route_stops, discovery_content | route_stops and discovery_content use a type-plus-id pattern to reference either a place or a business, no foreign key on that column, app layer must enforce it points at a real row |
+| 0006 | events | published (draft/live) kept separate from lifecycle_status (upcoming/ongoing/past) |
+| 0007 | trail_credentials, user_credentials, completed_routes, saved_places, saved_routes | user_credentials and completed_routes are cohort-stat sources only, never queried as a per-user leaderboard, per competitive-positioning.md |
+
+RLS pattern used throughout: a `_select_public` policy with no `to` clause (defaults to public, covers Guest with no sign-in) gated on a status column (verified, published, active), a `_select_staff` and `_write_staff` pair checking `staff_role = 'admin' or '<permission>' = any(system_permission)`, and for owner-writable tables (businesses, saved_*, user_credentials, completed_routes) a `using (auth.uid() = <owner column>)` policy. Column-level protection (e.g. a vendor must not send verification_status in their own update) is not enforced by RLS, same limitation documented in migration 0001, the app layer must not send staff-only fields in a self-update request.
+
+Fields present in docs/data-model.md but intentionally left out of the schema, since they are derivable from a join table instead of stored directly: places.Trails Included In, businesses.Trails Included In, routes.Places Included and Place Order (both live in route_stops), trail_credentials.Users Earned. Recomputing these from route_stops and user_credentials avoids duplicated data going stale.
 
 **What Must Never Be Touched Without Human Approval:**
-(e.g. auth logic, payment flows, database schema, config files)
+Database schema (supabase/migrations/*.sql), auth logic (src/lib/auth-context.tsx, auth-types.ts), RLS policies.
 
 **Known Fragile Areas:**
-Areas of the codebase that have caused bugs before or require
-extra care when modified.
+- route_stops.stop_id and discovery_content.related_location_id have no foreign key, since they point at either places or businesses. A bad stop_type value or an id that doesn't exist in the matching table will not be caught by the database.
+- RLS update policies guard rows, not columns. Any form that lets a vendor edit their own business, or a user edit their own profile, must not submit staff-only or role fields, the database will not block it if the row is otherwise theirs.
 
 ---
 ## STRUCTURE CHANGE LOG
@@ -95,6 +118,9 @@ AI: when the structure changes during the build, log it here.
 
 | Date | Change | Reason |
 |------|--------|--------|
-|      |        |        |
+| Build 2 | Added profiles.position, profiles.system_permission | Needed before any staff-gated table could check permissions |
+| Build 2 | Added routes.status (draft/published) | Not in data-model.md, needed since admin-panel-spec.md implies a build-then-publish flow with no second reviewer |
+| Build 2 | Added events.published, separate from lifecycle_status | admin-panel-spec.md names create/edit/publish as distinct actions, implying a draft state distinct from Upcoming/Ongoing/Past |
+| Build 2 | Added discovery_content.needs_place_review | Flags the admin-panel-spec.md exception where new historical claims in Discovery content must route through the Places review queue |
 
 ---
