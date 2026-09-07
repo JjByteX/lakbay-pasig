@@ -91,6 +91,7 @@ create policy "businesses_select_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );
@@ -110,6 +111,7 @@ create policy "businesses_update_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );
@@ -158,6 +160,7 @@ create policy "business_items_write_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   )
@@ -165,6 +168,7 @@ create policy "business_items_write_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );
@@ -178,6 +182,7 @@ create policy "business_reviews_select_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );
@@ -188,6 +193,7 @@ create policy "business_reviews_insert_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );
@@ -207,6 +213,7 @@ create policy "business_flags_select_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );
@@ -217,6 +224,7 @@ create policy "business_flags_update_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'review_businesses' = any(p.system_permission))
     )
   );

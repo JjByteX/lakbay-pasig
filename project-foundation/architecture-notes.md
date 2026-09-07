@@ -80,7 +80,7 @@ Which files depend on which? What breaks if X changes?
 (This is the map the AI uses before touching anything)
 - src/lib/auth-context.tsx → depends on → src/lib/auth-types.ts, supabase/migrations/0001, 0002 (profiles columns)
 - Any future admin panel Places section → depends on → places, place_photos, place_reviews (0003)
-- Any future admin panel Businesses section → depends on → businesses, business_items, business_reviews, business_flags (0004)
+- Any future admin panel Businesses section → depends on → businesses, business_items, business_reviews, business_flags (0004), business_photos and the profiles_select_staff_business_submitters policy (0008)
 - Any future admin panel Trails section → depends on → routes, route_stops, discovery_content (0005)
 - Any future admin panel Events section → depends on → events (0006)
 - Public Trails tab, Saved tab → depends on → trail_credentials, user_credentials, completed_routes, saved_places, saved_routes (0007)
@@ -99,6 +99,7 @@ Migrations 0001 to 0007, in `supabase/migrations/`. All tables have row level se
 | 0005 | routes, route_stops, discovery_content | route_stops and discovery_content use a type-plus-id pattern to reference either a place or a business, no foreign key on that column, app layer must enforce it points at a real row |
 | 0006 | events | published (draft/live) kept separate from lifecycle_status (upcoming/ongoing/past) |
 | 0007 | trail_credentials, user_credentials, completed_routes, saved_places, saved_routes | user_credentials and completed_routes are cohort-stat sources only, never queried as a per-user leaderboard, per competitive-positioning.md |
+| 0008 | business_photos (new table); profiles (new select policy only) | Build 3, phase 6.1 follow-up. Adds the photo storage 0004 left out for Businesses, and a narrow profiles read policy scoped to accounts that submitted a business, so a review_businesses reviewer can read created_at. Both back the "no photos" and "new accounts" signals in src/lib/business-queue-priority.ts |
 
 RLS pattern used throughout: a `_select_public` policy with no `to` clause (defaults to public, covers Guest with no sign-in) gated on a status column (verified, published, active), a `_select_staff` and `_write_staff` pair checking `staff_role = 'admin' or '<permission>' = any(system_permission)`, and for owner-writable tables (businesses, saved_*, user_credentials, completed_routes) a `using (auth.uid() = <owner column>)` policy. Column-level protection (e.g. a vendor must not send verification_status in their own update) is not enforced by RLS, same limitation documented in migration 0001, the app layer must not send staff-only fields in a self-update request.
 
@@ -122,5 +123,7 @@ AI: when the structure changes during the build, log it here.
 | Build 2 | Added routes.status (draft/published) | Not in data-model.md, needed since admin-panel-spec.md implies a build-then-publish flow with no second reviewer |
 | Build 2 | Added events.published, separate from lifecycle_status | admin-panel-spec.md names create/edit/publish as distinct actions, implying a draft state distinct from Upcoming/Ongoing/Past |
 | Build 2 | Added discovery_content.needs_place_review | Flags the admin-panel-spec.md exception where new historical claims in Discovery content must route through the Places review queue |
+| Build 3, phase 6.1 | Added business_photos table (0008) | data-model.md's "Pictures" field for Local Business was never given a table in 0004, unlike place_photos in 0003. Needed to evaluate the "no photos" review queue signal from vendor-mode-spec.md |
+| Build 3, phase 6.1 | Added profiles_select_staff_business_submitters policy (0008) | profiles_select_admin (0001) only covered Admin. A Staff reviewer with only review_businesses had no way to read a vendor's created_at, needed for the "new account" review queue signal from vendor-mode-spec.md. Scoped to profiles that submitted a business, not profiles generally |
 
 ---

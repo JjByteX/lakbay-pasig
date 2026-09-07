@@ -45,3 +45,4 @@ export default function AdminPage() {
     </SidebarProvider>
   );
 }
+

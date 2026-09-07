@@ -5,11 +5,6 @@ import HomePage from "@/pages/home";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
 import AdminPage from "@/pages/admin";
-import AdminDashboardPage from "@/pages/admin-dashboard";
-import AdminPlacesPage from "@/pages/admin-places";
-import AdminPlaceDetailPage from "@/pages/admin-place-detail";
-import AdminBusinessesPage from "@/pages/admin-businesses";
-import AdminBusinessDetailPage from "@/pages/admin-business-detail";
 
 export default function App() {
   return (
@@ -29,28 +24,12 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<AdminDashboardPage />} />
+          <Route index element={null} />
           <Route
             path="places"
             element={
               <ProtectedRoute requiredPermission="manage_places">
-                <AdminPlacesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="places/new"
-            element={
-              <ProtectedRoute requiredPermission="manage_places">
-                <AdminPlaceDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="places/:id"
-            element={
-              <ProtectedRoute requiredPermission="manage_places">
-                <AdminPlaceDetailPage />
+                <></>
               </ProtectedRoute>
             }
           />
@@ -58,15 +37,7 @@ export default function App() {
             path="businesses"
             element={
               <ProtectedRoute requiredPermission="review_businesses">
-                <AdminBusinessesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="businesses/:id"
-            element={
-              <ProtectedRoute requiredPermission="review_businesses">
-                <AdminBusinessDetailPage />
+                <></>
               </ProtectedRoute>
             }
           />

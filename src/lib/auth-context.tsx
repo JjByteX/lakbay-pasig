@@ -12,6 +12,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// active_status only has defined meaning for staff accounts per
+// admin-panel-spec.md's Staff section (Admin sets Active/Inactive on other
+// CATO Staff). A resident's active_status is not a concept used anywhere,
+// so this intentionally does not apply to profile?.staff_role === null.
+function isInactiveStaff(profile: Profile | null): boolean {
+  return !!profile?.staff_role && profile.active_status === "inactive";
+}
+
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
@@ -32,18 +40,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
       if (data.session) {
-        setProfile(await fetchProfile(data.session.user.id));
+        const loadedProfile = await fetchProfile(data.session.user.id);
+        if (isInactiveStaff(loadedProfile)) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        setSession(data.session);
+        setProfile(loadedProfile);
+      } else {
+        setSession(data.session);
       }
       setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession);
       if (newSession) {
-        setProfile(await fetchProfile(newSession.user.id));
+        const loadedProfile = await fetchProfile(newSession.user.id);
+        if (isInactiveStaff(loadedProfile)) {
+          await supabase.auth.signOut();
+          setSession(null);
+          setProfile(null);
+          return;
+        }
+        setSession(newSession);
+        setProfile(loadedProfile);
       } else {
+        setSession(newSession);
         setProfile(null);
       }
     });

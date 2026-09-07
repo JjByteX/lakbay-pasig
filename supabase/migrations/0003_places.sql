@@ -64,6 +64,7 @@ create policy "places_select_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
@@ -74,6 +75,7 @@ create policy "places_insert_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
@@ -84,6 +86,7 @@ create policy "places_update_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
@@ -106,6 +109,7 @@ create policy "place_photos_select_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
@@ -116,6 +120,7 @@ create policy "place_photos_write_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   )
@@ -123,6 +128,7 @@ create policy "place_photos_write_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
@@ -137,6 +143,7 @@ create policy "place_reviews_select_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
@@ -147,6 +154,7 @@ create policy "place_reviews_insert_staff"
     exists (
       select 1 from public.profiles p
       where p.id = auth.uid()
+        and p.active_status = 'active'
         and (p.staff_role = 'admin' or 'manage_places' = any(p.system_permission))
     )
   );
