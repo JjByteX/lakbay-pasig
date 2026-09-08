@@ -54,6 +54,12 @@ jobs:
   migrations-check:
     name: Validate migrations
     runs-on: ubuntu-latest
+    env:
+      # The CLI checks for an access token on startup even for commands that
+      # never touch a real project, per supabase/cli#1872. This token is
+      # never used to link or push here, --linked=false below keeps this
+      # job entirely local to the throwaway Postgres in Docker.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
