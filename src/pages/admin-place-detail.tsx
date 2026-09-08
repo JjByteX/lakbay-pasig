@@ -100,6 +100,18 @@ interface PlaceReviewEntry {
   created_at: string;
 }
 
+// Raw shape returned by the place_reviews select below, before mapping into
+// PlaceReviewEntry. profiles comes back as a joined object (or null if the
+// staff profile was since deleted) rather than a flat staff_name.
+interface PlaceReviewRow {
+  id: string;
+  staff_id: string;
+  action: "verify" | "reject";
+  notes: string | null;
+  created_at: string;
+  profiles: { display_name: string | null } | null;
+}
+
 interface PlaceRecord extends PlaceFormState {
   id: string;
   verification_status: "pending" | "verified" | "rejected";
@@ -193,7 +205,7 @@ export default function AdminPlaceDetailPage() {
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         setReviews(
-          (data ?? []).map((r: any) => ({
+          (data ?? []).map((r: PlaceReviewRow) => ({
             id: r.id,
             staff_id: r.staff_id,
             staff_name: r.profiles?.display_name ?? null,

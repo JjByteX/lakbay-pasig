@@ -18,6 +18,18 @@ const ACTION_LABEL: Record<string, string> = {
   feature: "featured",
 };
 
+// Raw shape returned by both the place_reviews and business_reviews queries
+// below (same selected columns), before mapping into ActivityEntry.
+// profiles comes back as a joined object (or null if the staff profile was
+// since deleted) rather than a flat staff_name.
+interface ReviewActivityRow {
+  id: string;
+  action: string;
+  notes: string | null;
+  created_at: string;
+  profiles: { display_name: string | null } | null;
+}
+
 export default function AdminDashboardPage() {
   const { profile } = useAuth();
   const isAdmin = profile?.staff_role === "admin";
@@ -64,7 +76,7 @@ export default function AdminDashboardPage() {
         : Promise.resolve({ data: [] }),
     ]).then(([placeRes, businessRes]) => {
       const combined: ActivityEntry[] = [
-        ...(placeRes.data ?? []).map((r: any) => ({
+        ...(placeRes.data ?? []).map((r: ReviewActivityRow) => ({
           id: r.id,
           section: "Places" as const,
           action: r.action,
@@ -72,7 +84,7 @@ export default function AdminDashboardPage() {
           created_at: r.created_at,
           staff_name: r.profiles?.display_name ?? null,
         })),
-        ...(businessRes.data ?? []).map((r: any) => ({
+        ...(businessRes.data ?? []).map((r: ReviewActivityRow) => ({
           id: r.id,
           section: "Businesses" as const,
           action: r.action,

@@ -37,9 +37,19 @@ const STATUS_VARIANT = {
   unverified: "destructive",
 } as const;
 
+// PrioritizedBusiness (from business-queue-priority.ts) only carries the
+// fields the priority function needs. The table also displays name,
+// business_type, and featured_status, which are joined back in from the
+// original row after prioritizing, so this page's list state needs both.
+interface BusinessRow extends PrioritizedBusiness {
+  name: string;
+  business_type: string;
+  featured_status: "listed" | "featured";
+}
+
 export default function AdminBusinessesPage() {
   const navigate = useNavigate();
-  const [businesses, setBusinesses] = useState<PrioritizedBusiness[] | null>(null);
+  const [businesses, setBusinesses] = useState<BusinessRow[] | null>(null);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -72,7 +82,10 @@ export default function AdminBusinessesPage() {
 
       const businessIdsWithPhotos = new Set((photosRes.data ?? []).map((p) => p.business_id));
       const createdAtByProfile = new Map(
-        (profilesRes.data ?? []).map((p: any) => [p.id, p.created_at as string | null])
+        (profilesRes.data ?? []).map((p: { id: string; created_at: string | null }) => [
+          p.id,
+          p.created_at,
+        ])
       );
       const flaggedBusinessIds = new Set((flagsRes.data ?? []).map((f) => f.business_id));
 
@@ -86,9 +99,14 @@ export default function AdminBusinessesPage() {
         hasPhotos: businessIdsWithPhotos.has(row.id),
       }));
 
-      const prioritized = computeBusinessQueuePriority(candidates).map((p) => {
+      const prioritized: BusinessRow[] = computeBusinessQueuePriority(candidates).map((p) => {
         const original = rows.find((r) => r.id === p.id)!;
-        return { ...p, name: original.name, business_type: original.business_type, featured_status: original.featured_status } as any;
+        return {
+          ...p,
+          name: original.name,
+          business_type: original.business_type,
+          featured_status: original.featured_status,
+        };
       });
 
       if (!cancelled) {
@@ -126,7 +144,7 @@ export default function AdminBusinessesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {businesses.map((business: any) => (
+            {businesses.map((business) => (
               <TableRow key={business.id}>
                 <TableCell className="font-semibold text-foreground">{business.name}</TableCell>
                 <TableCell>{business.business_type}</TableCell>

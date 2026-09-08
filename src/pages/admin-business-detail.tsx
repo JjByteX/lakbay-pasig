@@ -51,6 +51,18 @@ interface BusinessReviewEntry {
   created_at: string;
 }
 
+// Raw shape returned by the business_reviews select below, before mapping
+// into BusinessReviewEntry. profiles comes back as a joined object (or null
+// if the staff profile was since deleted) rather than a flat staff_name.
+interface BusinessReviewRow {
+  id: string;
+  staff_id: string;
+  action: "verify" | "reject" | "feature";
+  notes: string | null;
+  created_at: string;
+  profiles: { display_name: string | null } | null;
+}
+
 // 6.4: form fields matching the businesses table, per build-3-phases-plan.md
 // 6.4 — name, business type, category, description, address, contact, hours,
 // business story, unique specialty, accessibility info, social links,
@@ -215,7 +227,7 @@ export default function AdminBusinessDetailPage() {
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         setReviews(
-          (data ?? []).map((r: any) => ({
+          (data ?? []).map((r: BusinessReviewRow) => ({
             id: r.id,
             staff_id: r.staff_id,
             staff_name: r.profiles?.display_name ?? null,
