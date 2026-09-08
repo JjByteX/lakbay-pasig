@@ -1,6 +1,6 @@
-# Used by `supabase start` / `supabase db lint` in CI (see .github/workflows/ci.yml)
-# to spin up a throwaway local Postgres and validate migrations against it.
-# This does not point at or affect the real Supabase project in any way.
+# Used by `supabase start` for local dev, and by `supabase db lint` in CI
+# (see .github/workflows/ci.yml). Never points at or affects the real
+# Supabase project. See SUPABASE_SETUP.md for how to use this locally.
 project_id = "lakbay-pasig"
 
 [api]
@@ -10,13 +10,15 @@ port = 54321
 port = 54322
 
 [studio]
-enabled = false
+enabled = true
+port = 54323
 
 [inbucket]
-enabled = false
+enabled = true
+port = 54324
 
 [storage]
-enabled = false
+enabled = true
 
 [auth]
 enabled = true

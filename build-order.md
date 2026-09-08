@@ -8,7 +8,7 @@ What to build, in order. Each step assumes the ones before it exist.
 - [x] 2. **Core data models**
       Local Historical Place, Local Business, Route/Trail, Discovery Content, Event/Announcement, CATO Staff, End User. Schema first, no UI yet.
 
-- [ ] 3. **CATO Admin Panel: Dashboard, Places, Businesses**
+- [x] 3. **CATO Admin Panel: Dashboard, Places, Businesses**
       Sidebar shell with role based section visibility. Places and Businesses review queues, separate from each other. Verify, reject with notes, set Featured status.
 
 - [ ] 4. **CATO Admin Panel: Events & Announcements, Trails, Staff**
