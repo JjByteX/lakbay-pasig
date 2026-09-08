@@ -52,15 +52,16 @@ interface BusinessReviewEntry {
 }
 
 // Raw shape returned by the business_reviews select below, before mapping
-// into BusinessReviewEntry. profiles comes back as a joined object (or null
-// if the staff profile was since deleted) rather than a flat staff_name.
+// into BusinessReviewEntry. Supabase types a select(...profiles(display_name))
+// join as an array even for a one-to-one relationship, so profiles comes
+// back as a (possibly empty) array here, not a single nullable object.
 interface BusinessReviewRow {
   id: string;
   staff_id: string;
   action: "verify" | "reject" | "feature";
   notes: string | null;
   created_at: string;
-  profiles: { display_name: string | null } | null;
+  profiles: { display_name: string | null }[];
 }
 
 // 6.4: form fields matching the businesses table, per build-3-phases-plan.md
@@ -230,7 +231,7 @@ export default function AdminBusinessDetailPage() {
           (data ?? []).map((r: BusinessReviewRow) => ({
             id: r.id,
             staff_id: r.staff_id,
-            staff_name: r.profiles?.display_name ?? null,
+            staff_name: r.profiles[0]?.display_name ?? null,
             action: r.action,
             notes: r.notes,
             created_at: r.created_at,

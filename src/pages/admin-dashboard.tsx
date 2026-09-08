@@ -20,14 +20,15 @@ const ACTION_LABEL: Record<string, string> = {
 
 // Raw shape returned by both the place_reviews and business_reviews queries
 // below (same selected columns), before mapping into ActivityEntry.
-// profiles comes back as a joined object (or null if the staff profile was
-// since deleted) rather than a flat staff_name.
+// Supabase types a select(...profiles(display_name)) join as an array even
+// for a one-to-one relationship, so profiles comes back as a (possibly
+// empty) array here, not a single nullable object.
 interface ReviewActivityRow {
   id: string;
   action: string;
   notes: string | null;
   created_at: string;
-  profiles: { display_name: string | null } | null;
+  profiles: { display_name: string | null }[];
 }
 
 export default function AdminDashboardPage() {
@@ -82,7 +83,7 @@ export default function AdminDashboardPage() {
           action: r.action,
           notes: r.notes,
           created_at: r.created_at,
-          staff_name: r.profiles?.display_name ?? null,
+          staff_name: r.profiles[0]?.display_name ?? null,
         })),
         ...(businessRes.data ?? []).map((r: ReviewActivityRow) => ({
           id: r.id,
@@ -90,7 +91,7 @@ export default function AdminDashboardPage() {
           action: r.action,
           notes: r.notes,
           created_at: r.created_at,
-          staff_name: r.profiles?.display_name ?? null,
+          staff_name: r.profiles[0]?.display_name ?? null,
         })),
       ]
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
