@@ -45,17 +45,18 @@ export default function LoginPage() {
       return;
     }
 
+    // staff_role, not role, is what actually gates /admin everywhere else
+    // (see protected-route.tsx). role only distinguishes resident vs staff
+    // account type, staff_role is null/staff/admin. Query directly here
+    // instead of waiting on AuthProvider's own fetch, so navigate has a
+    // value the same tick auth resolves.
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("staff_role")
       .eq("id", data.session.user.id)
       .single();
 
-    if (profile?.role === "staff") {
-      navigate("/admin");
-    } else {
-      navigate("/");
-    }
+    navigate(profile?.staff_role ? "/admin" : "/");
   }
 
   async function handleResend() {
