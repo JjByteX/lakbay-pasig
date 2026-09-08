@@ -13,11 +13,65 @@ Tourism Office backed platform for Pasig heritage sites, businesses, and guided 
 
 React + TypeScript + Vite, shadcn/ui + Tailwind, Supabase (PostgreSQL), Hostinger hosting. Full reasoning in `project-foundation/architecture-notes.md`.
 
-## Local Setup
+## Local Setup (Windows, no experience needed)
 
-Supabase does not need to be online. The CLI runs Postgres, Auth, Storage, and the API in Docker on your machine.
+This runs everything on your own PC. Follow the steps in order.
 
-Needs: Node.js 22, Docker Desktop running.
+**1. Install Git**
+Go to https://git-scm.com/downloads/win, download, run it, click Next until done.
+
+**2. Install Node.js**
+Go to https://nodejs.org, download the LTS version, run it, click Next until done.
+
+**3. Install Docker Desktop**
+Go to https://www.docker.com/products/docker-desktop, download, run it. Accept WSL 2 if asked. Restart your PC after. Open Docker Desktop and wait until it says running. Keep it open the whole time you work on this project.
+
+**4. Get the code**
+Open Start menu, type Git Bash, open it. Paste the `git clone ...` link your team gave you, press Enter. Type `cd lakbay-pasig`, press Enter.
+
+**5. Install and start**
+
+```bash
+npm install
+npm run db:start
+```
+
+First time takes a few minutes. Wait for it to finish and print some URLs and keys, don't close the window.
+
+**6. Set up your .env**
+Copy `.env.example`, rename the copy to `.env`, open it with Notepad. Paste the two values printed in step 5:
+
+```
+VITE_SUPABASE_URL=<API URL from step 5>
+VITE_SUPABASE_ANON_KEY=<anon key from step 5>
+```
+
+Save and close.
+
+**7. Run it**
+
+```bash
+npm run dev
+```
+
+Open the link it prints, usually http://localhost:5173. Press Ctrl+C in Git Bash to stop.
+
+**Next time**
+Open Docker Desktop, wait for running. Open Git Bash, `cd` into the folder. Run `npm run db:start`, then `npm run dev`.
+
+**If it breaks**
+- Won't start, mentions docker: Docker Desktop isn't open. Open it, wait, retry.
+- No data or login broken: check `.env` matches `npm run db:status`.
+- Still broken: run `npm run db:nuke`, then try again.
+- Nothing here helps: send a screenshot to whoever set this up.
+
+This only touches your own PC, never the real site.
+
+---
+
+## Local Setup (reference, for anyone comfortable with a terminal)
+
+Needs: Node.js 22, Docker running.
 
 ```bash
 npm install
