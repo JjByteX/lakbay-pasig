@@ -150,6 +150,35 @@ Deletes the local database entirely and rebuilds it from scratch off the migrati
 
 `supabase start` only touches local Docker containers, it cannot reach the real hosted project. Pushing to the real project only happens in CI on merge to `main`, using credentials nobody's local machine has.
 
+## Demo Data
+
+`supabase/seed.sql` is applied automatically by `npm run db:start` (first run) and `npm run db:reset` on the local Docker stack. It's dev-only — never runs against the hosted project, so it's safe to keep in the repo. No sign-up needed: log in as any account below.
+
+**Password for every account:** `Demo!Password123`
+
+| Role | Login | Notes |
+|---|---|---|
+| Admin | `admin1@lakbay-demo.local` | CATO Officer In Charge |
+| Admin | `admin2@lakbay-demo.local` | Assistant Department Head |
+| Staff | `staff.places@lakbay-demo.local` | Places permission only |
+| Staff | `staff.business@lakbay-demo.local` | Business review permission only |
+| Staff | `staff.events@lakbay-demo.local` | **Inactive** — use to test the forced-signout path |
+| Staff | `staff.new@lakbay-demo.local` | No permissions assigned — tests the empty "no sections" state |
+| Resident | `resident1@lakbay-demo.local` – `resident6@lakbay-demo.local` | Registered users, no business |
+| Vendor | `vendor1@lakbay-demo.local` – `vendor6@lakbay-demo.local` | Residents with a business (vendor mode) — mixed ages and verification states |
+
+Guest needs no login, it's just the signed-out state.
+
+Data also covers places, businesses (with items/photos/flags/review log), routes and trails, events, trail credentials, and personal records (saved places/routes, completed routes, earned credentials) across every status value the app checks for, so admin lists, filters, and badges have something real to render.
+
+**Reseed without a full reset** (keeps containers up, just re-runs the seed file):
+
+```bash
+npx supabase db reset --local
+```
+
+(This is the same thing `npm run db:reset` runs — either works.)
+
 ## Status
 
 Auth and roles, core data models, and the CATO Admin Panel (Dashboard, Places, Businesses) are built. Next up is step 4, Events & Announcements, Trails, and Staff. See `build-order.md` for the full list.
