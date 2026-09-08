@@ -29,6 +29,8 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     .eq("id", userId)
     .single();
 
+  console.log("DEBUG fetchProfile", { userId, data, error });
+
   if (error) return null;
   return data as Profile;
 }
