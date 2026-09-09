@@ -408,15 +408,19 @@ insert into public.place_photos (place_id, photo_url, photo_type, sort_order) va
 -- above, plus extra history rows on a couple of places to show the log
 -- holding more than one entry over time (e.g. a re-review), matching
 -- admin-panel-spec.md: "the full history stays visible for accountability."
-insert into public.place_reviews (place_id, staff_id, action, notes, created_at) values
-  ('6bce5398-b23e-4611-87e8-3747ea370bc4', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '12 days'),
-  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'reject', 'Address did not match Assessor''s Office records, please recheck before resubmitting.', now() - interval '25 days'),
-  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'Address corrected, coordinates now match.', now() - interval '20 days'),
-  ('84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', null, now() - interval '35 days'),
-  ('290fe466-9327-4660-9766-a2c64cdf078d', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '8 days'),
-  ('3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', null, now() - interval '50 days'),
-  ('e551915e-15e5-41ed-9ca1-a71364da7028', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'reject', 'Source reference is a single parish note with no second source. Needs corroboration before this goes live.', now() - interval '15 days'),
-  ('56302e94-c04a-4e3e-8a2c-068d92e19298', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '6 days');
+-- reviewed_type/reviewed_id replaced place_id in migration 0014 (widened to
+-- also cover discovery_content reviews). Every row below reviews a place,
+-- so reviewed_type is 'place' throughout, reviewed_id carries the old
+-- place_id value, same backfill 0014 itself did for pre-existing rows.
+insert into public.place_reviews (reviewed_type, reviewed_id, staff_id, action, notes, created_at) values
+  ('place', '6bce5398-b23e-4611-87e8-3747ea370bc4', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '12 days'),
+  ('place', 'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'reject', 'Address did not match Assessor''s Office records, please recheck before resubmitting.', now() - interval '25 days'),
+  ('place', 'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'Address corrected, coordinates now match.', now() - interval '20 days'),
+  ('place', '84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', null, now() - interval '35 days'),
+  ('place', '290fe466-9327-4660-9766-a2c64cdf078d', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '8 days'),
+  ('place', '3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', null, now() - interval '50 days'),
+  ('place', 'e551915e-15e5-41ed-9ca1-a71364da7028', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'reject', 'Source reference is a single parish note with no second source. Needs corroboration before this goes live.', now() - interval '15 days'),
+  ('place', '56302e94-c04a-4e3e-8a2c-068d92e19298', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '6 days');
 
 commit;
 
