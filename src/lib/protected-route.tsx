@@ -7,17 +7,19 @@ interface ProtectedRouteProps {
   children: ReactNode;
   /** Require profile.staff_role to be set (staff or admin), not just a session. */
   requireStaff?: boolean;
+  /** Require profile.staff_role to be exactly admin. Used for the Staff section, per admin-panel-spec.md, Staff role has no access there. */
+  requireAdmin?: boolean;
   /** Require this permission in system_permission, unless staff_role is admin (admin bypasses every permission check per admin-panel-spec.md). */
   requiredPermission?: SystemPermission;
 }
 
-export function ProtectedRoute({ children, requireStaff, requiredPermission }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requireStaff, requireAdmin, requiredPermission }: ProtectedRouteProps) {
   const { session, profile, loading } = useAuth();
 
   if (loading) return null;
   if (!session) return <Navigate to="/login" replace />;
 
-  if ((requireStaff || requiredPermission) && !profile?.staff_role) {
+  if ((requireStaff || requireAdmin || requiredPermission) && !profile?.staff_role) {
     return <Navigate to="/" replace />;
   }
 
@@ -26,8 +28,12 @@ export function ProtectedRoute({ children, requireStaff, requiredPermission }: P
   // having no staff_role at all. auth-context.tsx also signs an Inactive
   // staff member out on load, so this mainly guards the moment between
   // "was active" and "session refreshes" rather than being the only check.
-  if ((requireStaff || requiredPermission) && profile?.staff_role && profile.active_status === "inactive") {
+  if ((requireStaff || requireAdmin || requiredPermission) && profile?.staff_role && profile.active_status === "inactive") {
     return <Navigate to="/" replace />;
+  }
+
+  if (requireAdmin && profile?.staff_role !== "admin") {
+    return <Navigate to="/admin" replace />;
   }
 
   if (requiredPermission && profile?.staff_role !== "admin" && !profile?.system_permission?.includes(requiredPermission)) {

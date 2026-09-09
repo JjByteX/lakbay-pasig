@@ -198,11 +198,18 @@ export default function AdminPlaceDetailPage() {
       });
 
     // 5.6: full review history, staff id, action, notes, timestamp, newest
-    // first, per admin-panel-spec.md's Review Action Log.
+    // first, per admin-panel-spec.md's Review Action Log. place_reviews
+    // widened in migration 0014 (phase-5-decisions.md Decision 3) to a
+    // type-plus-id pair so Trail Content reviews can reuse this table too
+    // — this page is specifically the Place detail page, so it must filter
+    // on reviewed_type = 'place' explicitly, not just reviewed_id, or a
+    // discovery_content.id that happens to collide with this place's id
+    // would incorrectly show up here.
     supabase
       .from("place_reviews")
       .select("id, staff_id, action, notes, created_at, profiles(display_name)")
-      .eq("place_id", id)
+      .eq("reviewed_type", "place")
+      .eq("reviewed_id", id)
       .order("created_at", { ascending: false })
       .then(({ data }) => {
         setReviews(
@@ -377,10 +384,14 @@ export default function AdminPlaceDetailPage() {
 
     // Same submit writes both the audit log row and the record's current
     // state, per admin-panel-spec.md Review Action Log and plan 5.5.
+    // place_id widened to reviewed_type/reviewed_id in migration 0014
+    // (phase-5-decisions.md Decision 3) — this page always writes
+    // reviewed_type = 'place', since it only ever reviews a places row.
     const { data: insertedReview, error: reviewInsertError } = await supabase
       .from("place_reviews")
       .insert({
-        place_id: id,
+        reviewed_type: "place",
+        reviewed_id: id,
         staff_id: profile.id,
         action: reviewAction,
         notes: reviewNotes.trim() || null,

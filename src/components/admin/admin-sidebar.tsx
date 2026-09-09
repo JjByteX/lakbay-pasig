@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, LogOut } from "lucide-react";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Users, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -17,12 +17,17 @@ import { Button } from "@/components/ui/button";
 
 // Sidebar Sections per admin-panel-spec.md. Dashboard always visible.
 // Places needs manage_places or admin, Businesses needs review_businesses or
-// admin. Events, Trails, Staff are a later build step (build-order.md #4),
-// not listed here yet.
+// admin, Events needs publish_events or admin, Trails needs build_trails or
+// admin. Staff is adminOnly: true, admin role only per admin-panel-spec.md's
+// Staff Roles section, no system_permission string grants it, unlike the
+// other sections.
 const NAV_ITEMS = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null },
-  { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const },
-  { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const },
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null, adminOnly: false },
+  { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const, adminOnly: false },
+  { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const, adminOnly: false },
+  { to: "/admin/events", label: "Events & Announcements", icon: CalendarDays, permission: "publish_events" as const, adminOnly: false },
+  { to: "/admin/trails", label: "Trails", icon: Map, permission: "build_trails" as const, adminOnly: false },
+  { to: "/admin/staff", label: "Staff", icon: Users, permission: null, adminOnly: true },
 ];
 
 export function AdminSidebar() {
@@ -31,10 +36,13 @@ export function AdminSidebar() {
   const isAdmin = profile?.staff_role === "admin";
 
   // Filtered items do not render at all, no greyed out state, per
-  // admin-panel-spec.md Access Rule and 3.2.
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => item.permission === null || isAdmin || profile?.system_permission?.includes(item.permission)
-  );
+  // admin-panel-spec.md Access Rule and 3.2. adminOnly items need staff_role
+  // === admin specifically, isAdmin alone already captures that, a
+  // permission string is never enough on its own for those items.
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.adminOnly) return isAdmin;
+    return item.permission === null || isAdmin || profile?.system_permission?.includes(item.permission);
+  });
 
   const initial = profile?.display_name?.[0]?.toUpperCase() ?? "?";
 

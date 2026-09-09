@@ -22,3 +22,12 @@ enabled = true
 
 [auth]
 enabled = true
+
+# Phase 3.2 (step-4-phases.md): server side staff account creation,
+# service role only. verify_jwt = false since the function does its own
+# Admin check against the caller's JWT (see index.ts) after a plain
+# createClient(anon key) call, not the platform's blanket gate — the
+# function needs to inspect *who* the caller is (Admin vs not), not just
+# whether a valid JWT was presented at all.
+[functions.create-staff-account]
+verify_jwt = false

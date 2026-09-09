@@ -41,7 +41,6 @@ Each question is tagged to the milestone where it must be resolved.
 | # | Question | Milestone | Answered? |
 |---|----------|-----------|-----------|
 |   |          |           | [ ]       |
-|   |          |           | [ ]       |
 
 ---
 ## HOW TO ADD A QUESTION (AI instructions)
@@ -65,6 +64,6 @@ Answered questions live here permanently as part of project history.
 
 | # | Question | Answer | Resolved At |
 |---|----------|--------|-------------|
-|   |          |        |             |
+| 1 | admin-dashboard.tsx's "Recent activity" feed queried place_reviews with no reviewed_type filter, mislabeling discovery_content ("Trail Content") reviews as "a place" since migration 0014 widened the table. | Query now runs twice, once per reviewed_type ('place', 'discovery_content'), each mapped to its correct section label. See architecture-notes.md's changelog. | Post-6.1 fix |
 
 ---
