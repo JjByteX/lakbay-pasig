@@ -61,6 +61,28 @@ interface ReviewRow {
   profiles: { display_name: string | null }[];
 }
 
+// Raw shape of the discovery_content + routes(name) join below, before
+// mapping into DiscoveryContentDetail. supabase.ts creates the client with
+// no Database generic, so a joined relation like routes(name) isn't typed
+// against the schema and TS can't resolve .routes on the inferred result —
+// same root cause and same fix as admin-dashboard.tsx's ReviewActivityRow:
+// declare the row shape locally, cast at the query boundary. Supabase
+// always returns a to-one join as an array here (confirmed in
+// admin-dashboard.tsx's own comment), never a bare object, so routes is
+// typed as an array only, not the leftover object-or-array union that was
+// here before.
+interface DiscoveryContentQueryRow {
+  id: string;
+  title: string;
+  content: string;
+  unlock_radius: number;
+  sequence_order: number;
+  route_id: string;
+  related_location_type: "place" | "business";
+  related_location_id: string;
+  routes: { name: string }[];
+}
+
 export default function AdminDiscoveryContentReviewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -96,31 +118,32 @@ export default function AdminDiscoveryContentReviewPage() {
           setLoading(false);
           return;
         }
+        const row = data as unknown as DiscoveryContentQueryRow;
 
         // related_location_id has no foreign key (0005's type-plus-id
         // pattern), resolved with a second query the same way
         // admin-places.tsx's queue list does for the same pair of columns.
-        const table = data.related_location_type === "place" ? "places" : "businesses";
+        const table = row.related_location_type === "place" ? "places" : "businesses";
         const { data: location } = await supabase
           .from(table)
           .select("name, verification_status")
-          .eq("id", data.related_location_id)
+          .eq("id", row.related_location_id)
           .maybeSingle();
 
         if (cancelled) return;
 
-        const routeName = Array.isArray(data.routes) ? data.routes[0]?.name : data.routes?.name;
+        const routeName = row.routes[0]?.name;
 
         setEntry({
-          id: data.id,
-          title: data.title,
-          content: data.content,
-          unlock_radius: data.unlock_radius,
-          sequence_order: data.sequence_order,
-          route_id: data.route_id,
+          id: row.id,
+          title: row.title,
+          content: row.content,
+          unlock_radius: row.unlock_radius,
+          sequence_order: row.sequence_order,
+          route_id: row.route_id,
           trail_name: routeName ?? "Untitled trail",
-          related_location_type: data.related_location_type,
-          related_location_id: data.related_location_id,
+          related_location_type: row.related_location_type,
+          related_location_id: row.related_location_id,
           related_location_name: location?.name ?? "Unknown",
           related_location_verification_status: location?.verification_status ?? null,
         });
