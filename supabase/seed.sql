@@ -76,41 +76,48 @@ delete from auth.users where email like '%@lakbay-demo.local';
 -- anyone signing up for real, per vendor-mode-spec.md's Verification Method
 -- section. confirmed_at is a generated column on this Postgres image (it
 -- derives from email_confirmed_at), so it's left out of the insert rather
--- than set directly.
+-- than set directly. The token columns below (confirmation_token and
+-- friends) are set to '' rather than left NULL: GoTrue's Go client scans
+-- them as non-nullable strings, so a NULL here doesn't fail the insert but
+-- crashes every later read of the row (including login) with "converting
+-- NULL to string is unsupported".
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
   email_confirmed_at, created_at, updated_at,
-  raw_app_meta_data, raw_user_meta_data
+  raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token,
+  email_change_token_new, email_change_token_current, email_change,
+  phone_change, phone_change_token, reauthentication_token
 )
 values
   -- CATO Staff — Admin (2)
-  ('00000000-0000-0000-0000-000000000000', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'authenticated', 'authenticated', 'admin1@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '220 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'authenticated', 'authenticated', 'admin2@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '190 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
+  ('00000000-0000-0000-0000-000000000000', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'authenticated', 'authenticated', 'admin1@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '220 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'authenticated', 'authenticated', 'admin2@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '190 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
 
   -- CATO Staff — Staff (4)
-  ('00000000-0000-0000-0000-000000000000', '6456adca-58a3-48c3-b0e6-6a086d03734f', 'authenticated', 'authenticated', 'staff.places@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '150 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'authenticated', 'authenticated', 'staff.business@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '130 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'e283c6fb-4dcd-455f-a60c-e35add77a330', 'authenticated', 'authenticated', 'staff.events@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '95 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '9756f8d7-2a8e-4bd8-8669-0eac163096c6', 'authenticated', 'authenticated', 'staff.new@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '5 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
+  ('00000000-0000-0000-0000-000000000000', '6456adca-58a3-48c3-b0e6-6a086d03734f', 'authenticated', 'authenticated', 'staff.places@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '150 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'authenticated', 'authenticated', 'staff.business@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '130 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'e283c6fb-4dcd-455f-a60c-e35add77a330', 'authenticated', 'authenticated', 'staff.events@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '95 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '9756f8d7-2a8e-4bd8-8669-0eac163096c6', 'authenticated', 'authenticated', 'staff.new@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '5 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
 
   -- Registered Users, no business (6)
-  ('00000000-0000-0000-0000-000000000000', 'ed8d4b57-6a77-418b-9db3-11c18e18fbca', 'authenticated', 'authenticated', 'resident1@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '300 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '75486d5a-d222-4853-8046-8a55199c6208', 'authenticated', 'authenticated', 'resident2@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '260 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'e927ff41-bff8-43f0-9c1f-98fcaa54793d', 'authenticated', 'authenticated', 'resident3@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '200 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'db860542-f964-4290-a8f4-72c58c0dfff3', 'authenticated', 'authenticated', 'resident4@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '140 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'c5a73b63-20bd-4310-9515-3f22fa9dd40c', 'authenticated', 'authenticated', 'resident5@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '60 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '62acb632-8642-4b55-86ac-dfdee7f1d953', 'authenticated', 'authenticated', 'resident6@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '10 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
+  ('00000000-0000-0000-0000-000000000000', 'ed8d4b57-6a77-418b-9db3-11c18e18fbca', 'authenticated', 'authenticated', 'resident1@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '300 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '75486d5a-d222-4853-8046-8a55199c6208', 'authenticated', 'authenticated', 'resident2@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '260 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'e927ff41-bff8-43f0-9c1f-98fcaa54793d', 'authenticated', 'authenticated', 'resident3@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '200 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'db860542-f964-4290-a8f4-72c58c0dfff3', 'authenticated', 'authenticated', 'resident4@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '140 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'c5a73b63-20bd-4310-9515-3f22fa9dd40c', 'authenticated', 'authenticated', 'resident5@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '60 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '62acb632-8642-4b55-86ac-dfdee7f1d953', 'authenticated', 'authenticated', 'resident6@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '10 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
 
   -- Vendors — Registered Users who also hold a business (6). Ages vary on
   -- purpose: some old (established vendor), some brand new (the "new
   -- account" business-queue-priority.ts signal, 30 day window).
-  ('00000000-0000-0000-0000-000000000000', 'a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'authenticated', 'authenticated', 'vendor1@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '400 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', 'fd00f3e8-88bf-4536-96af-86a764856066', 'authenticated', 'authenticated', 'vendor2@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '320 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '1f73e1d0-9eaa-498e-a19d-d6b07b02e9d0', 'authenticated', 'authenticated', 'vendor3@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '250 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '813367e0-97dc-442c-9511-0e6c506c0883', 'authenticated', 'authenticated', 'vendor4@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '45 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '66c28540-f93a-48e2-aaa3-792f34b84491', 'authenticated', 'authenticated', 'vendor5@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '3 days', now(), '{"provider":"email","providers":["email"]}', '{}'),
-  ('00000000-0000-0000-0000-000000000000', '3541db59-0c27-4324-b685-eb66de017874', 'authenticated', 'authenticated', 'vendor6@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '1 days', now(), '{"provider":"email","providers":["email"]}', '{}');
+  ('00000000-0000-0000-0000-000000000000', 'a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'authenticated', 'authenticated', 'vendor1@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '400 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', 'fd00f3e8-88bf-4536-96af-86a764856066', 'authenticated', 'authenticated', 'vendor2@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '320 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '1f73e1d0-9eaa-498e-a19d-d6b07b02e9d0', 'authenticated', 'authenticated', 'vendor3@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '250 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '813367e0-97dc-442c-9511-0e6c506c0883', 'authenticated', 'authenticated', 'vendor4@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '45 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '66c28540-f93a-48e2-aaa3-792f34b84491', 'authenticated', 'authenticated', 'vendor5@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '3 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '3541db59-0c27-4324-b685-eb66de017874', 'authenticated', 'authenticated', 'vendor6@lakbay-demo.local', crypt('Demo!Password123', gen_salt('bf')), now(), now() - interval '1 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', '');
 
 -- Supabase Auth also expects a matching row in auth.identities for
 -- email/password sign-in to resolve correctly in some GoTrue versions.
