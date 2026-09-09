@@ -11,7 +11,7 @@ What to build, in order. Each step assumes the ones before it exist.
 - [x] 3. **CATO Admin Panel: Dashboard, Places, Businesses**
       Sidebar shell with role based section visibility. Places and Businesses review queues, separate from each other. Verify, reject with notes, set Featured status.
 
-- [ ] 4. **CATO Admin Panel: Events & Announcements, Trails, Staff**
+- [x] 4. **CATO Admin Panel: Events & Announcements, Trails, Staff**
       Event creation and status. Trail builder: theme, place order, duration, budget, Discovery content assignment. Staff section, Admin role only.
 
 - [ ] 5. **Public app: Discover**
