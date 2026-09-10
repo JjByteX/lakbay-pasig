@@ -44,6 +44,28 @@ Discover's business detail page now shows a pending business's item list correct
 
 ---
 
+**#:** 2
+**Date:** Auth visual pass
+**Milestone:** Authentication screens — image panel legibility
+
+**Context:**
+ux-ui-guidelines.md's Style Specification Rules prohibit gradients on any structural surface, including backgrounds. auth-layout.tsx's image panel is a structural surface. The panel's tagline text was made legible against the photo first with a flat navy overlay (bg-secondary/50 over the full image), then with a text-shadow after the overlay was removed on request. Neither fully solved the problem the user was seeing: the overlay dimmed the whole photo rather than just where the text sits, and the text-shadow alone was not enough contrast against the photo's sky. The user then explicitly asked for a dark gradient behind the text.
+
+**Options Considered:**
+- Option A: Keep text-shadow only, no gradient, stay strictly inside the no-gradients rule.
+- Option B: Add a bottom-anchored linear-gradient scrim (navy to transparent) behind the tagline only, not the full panel.
+
+**Community Consensus:**
+Not applicable, this is a request to override a documented project rule, not a technology or pattern choice with an external best-practice debate.
+
+**Decision:**
+Option B, per explicit user instruction. This is flagged here rather than silently applied because it directly contradicts a "never use these under any circumstances" rule in ux-ui-guidelines.md, per constraints.md's No Silent Overrides rule. The gradient is scoped to the bottom half of the image panel only (not a full-panel wash), functions as a legibility scrim rather than decoration, and does not extend to any card, button, or other structural surface elsewhere in the app.
+
+**Consequences:**
+The image panel in auth-layout.tsx is now the one place in the app with a gradient. If ux-ui-guidelines.md's no-gradients rule is enforced by an automated check in the future, this file needs an explicit exemption. Any future gradient request elsewhere in the app should be flagged the same way, not treated as precedent already set by this one.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**
