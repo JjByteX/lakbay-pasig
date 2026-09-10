@@ -1,7 +1,14 @@
 import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth-context";
 import { ProtectedRoute } from "@/lib/protected-route";
+import { PublicShell } from "@/components/public/public-shell";
 import HomePage from "@/pages/home";
+import TrailsPage from "@/pages/trails";
+import DiscoverPage from "@/pages/discover";
+import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
+import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
+import SavedPage from "@/pages/saved";
+import ProfilePage from "@/pages/profile";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
 import AdminPage from "@/pages/admin";
@@ -22,8 +29,32 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Guest accessible, no session required, per navigation-and-access-control.md */}
-        <Route path="/" element={<HomePage />} />
+        {/* Public shell, five tabs per navigation-and-access-control.md's
+            Bottom Nav Order, Guest accessible, no session required. home.tsx
+            previously owned "/" directly; the shell takes over as root here
+            per step-5-phases.md Phase 2.5, home.tsx now renders as the
+            index child instead. Only Discover is a real screen this step,
+            the other three are stub routes per Phase 2.4. */}
+        <Route path="/" element={<PublicShell />}>
+          <Route index element={<HomePage />} />
+          <Route path="trails" element={<TrailsPage />} />
+          <Route path="discover" element={<DiscoverPage />} />
+          {/* Phase 6.2 (step-5-phases.md): full record detail, separate
+              from the Phase 6.1 preview card (result-card.tsx's modal).
+              Nested under the shell, not standalone, per ux-ui-
+              guidelines.md's Layout Shell Rules, the bottom nav and top
+              bar are persistent chrome on every public page, a drill-down
+              detail page is still part of the public app, not a dead end
+              outside it. Two routes, not one branching on the type
+              discriminator, since 6.3/6.4 name genuinely different field
+              sets per kind, matching admin's own split between
+              admin-place-detail.tsx and admin-business-detail.tsx rather
+              than one component doing both shapes. */}
+          <Route path="discover/place/:id" element={<DiscoverPlaceDetailPage />} />
+          <Route path="discover/business/:id" element={<DiscoverBusinessDetailPage />} />
+          <Route path="saved" element={<SavedPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
 

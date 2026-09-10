@@ -14,7 +14,7 @@ What to build, in order. Each step assumes the ones before it exist.
 - [x] 4. **CATO Admin Panel: Events & Announcements, Trails, Staff**
       Event creation and status. Trail builder: theme, place order, duration, budget, Discovery content assignment. Staff section, Admin role only.
 
-- [ ] 5. **Public app: Discover**
+- [x] 5. **Public app: Discover**
       Search and map lookup for Places and Businesses. Verification label on every result. This is the daily habit tab, build it early.
 
 - [ ] 6. **Public app: Home**
