@@ -7,12 +7,20 @@ import { ResultCard } from "./result-card";
 
 // Phase 8.1: tiles are their own loading concern, separate from the
 // results query above them (a slow tile server on a fast query, or the
-// reverse, are both real and independent cases). "loading"/"load" are
-// core L.Map events, aggregated across every layer added to the map
-// (TileLayer included), not react-leaflet's own API, so this reads the
-// underlying Leaflet instance via useMap the same way RecenterOnLocation
-// already does in this file, rather than a prop on TileLayer itself
-// (TileLayer exposes no loading-state prop to read from the outside).
+// reverse, are both real and independent cases). Bug found post-8.1: the
+// original version listened for Leaflet's "load" event, which fires
+// exactly once, the moment the map finishes its initial tile load. Since
+// that can happen before this component's own useEffect runs and attaches
+// the listener (a real race, not a hypothetical one, Leaflet does not
+// replay a past event to a listener added after it already fired),
+// tilesLoading could get stuck at its initial `true` forever with nothing
+// left to ever flip it, which is exactly the "Loading map…" pill that
+// never clears. map.whenReady() exists precisely for this: if the map is
+// already loaded by the time it's called, the callback still fires (on
+// the next tick), so there is no race to lose. "loading"/"load" are still
+// used for the ongoing case (a later pan/zoom triggers a new tile load),
+// whenReady only needs to cover the one-time initial case those two
+// events already miss.
 function TileLoadIndicator({ onChange }: { onChange: (loading: boolean) => void }) {
   const map = useMap();
 
@@ -20,6 +28,7 @@ function TileLoadIndicator({ onChange }: { onChange: (loading: boolean) => void 
     const handleLoading = () => onChange(true);
     const handleLoad = () => onChange(false);
 
+    map.whenReady(handleLoad);
     map.on("loading", handleLoading);
     map.on("load", handleLoad);
 
