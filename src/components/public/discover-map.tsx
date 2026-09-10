@@ -1,202 +1,381 @@
-import { useEffect, useState } from "react";
-import L from "leaflet";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { useEffect, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
+import type { StyleSpecification } from "maplibre-gl";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { ResultCard } from "./result-card";
 
-// Phase 8.1: tiles are their own loading concern, separate from the
-// results query above them (a slow tile server on a fast query, or the
-// reverse, are both real and independent cases). Bug found post-8.1: the
-// original version listened for Leaflet's "load" event, which fires
-// exactly once, the moment the map finishes its initial tile load. Since
-// that can happen before this component's own useEffect runs and attaches
-// the listener (a real race, not a hypothetical one, Leaflet does not
-// replay a past event to a listener added after it already fired),
-// tilesLoading could get stuck at its initial `true` forever with nothing
-// left to ever flip it, which is exactly the "Loading map…" pill that
-// never clears. map.whenReady() exists precisely for this: if the map is
-// already loaded by the time it's called, the callback still fires (on
-// the next tick), so there is no race to lose. "loading"/"load" are still
-// used for the ongoing case (a later pan/zoom triggers a new tile load),
-// whenReady only needs to cover the one-time initial case those two
-// events already miss.
-function TileLoadIndicator({ onChange }: { onChange: (loading: boolean) => void }) {
-  const map = useMap();
+// Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
+// raster tiles with a `mix-blend-mode: color` div. Positron's raster tiles
+// are near-grayscale by design, so the blend had almost no color to
+// preserve — confirmed against the screenshot, a flat washed-out grey, not
+// Catppuccin. A filter/blend on a grayscale raster image can't invent
+// per-feature color, that's a hard ceiling, not a tuning problem.
+//
+// Fix: vector tiles + a real style, where every feature type (water, parks,
+// roads, buildings) has its own `paint` color to set directly, no blend.
+// Tiles: OpenFreeMap (tiles.openfreemap.org), free, no key, no request
+// limit, built on OpenStreetMap data via the OpenMapTiles schema. Base
+// layer shape (source-layer names, layer list) confirmed against
+// OpenFreeMap's own hosted style JSON and the upstream
+// openmaptiles/positron-gl-style repo it forks, not guessed; only the
+// `paint` colors below are ours, replacing Positron's own greys/blues
+// with Catppuccin's real hex values, one per feature type. Renderer is
+// maplibre-gl directly (no react-maplibre wrapper) since this component
+// already needs the same kind of imperative instance access
+// react-leaflet's useMap gave the old version (RecenterOnLocation,
+// TileLoadIndicator), and one fewer dependency is the lazier fit here.
+//
+// react-leaflet/leaflet stay installed for the rest of the app; this swap
+// is scoped to this file only, per the plan's own Scope section.
 
-  useEffect(() => {
-    const handleLoading = () => onChange(true);
-    const handleLoad = () => onChange(false);
-
-    map.whenReady(handleLoad);
-    map.on("loading", handleLoading);
-    map.on("load", handleLoad);
-
-    return () => {
-      map.off("loading", handleLoading);
-      map.off("load", handleLoad);
-    };
-  }, [map, onChange]);
-
-  return null;
-}
-
-// Phase 4.1: default center when no location permission is granted.
-// Approximate center of Pasig City, National Capital Region, Philippines.
 const PASIG_CENTER: Coordinates = { latitude: 14.5764, longitude: 121.0851 };
 const DEFAULT_ZOOM = 14;
 
-// Phase 4.3: two marker treatments minimum, verified (places and
-// businesses) versus pending business, so the pending visual distinction
-// step-5-plan.md requires for the badge (Phase 6.1) is already anchored in
-// the marker itself, not just the detail card. CSS-styled L.divIcon over a
-// second set of raster marker images, reuses the same design tokens
-// (primary, muted-foreground) every other component already reads from,
-// per ux-ui-guidelines.md's Consistency Rules, no new one-off colors.
-const verifiedIcon = L.divIcon({
-  className: "",
-  html: '<span class="block h-4 w-4 rounded-full border-2 border-card bg-primary shadow"></span>',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-});
+// Catppuccin Latte (light) / Mocha (dark) hex values, one per OpenMapTiles
+// feature type. Latte is the default; MOCHA overrides apply when `.dark` is
+// present on <html>, matching this codebase's existing class-based dark
+// mode strategy (tailwind.config.ts's `darkMode: ["class"]`, the same
+// convention the old overlay div's `dark:` variant relied on).
+//
+// Fix, human-reported (screenshot): the first version used Catppuccin's own
+// surface0/1/2 for buildings/roads, adjacent steps on Catppuccin's neutral
+// ramp (base 241 lum -> mantle 233 -> surface0 208 -> surface1 192 ->
+// surface2 176, all the same blue-grey hue). That's correct as Catppuccin,
+// which designs that ramp as a low-contrast backdrop for UI chrome, but
+// it's the wrong tool for a basemap: building/road polygons need to read
+// as distinct color against the page and against each other, not blend
+// into one grey mass, which is exactly what the screenshot showed.
+// Building/road/boundary tokens below are pulled from further apart on the
+// same real Catppuccin palette (surface1, overlay0, overlay1, subtext0/1)
+// instead of adjacent surface steps, still Latte/Mocha's own hex values,
+// chosen for contrast instead of copied mechanically by matching name.
+const LATTE = {
+  base: "#eff1f5",
+  mantle: "#e6e9ef",
+  green: "#40a02b",
+  blue: "#1e66f5",
+  sapphire: "#209fb5",
+  building: "#bcc0cc", // surface1
+  buildingLine: "#acb0be", // surface2, one soft step off the fill
+  road: "#9ca0b0", // overlay0
+  roadDark: "#8c8fa1", // overlay1, secondary/tertiary, one step darker than minor roads
+  peach: "#fe640b",
+  railway: "#6c6f85", // subtext1
+  boundary: "#6c6f85", // subtext1
+  text: "#4c4f69",
+} as const;
 
-const pendingIcon = L.divIcon({
-  className: "",
-  html: '<span class="block h-4 w-4 rounded-full border-2 border-card bg-muted-foreground shadow"></span>',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-});
+const MOCHA: typeof LATTE = {
+  base: "#1e1e2e",
+  mantle: "#181825",
+  green: "#a6e3a1",
+  blue: "#89b4fa",
+  sapphire: "#74c7ec",
+  building: "#45475a", // surface1
+  buildingLine: "#585b70", // surface2, one soft step off the fill
+  road: "#6c7086", // overlay0
+  roadDark: "#7f849c", // overlay1
+  peach: "#fab387",
+  railway: "#a6adc8", // subtext0
+  boundary: "#a6adc8", // subtext0
+  text: "#cdd6f4",
+};
 
-function iconFor(result: DiscoverResult): L.DivIcon {
-  return result.verification_status === "pending" ? pendingIcon : verifiedIcon;
+// OpenFreeMap's `openmaptiles` vector source (OpenMapTiles schema) and font
+// glyph endpoint, confirmed directly from OpenFreeMap's own hosted styles
+// (tiles.openfreemap.org/styles/liberty, same source/glyphs every OFM style
+// shares). No sprite here: Positron itself ships no POI icons (OpenFreeMap's
+// own Positron fork removes POIs entirely, "a special clean looking style"
+// per its changelog), and this screen's own markers are Leaflet-era
+// divIcon-alikes drawn with MapLibre markers below, not sprite images, so
+// no sprite URL is needed.
+function buildStyle(palette: typeof LATTE): StyleSpecification {
+  return {
+    version: 8,
+    sources: {
+      openmaptiles: {
+        type: "vector",
+        url: "https://tiles.openfreemap.org/planet",
+      },
+    },
+    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+    layers: [
+      { id: "background", type: "background", paint: { "background-color": palette.base } },
+      {
+        id: "landuse-residential",
+        type: "fill",
+        source: "openmaptiles",
+        "source-layer": "landuse",
+        filter: ["==", ["get", "class"], "residential"],
+        paint: { "fill-color": palette.mantle },
+      },
+      {
+        id: "landcover-wood",
+        type: "fill",
+        source: "openmaptiles",
+        "source-layer": "landcover",
+        filter: ["==", ["get", "class"], "wood"],
+        paint: { "fill-color": palette.green, "fill-opacity": 0.5 },
+      },
+      {
+        id: "park",
+        type: "fill",
+        source: "openmaptiles",
+        "source-layer": "park",
+        paint: { "fill-color": palette.green, "fill-opacity": 0.35 },
+      },
+      {
+        id: "water",
+        type: "fill",
+        source: "openmaptiles",
+        "source-layer": "water",
+        paint: { "fill-color": palette.blue },
+      },
+      {
+        id: "waterway",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "waterway",
+        paint: { "line-color": palette.blue, "line-width": 1 },
+      },
+      {
+        id: "building",
+        type: "fill",
+        source: "openmaptiles",
+        "source-layer": "building",
+        minzoom: 13,
+        paint: {
+          "fill-color": palette.building,
+          "fill-outline-color": palette.buildingLine,
+        },
+      },
+      {
+        id: "road-minor",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["match", ["get", "class"], ["minor", "service", "track"], true, false],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": palette.road,
+          "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 13, 0.5, 20, 12],
+        },
+      },
+      {
+        id: "road-secondary-tertiary",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["match", ["get", "class"], ["secondary", "tertiary"], true, false],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": palette.roadDark,
+          "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 8, 1, 20, 14],
+        },
+      },
+      {
+        id: "road-major",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["match", ["get", "class"], ["primary", "trunk", "motorway"], true, false],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": palette.peach,
+          "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 5, 0.5, 20, 18],
+        },
+      },
+      {
+        id: "railway",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["==", ["get", "class"], "rail"],
+        paint: { "line-color": palette.railway, "line-width": 1 },
+      },
+      {
+        id: "boundary",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "boundary",
+        filter: [">=", ["get", "admin_level"], 3],
+        paint: { "line-color": palette.boundary, "line-width": 1, "line-dasharray": [2, 1] },
+      },
+      {
+        id: "water-name",
+        type: "symbol",
+        source: "openmaptiles",
+        "source-layer": "water_name",
+        layout: { "text-field": ["get", "name"], "text-size": 12 },
+        paint: {
+          "text-color": palette.sapphire,
+          "text-halo-color": palette.base,
+          "text-halo-width": 1,
+        },
+      },
+      {
+        id: "road-label",
+        type: "symbol",
+        source: "openmaptiles",
+        "source-layer": "transportation_name",
+        layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-size": 11 },
+        paint: {
+          "text-color": palette.text,
+          "text-halo-color": palette.base,
+          "text-halo-width": 1,
+        },
+      },
+      {
+        id: "place-label",
+        type: "symbol",
+        source: "openmaptiles",
+        "source-layer": "place",
+        filter: ["match", ["get", "class"], ["city", "town", "village"], true, false],
+        layout: { "text-field": ["get", "name"], "text-size": 13 },
+        paint: {
+          "text-color": palette.text,
+          "text-halo-color": palette.base,
+          "text-halo-width": 1.5,
+        },
+      },
+    ],
+  };
 }
 
-// Phase 4.2: recenters the map imperatively once a user location resolves.
-// react-leaflet's MapContainer only reads `center` on first mount, so
-// moving the view after geolocation resolves needs the underlying Leaflet
-// map instance via useMap, not a prop change.
-function RecenterOnLocation({ location }: { location: Coordinates | null }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (location) {
-      map.setView([location.latitude, location.longitude], DEFAULT_ZOOM);
-    }
-  }, [location, map]);
-
-  return null;
+// Phase 4.3's two marker treatments (verified vs pending), same tokens as
+// before (bg-primary / bg-muted-foreground) now drawn as a MapLibre Marker
+// element instead of a Leaflet L.divIcon, since MapLibre has no divIcon
+// concept, it takes a plain DOM node.
+function markerElement(result: DiscoverResult): HTMLElement {
+  const el = document.createElement("span");
+  el.className =
+    result.verification_status === "pending"
+      ? "block h-4 w-4 rounded-full border-2 border-card bg-muted-foreground shadow cursor-pointer"
+      : "block h-4 w-4 rounded-full border-2 border-card bg-primary shadow cursor-pointer";
+  return el;
 }
 
 interface DiscoverMapProps {
   results: DiscoverResult[];
   userLocation: Coordinates | null;
-  // Phase 8.1: query-in-flight, from discover.tsx's shared fetch. Distinct
-  // from `tilesLoading` below, both are shown at once when they overlap.
   resultsLoading: boolean;
-  // Phase 8.3: a specific message when the combined fetch failed outright,
-  // distinct from a fetch that succeeded with zero rows (Phase 8.2's empty
-  // state). Null when there is no error.
   resultsError: string | null;
 }
 
 /**
- * Phase 4.1-4.4, controlled since Phase 5: map view, full-bleed under the
- * shell's top bar, no card wrapper per ux-ui-guidelines.md (a map is not
- * card content). Centered on Pasig by default, recenters on `userLocation`
- * once resolved. `results` and `userLocation` are lifted to discover.tsx
- * as of Phase 5 (search and category filter, 5.3-5.4), since the list
- * surface needs the identical filtered set and the same location to sort
- * by, per step-5-plan.md's "narrows both map markers and the list
- * together" and Phase 5.2's "same result set... as markers." Geolocation
- * request itself also moved up for the same reason, one request, one
- * source of truth, not a second permission prompt from the list surface.
- * Renders one marker per result from the filtered set (4.3); tapping a
- * marker opens the shared result card (4.4), same component Phase 5's
- * list rows open (5.2).
+ * Phase 4.1-4.4, controlled since Phase 5 (see architecture-notes.md for the
+ * full history of this component). Map view, full-bleed under the shell's
+ * top bar, no card wrapper. Centered on Pasig by default, recenters on
+ * `userLocation` once resolved. Renders one marker per result, verified vs
+ * pending treatments, tapping a marker opens the shared ResultCard.
  *
- * Phase 8.1 adds two independent loading signals on top of the above:
- * `resultsLoading` (the query, from discover.tsx) and `tilesLoading` (the
- * raster tiles themselves, tracked locally via TileLoadIndicator). Markers
- * depend on the former, the basemap depends on the latter, a slow query
- * and a slow tile server are unrelated failure/delay modes and neither
- * should be reported as the other. Phase 8.2 adds `isEmpty`, a completed
- * fetch with zero results. Phase 8.3 adds `resultsError`, a failed fetch;
- * it takes priority over both loading and empty, since a query that never
- * completed is a more severe condition than one that is still running or
- * one that ran and found nothing.
+ * map-vector-restyle-plan.md (Path B): tile source is now OpenFreeMap
+ * vector tiles rendered through maplibre-gl, replacing react-leaflet +
+ * CARTO raster tiles. Recolored with real Catppuccin paint values per
+ * feature type (see buildStyle above), not a CSS blend. Prop contract
+ * (results/userLocation/resultsLoading/resultsError) is unchanged, so
+ * discover.tsx needs no changes to call this component.
  */
 export function DiscoverMap({ results, userLocation, resultsLoading, resultsError }: DiscoverMapProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
   const [selected, setSelected] = useState<DiscoverResult | null>(null);
   const [tilesLoading, setTilesLoading] = useState(true);
-  // Phase 8.2: zero results after a completed fetch that did NOT error,
-  // distinct from still loading (Phase 8.1) and from the fetch having
-  // failed outright (Phase 8.3, checked first below). Mirrors discover-
-  // list.tsx's own `sorted.length === 0` check, same underlying filtered
-  // set, same "search or filter combination" cause.
   const isEmpty = !resultsError && !resultsLoading && !tilesLoading && results.length === 0;
+
+  // Map instance: created once, destroyed on unmount. Dark/light palette is
+  // read once at creation via the `.dark` class on <html> (this codebase's
+  // existing dark-mode strategy, tailwind.config.ts's `darkMode: ["class"]`)
+  // and re-applied via setStyle if that class changes later, watched with a
+  // MutationObserver since there's no app-level theme context to subscribe
+  // to yet (grepped, none exists).
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const isDark = () => document.documentElement.classList.contains("dark");
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: buildStyle(isDark() ? MOCHA : LATTE),
+      center: [PASIG_CENTER.longitude, PASIG_CENTER.latitude],
+      zoom: DEFAULT_ZOOM,
+      attributionControl: {
+        customAttribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://openfreemap.org">OpenFreeMap</a>',
+      },
+    });
+    mapRef.current = map;
+
+    // Phase 8.1 parity: tiles are their own loading concern, separate from
+    // the results query. MapLibre's "load" fires once the initial style +
+    // visible tiles are ready; "dataloading"/"idle" cover later pan/zoom
+    // tile fetches, mirroring the old TileLoadIndicator's
+    // loading/load/whenReady trio (no whenReady equivalent needed here:
+    // unlike Leaflet, attaching "load" after MapLibre's own constructor-
+    // driven initial load is not a race, the listener is attached
+    // synchronously in this same effect, before the browser yields).
+    const handleLoad = () => setTilesLoading(false);
+    const handleDataLoading = () => setTilesLoading(true);
+    map.on("load", handleLoad);
+    map.on("dataloading", handleDataLoading);
+    map.on("idle", handleLoad);
+
+    const observer = new MutationObserver(() => {
+      map.setStyle(buildStyle(isDark() ? MOCHA : LATTE));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    return () => {
+      observer.disconnect();
+      map.off("load", handleLoad);
+      map.off("dataloading", handleDataLoading);
+      map.off("idle", handleLoad);
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Phase 4.2: recenter once a user location resolves. MapLibre's own
+  // constructor `center` option, like react-leaflet's, only applies on
+  // first mount, so a later location needs an imperative call.
+  useEffect(() => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.setCenter([userLocation.longitude, userLocation.latitude]);
+      mapRef.current.setZoom(DEFAULT_ZOOM);
+    }
+  }, [userLocation]);
+
+  // Markers: cleared and redrawn on every results change, same
+  // filter-out-missing-coordinates rule as before.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = results
+      .filter((result) => result.latitude != null && result.longitude != null)
+      .map((result) => {
+        const marker = new maplibregl.Marker({ element: markerElement(result) })
+          .setLngLat([result.longitude as number, result.latitude as number])
+          .addTo(map);
+        marker.getElement().addEventListener("click", () => setSelected(result));
+        return marker;
+      });
+
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+    };
+  }, [results]);
 
   return (
     <div className="relative h-full w-full">
-      <MapContainer
-        center={[PASIG_CENTER.latitude, PASIG_CENTER.longitude]}
-        zoom={DEFAULT_ZOOM}
-        className="h-full w-full"
-        scrollWheelZoom
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <TileLoadIndicator onChange={setTilesLoading} />
-        <RecenterOnLocation location={userLocation} />
-        {results
-          .filter((result) => result.latitude != null && result.longitude != null)
-          .map((result) => (
-            <Marker
-              key={`${result.kind}-${result.id}`}
-              position={[result.latitude as number, result.longitude as number]}
-              icon={iconFor(result)}
-              eventHandlers={{ click: () => setSelected(result) }}
-            />
-          ))}
-      </MapContainer>
+      <div ref={containerRef} className="h-full w-full" />
 
-      {/* Phase 8.1's loading pill, Phase 8.2's empty-state pill, and Phase
-          8.3's error pill share the same top-of-map slot and z-index
-          rather than stacking separate overlays, per ux-ui-guidelines.md's
-          State Rules, one state communicated at a time. Error takes
-          priority over loading and empty (a failed fetch is a more severe,
-          more specific condition than either "still waiting" or "completed
-          with nothing to show," and `isEmpty` above already excludes the
-          error case so the two pills below it never compete). Empty only
-          appears once both loading flags have resolved with no error and
-          the filtered set is still zero, matching discover-list.tsx's own
-          "no results" wording exactly (same filtered set, per step-5-
-          plan.md's "narrows both map markers and the list together," so
-          the two surfaces should never disagree about whether the current
-          search/filter combination has results, or whether it errored).
-          The map itself stays interactive under any of these three pills
-          (no overlay blocking pan/zoom), unlike the list's full-body swap,
-          since a person may still want to look around manually, per
-          navigation-and-access-control.md's "search and view" pattern
-          this screen is built around. z-[1000] on every pill clears
-          Leaflet's own pane stack (its panes sit in the 200-650 range),
-          matching the z-index this codebase's other floating-over-map
-          elements (ResultCard's Dialog) already need to clear. */}
       {resultsError ? (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center px-6">
-          {/* text-destructive on the message only, same convention this
-              codebase's other error messages already use (e.g. admin-
-              staff-detail.tsx's notFound branch), the pill's own border/
-              background stay identical to the loading and empty pills, so
-              only the text signals severity, not a second container style
-              invented for this one case. Phase 8.4 fix: max-w-full plus
-              the wrapping div's own px-6 keeps a long error message (this
-              one's length isn't fixed like the loading/empty copy, it
-              comes from whatever Supabase or the network actually reports)
-              from stretching past the viewport at narrow widths; no
-              whitespace-nowrap here means it wraps onto a second line
-              instead, rather than overflowing horizontally. */}
           <span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-center text-xs text-destructive shadow">
             {resultsError}
           </span>
