@@ -7,6 +7,7 @@ import TrailsPage from "@/pages/trails";
 import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
 import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
+import EventDetailPage from "@/pages/event-detail";
 import SavedPage from "@/pages/saved";
 import ProfilePage from "@/pages/profile";
 import LoginPage from "@/pages/login";
@@ -52,6 +53,11 @@ export default function App() {
               than one component doing both shapes. */}
           <Route path="discover/place/:id" element={<DiscoverPlaceDetailPage />} />
           <Route path="discover/business/:id" element={<DiscoverBusinessDetailPage />} />
+          {/* Phase 4.4 (step-6-phases.md): same nesting as the two discover
+              detail routes above, not top level, so the bottom nav and top
+              bar stay visible per ux-ui-guidelines.md's Layout Shell Rules.
+              Reached from AnnouncementCard's row tap (home.tsx). */}
+          <Route path="events/:id" element={<EventDetailPage />} />
           <Route path="saved" element={<SavedPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>

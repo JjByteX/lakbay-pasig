@@ -405,12 +405,18 @@ export default function AdminPlaceDetailPage() {
       return;
     }
 
+    // Phase 1 (step-6-phases.md): verified_at (migration 0017) only set on
+    // the transition into 'verified', not on every save, so an edit to an
+    // already-verified row (handleSubmit's own update, above) never moves
+    // it. Home's "recently verified" section sorts on this column, not on
+    // updated_at, which would also move on an unrelated edit.
     const { error: updateError } = await supabase
       .from("places")
       .update({
         verification_status: nextStatus,
         reviewed_by: profile.id,
         updated_at: new Date().toISOString(),
+        ...(nextStatus === "verified" ? { verified_at: new Date().toISOString() } : {}),
       })
       .eq("id", id);
 
