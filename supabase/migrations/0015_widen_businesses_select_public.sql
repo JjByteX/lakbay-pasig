@@ -32,7 +32,10 @@
 --   sources above, this reads as inconsistent phrasing in a summary row,
 --   not a deliberate scope cut.
 --
--- 'rejected' and 'unverified' stay excluded, those are outcomes of a
+-- 'unverified' stays excluded, per migration 0004's own check constraint
+-- businesses only ever hold 'pending', 'verified', or 'unverified',
+-- there is no 'rejected' value for this table (unlike places, migration
+-- 0003, which does have 'rejected'). 'unverified' is the outcome of a
 -- completed review a business did not pass, not a listing waiting on
 -- one. Per step-5-plan.md's own instruction, the Discover UI must pair
 -- this widen with a "Pending Verification" badge, visually distinct from

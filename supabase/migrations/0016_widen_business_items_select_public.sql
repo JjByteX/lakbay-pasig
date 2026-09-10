@@ -15,8 +15,9 @@
 -- as the parent business record. This migration brings business_items in
 -- line with that: an item is visible whenever its parent business is
 -- ('verified' or 'pending'), same two statuses, no new reasoning beyond
--- what 0015 already established. 'rejected' and 'unverified' stay
--- excluded, matching the parent policy exactly.
+-- what 0015 already established. 'unverified' stays excluded, matching
+-- the parent policy exactly (businesses have no 'rejected' value at all,
+-- per migration 0004's check constraint, see 0015's own corrected note).
 drop policy "business_items_select_public" on public.business_items;
 
 create policy "business_items_select_public"
