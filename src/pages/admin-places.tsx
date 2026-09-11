@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -11,13 +11,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
+import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 
 interface PlaceQueueRow {
   kind: "place";
@@ -49,6 +50,12 @@ interface DiscoveryContentQueueRow {
 
 type QueueRow = PlaceQueueRow | DiscoveryContentQueueRow;
 
+// Shared display name across both row kinds, used by AdminDataTable's
+// column render and by the search filter below.
+function rowName(row: QueueRow): string {
+  return row.kind === "place" ? row.name : row.title;
+}
+
 const STATUS_VARIANT = {
   pending: "outline",
   verified: "default",
@@ -63,9 +70,15 @@ const STATUS_VARIANT = {
 // getting its own separate priority tier.
 const STATUS_PRIORITY = { pending: 0, verified: 1, rejected: 1 } as const;
 
+const TYPE_OPTIONS = ["all", "place", "discovery_content"] as const;
+const STATUS_OPTIONS = ["all", "pending", "verified", "rejected"] as const;
+
 export default function AdminPlacesPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<QueueRow[] | null>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<(typeof TYPE_OPTIONS)[number]>("all");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -150,116 +163,157 @@ export default function AdminPlacesPage() {
     });
   }
 
+  // Search row, type/status filters, sortable columns, and pagination:
+  // ported from amkor-ims's DataTable.jsx + FilterStrip.jsx into
+  // AdminDataTable/AdminFilterBar (src/components/admin/), filtered client
+  // side over the already-loaded `rows` array — same fetch-on-mount shape
+  // this page already used. The default STATUS_PRIORITY ordering computed
+  // above stays the default row order (AdminDataTable only re-sorts once a
+  // column header is clicked), so this filter/search layer sits on top of
+  // the review queue's existing priority order rather than replacing it.
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const query = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (query && !rowName(row).toLowerCase().includes(query)) return false;
+      if (typeFilter !== "all" && row.kind !== typeFilter) return false;
+      if (statusFilter !== "all") {
+        const rowStatus = row.kind === "place" ? row.verification_status : "pending";
+        if (rowStatus !== statusFilter) return false;
+      }
+      return true;
+    });
+  }, [rows, search, typeFilter, statusFilter]);
+
+  const columns: AdminColumn<QueueRow>[] = [
+    {
+      key: "name",
+      label: "Name",
+      sortKey: "name",
+      render: (row) => <span className="font-semibold text-foreground">{rowName(row)}</span>,
+    },
+    {
+      key: "type",
+      label: "Type",
+      render: (row) => <Badge variant="secondary">{row.kind === "place" ? "Place" : "Trail Content"}</Badge>,
+    },
+    {
+      key: "category",
+      label: "Category",
+      sortable: false,
+      render: (row) =>
+        row.kind === "place" ? row.category : `${row.trail_name} · ${row.related_location_name}`,
+    },
+    {
+      key: "verification_status",
+      label: "Verification Status",
+      render: (row) => {
+        const status = row.kind === "place" ? row.verification_status : "pending";
+        return <Badge variant={STATUS_VARIANT[status]}>{status}</Badge>;
+      },
+    },
+    {
+      key: "updated_at",
+      label: "Last Updated",
+      render: (row) =>
+        row.updated_at ? (
+          <span className="text-muted-foreground">{new Date(row.updated_at).toLocaleDateString()}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: "actions",
+      label: "",
+      render: (row) =>
+        row.kind === "place" ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open actions</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}`)}>View</DropdownMenuItem>
+              {row.verification_status === "pending" && (
+                <>
+                  <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}?review=verify`)}>
+                    Verify
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}?review=reject`)}>
+                    Reject
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open actions</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}`)}>View</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}?review=verify`)}>
+                Verify
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}?review=reject`)}>
+                Reject
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Places</h1>
         <Button onClick={() => navigate("/admin/places/new")}>New Place</Button>
       </div>
 
-      {rows === null ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No places yet.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Verification Status</TableHead>
-              <TableHead>Last Updated</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) =>
-              row.kind === "place" ? (
-                <TableRow key={`place-${row.id}`}>
-                  <TableCell className="font-semibold text-foreground">{row.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">Place</Badge>
-                  </TableCell>
-                  <TableCell>{row.category}</TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT[row.verification_status]}>
-                      {row.verification_status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(row.updated_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Open actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}`)}>
-                          View
-                        </DropdownMenuItem>
-                        {row.verification_status === "pending" && (
-                          <>
-                            <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}?review=verify`)}>
-                              Verify
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}?review=reject`)}>
-                              Reject
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <TableRow key={`discovery-${row.id}`}>
-                  <TableCell className="font-semibold text-foreground">{row.title}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">Trail Content</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {row.trail_name} &middot; {row.related_location_name}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANT.pending}>pending</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">—</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Open actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}`)}>
-                          View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => navigate(`/admin/places/discovery/${row.id}?review=verify`)}
-                        >
-                          Verify
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => navigate(`/admin/places/discovery/${row.id}?review=reject`)}
-                        >
-                          Reject
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )
-            )}
-          </TableBody>
-        </Table>
-      )}
+      <AdminDataTable
+        columns={columns}
+        rows={filtered}
+        loading={rows === null}
+        keyField="id"
+        autoPageSize
+        empty={rows && rows.length > 0 ? "No places match your search and filters." : "No places yet."}
+        toolbar={
+          <AdminFilterBar>
+            <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name…" />
+            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                {TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "all" ? "All types" : option === "place" ? "Place" : "Trail Content"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Verification status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "all" ? "All statuses" : option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </AdminFilterBar>
+        }
+      />
     </div>
   );
 }

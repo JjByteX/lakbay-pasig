@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -12,13 +12,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
+import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { countOtherActiveAdmins } from "@/lib/staff-lockout-guard";
 
 // Phase 3.1: table per step-4-phases.md — full name (display_name), position,
@@ -31,6 +32,13 @@ import { countOtherActiveAdmins } from "@/lib/staff-lockout-guard";
 // protected-route.tsx's requireAdmin on the /admin/staff route (App.tsx),
 // so every row here is fair game for the Admin to edit, no extra
 // permission check needed inside the page itself.
+//
+// Search row, role/status filters, sortable columns, and pagination:
+// ported from amkor-ims's DataTable.jsx + FilterStrip.jsx into
+// AdminDataTable/AdminFilterBar (src/components/admin/), filtered client
+// side over the already-fetched `staff` array. The display_name-ascending
+// order from the Supabase query stays the default row order until a
+// column header is clicked.
 
 interface StaffRow {
   id: string;
@@ -48,12 +56,18 @@ const PERMISSION_LABEL: Record<string, string> = {
   build_trails: "Trails",
 };
 
+const ROLE_OPTIONS = ["all", "staff", "admin"] as const;
+const ACTIVE_OPTIONS = ["all", "active", "inactive"] as const;
+
 export default function AdminStaffPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffRow[] | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<(typeof ROLE_OPTIONS)[number]>("all");
+  const [activeFilter, setActiveFilter] = useState<(typeof ACTIVE_OPTIONS)[number]>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -112,8 +126,85 @@ export default function AdminStaffPage() {
     );
   }
 
+  const filtered = useMemo(() => {
+    if (!staff) return [];
+    const query = search.trim().toLowerCase();
+    return staff.filter((row) => {
+      if (
+        query &&
+        !(row.display_name ?? "").toLowerCase().includes(query) &&
+        !(row.position ?? "").toLowerCase().includes(query)
+      ) {
+        return false;
+      }
+      if (roleFilter !== "all" && row.staff_role !== roleFilter) return false;
+      if (activeFilter !== "all" && row.active_status !== activeFilter) return false;
+      return true;
+    });
+  }, [staff, search, roleFilter, activeFilter]);
+
+  const columns: AdminColumn<StaffRow>[] = [
+    {
+      key: "display_name",
+      label: "Full Name",
+      render: (row) => <span className="font-semibold text-foreground">{row.display_name ?? "—"}</span>,
+    },
+    { key: "position", label: "Position", render: (row) => row.position ?? "—" },
+    {
+      key: "staff_role",
+      label: "Role",
+      render: (row) => <span className="capitalize">{row.staff_role}</span>,
+    },
+    {
+      key: "system_permission",
+      label: "Permissions",
+      sortable: false,
+      render: (row) =>
+        row.staff_role === "admin" ? (
+          <span className="text-sm text-muted-foreground">All sections</span>
+        ) : row.system_permission && row.system_permission.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {row.system_permission.map((p) => (
+              <Badge key={p} variant="secondary">
+                {PERMISSION_LABEL[p] ?? p}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">None</span>
+        ),
+    },
+    {
+      key: "active_status",
+      label: "Active Status",
+      render: (row) => (
+        <Badge variant={row.active_status === "active" ? "default" : "outline"}>{row.active_status}</Badge>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      render: (row) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={togglingId === row.id}>
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Open actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate(`/admin/staff/${row.id}`)}>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleToggleActive(row)}>
+              {row.active_status === "active" ? "Deactivate" : "Activate"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Staff</h1>
         <Button onClick={() => navigate("/admin/staff/new")}>New Staff Account</Button>
@@ -121,78 +212,43 @@ export default function AdminStaffPage() {
 
       {toggleError && <p className="text-sm text-destructive">{toggleError}</p>}
 
-      {staff === null ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : staff.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No staff accounts yet.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Full Name</TableHead>
-              <TableHead>Position</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Permissions</TableHead>
-              <TableHead>Active Status</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {staff.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="font-semibold text-foreground">
-                  {row.display_name ?? "—"}
-                </TableCell>
-                <TableCell>{row.position ?? "—"}</TableCell>
-                <TableCell className="capitalize">{row.staff_role}</TableCell>
-                <TableCell>
-                  {row.staff_role === "admin" ? (
-                    <span className="text-sm text-muted-foreground">All sections</span>
-                  ) : row.system_permission && row.system_permission.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {row.system_permission.map((p) => (
-                        <Badge key={p} variant="secondary">
-                          {PERMISSION_LABEL[p] ?? p}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">None</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={row.active_status === "active" ? "default" : "outline"}>
-                    {row.active_status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={togglingId === row.id}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Open actions</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(`/admin/staff/${row.id}`)}>
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleActive(row)}>
-                        {row.active_status === "active" ? "Deactivate" : "Activate"}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <AdminDataTable
+        columns={columns}
+        rows={filtered}
+        loading={staff === null}
+        keyField="id"
+        autoPageSize
+        empty={staff && staff.length > 0 ? "No staff accounts match your search and filters." : "No staff accounts yet."}
+        toolbar={
+          <AdminFilterBar>
+            <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name or position…" />
+            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as typeof roleFilter)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Role" />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "all" ? "All roles" : option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={activeFilter} onValueChange={(v) => setActiveFilter(v as typeof activeFilter)}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTIVE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "all" ? "All statuses" : option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </AdminFilterBar>
+        }
+      />
     </div>
   );
 }

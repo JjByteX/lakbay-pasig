@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -11,13 +11,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
+import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 
 // Phase 4.1 (step-4-phases.md): table — name, theme, status (draft/published)
 // badge, stop count. Row action: edit, publish/unpublish if no blocking
@@ -37,6 +38,13 @@ import {
 // gated rule requires a visible reason and, per step-4-plan.md, a link to
 // the blocking content — blockingEntry below carries what's needed to
 // build that link.
+//
+// Search row, status filter, sortable columns, and pagination: ported from
+// amkor-ims's DataTable.jsx + FilterStrip.jsx into AdminDataTable/
+// AdminFilterBar (src/components/admin/), filtered client side over the
+// already-fetched `trails` array. The updated_at-descending order from the
+// Supabase query stays the default row order until a column header is
+// clicked.
 
 interface TrailRow {
   id: string;
@@ -55,6 +63,8 @@ const STATUS_VARIANT = {
   published: "default",
 } as const;
 
+const STATUS_OPTIONS = ["all", "draft", "published"] as const;
+
 export default function AdminTrailsPage() {
   const navigate = useNavigate();
   const [trails, setTrails] = useState<TrailRow[] | null>(null);
@@ -64,6 +74,8 @@ export default function AdminTrailsPage() {
   // blocking, link to it."
   const [toggleError, setToggleError] = useState<{ message: string; link: { href: string; label: string } | null } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -160,8 +172,55 @@ export default function AdminTrailsPage() {
     );
   }
 
+  const filtered = useMemo(() => {
+    if (!trails) return [];
+    const query = search.trim().toLowerCase();
+    return trails.filter((trail) => {
+      if (query && !trail.name.toLowerCase().includes(query) && !(trail.theme ?? "").toLowerCase().includes(query)) {
+        return false;
+      }
+      if (statusFilter !== "all" && trail.status !== statusFilter) return false;
+      return true;
+    });
+  }, [trails, search, statusFilter]);
+
+  const columns: AdminColumn<TrailRow>[] = [
+    {
+      key: "name",
+      label: "Name",
+      render: (trail) => <span className="font-semibold text-foreground">{trail.name}</span>,
+    },
+    { key: "theme", label: "Theme", render: (trail) => trail.theme ?? "—" },
+    {
+      key: "status",
+      label: "Status",
+      render: (trail) => <Badge variant={STATUS_VARIANT[trail.status]}>{trail.status}</Badge>,
+    },
+    { key: "stop_count", label: "Stops", align: "right" },
+    {
+      key: "actions",
+      label: "",
+      render: (trail) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={togglingId === trail.id}>
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">Open actions</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate(`/admin/trails/${trail.id}`)}>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleTogglePublish(trail)}>
+              {trail.status === "published" ? "Unpublish" : "Publish"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Trails</h1>
         <Button onClick={() => navigate("/admin/trails/new")}>New Trail</Button>
@@ -181,58 +240,31 @@ export default function AdminTrailsPage() {
         </p>
       )}
 
-      {trails === null ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : trails.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No trails yet.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Theme</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Stops</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {trails.map((trail) => (
-              <TableRow key={trail.id}>
-                <TableCell className="font-semibold text-foreground">{trail.name}</TableCell>
-                <TableCell>{trail.theme ?? "—"}</TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_VARIANT[trail.status]}>{trail.status}</Badge>
-                </TableCell>
-                <TableCell>{trail.stop_count}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={togglingId === trail.id}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Open actions</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(`/admin/trails/${trail.id}`)}>
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleTogglePublish(trail)}>
-                        {trail.status === "published" ? "Unpublish" : "Publish"}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <AdminDataTable
+        columns={columns}
+        rows={filtered}
+        loading={trails === null}
+        keyField="id"
+        autoPageSize
+        empty={trails && trails.length > 0 ? "No trails match your search and filters." : "No trails yet."}
+        toolbar={
+          <AdminFilterBar>
+            <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name or theme…" />
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option === "all" ? "All statuses" : option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </AdminFilterBar>
+        }
+      />
     </div>
   );
 }

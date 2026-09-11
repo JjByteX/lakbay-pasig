@@ -1,10 +1,26 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { cn } from "@/lib/utils";
+
+// Exact-match list routes only — each one's own AdminDataTable measures
+// this outlet region to auto-size its page (see admin-data-table.tsx's
+// VIEWPORT FIT comment). Their /new and /:id children (detail pages,
+// the trail builder) are deliberately excluded: those rely on normal
+// page scroll, same as admin-dashboard.tsx, and have no table to fit.
+const BOUNDED_LIST_ROUTES = new Set([
+  "/admin/places",
+  "/admin/businesses",
+  "/admin/events",
+  "/admin/trails",
+  "/admin/staff",
+]);
 
 export default function AdminPage() {
   const { profile, loading } = useAuth();
+  const { pathname } = useLocation();
+  const isBoundedListRoute = BOUNDED_LIST_ROUTES.has(pathname);
 
   // Session loading state, distinct from the happy path per plan 3.4.
   if (loading) {
@@ -34,11 +50,16 @@ export default function AdminPage() {
   return (
     <SidebarProvider>
       <AdminSidebar />
-      <SidebarInset>
+      <SidebarInset className="h-svh overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
           <SidebarTrigger />
         </header>
-        <div className="flex-1 p-6">
+        <div
+          className={cn(
+            "flex-1 p-6",
+            isBoundedListRoute ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto"
+          )}
+        >
           <Outlet />
         </div>
       </SidebarInset>
