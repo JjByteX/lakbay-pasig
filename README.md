@@ -1,6 +1,6 @@
 # Lakbay Pasig
 
-Tourism Office backed platform for Pasig heritage sites, businesses, and guided routes. PWA, verified by CATO, built around sequenced location based storytelling.
+Tourism Office backed platform for Pasig heritage sites, businesses, and guided routes. PWA, built around sequenced location based storytelling.
 
 ## Docs
 

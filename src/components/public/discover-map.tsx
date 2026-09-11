@@ -68,7 +68,7 @@ const LATTE = {
   railway: "#6c6f85", // subtext1
   boundary: "#6c6f85", // subtext1
   text: "#4c4f69",
-} as const;
+};
 
 const MOCHA: typeof LATTE = {
   base: "#1e1e2e",
