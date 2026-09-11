@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Navigation } from "lucide-react";
+import { ArrowLeft, Navigation, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { fetchTrailDetail } from "@/lib/trail-query";
-import { getRouteProgress, unlockStop, type RouteProgress } from "@/lib/trail-progress";
+import { getRouteProgress, unlockStop, resetRouteProgress, type RouteProgress } from "@/lib/trail-progress";
+import { completeTrail, isRouteCompleted } from "@/lib/trail-completion";
 import { distanceKm, type Coordinates } from "@/lib/discover-query";
 import type { TrailDetail } from "@/lib/trail-types";
 import { TrailStop } from "@/components/public/trail-stop";
@@ -56,11 +57,11 @@ function errorMessageFrom(err: unknown, fallback: string): string {
  * stop one). Either branch also swaps the Phase 3.3 plain `<li>` stop list
  * for trail-stop.tsx's three-state render (Phase 4.1), computing each
  * stop's state from routeProgress.highestUnlockedStopId: every stop up to
- * and including the highest unlocked one renders unlocked (or completed
- * once trail-completion logic exists in Phase 5, not built ahead of it
- * here), everything after stays locked. No progress at all (guest, or a
- * signed-in user who hasn't started) keeps every stop locked, matching
- * Phase 3.3's original "no progress yet" baseline.
+ * and including the highest unlocked one renders unlocked, or completed
+ * once the whole trail is finished (Phase 5.1-5.3), everything after
+ * stays locked. No progress at all (guest, or a signed-in user who
+ * hasn't started) keeps every stop locked, matching Phase 3.3's original
+ * "no progress yet" baseline.
  *
  * 4.4: GPS proximity read, while the page is open. Same
  * navigator.geolocation entry point discover.tsx's existing geolocation
@@ -132,6 +133,50 @@ function errorMessageFrom(err: unknown, fallback: string): string {
  * wired to saved-routes.ts (Phase 1.6) instead of saved-places.ts. Same
  * signed-out behavior: a signed-out tap navigates to /login, never a
  * disabled heart, per ux-ui-guidelines.md's Disabled/gated rule.
+ *
+ * Phase 5: completion and credential, own file src/lib/trail-
+ * completion.ts (isRouteCompleted, completeTrail), matching every other
+ * table in this domain having its own lib file rather than this page
+ * calling supabase directly.
+ *
+ * 5.1: detect last-stop unlock. Both places that can unlock a stop --
+ * the proximity effect (4.5) and handleStart's first-stop unlock (4.3,
+ * covers the edge case of a one-stop trail, whose first unlock is also
+ * its last) -- call a shared maybeCompleteTrail helper after their own
+ * unlockStop write succeeds, rather than duplicating the "is this the
+ * final stop" check in two places.
+ *
+ * 5.2: write completion records. completeTrail inserts completed_routes,
+ * then user_credentials if trail.credential exists, both owner-writable
+ * per migration 0007, no staff involvement, matching admin-panel-
+ * spec.md's Trail Publishing section. Guarded by `completed` state
+ * (loaded on mount via isRouteCompleted, same signed-in-only shape as
+ * routeProgress's own 4.2 load) so a trail already finished on a prior
+ * visit never attempts a second completed_routes insert from a later
+ * proximity re-check. A brief "Saving your completion…" line shows while
+ * the write is in flight (completing state), a real consumer rather than
+ * a merely-declared one, same reasoning Phase 4.2's own routeProgress
+ * fix used for tsconfig.app.json's noUnusedLocals.
+ *
+ * 5.3: show the credential earned. The existing "Earn: {name}" badge
+ * (3.2) relabels to "Earned: {name}" once completed, same accent
+ * treatment reused rather than a new one. A completed trail with no
+ * linked credential shows a plain "Trail completed" line instead
+ * (CheckCircle2, matching trail-stop.tsx's own completed-state icon).
+ * No leaderboard, no per-user rank, no personal-best framing anywhere,
+ * per competitive-positioning.md and build-priorities.md's hard rule.
+ * No cohort completion count either: trail-completion.ts has no query
+ * for one, the plan doc only requires it "if shown at all," it doesn't
+ * require adding one in this phase.
+ *
+ * 5.4: progress cleanup on restart. A "Restart trail" control appears
+ * beneath Start/Resume once completed, calling resetRouteProgress
+ * (trail-progress.ts, 1.5) to delete the route_progress row outright
+ * rather than reset it to the first stop -- a deleted row and a never-
+ * started row read identically to every consumer of getRouteProgress.
+ * completed_routes is left untouched by a restart, that table is a
+ * completion event log, not current progress, so a prior finish stays
+ * on record even if the trail is walked again.
  */
 export default function TrailDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -152,6 +197,22 @@ export default function TrailDetailPage() {
   // discover.tsx's own fallback). Consumed by 4.5's unlock check once that
   // phase exists; this phase's only consumer is the inert indicator below.
   const [watchedPosition, setWatchedPosition] = useState<Coordinates | null>(null);
+  // Phase 5.1-5.3: whether the signed-in user has already completed this
+  // specific route (completed_routes, checked once the trail resolves,
+  // same signed-in-only shape as the routeProgress load in 4.2). Drives
+  // the last-stop-unlock detection below (5.1 only fires once, not on
+  // every subsequent proximity re-check of an already-finished trail)
+  // and the credential-earned display (5.3): true from either a fresh
+  // completion just now or a completion from a prior visit, trail-
+  // stop.tsx's own "completed" state (Phase 4.1) doesn't distinguish the
+  // two, so this state doesn't need to either.
+  const [completed, setCompleted] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  // Phase 5.4: restart is its own async action, same loading/error split
+  // as starting/startError (4.3) and the save button's own pattern.
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -184,6 +245,22 @@ export default function TrailDetailPage() {
     getRouteProgress(session.user.id, trail.id)
       .then(setRouteProgress)
       .catch(() => setRouteProgress(null));
+  }, [session, trail]);
+
+  // Phase 5.1-5.3: same signed-in-only shape as the effect above, checks
+  // whether this route is already in completed_routes for this user. No
+  // session or no trail yet resets to false, matching every other
+  // signed-in-only read in this file (routeProgress, save-button.tsx's
+  // isPlaceSaved) rather than surfacing a second error state for a
+  // perfectly normal "not completed yet" outcome.
+  useEffect(() => {
+    if (!session || !trail) {
+      setCompleted(false);
+      return;
+    }
+    isRouteCompleted(session.user.id, trail.id)
+      .then(setCompleted)
+      .catch(() => setCompleted(false));
   }, [session, trail]);
 
   // 4.4: GPS proximity read, while the page is open. watchPosition (not
@@ -257,12 +334,38 @@ export default function TrailDetailPage() {
     unlockStop(session.user.id, trail.id, nextStop.id)
       .then(() => {
         setRouteProgress({ highestUnlockedStopId: nextStop.id, unlockedAt: new Date().toISOString() });
+        maybeCompleteTrail(nextStop.id);
       })
       .catch(() => {
         // Silent, see docblock: no user-facing retry for a check that
         // already retries itself on the next position update.
       });
-  }, [session, trail, routeProgress, watchedPosition]);
+  }, [session, trail, routeProgress, watchedPosition, completed]);
+
+  // Phase 5.1: shared by both places that can unlock the final stop --
+  // the proximity effect above (the normal multi-stop case) and
+  // handleStart below (a one-stop trail's first unlock is also its last,
+  // there is no proximity step in between the two). Keeping this as one
+  // function rather than duplicating the same "is this the last stop"
+  // check in both call sites, per ponytail's reuse-over-duplication rule.
+  // Guarded on !completed so a trail already finished (isRouteCompleted's
+  // load, or an earlier finish this session) never inserts a second
+  // completed_routes row.
+  function maybeCompleteTrail(unlockedStopId: string) {
+    if (!session || !trail || completed) return;
+    const isFinalStop = trail.stops[trail.stops.length - 1]?.id === unlockedStopId;
+    if (!isFinalStop) return;
+
+    setCompleted(true); // optimistic, matches the unlock write it follows
+    setCompleting(true);
+    setCompleteError(null);
+    completeTrail(session.user.id, trail.id, trail.credential?.id)
+      .catch(() => {
+        setCompleted(false); // revert: completion write failed
+        setCompleteError("Couldn't record your completion. Try again.");
+      })
+      .finally(() => setCompleting(false));
+  }
 
   // 3.4/4.3: Start button. Unauthenticated branch unchanged from Phase 3,
   // visible to everyone, never disabled, reusing save-button.tsx's exact
@@ -304,9 +407,50 @@ export default function TrailDetailPage() {
     unlockStop(session.user.id, trail.id, firstStopId)
       .then(() => {
         setRouteProgress({ highestUnlockedStopId: firstStopId, unlockedAt: new Date().toISOString() });
+        maybeCompleteTrail(firstStopId);
       })
       .catch(() => setStartError("Couldn't start this trail. Try again."))
       .finally(() => setStarting(false));
+  }
+
+  // Phase 5.4: "If a user abandons a trail and restarts it ... the
+  // route_progress row to be deleted or reset, not left pointing at a
+  // finished sequence." resetRouteProgress (trail-progress.ts, 1.5)
+  // deletes the row outright rather than resetting it to the first stop,
+  // matching that function's own file comment: a deleted row and a
+  // never-started row read identically to every consumer of
+  // getRouteProgress (null either way), so there's no reason to leave a
+  // first-stop row behind when "no row" already means exactly that.
+  // completed_routes is intentionally left untouched by a restart: that
+  // table is a completion *event* log (competitive-positioning.md's
+  // cohort-stat source), not current progress, so a prior finish stays
+  // on record even if the person walks it again.
+  //
+  // This means local `completed` state deliberately drifts from
+  // isRouteCompleted's own DB truth the moment a restart happens: the
+  // row in completed_routes still exists (on purpose, see above), but
+  // this page needs the trail to render as in-progress again (stop
+  // list back to locked/unlocked, Start/Resume button back instead of
+  // the credential display) so the person can actually re-walk it.
+  // setCompleted(false) here is that local override. It's stable
+  // because the isRouteCompleted effect is keyed on [session, trail],
+  // neither of which changes on a restart, so it never re-fires to pull
+  // completed back to true from the still-existing row. A second finish
+  // then calls maybeCompleteTrail again (its own !completed guard is
+  // now clear), inserting a second, genuinely separate completed_routes
+  // row -- two walks completed twice, not one duplicated.
+  function handleRestart() {
+    if (!session || !trail) return;
+
+    setResetting(true);
+    setResetError(null);
+    resetRouteProgress(session.user.id, trail.id)
+      .then(() => {
+        setRouteProgress(null);
+        setCompleted(false);
+      })
+      .catch(() => setResetError("Couldn't restart this trail. Try again."))
+      .finally(() => setResetting(false));
   }
 
   // 3.2: no verification badge here, per the plan doc's explicit
@@ -335,15 +479,21 @@ export default function TrailDetailPage() {
   const hasStops = (trail?.stops.length ?? 0) > 0;
   const startLabel = routeProgress ? "Resume trail" : "Start trail";
 
-  // 4.3: per-stop state for trail-stop.tsx (Phase 4.1), computed from
+  // 4.3/5.3: per-stop state for trail-stop.tsx (Phase 4.1), computed from
   // routeProgress.highestUnlockedStopId against each stop's own
   // sequence_order. Every stop up to and including the highest unlocked
-  // one renders unlocked; everything after stays locked. No routeProgress
-  // (guest, or a signed-in user who hasn't started) means every stop is
-  // locked, matching Phase 3.3's original baseline before progress
-  // existed. "completed" (the whole-trail-finished visual) is Phase 5's
-  // scope, not computed here, so unlocked is the ceiling this phase ever
-  // assigns.
+  // one renders unlocked (or completed, once the whole trail is finished,
+  // Phase 5.1-5.3's `completed` state below); everything after stays
+  // locked. No routeProgress (guest, or a signed-in user who hasn't
+  // started) means every stop is locked, matching Phase 3.3's original
+  // baseline before progress existed. Every unlocked stop flips to
+  // completed together once the trail itself is completed, not just the
+  // final stop, since "completed" is this component's per-stop visual
+  // marker of "this stop's content is not just visible, the whole walk
+  // it belongs to is done," matching the plan doc's own "completed (same
+  // as unlocked, visually marked done)" wording -- it never needed a
+  // separate per-stop completed timestamp to compute, whole-trail
+  // completion is enough.
   const highestUnlockedIndex = routeProgress
     ? (trail?.stops.findIndex((s) => s.id === routeProgress.highestUnlockedStopId) ?? -1)
     : -1;
@@ -370,11 +520,52 @@ export default function TrailDetailPage() {
           <div className="flex flex-col gap-2">
             <h1 className="text-xl font-semibold text-foreground">{trail.name}</h1>
             {metaLine && <p className="text-sm text-muted-foreground">{metaLine}</p>}
+            {/* Phase 5.3: once completed, the badge reads "Earned" instead
+                of the aspirational "Earn," same accent treatment reused
+                rather than a new color/token per ux-ui-guidelines.md's
+                consistency rules -- only the label changes, not the
+                component. No route with no credential ever reaches this
+                branch since trail.credential is null in that case. */}
             {trail.credential && (
               <Badge variant="accent" className="w-fit">
-                Earn: {trail.credential.credential_name}
+                {completed ? "Earned" : "Earn"}: {trail.credential.credential_name}
               </Badge>
             )}
+            {/* Phase 5.3: "show the credential earned" for a completed
+                trail with no linked credential (trail.credential null)
+                still needs *some* completion acknowledgment, per the
+                plan doc's own "shows the credential earned" instruction
+                reading as this page's confirmation that the walk itself
+                is done -- CheckCircle2 matches trail-stop.tsx's existing
+                completed-state icon (Phase 4.1), not a new concept.
+                Explicitly no leaderboard, no per-user rank, no personal-
+                best framing anywhere on this line or elsewhere on this
+                page, per competitive-positioning.md and build-
+                priorities.md's hard rule, restated verbatim in the plan
+                doc. No cohort completion count is shown either: no query
+                for one exists yet (trail-completion.ts is insert/exists-
+                check only), and the plan doc itself only requires this
+                "if a completion count is shown at all," it doesn't
+                require adding one now. */}
+            {completed && !trail.credential && (
+              <span className="flex w-fit items-center gap-1 text-sm font-semibold text-foreground">
+                <CheckCircle2 className="h-4 w-4 fill-primary text-primary-foreground" aria-hidden="true" />
+                Trail completed
+              </span>
+            )}
+            {/* Specific to the completion write failing, not a generic
+                message, matching every other direction-specific error
+                in this file (startError, save-route-button.tsx's own
+                error state). completing shows a brief "Saving…" line
+                while the write is in flight -- unlike 4.5's silent
+                background proximity retries (a check that keeps
+                retrying itself needs no progress text), completeTrail
+                is a one-shot write with a real end state to report,
+                and noUnusedLocals (tsconfig.app.json) requires this
+                state have a genuine consumer, not just a setter call,
+                same reasoning Phase 4.2's own routeProgress fix used. */}
+            {completing && <p className="text-xs text-muted-foreground">Saving your completion…</p>}
+            {completeError && <p className="text-xs text-destructive">{completeError}</p>}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -385,6 +576,31 @@ export default function TrailDetailPage() {
                 message, matching save-button.tsx's error-message
                 convention (text-destructive, direction-specific copy). */}
             {startError && <p className="text-xs text-destructive">{startError}</p>}
+            {/* Phase 5.4: "the route_progress row to be deleted or reset
+                ... restarts, on the same accessible entry point Start
+                already provides" -- placed directly beneath Start rather
+                than a separate control elsewhere on the page, only shown
+                once a trail is completed (restarting an in-progress,
+                unfinished trail isn't this phase's scope, the plan doc's
+                own wording is "if a user abandons a trail and restarts
+                it" in the context of a trail already finished). variant
+                outline keeps it visually secondary to the Start/Resume
+                button per ux-ui-guidelines.md's 60/30/10 color rule, the
+                accent (10%) stays reserved for the primary action above. */}
+            {completed && (
+              <div className="flex flex-col gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleRestart}
+                  disabled={resetting}
+                  className="w-full"
+                >
+                  Restart trail
+                </Button>
+                {resetError && <p className="text-xs text-destructive">{resetError}</p>}
+              </div>
+            )}
           </div>
 
           {/* 3.3/4.3: stop list. Numbered sequence, not an unordered
@@ -428,7 +644,9 @@ export default function TrailDetailPage() {
                     key={stop.id}
                     stop={stop}
                     index={index}
-                    state={index <= highestUnlockedIndex ? "unlocked" : "locked"}
+                    state={
+                      index > highestUnlockedIndex ? "locked" : completed ? "completed" : "unlocked"
+                    }
                   />
                 ))}
               </ol>
