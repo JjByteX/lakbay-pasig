@@ -77,7 +77,13 @@ export interface Coordinates {
 // Phase 3.3: straight-line (haversine) distance in kilometers. This is a
 // sort order for a list, not turn-by-turn routing, per step-5-phases.md, so
 // great-circle distance is sufficient, no routing API needed.
-function distanceKm(a: Coordinates, b: Coordinates): number {
+//
+// Exported as of Step 7, Phase 4.5: trail-detail.tsx's proximity unlock
+// check reuses this exact function rather than reimplementing haversine a
+// second time, per step-7-phases.md's own 4.5 instruction ("same distanceKm
+// logic already in discover-query.ts, reused not reinvented") and
+// constraints.md's Inventory Before Suggesting rule.
+export function distanceKm(a: Coordinates, b: Coordinates): number {
   const R = 6371;
   const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
   const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;

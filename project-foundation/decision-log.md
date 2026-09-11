@@ -66,6 +66,38 @@ The image panel in auth-layout.tsx is now the one place in the app with a gradie
 
 ---
 
+**#:** 3
+**Date:** Step 7, Phase 0
+**Milestone:** Step 7, Phase 0 — route_progress schema, leaflet removal
+
+**Context:**
+Two changes, bundled under the same milestone since both were confirmed together before any step 7 UI work started.
+
+First: step-7-trail-plan.md's own Schema Change First section flags that `completed_routes` (0007) is written once at finish, all or nothing. No table tracked which stop a user had reached on a trail started but not finished, so closing the app mid-walk had no way to resume, the next open restarted from stop one.
+
+Second: map-vector-restyle-plan.md (not present in this checkout, referenced only in code comments) left an Open Item: leaflet and react-leaflet stayed installed after discover-map.tsx was rewritten to use maplibre-gl exclusively, deferred as "a separate, larger decision, out of scope here." Grepped before touching anything: only discover-map.tsx and main.tsx referenced leaflet anywhere in src/, and discover-map.tsx's own reference was already a stale comment, not live code.
+
+**Options Considered:**
+- route_progress — Option A: extend `completed_routes` with a nullable "furthest stop" column instead of a new table.
+- route_progress — Option B: new table, one row per user per route, mirroring saved_places/saved_routes's shape (0007).
+- leaflet — Option A: leave it installed, since nothing currently breaks by its presence.
+- leaflet — Option B: remove it from package.json now that the Open Item's deferral reason (migration still in progress) no longer applies.
+
+**Community Consensus:**
+Not applicable to either half. route_progress is a same-codebase schema-shape choice (matching an existing sibling pattern), not an externally-debated technology choice. The leaflet removal is deleting an already-unused dependency, not a library selection decision.
+
+**Decision:**
+route_progress — Option B. A new table keeps `completed_routes`'s meaning intact (a finish event) instead of overloading it with in-progress state, and matches the one-row-per-user-per-target shape every other personal-record table in 0007 already uses, per constraints.md's Inventory Before Suggesting rule. Owner-only RLS, identical `using`/`with check` shape to `saved_places_own`. See migration 0018.
+
+leaflet — Option B. The deferred Open Item's stated reason (a separate, larger decision) is resolved now: nothing in the app renders a Leaflet map, so keeping the dependency installed serves no purpose and adds two unused packages to every future `npm install`. Removed from package.json's dependencies and devDependencies. `package-lock.json` is deliberately left untouched, per explicit instruction not to run `npm install` this session, a hand-edited lockfile risks a broken `npm ci` for teammates, which is worse than a lockfile that resolves itself on the next real install.
+
+**Consequences:**
+route_progress: any future Trails UI work reads/writes this table through a new `src/lib/trail-progress.ts`, mirroring saved-places.ts. A stop reorder in admin-trail-builder.tsx after a user has started a trail does not invalidate their saved position, since `highest_unlocked_stop_id` references `route_stops.id`, which persistStops already keeps stable across a reorder (see this file's Pre-5.4 fix entry).
+
+leaflet: `package.json` no longer lists leaflet, react-leaflet, or @types/leaflet. `package-lock.json` still lists them until the next `npm install`, this is expected and self-resolving, not a bug. Any future map work in this codebase should use maplibre-gl, matching discover-map.tsx, not reintroduce leaflet.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**

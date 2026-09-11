@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
 import HomePage from "@/pages/home";
 import TrailsPage from "@/pages/trails";
+import TrailDetailPage from "@/pages/trail-detail";
 import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
 import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
@@ -39,6 +40,13 @@ export default function App() {
         <Route path="/" element={<PublicShell />}>
           <Route index element={<HomePage />} />
           <Route path="trails" element={<TrailsPage />} />
+          {/* Phase 2.1 (step-7-phases.md): detail route, no auth gate on
+              the route itself, per navigation-and-access-control.md's
+              Guest full-preview rule for Trails (full browse access
+              including stop list, duration, and budget preview; sign-in
+              only gates starting/tracking/saving/finishing, Phase 4's
+              concern). Page itself is a stub until Phase 3 builds it out. */}
+          <Route path="trails/:id" element={<TrailDetailPage />} />
           <Route path="discover" element={<DiscoverPage />} />
           {/* Phase 6.2 (step-5-phases.md): full record detail, separate
               from the Phase 6.1 preview card (result-card.tsx's modal).

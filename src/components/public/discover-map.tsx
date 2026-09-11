@@ -26,8 +26,12 @@ import { ResultCard } from "./result-card";
 // react-leaflet's useMap gave the old version (RecenterOnLocation,
 // TileLoadIndicator), and one fewer dependency is the lazier fit here.
 //
-// react-leaflet/leaflet stay installed for the rest of the app; this swap
-// is scoped to this file only, per the plan's own Scope section.
+// Pre-step-7 cleanup: react-leaflet/leaflet are no longer installed
+// anywhere in the project (previously deferred as map-vector-restyle-
+// plan.md's own Open Item, resolved separately, see main.tsx). This file
+// was already maplibre-gl only before that removal, so nothing here
+// changes behavior, the note above is now historical context for why
+// maplibre-gl was chosen, not a live scoping boundary.
 
 const PASIG_CENTER: Coordinates = { latitude: 14.5764, longitude: 121.0851 };
 const DEFAULT_ZOOM = 14;
