@@ -526,8 +526,19 @@ export default function TrailDetailPage() {
                 consistency rules -- only the label changes, not the
                 component. No route with no credential ever reaches this
                 branch since trail.credential is null in that case. */}
+            {/* Phase 6.5: 320px overflow check. Badge (badge.tsx) is
+                inline-flex with no width cap of its own; w-fit alone lets
+                a long credential_name (plain `text` column, migration
+                0007, no length cap, staff-authored via admin-trail-
+                builder.tsx) push the badge itself wider than this
+                max-w-md/px-6 container instead of wrapping inside it.
+                max-w-full constrains the badge to the container's width;
+                break-words lets a long name wrap inside that width rather
+                than overflow it. No new token invented, both are stock
+                Tailwind utilities already in use elsewhere in this
+                codebase for the same reason. */}
             {trail.credential && (
-              <Badge variant="accent" className="w-fit">
+              <Badge variant="accent" className="w-fit max-w-full break-words">
                 {completed ? "Earned" : "Earn"}: {trail.credential.credential_name}
               </Badge>
             )}

@@ -18,18 +18,23 @@ function errorMessageFrom(err: unknown, fallback: string): string {
     : fallback;
 }
 
-// Phase 2.4: row-shaped skeletons, same three-row primitive discover-
-// list.tsx and home.tsx's SectionSkeleton both already use, not a
-// spinner, per ponytail's native-feature-first rung (reuse the existing
-// Skeleton primitive rather than adding a spinner dependency).
+// Phase 6.2: row-shaped skeletons matching trail-card.tsx's own row shape
+// exactly, not discover-list.tsx's skeleton copied wholesale (that list's
+// real row has three elements: name, category, and a VerificationBadge,
+// hence its three Skeleton lines; discover-place-detail.tsx's own note
+// on why trails carry no verification badge, Phase 3.2, is exactly why
+// trail-card.tsx's row only ever has two: name, then one metadata line
+// joining theme/duration/budget). Same Skeleton primitive already in
+// use, not a spinner, per ponytail's native-feature-first rung. Three
+// placeholder rows is a row count, unrelated to each row's own line
+// count, and stays a placeholder not tied to the eventual result count.
 function TrailListSkeleton() {
   return (
     <ul className="mx-auto flex max-w-md flex-col divide-y divide-border">
       {[0, 1, 2].map((i) => (
-        <li key={i} className="flex flex-col gap-2 px-6 py-4">
+        <li key={i} className="flex flex-col gap-1 px-6 py-4">
           <Skeleton className="h-4 w-2/3" />
           <Skeleton className="h-3 w-1/3" />
-          <Skeleton className="h-3 w-1/4" />
         </li>
       ))}
     </ul>
