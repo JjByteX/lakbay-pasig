@@ -55,6 +55,7 @@ export function AdminSearchInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={cn("pl-8", value && "pr-8")}
+        maxLength={150}
       />
       {value && (
         <Button

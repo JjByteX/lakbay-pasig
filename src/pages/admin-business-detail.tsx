@@ -146,6 +146,19 @@ const STATUS_VARIANT = {
   unverified: "destructive",
 } as const;
 
+// admin-form-fields-plan.md #2: every maxLength needs a visible counter
+// nearby so the cap isn't a silent wall. Same helper as
+// admin-place-detail.tsx's own CharCount, kept as a page-local copy per
+// this codebase's existing convention (see profile.tsx's errorMessageFrom
+// comment) rather than a new shared module for one small component.
+function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
+  return (
+    <span className="self-end text-xs text-muted-foreground">
+      {value.length}/{max}
+    </span>
+  );
+}
+
 export default function AdminBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -542,7 +555,14 @@ export default function AdminBusinessDetailPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="name">Business Name</Label>
-              <Input id="name" value={form.name} onChange={(e) => updateField("name", e.target.value)} required />
+              <Input
+                id="name"
+                value={form.name}
+                onChange={(e) => updateField("name", e.target.value)}
+                required
+                maxLength={150}
+              />
+              <CharCount value={form.name} max={150} />
             </div>
 
             <div className="flex flex-col gap-2">
@@ -564,7 +584,12 @@ export default function AdminBusinessDetailPage() {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="category">Category</Label>
-            <Input id="category" value={form.category} onChange={(e) => updateField("category", e.target.value)} />
+            <Input
+              id="category"
+              value={form.category}
+              onChange={(e) => updateField("category", e.target.value)}
+              maxLength={100}
+            />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -574,7 +599,9 @@ export default function AdminBusinessDetailPage() {
               placeholder="One line, what the business sells or offers"
               value={form.description}
               onChange={(e) => updateField("description", e.target.value)}
+              maxLength={300}
             />
+            <CharCount value={form.description} max={300} />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -585,13 +612,19 @@ export default function AdminBusinessDetailPage() {
               value={form.address}
               onChange={(e) => updateField("address", e.target.value)}
               required
+              maxLength={300}
             />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="contact">Contact</Label>
-              <Input id="contact" value={form.contact} onChange={(e) => updateField("contact", e.target.value)} />
+              <Input
+                id="contact"
+                value={form.contact}
+                onChange={(e) => updateField("contact", e.target.value)}
+                maxLength={150}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="opening_hours">Opening Hours</Label>
@@ -599,6 +632,7 @@ export default function AdminBusinessDetailPage() {
                 id="opening_hours"
                 value={form.opening_hours}
                 onChange={(e) => updateField("opening_hours", e.target.value)}
+                maxLength={150}
               />
             </div>
           </div>
@@ -611,7 +645,9 @@ export default function AdminBusinessDetailPage() {
               value={form.business_story}
               onChange={(e) => updateField("business_story", e.target.value)}
               className="min-h-30"
+              maxLength={5000}
             />
+            <CharCount value={form.business_story} max={5000} />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -620,7 +656,9 @@ export default function AdminBusinessDetailPage() {
               id="unique_specialty"
               value={form.unique_specialty}
               onChange={(e) => updateField("unique_specialty", e.target.value)}
+              maxLength={300}
             />
+            <CharCount value={form.unique_specialty} max={300} />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -630,7 +668,9 @@ export default function AdminBusinessDetailPage() {
               placeholder="Parking, wheelchair access, nearby transport"
               value={form.accessibility_info}
               onChange={(e) => updateField("accessibility_info", e.target.value)}
+              maxLength={300}
             />
+            <CharCount value={form.accessibility_info} max={300} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -641,6 +681,7 @@ export default function AdminBusinessDetailPage() {
                 placeholder="Comma separated"
                 value={form.social_media_links}
                 onChange={(e) => updateField("social_media_links", e.target.value)}
+                maxLength={500}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -703,7 +744,9 @@ export default function AdminBusinessDetailPage() {
                 onChange={(e) => setReviewNotes(e.target.value)}
                 placeholder="Reason for rejection"
                 required
+                maxLength={1000}
               />
+              <CharCount value={reviewNotes} max={1000} />
             </div>
           )}
 

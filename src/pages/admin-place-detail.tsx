@@ -58,7 +58,7 @@ interface PlaceFormState {
   source_reference: string;
   address: string;
   operating_hours: string;
-  entrance_fee: string;
+  entrance_fee: string; // numeric column (migration 0019), kept as a string here since the number input's value must be a string; parsed to a number or null at submit time
   visit_duration: string;
   accessibility_info: string;
   facilities: string[];
@@ -125,6 +125,17 @@ const STATUS_VARIANT = {
   rejected: "destructive",
 } as const;
 
+// admin-form-fields-plan.md #2: every maxLength needs a visible counter
+// nearby so the cap isn't a silent wall. One small shared helper instead
+// of repeating this markup at every capped field.
+function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
+  return (
+    <span className="self-end text-xs text-muted-foreground">
+      {value.length}/{max}
+    </span>
+  );
+}
+
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -176,7 +187,7 @@ export default function AdminPlaceDetailPage() {
           source_reference: data.source_reference ?? "",
           address: data.address ?? "",
           operating_hours: data.operating_hours ?? "",
-          entrance_fee: data.entrance_fee ?? "",
+          entrance_fee: data.entrance_fee !== null ? String(data.entrance_fee) : "",
           visit_duration: data.visit_duration ?? "",
           accessibility_info: data.accessibility_info ?? "",
           facilities: data.facilities ?? [],
@@ -263,7 +274,16 @@ export default function AdminPlaceDetailPage() {
     setSaving(true);
     setError(null);
 
-    const payload = { ...form, updated_at: new Date().toISOString() };
+    // entrance_fee is numeric (migration 0019): the form holds it as a
+    // string for the number input, so it must be parsed back to a number
+    // (or null when blank) before it reaches a numeric column -- an empty
+    // string fails Postgres's numeric cast, unlike every other field here
+    // which stays text all the way through.
+    const payload = {
+      ...form,
+      entrance_fee: form.entrance_fee.trim() ? Number(form.entrance_fee) : null,
+      updated_at: new Date().toISOString(),
+    };
 
     if (isNew) {
       const { data, error: insertError } = await supabase
@@ -570,7 +590,9 @@ export default function AdminPlaceDetailPage() {
                 onChange={(e) => setReviewNotes(e.target.value)}
                 placeholder="Reason for rejection"
                 required
+                maxLength={1000}
               />
+              <CharCount value={reviewNotes} max={1000} />
             </div>
           )}
 
@@ -608,7 +630,14 @@ function PlaceFormFields({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="name">Place Name</Label>
-          <Input id="name" value={form.name} onChange={(e) => updateField("name", e.target.value)} required />
+          <Input
+            id="name"
+            value={form.name}
+            onChange={(e) => updateField("name", e.target.value)}
+            required
+            maxLength={150}
+          />
+          <CharCount value={form.name} max={150} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -635,7 +664,9 @@ function PlaceFormFields({
           placeholder="One line, what visitors can see or do there"
           value={form.description}
           onChange={(e) => updateField("description", e.target.value)}
+          maxLength={300}
         />
+        <CharCount value={form.description} max={300} />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -646,7 +677,9 @@ function PlaceFormFields({
           value={form.historical_background}
           onChange={(e) => updateField("historical_background", e.target.value)}
           className="min-h-30"
+          maxLength={5000}
         />
+        <CharCount value={form.historical_background} max={5000} />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -656,7 +689,9 @@ function PlaceFormFields({
           value={form.historical_significance}
           onChange={(e) => updateField("historical_significance", e.target.value)}
           className="min-h-30"
+          maxLength={5000}
         />
+        <CharCount value={form.historical_significance} max={5000} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -666,6 +701,7 @@ function PlaceFormFields({
             id="year_or_period"
             value={form.year_or_period}
             onChange={(e) => updateField("year_or_period", e.target.value)}
+            maxLength={100}
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -674,6 +710,7 @@ function PlaceFormFields({
             id="source_reference"
             value={form.source_reference}
             onChange={(e) => updateField("source_reference", e.target.value)}
+            maxLength={300}
           />
         </div>
       </div>
@@ -686,6 +723,7 @@ function PlaceFormFields({
           value={form.address}
           onChange={(e) => updateField("address", e.target.value)}
           required
+          maxLength={300}
         />
       </div>
 
@@ -696,15 +734,31 @@ function PlaceFormFields({
             id="operating_hours"
             value={form.operating_hours}
             onChange={(e) => updateField("operating_hours", e.target.value)}
+            maxLength={150}
           />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="entrance_fee">Entrance Fee</Label>
-          <Input
-            id="entrance_fee"
-            value={form.entrance_fee}
-            onChange={(e) => updateField("entrance_fee", e.target.value)}
-          />
+          {/* entrance_fee is numeric (migration 0019): a plain peso amount,
+              not a range, per admin-form-fields-plan.md #4. The ₱ sign is a
+              fixed label beside the field, never typed by the user; the
+              number input's own up/down arrows step the value. */}
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              ₱
+            </span>
+            <Input
+              id="entrance_fee"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100000}
+              step={1}
+              value={form.entrance_fee}
+              onChange={(e) => updateField("entrance_fee", e.target.value)}
+              className="pl-7"
+            />
+          </div>
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="visit_duration">Estimated Visit Duration</Label>
@@ -712,6 +766,7 @@ function PlaceFormFields({
             id="visit_duration"
             value={form.visit_duration}
             onChange={(e) => updateField("visit_duration", e.target.value)}
+            maxLength={150}
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -737,7 +792,9 @@ function PlaceFormFields({
           id="accessibility_info"
           value={form.accessibility_info}
           onChange={(e) => updateField("accessibility_info", e.target.value)}
+          maxLength={300}
         />
+        <CharCount value={form.accessibility_info} max={300} />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -766,7 +823,9 @@ function PlaceFormFields({
           id="nearby_places"
           value={form.nearby_places}
           onChange={(e) => updateField("nearby_places", e.target.value)}
+          maxLength={300}
         />
+        <CharCount value={form.nearby_places} max={300} />
       </div>
     </>
   );

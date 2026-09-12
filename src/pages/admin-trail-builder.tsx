@@ -64,7 +64,7 @@ interface TrailInfoFormState {
   name: string;
   theme: string;
   estimated_duration: string;
-  estimated_budget: string;
+  estimated_budget: string; // numeric column (migration 0019), kept as a string here since the number input's value must be a string; parsed to a number or null at submit time
   recommended_time: string;
   run_type: string;
 }
@@ -214,6 +214,17 @@ function discoveryEntrySaveLabel(discoverySaving: boolean, editingEntryId: strin
   return editingEntryId === "new" ? "Add" : "Save Changes";
 }
 
+// admin-form-fields-plan.md #2: every maxLength needs a visible counter
+// nearby so the cap isn't a silent wall. Page-local copy, same as the
+// other admin detail pages' own CharCount.
+function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
+  return (
+    <span className="self-end text-xs text-muted-foreground">
+      {value.length}/{max}
+    </span>
+  );
+}
+
 // Extracted from AdminTrailBuilderPage's render (previously an inline IIFE
 // inside the Dialog's DialogContent). Same two-mode body: a list view
 // (editingEntryId === null) or the add/edit form, same markup and
@@ -320,7 +331,9 @@ function DiscoveryContentModalBody({
               value={discoveryForm.title}
               onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, title: e.target.value }))}
               required
+              maxLength={150}
             />
+            <CharCount value={discoveryForm.title} max={150} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="discovery_content_text">Content</Label>
@@ -330,7 +343,9 @@ function DiscoveryContentModalBody({
               value={discoveryForm.content}
               onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, content: e.target.value }))}
               required
+              maxLength={2000}
             />
+            <CharCount value={discoveryForm.content} max={2000} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
@@ -338,7 +353,9 @@ function DiscoveryContentModalBody({
               <Input
                 id="discovery_sequence_order"
                 type="number"
+                inputMode="numeric"
                 min={1}
+                max={100}
                 value={discoveryForm.sequence_order}
                 onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, sequence_order: e.target.value }))}
                 required
@@ -349,7 +366,9 @@ function DiscoveryContentModalBody({
               <Input
                 id="discovery_unlock_radius"
                 type="number"
+                inputMode="numeric"
                 min={1}
+                max={500}
                 value={discoveryForm.unlock_radius}
                 onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, unlock_radius: e.target.value }))}
                 required
@@ -466,7 +485,7 @@ export default function AdminTrailBuilderPage() {
           name: data.name ?? "",
           theme: data.theme ?? "",
           estimated_duration: data.estimated_duration ?? "",
-          estimated_budget: data.estimated_budget ?? "",
+          estimated_budget: data.estimated_budget !== null ? String(data.estimated_budget) : "",
           recommended_time: data.recommended_time ?? "",
           run_type: data.run_type ?? "",
         });
@@ -590,11 +609,15 @@ export default function AdminTrailBuilderPage() {
     setSaving(true);
     setError(null);
 
+    // estimated_budget is numeric (migration 0019): the form holds it as a
+    // string for the number input, same reasoning as admin-place-detail.tsx's
+    // entrance_fee -- an empty string fails Postgres's numeric cast, so it
+    // must become a real number or null before it reaches the payload.
     const payload = {
       name: info.name.trim(),
       theme: info.theme || null,
       estimated_duration: info.estimated_duration || null,
-      estimated_budget: info.estimated_budget || null,
+      estimated_budget: info.estimated_budget.trim() ? Number(info.estimated_budget) : null,
       recommended_time: info.recommended_time || null,
       run_type: info.run_type || null,
       updated_at: new Date().toISOString(),
@@ -1062,7 +1085,14 @@ export default function AdminTrailBuilderPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="name">Route Name</Label>
-              <Input id="name" value={info.name} onChange={(e) => updateInfoField("name", e.target.value)} required />
+              <Input
+                id="name"
+                value={info.name}
+                onChange={(e) => updateInfoField("name", e.target.value)}
+                required
+                maxLength={150}
+              />
+              <CharCount value={info.name} max={150} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="theme">Theme</Label>
@@ -1089,16 +1119,35 @@ export default function AdminTrailBuilderPage() {
                 placeholder="e.g. 2 hours"
                 value={info.estimated_duration}
                 onChange={(e) => updateInfoField("estimated_duration", e.target.value)}
+                maxLength={100}
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="estimated_budget">Estimated Budget</Label>
-              <Input
-                id="estimated_budget"
-                placeholder="e.g. ₱300–500"
-                value={info.estimated_budget}
-                onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
-              />
+              {/* estimated_budget is numeric (migration 0019): a single
+                  peso amount, not a range, per admin-form-fields-plan.md
+                  #4 -- drops the old "e.g. ₱300–500" range placeholder.
+                  The ₱ sign is a fixed label beside the field, never
+                  typed by the user; the number input's own up/down
+                  arrows step the value. Same pattern as
+                  admin-place-detail.tsx's entrance_fee field. */}
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  ₱
+                </span>
+                <Input
+                  id="estimated_budget"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100000}
+                  step={1}
+                  placeholder="e.g. 300"
+                  value={info.estimated_budget}
+                  onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
+                  className="pl-7"
+                />
+              </div>
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="recommended_time">Recommended Time</Label>
@@ -1107,6 +1156,7 @@ export default function AdminTrailBuilderPage() {
                 placeholder="e.g. Weekend mornings"
                 value={info.recommended_time}
                 onChange={(e) => updateInfoField("recommended_time", e.target.value)}
+                maxLength={150}
               />
             </div>
           </div>

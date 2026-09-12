@@ -39,6 +39,18 @@ function errorMessageFrom(err: unknown, fallback: string): string {
     : fallback;
 }
 
+// admin-form-fields-plan.md #2: every maxLength needs a visible counter
+// nearby so the cap isn't a silent wall. Page-local copy, same as the
+// admin detail pages' own CharCount, and same reasoning as this file's
+// own errorMessageFrom comment above for why it stays page-local.
+function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
+  return (
+    <span className="self-end text-xs text-muted-foreground">
+      {value.length}/{max}
+    </span>
+  );
+}
+
 /**
  * Step 8, Phase 4: Profile page, loaded state. Guest-locked branch (Phase
  * 2.2) is unchanged above this.
@@ -116,6 +128,15 @@ export default function ProfilePage() {
     );
   }
 
+  // admin-form-fields-plan.md #3: contact number constrained to digits,
+  // sensible length range. Same treatment as admin-staff-detail.tsx's own
+  // updateContactNumber -- PH mobile numbers are 11 digits (09XXXXXXXXX),
+  // capped a little above that (15) to also allow a leading country code
+  // like +63 typed as digits, without accepting arbitrary free text.
+  function updateContactNumber(raw: string) {
+    setContactNumber(raw.replace(/\D/g, "").slice(0, 15));
+  }
+
   // 4.4: explicit allow list, not the form state spread wholesale. RLS
   // (profiles_update_own, migration 0001) guards the row, not columns --
   // role, staff_role, active_status, position, and system_permission must
@@ -163,7 +184,9 @@ export default function ProfilePage() {
             id="display_name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
+            maxLength={150}
           />
+          <CharCount value={displayName} max={150} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -175,8 +198,11 @@ export default function ProfilePage() {
           <Label htmlFor="contact_number">Contact Number</Label>
           <Input
             id="contact_number"
+            type="tel"
+            inputMode="numeric"
             value={contactNumber}
-            onChange={(e) => setContactNumber(e.target.value)}
+            onChange={(e) => updateContactNumber(e.target.value)}
+            maxLength={15}
           />
         </div>
 

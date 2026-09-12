@@ -73,6 +73,7 @@ export default function SignupPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              maxLength={150}
             />
           </div>
 
@@ -84,6 +85,7 @@ export default function SignupPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              maxLength={72}
             />
             {password.length > 0 && !passwordLongEnough && (
               <p className="text-base text-destructive">
@@ -100,6 +102,7 @@ export default function SignupPage() {
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              maxLength={72}
             />
             {confirmPassword.length > 0 && !passwordsMatch && (
               <p className="text-base text-destructive">Passwords do not match.</p>

@@ -57,6 +57,17 @@ interface StaffFormState {
   system_permission: SystemPermission[];
 }
 
+// admin-form-fields-plan.md #2: every maxLength needs a visible counter
+// nearby so the cap isn't a silent wall. Page-local copy, same as the
+// other admin detail pages' own CharCount.
+function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
+  return (
+    <span className="self-end text-xs text-muted-foreground">
+      {value.length}/{max}
+    </span>
+  );
+}
+
 const EMPTY_FORM: StaffFormState = {
   full_name: "",
   email: "",
@@ -116,6 +127,15 @@ export default function AdminStaffDetailPage() {
 
   function updateField<K extends keyof StaffFormState>(key: K, value: StaffFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // admin-form-fields-plan.md #3: contact number constrained to digits,
+  // sensible length range. PH mobile numbers are 11 digits (09XXXXXXXXX);
+  // capped a little above that (15) to also allow a leading country code
+  // like +63 typed as digits, without accepting arbitrary free text.
+  function updateContactNumber(raw: string) {
+    const digitsOnly = raw.replace(/\D/g, "").slice(0, 15);
+    updateField("contact_number", digitsOnly);
   }
 
   function togglePermission(permission: SystemPermission) {
@@ -277,7 +297,9 @@ export default function AdminStaffDetailPage() {
               value={form.full_name}
               onChange={(e) => updateField("full_name", e.target.value)}
               required
+              maxLength={150}
             />
+            <CharCount value={form.full_name} max={150} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="position">Position</Label>
@@ -286,7 +308,9 @@ export default function AdminStaffDetailPage() {
               value={form.position}
               onChange={(e) => updateField("position", e.target.value)}
               required
+              maxLength={100}
             />
+            <CharCount value={form.position} max={100} />
           </div>
         </div>
 
@@ -300,6 +324,7 @@ export default function AdminStaffDetailPage() {
                 value={form.email}
                 onChange={(e) => updateField("email", e.target.value)}
                 required
+                maxLength={150}
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -312,6 +337,7 @@ export default function AdminStaffDetailPage() {
                 placeholder="At least 8 characters"
                 required
                 minLength={8}
+                maxLength={72}
               />
             </div>
           </div>
@@ -331,9 +357,12 @@ export default function AdminStaffDetailPage() {
           <Label htmlFor="contact_number">Contact Number</Label>
           <Input
             id="contact_number"
+            type="tel"
+            inputMode="numeric"
             value={form.contact_number}
-            onChange={(e) => updateField("contact_number", e.target.value)}
+            onChange={(e) => updateContactNumber(e.target.value)}
             required
+            maxLength={15}
           />
         </div>
 

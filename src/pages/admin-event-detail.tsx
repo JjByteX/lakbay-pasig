@@ -30,6 +30,17 @@ const LIFECYCLE_VARIANT = {
   past: "outline",
 } as const;
 
+// admin-form-fields-plan.md #2: every maxLength needs a visible counter
+// nearby so the cap isn't a silent wall. Page-local copy, same as
+// admin-place-detail.tsx and admin-business-detail.tsx's own CharCount.
+function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
+  return (
+    <span className="self-end text-xs text-muted-foreground">
+      {value.length}/{max}
+    </span>
+  );
+}
+
 interface EventFormState {
   title: string;
   description: string;
@@ -307,7 +318,14 @@ export default function AdminEventDetailPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor="title">Event Title</Label>
-            <Input id="title" value={form.title} onChange={(e) => updateField("title", e.target.value)} required />
+            <Input
+              id="title"
+              value={form.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              required
+              maxLength={150}
+            />
+            <CharCount value={form.title} max={150} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="category">Category</Label>
@@ -332,7 +350,9 @@ export default function AdminEventDetailPage() {
             id="description"
             value={form.description}
             onChange={(e) => updateField("description", e.target.value)}
+            maxLength={2000}
           />
+          <CharCount value={form.description} max={2000} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -343,6 +363,7 @@ export default function AdminEventDetailPage() {
               placeholder="e.g. Pasig Creative Arts Academy, if recurring"
               value={form.related_program}
               onChange={(e) => updateField("related_program", e.target.value)}
+              maxLength={150}
             />
           </div>
           <div className="flex flex-col gap-2">
@@ -359,7 +380,12 @@ export default function AdminEventDetailPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor="location">Location</Label>
-            <Input id="location" value={form.location} onChange={(e) => updateField("location", e.target.value)} />
+            <Input
+              id="location"
+              value={form.location}
+              onChange={(e) => updateField("location", e.target.value)}
+              maxLength={300}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="related_place_id">Related Place</Label>
@@ -386,7 +412,9 @@ export default function AdminEventDetailPage() {
               placeholder="Slots available, how to join, if applicable"
               value={form.enrollment_info}
               onChange={(e) => updateField("enrollment_info", e.target.value)}
+              maxLength={1000}
             />
+            <CharCount value={form.enrollment_info} max={1000} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="language">Language</Label>
