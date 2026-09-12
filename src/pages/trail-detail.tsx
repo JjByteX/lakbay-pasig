@@ -22,6 +22,13 @@ function errorMessageFrom(err: unknown, fallback: string): string {
     : fallback;
 }
 
+// Extracted from a nested ternary (index > highestUnlockedIndex ? ... :
+// completed ? ... : ...) inline in the stop list's per-stop state below.
+function stopStateFor(index: number, highestUnlockedIndex: number, completed: boolean): "locked" | "completed" | "unlocked" {
+  if (index > highestUnlockedIndex) return "locked";
+  return completed ? "completed" : "unlocked";
+}
+
 /**
  * Step 7, Phase 3: trail detail page, guest preview. Route /trails/:id
  * already wired (Phase 2.1, App.tsx). Guest-visible content first, per
@@ -655,9 +662,7 @@ export default function TrailDetailPage() {
                     key={stop.id}
                     stop={stop}
                     index={index}
-                    state={
-                      index > highestUnlockedIndex ? "locked" : completed ? "completed" : "unlocked"
-                    }
+                    state={stopStateFor(index, highestUnlockedIndex, completed)}
                   />
                 ))}
               </ol>

@@ -40,7 +40,7 @@ interface TrailStopProps {
   state: TrailStopState;
 }
 
-export function TrailStop({ stop, index, state }: TrailStopProps) {
+export function TrailStop({ stop, index, state }: Readonly<TrailStopProps>) {
   const isLocked = state === "locked";
   const isCompleted = state === "completed";
 

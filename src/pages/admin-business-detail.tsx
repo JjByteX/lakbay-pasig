@@ -475,6 +475,24 @@ export default function AdminBusinessDetailPage() {
     return <p className="text-sm text-muted-foreground">Could not load this business.</p>;
   }
 
+  // Extracted from a nested ternary (featureSubmitting ? ... : featuredStatus
+  // === "featured" ? ... : ...) inline in the Feature/Unfeature button below.
+  let featureToggleLabel = "Feature";
+  if (featureSubmitting) {
+    featureToggleLabel = "Updating…";
+  } else if (featuredStatus === "featured") {
+    featureToggleLabel = "Unfeature";
+  }
+
+  // Extracted from a nested ternary (reviewSubmitting ? ... : reviewAction
+  // === "verify" ? ... : ...) inline in the Verify/Reject dialog button below.
+  let reviewSubmitLabel = "Reject";
+  if (reviewSubmitting) {
+    reviewSubmitLabel = "Submitting…";
+  } else if (reviewAction === "verify") {
+    reviewSubmitLabel = "Verify";
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -500,11 +518,7 @@ export default function AdminBusinessDetailPage() {
               className="gap-2"
             >
               <Star className="h-4 w-4" />
-              {featureSubmitting
-                ? "Updating…"
-                : featuredStatus === "featured"
-                  ? "Unfeature"
-                  : "Feature"}
+              {featureToggleLabel}
             </Button>
           )}
         </div>
@@ -704,7 +718,7 @@ export default function AdminBusinessDetailPage() {
               onClick={handleReviewSubmit}
               disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
             >
-              {reviewSubmitting ? "Submitting…" : reviewAction === "verify" ? "Verify" : "Reject"}
+              {reviewSubmitLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -733,7 +747,7 @@ const REVIEW_ACTION_VARIANT: Record<BusinessReviewEntry["action"], "default" | "
   feature: "accent",
 };
 
-function ReviewHistoryList({ reviews }: { reviews: BusinessReviewEntry[] | null }) {
+function ReviewHistoryList({ reviews }: Readonly<{ reviews: BusinessReviewEntry[] | null }>) {
   if (reviews === null) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
@@ -769,7 +783,7 @@ function ReviewHistoryList({ reviews }: { reviews: BusinessReviewEntry[] | null 
 // here. Fewer than 5 rows is the common case for a single business's item
 // list, so this uses a simple list per ux-ui-guidelines.md's table sizing
 // rule, not the Table primitive.
-function ItemList({ items }: { items: BusinessItem[] | null }) {
+function ItemList({ items }: Readonly<{ items: BusinessItem[] | null }>) {
   if (items === null) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }

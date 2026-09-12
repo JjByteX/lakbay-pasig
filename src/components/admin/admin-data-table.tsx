@@ -233,7 +233,7 @@ export default function AdminDataTable<T>({
   onRowClick,
   toolbar,
   className,
-}: AdminDataTableProps<T>) {
+}: Readonly<AdminDataTableProps<T>>) {
   const [sortState, dispatchSort] = useReducer(sortReducer, sortInitial);
   const [page, setPage] = useReducer((_: number, p: number) => p, 1);
 
@@ -276,6 +276,47 @@ export default function AdminDataTable<T>({
 
   const isEmpty = !loading && paginated.length === 0;
 
+  // Extracted from a nested ternary (loading ? ... : !isEmpty ? ... : null)
+  // inline in the table body below: three mutually exclusive render states
+  // (skeleton rows while loading, real rows once loaded and non-empty,
+  // nothing here otherwise — the empty-state message renders separately
+  // below the table).
+  let tableBody: ReactNode = null;
+  if (loading) {
+    tableBody = <TableSkeletonRows columns={columns} rowCount={effectivePageSize || 10} rowRef={apsRowRef} />;
+  } else if (!isEmpty) {
+    tableBody = (
+      <TableBody>
+        {paginated.map((row, rowIndex) => {
+          const rowKey = String(row[keyField] ?? JSON.stringify(row));
+          return (
+            <TableRow
+              key={rowKey}
+              ref={rowIndex === 0 ? apsRowRef : undefined}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={onRowClick ? "cursor-pointer" : undefined}
+            >
+              {columns.map((col) => {
+                const actionsCol = isActionsColumn(col);
+                return (
+                  <TableCell
+                    key={col.key}
+                    className={cn(
+                      actionsCol && "w-px whitespace-nowrap text-center",
+                      !actionsCol && col.align === "right" && "text-right"
+                    )}
+                  >
+                    {renderCellContent(row, col)}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    );
+  }
+
   return (
     <div className={cn("flex flex-col gap-2", autoPageSize && "flex-1 min-h-0", className)} ref={apsContainerRef}>
       <div
@@ -300,38 +341,7 @@ export default function AdminDataTable<T>({
               </TableRow>
             </TableHeader>
 
-            {loading ? (
-              <TableSkeletonRows columns={columns} rowCount={effectivePageSize || 10} rowRef={apsRowRef} />
-            ) : !isEmpty ? (
-              <TableBody>
-                {paginated.map((row, rowIndex) => {
-                  const rowKey = String(row[keyField] ?? JSON.stringify(row));
-                  return (
-                    <TableRow
-                      key={rowKey}
-                      ref={rowIndex === 0 ? apsRowRef : undefined}
-                      onClick={onRowClick ? () => onRowClick(row) : undefined}
-                      className={onRowClick ? "cursor-pointer" : undefined}
-                    >
-                      {columns.map((col) => {
-                        const actionsCol = isActionsColumn(col);
-                        return (
-                          <TableCell
-                            key={col.key}
-                            className={cn(
-                              actionsCol && "w-px whitespace-nowrap text-center",
-                              !actionsCol && col.align === "right" && "text-right"
-                            )}
-                          >
-                            {renderCellContent(row, col)}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            ) : null}
+            {tableBody}
           </Table>
 
           {isEmpty && (
@@ -403,11 +413,11 @@ function TableSkeletonRows<T>({
   columns,
   rowCount,
   rowRef,
-}: {
+}: Readonly<{
   columns: AdminColumn<T>[];
   rowCount: number;
   rowRef?: Ref<HTMLTableRowElement>;
-}) {
+}>) {
   const rowIndexes = Array.from({ length: Math.max(1, rowCount) }, (_, i) => i);
 
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -251,6 +251,49 @@ function DiscoveryContentModalBody({
   onCancelEdit: () => void;
   onSave: (stop: StopRow) => void;
 }>) {
+  // Extracted from a nested ternary (discoveryLoading ? ... :
+  // entriesForStop.length === 0 ? ... : ...) inline in the list view below.
+  let entriesListBody: ReactNode;
+  if (discoveryLoading) {
+    entriesListBody = <p className="text-sm text-muted-foreground">Loading…</p>;
+  } else if (entriesForStop.length === 0) {
+    entriesListBody = <p className="text-sm text-muted-foreground">No discovery content yet.</p>;
+  } else {
+    entriesListBody = (
+      <ul className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
+        {entriesForStop.map((entry) => (
+          <li key={entry.id} className="flex items-start justify-between gap-3 p-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">
+                  {entry.sequence_order}
+                </span>
+                <span className="truncate text-sm font-semibold text-foreground">{entry.title}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Unlocks within {entry.unlock_radius}m</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onStartEdit(entry)}>
+                <Pencil className="h-4 w-4" />
+                <span className="sr-only">Edit</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                disabled={discoverySaving}
+                onClick={() => onDelete(entry.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="sr-only">Delete</span>
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
     <>
       <DialogHeader>
@@ -261,43 +304,7 @@ function DiscoveryContentModalBody({
 
       {editingEntryId === null ? (
         <div className="flex flex-col gap-3">
-          {discoveryLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : entriesForStop.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No discovery content yet.</p>
-          ) : (
-            <ul className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
-              {entriesForStop.map((entry) => (
-                <li key={entry.id} className="flex items-start justify-between gap-3 p-3">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">
-                        {entry.sequence_order}
-                      </span>
-                      <span className="truncate text-sm font-semibold text-foreground">{entry.title}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Unlocks within {entry.unlock_radius}m</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onStartEdit(entry)}>
-                      <Pencil className="h-4 w-4" />
-                      <span className="sr-only">Edit</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      disabled={discoverySaving}
-                      onClick={() => onDelete(entry.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete</span>
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          {entriesListBody}
           <div>
             <Button type="button" variant="outline" onClick={() => onStartNew(activeStop)}>
               Add Discovery Content
@@ -944,6 +951,84 @@ export default function AdminTrailBuilderPage() {
     return status === "published" ? "Unpublish" : "Publish";
   }
 
+  // Extracted from a nested ternary (stopsLoading ? ... : stops.length
+  // === 0 ? ... : ...) inline in the Stops step's list below.
+  function stopsListBody(): ReactNode {
+    if (stopsLoading) {
+      return <p className="text-sm text-muted-foreground">Loading…</p>;
+    }
+    if (stops.length === 0) {
+      return <p className="text-sm text-muted-foreground">No stops yet.</p>;
+    }
+    return (
+      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+        {stops.map((stop, index) => (
+          <li key={stop.id} className="flex items-center justify-between gap-3 p-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+                {index + 1}
+              </span>
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-foreground">{stop.name}</span>
+                <Badge variant="secondary" className="mt-1 w-fit capitalize">
+                  {stop.stop_type}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={savingStops}
+                onClick={() => openDiscoveryModal(stop.id)}
+              >
+                <BookOpen className="h-4 w-4" />
+                Discovery Content
+                {discoveryContent.some((d) => d.route_stop_id === stop.id) && (
+                  <Badge variant="secondary" className="ml-1">
+                    {discoveryContent.filter((d) => d.route_stop_id === stop.id).length}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={index === 0 || savingStops}
+                onClick={() => handleMoveStop(index, -1)}
+              >
+                <ArrowUp className="h-4 w-4" />
+                <span className="sr-only">Move up</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={index === stops.length - 1 || savingStops}
+                onClick={() => handleMoveStop(index, 1)}
+              >
+                <ArrowDown className="h-4 w-4" />
+                <span className="sr-only">Move down</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                disabled={savingStops}
+                onClick={() => handleRemoveStop(stop.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="sr-only">Remove stop</span>
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
@@ -1059,77 +1144,7 @@ export default function AdminTrailBuilderPage() {
         <div className="flex flex-col gap-4">
           {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
 
-          {stopsLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : stops.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No stops yet.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-              {stops.map((stop, index) => (
-                <li key={stop.id} className="flex items-center justify-between gap-3 p-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-                      {index + 1}
-                    </span>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-foreground">{stop.name}</span>
-                      <Badge variant="secondary" className="mt-1 w-fit capitalize">
-                        {stop.stop_type}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      disabled={savingStops}
-                      onClick={() => openDiscoveryModal(stop.id)}
-                    >
-                      <BookOpen className="h-4 w-4" />
-                      Discovery Content
-                      {discoveryContent.some((d) => d.route_stop_id === stop.id) && (
-                        <Badge variant="secondary" className="ml-1">
-                          {discoveryContent.filter((d) => d.route_stop_id === stop.id).length}
-                        </Badge>
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={index === 0 || savingStops}
-                      onClick={() => handleMoveStop(index, -1)}
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                      <span className="sr-only">Move up</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={index === stops.length - 1 || savingStops}
-                      onClick={() => handleMoveStop(index, 1)}
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                      <span className="sr-only">Move down</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      disabled={savingStops}
-                      onClick={() => handleRemoveStop(stop.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Remove stop</span>
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          {stopsListBody()}
 
           <div>
             <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
@@ -1261,11 +1276,11 @@ function StepIndicator({
   currentStep,
   onSelect,
   disabledSteps,
-}: {
+}: Readonly<{
   currentStep: Step;
   onSelect: (step: Step) => void;
   disabledSteps: Set<Step>;
-}) {
+}>) {
   return (
     <div className="flex flex-wrap gap-2">
       {STEPS.map((s, index) => {

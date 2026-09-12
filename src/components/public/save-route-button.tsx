@@ -39,7 +39,7 @@ interface SaveRouteButtonProps {
  * Also enforced independently at the database layer, saved_routes_own
  * (migration 0007) has no policy allowing an unauthenticated insert.
  */
-export function SaveRouteButton({ routeId, onToggle }: SaveRouteButtonProps) {
+export function SaveRouteButton({ routeId, onToggle }: Readonly<SaveRouteButtonProps>) {
   const { session } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);

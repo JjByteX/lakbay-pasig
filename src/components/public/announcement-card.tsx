@@ -30,7 +30,7 @@ interface AnnouncementCardProps {
   onClick: () => void;
 }
 
-export function AnnouncementCard({ announcement, onClick }: AnnouncementCardProps) {
+export function AnnouncementCard({ announcement, onClick }: Readonly<AnnouncementCardProps>) {
   const formattedDate = formatDateTime(announcement.date_time);
 
   return (

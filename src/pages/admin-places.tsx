@@ -73,6 +73,14 @@ const STATUS_PRIORITY = { pending: 0, verified: 1, rejected: 1 } as const;
 const TYPE_OPTIONS = ["all", "place", "discovery_content"] as const;
 const STATUS_OPTIONS = ["all", "pending", "verified", "rejected"] as const;
 
+// Extracted from a nested ternary (option === "all" ? ... : option ===
+// "place" ? ... : ...) inline in the Type filter's option labels below.
+function typeFilterOptionLabel(option: (typeof TYPE_OPTIONS)[number]): string {
+  if (option === "all") return "All types";
+  if (option === "place") return "Place";
+  return "Trail Content";
+}
+
 export default function AdminPlacesPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<QueueRow[] | null>(null);
@@ -294,7 +302,7 @@ export default function AdminPlacesPage() {
               <SelectContent>
                 {TYPE_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {option === "all" ? "All types" : option === "place" ? "Place" : "Trail Content"}
+                    {typeFilterOptionLabel(option)}
                   </SelectItem>
                 ))}
               </SelectContent>

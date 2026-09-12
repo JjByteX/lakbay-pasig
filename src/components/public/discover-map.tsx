@@ -281,7 +281,7 @@ interface DiscoverMapProps {
  * (results/userLocation/resultsLoading/resultsError) is unchanged, so
  * discover.tsx needs no changes to call this component.
  */
-export function DiscoverMap({ results, userLocation, resultsLoading, resultsError }: DiscoverMapProps) {
+export function DiscoverMap({ results, userLocation, resultsLoading, resultsError }: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);

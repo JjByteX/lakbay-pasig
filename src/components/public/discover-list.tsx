@@ -34,7 +34,7 @@ interface DiscoverListProps {
  * the row itself opens into the shared card component, it should not also
  * be a card.
  */
-export function DiscoverList({ results, userLocation, resultsLoading, resultsError }: DiscoverListProps) {
+export function DiscoverList({ results, userLocation, resultsLoading, resultsError }: Readonly<DiscoverListProps>) {
   const [selected, setSelected] = useState<DiscoverResult | null>(null);
   const sorted = sortDiscoverResults(results, userLocation);
 

@@ -39,7 +39,7 @@ interface SaveButtonProps {
  * a permanent visible "Save" / "Saved" label next to it would compete with
  * the page's own title for attention in a small header row.
  */
-export function SaveButton({ placeId, onToggle }: SaveButtonProps) {
+export function SaveButton({ placeId, onToggle }: Readonly<SaveButtonProps>) {
   const { session } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);

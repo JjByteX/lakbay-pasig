@@ -64,6 +64,15 @@ const LIFECYCLE_STATUSES = ["upcoming", "ongoing", "past"] as const;
 const LIFECYCLE_FILTER_OPTIONS = ["all", ...LIFECYCLE_STATUSES] as const;
 const PUBLISHED_OPTIONS = ["all", "published", "draft"] as const;
 
+// Extracted from a nested ternary (option === "all" ? ... : option ===
+// "published" ? ... : ...) inline in the Published filter's option labels
+// below.
+function publishedFilterOptionLabel(option: (typeof PUBLISHED_OPTIONS)[number]): string {
+  if (option === "all") return "All";
+  if (option === "published") return "Published";
+  return "Draft";
+}
+
 export default function AdminEventsPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState<EventRow[] | null>(null);
@@ -248,7 +257,7 @@ export default function AdminEventsPage() {
               <SelectContent>
                 {PUBLISHED_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {option === "all" ? "All" : option === "published" ? "Published" : "Draft"}
+                    {publishedFilterOptionLabel(option)}
                   </SelectItem>
                 ))}
               </SelectContent>

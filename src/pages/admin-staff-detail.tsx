@@ -239,6 +239,15 @@ export default function AdminStaffDetailPage() {
     return <p className="text-sm text-destructive">Could not load this staff account.</p>;
   }
 
+  // Extracted from a nested ternary (saving ? ... : isNew ? ... : ...)
+  // inline in the submit button below.
+  let submitLabel = "Save Changes";
+  if (saving) {
+    submitLabel = "Saving…";
+  } else if (isNew) {
+    submitLabel = "Create Account";
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -398,7 +407,7 @@ export default function AdminStaffDetailPage() {
             Cancel
           </Button>
           <Button type="submit" disabled={!canSubmit}>
-            {saving ? "Saving…" : isNew ? "Create Account" : "Save Changes"}
+            {submitLabel}
           </Button>
         </div>
       </form>

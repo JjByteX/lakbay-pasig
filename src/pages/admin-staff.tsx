@@ -59,6 +59,29 @@ const PERMISSION_LABEL: Record<string, string> = {
 const ROLE_OPTIONS = ["all", "staff", "admin"] as const;
 const ACTIVE_OPTIONS = ["all", "active", "inactive"] as const;
 
+// Extracted from a nested ternary (row.staff_role === "admin" ? ... :
+// row.system_permission && ... ? ... : ...) inline in the Permissions
+// column's render below: three mutually exclusive states (admin bypasses
+// permissions entirely, staff with at least one permission, staff with
+// none).
+function PermissionsCell({ row }: Readonly<{ row: StaffRow }>) {
+  if (row.staff_role === "admin") {
+    return <span className="text-sm text-muted-foreground">All sections</span>;
+  }
+  if (row.system_permission && row.system_permission.length > 0) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {row.system_permission.map((p) => (
+          <Badge key={p} variant="secondary">
+            {PERMISSION_LABEL[p] ?? p}
+          </Badge>
+        ))}
+      </div>
+    );
+  }
+  return <span className="text-sm text-muted-foreground">None</span>;
+}
+
 export default function AdminStaffPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -159,20 +182,7 @@ export default function AdminStaffPage() {
       key: "system_permission",
       label: "Permissions",
       sortable: false,
-      render: (row) =>
-        row.staff_role === "admin" ? (
-          <span className="text-sm text-muted-foreground">All sections</span>
-        ) : row.system_permission && row.system_permission.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {row.system_permission.map((p) => (
-              <Badge key={p} variant="secondary">
-                {PERMISSION_LABEL[p] ?? p}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <span className="text-sm text-muted-foreground">None</span>
-        ),
+      render: (row) => <PermissionsCell row={row} />,
     },
     {
       key: "active_status",

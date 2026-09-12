@@ -23,10 +23,10 @@ import { cn } from "@/lib/utils";
 export default function AdminFilterBar({
   children,
   className,
-}: {
+}: Readonly<{
   children: ReactNode;
   className?: string;
-}) {
+}>) {
   return <div className={cn("flex flex-wrap items-center gap-2", className)}>{children}</div>;
 }
 
@@ -41,12 +41,12 @@ export function AdminSearchInput({
   onChange,
   placeholder = "Search…",
   className,
-}: {
+}: Readonly<{
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
-}) {
+}>) {
   return (
     <div className={cn("relative flex-1 min-w-[180px]", className)}>
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

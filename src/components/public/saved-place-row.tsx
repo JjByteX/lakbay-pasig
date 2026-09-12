@@ -36,7 +36,7 @@ interface SavedPlaceRowProps {
   onUnsave: () => void;
 }
 
-export function SavedPlaceRow({ place, onClick, onUnsave }: SavedPlaceRowProps) {
+export function SavedPlaceRow({ place, onClick, onUnsave }: Readonly<SavedPlaceRowProps>) {
   return (
     <div className="flex w-full items-center gap-2 px-6 py-4">
       <button

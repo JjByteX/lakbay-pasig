@@ -23,7 +23,7 @@ interface TrailCardProps {
   onClick: () => void;
 }
 
-export function TrailCard({ trail, onClick }: TrailCardProps) {
+export function TrailCard({ trail, onClick }: Readonly<TrailCardProps>) {
   const meta = [trail.theme, trail.estimated_duration, trail.estimated_budget].filter(Boolean).join(" · ");
 
   return (

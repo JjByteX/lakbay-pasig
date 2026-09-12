@@ -21,7 +21,7 @@ interface SavedTrailRowProps {
   onUnsave: () => void;
 }
 
-export function SavedTrailRow({ trail, onClick, onUnsave }: SavedTrailRowProps) {
+export function SavedTrailRow({ trail, onClick, onUnsave }: Readonly<SavedTrailRowProps>) {
   return (
     <div className="flex w-full items-center gap-2">
       <div className="min-w-0 flex-1">

@@ -16,7 +16,7 @@ interface VerifiedItemCardProps {
   onClick: () => void;
 }
 
-export function VerifiedItemCard({ item, onClick }: VerifiedItemCardProps) {
+export function VerifiedItemCard({ item, onClick }: Readonly<VerifiedItemCardProps>) {
   return (
     <button
       type="button"

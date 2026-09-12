@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ interface PlaceBusinessPickerProps {
   excludeIds?: Set<string>;
 }
 
-export function PlaceBusinessPicker({ onPick, excludeIds }: PlaceBusinessPickerProps) {
+export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusinessPickerProps>) {
   const [query, setQuery] = useState("");
   const [places, setPlaces] = useState<PlaceRow[] | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRow[] | null>(null);
@@ -84,6 +84,41 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: PlaceBusinessPickerP
     (b) => !excludeIds?.has(b.id) && (!normalizedQuery || b.name.toLowerCase().includes(normalizedQuery))
   );
 
+  const isEmpty = filteredPlaces.length === 0 && filteredBusinesses.length === 0;
+
+  // Extracted from a nested ternary (loading ? ... : isEmpty ? ... : ...)
+  // inline in the render below: three mutually exclusive states for the
+  // results area (loading, empty, or the actual place/business rows).
+  let pickerBody: ReactNode;
+  if (loading) {
+    pickerBody = <p className="text-sm text-muted-foreground">Loading…</p>;
+  } else if (isEmpty) {
+    pickerBody = <p className="text-sm text-muted-foreground">No verified places or businesses match.</p>;
+  } else {
+    pickerBody = (
+      <div className="flex max-h-80 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card">
+        {filteredPlaces.map((place) => (
+          <PickerRow
+            key={`place-${place.id}`}
+            name={place.name}
+            category={place.category}
+            typeLabel="Place"
+            onClick={() => onPick({ type: "place", id: place.id, name: place.name })}
+          />
+        ))}
+        {filteredBusinesses.map((business) => (
+          <PickerRow
+            key={`business-${business.id}`}
+            name={business.name}
+            category={business.category}
+            typeLabel="Business"
+            onClick={() => onPick({ type: "business", id: business.id, name: business.name })}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
@@ -96,32 +131,7 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: PlaceBusinessPickerP
         />
       </div>
 
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : filteredPlaces.length === 0 && filteredBusinesses.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No verified places or businesses match.</p>
-      ) : (
-        <div className="flex max-h-80 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card">
-          {filteredPlaces.map((place) => (
-            <PickerRow
-              key={`place-${place.id}`}
-              name={place.name}
-              category={place.category}
-              typeLabel="Place"
-              onClick={() => onPick({ type: "place", id: place.id, name: place.name })}
-            />
-          ))}
-          {filteredBusinesses.map((business) => (
-            <PickerRow
-              key={`business-${business.id}`}
-              name={business.name}
-              category={business.category}
-              typeLabel="Business"
-              onClick={() => onPick({ type: "business", id: business.id, name: business.name })}
-            />
-          ))}
-        </div>
-      )}
+      {pickerBody}
     </div>
   );
 }
@@ -131,12 +141,12 @@ function PickerRow({
   category,
   typeLabel,
   onClick,
-}: {
+}: Readonly<{
   name: string;
   category: string | null;
   typeLabel: string;
   onClick: () => void;
-}) {
+}>) {
   return (
     <button
       type="button"

@@ -52,6 +52,15 @@ const STATUS_VARIANT = {
 const STATUS_OPTIONS = ["all", "pending", "verified", "unverified"] as const;
 const FEATURED_OPTIONS = ["all", "featured", "listed"] as const;
 
+// Extracted from a nested ternary (option === "all" ? ... : option ===
+// "featured" ? ... : ...) inline in the Featured status filter's option
+// labels below.
+function featuredFilterOptionLabel(option: (typeof FEATURED_OPTIONS)[number]): string {
+  if (option === "all") return "All listings";
+  if (option === "featured") return "Featured";
+  return "Listed";
+}
+
 // PrioritizedBusiness (from business-queue-priority.ts) only carries the
 // fields the priority function needs. The table also displays name,
 // business_type, and featured_status, which are joined back in from the
@@ -258,7 +267,7 @@ export default function AdminBusinessesPage() {
               <SelectContent>
                 {FEATURED_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {option === "all" ? "All listings" : option === "featured" ? "Featured" : "Listed"}
+                    {featuredFilterOptionLabel(option)}
                   </SelectItem>
                 ))}
               </SelectContent>

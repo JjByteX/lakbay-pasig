@@ -29,7 +29,7 @@ import type { DiscoverResult } from "@/lib/discover-types";
 // per step-5-plan.md's "every result card shows a verification label,"
 // reused here rather than a second copy of the same status-to-label
 // mapping, per constraints.md's Inventory Before Suggesting rule.
-export function VerificationBadge({ status }: { status: DiscoverResult["verification_status"] }) {
+export function VerificationBadge({ status }: Readonly<{ status: DiscoverResult["verification_status"] }>) {
   if (status === "pending") {
     return <Badge variant="outline">Pending Verification</Badge>;
   }
@@ -58,7 +58,7 @@ interface ResultCardProps {
  * links). Link variant, not default, since this is a secondary
  * navigation action inside a preview, not the modal's primary action.
  */
-export function ResultCard({ result, onOpenChange }: ResultCardProps) {
+export function ResultCard({ result, onOpenChange }: Readonly<ResultCardProps>) {
   return (
     <Dialog open={result !== null} onOpenChange={onOpenChange}>
       <DialogContent>

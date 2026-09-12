@@ -285,6 +285,15 @@ export default function AdminDiscoveryContentReviewPage() {
     return <p className="text-sm text-destructive">Could not load this Trail Content entry.</p>;
   }
 
+  // Extracted from a nested ternary (reviewSubmitting ? ... : reviewAction
+  // === "verify" ? ... : ...) inline in the Verify/Reject dialog button below.
+  let reviewSubmitLabel = "Reject";
+  if (reviewSubmitting) {
+    reviewSubmitLabel = "Submitting…";
+  } else if (reviewAction === "verify") {
+    reviewSubmitLabel = "Verify";
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -386,7 +395,7 @@ export default function AdminDiscoveryContentReviewPage() {
               onClick={handleReviewSubmit}
               disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
             >
-              {reviewSubmitting ? "Submitting…" : reviewAction === "verify" ? "Verify" : "Reject"}
+              {reviewSubmitLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -395,7 +404,7 @@ export default function AdminDiscoveryContentReviewPage() {
   );
 }
 
-function ReviewHistoryList({ reviews }: { reviews: ReviewEntry[] | null }) {
+function ReviewHistoryList({ reviews }: Readonly<{ reviews: ReviewEntry[] | null }>) {
   if (reviews === null) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }

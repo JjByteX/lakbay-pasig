@@ -448,6 +448,15 @@ export default function AdminPlaceDetailPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
+  // Extracted from a nested ternary (reviewSubmitting ? ... : reviewAction
+  // === "verify" ? ... : ...) inline in the Verify/Reject dialog button below.
+  let reviewSubmitLabel = "Reject";
+  if (reviewSubmitting) {
+    reviewSubmitLabel = "Submitting…";
+  } else if (reviewAction === "verify") {
+    reviewSubmitLabel = "Verify";
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -576,7 +585,7 @@ export default function AdminPlaceDetailPage() {
               onClick={handleReviewSubmit}
               disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
             >
-              {reviewSubmitting ? "Submitting…" : reviewAction === "verify" ? "Verify" : "Reject"}
+              {reviewSubmitLabel}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -589,11 +598,11 @@ function PlaceFormFields({
   form,
   updateField,
   toggleFacility,
-}: {
+}: Readonly<{
   form: PlaceFormState;
   updateField: <K extends keyof PlaceFormState>(key: K, value: PlaceFormState[K]) => void;
   toggleFacility: (facility: string) => void;
-}) {
+}>) {
   return (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -766,7 +775,7 @@ function PlaceFormFields({
 // 5.6: full place_reviews history, staff id (via display name), action,
 // notes, timestamp. Lives in the Review History tab, separate from the
 // Current Info tab per plan 5.6's no-fragmentation instruction.
-function ReviewHistoryList({ reviews }: { reviews: PlaceReviewEntry[] | null }) {
+function ReviewHistoryList({ reviews }: Readonly<{ reviews: PlaceReviewEntry[] | null }>) {
   if (reviews === null) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
@@ -801,13 +810,13 @@ function PhotoUploadArea({
   uploading,
   onSelect,
   onRemove,
-}: {
+}: Readonly<{
   label: string;
   photos: PlacePhoto[];
   uploading: boolean;
   onSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemove: (photo: PlacePhoto) => void;
-}) {
+}>) {
   const inputId = `photo-upload-${label.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (

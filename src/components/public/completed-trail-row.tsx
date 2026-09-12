@@ -44,7 +44,7 @@ interface CompletedTrailRowProps {
   onClick: () => void;
 }
 
-export function CompletedTrailRow({ trail, onClick }: CompletedTrailRowProps) {
+export function CompletedTrailRow({ trail, onClick }: Readonly<CompletedTrailRowProps>) {
   const formattedDate = formatCompletedDate(trail.completed_at);
 
   return (

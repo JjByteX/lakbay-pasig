@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { fetchAnnouncements, fetchRecentlyVerified } from "@/lib/home-query";
 import type { Announcement, RecentlyVerifiedItem } from "@/lib/home-types";
 import { AnnouncementCard } from "@/components/public/announcement-card";
@@ -85,58 +85,68 @@ export default function HomePage() {
       .finally(() => setRecentlyVerifiedLoading(false));
   }, []);
 
+  // Extracted from a nested ternary (announcementsError ? ... :
+  // announcementsLoading ? ... : announcements.length === 0 ? ... : ...)
+  // inline in the Announcements section below. Error checked first, ahead
+  // of loading and empty, per discover-list.tsx's established ordering: an
+  // error is a more specific and more serious condition than either "still
+  // waiting" or "completed with nothing to show."
+  let announcementsBody: ReactNode;
+  if (announcementsError) {
+    announcementsBody = <p className="text-sm text-destructive">{announcementsError}</p>;
+  } else if (announcementsLoading) {
+    announcementsBody = <SectionSkeleton />;
+  } else if (announcements.length === 0) {
+    announcementsBody = <p className="text-sm text-muted-foreground">No announcements yet.</p>;
+  } else {
+    announcementsBody = (
+      <ul className="-mx-6 flex flex-col divide-y divide-border">
+        {announcements.map((announcement) => (
+          <li key={announcement.id}>
+            <AnnouncementCard
+              announcement={announcement}
+              onClick={() => navigate(`/events/${announcement.id}`)}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  // Same reasoning as announcementsBody above, for the Recently verified
+  // section.
+  let recentlyVerifiedBody: ReactNode;
+  if (recentlyVerifiedError) {
+    recentlyVerifiedBody = <p className="text-sm text-destructive">{recentlyVerifiedError}</p>;
+  } else if (recentlyVerifiedLoading) {
+    recentlyVerifiedBody = <SectionSkeleton />;
+  } else if (recentlyVerified.length === 0) {
+    recentlyVerifiedBody = <p className="text-sm text-muted-foreground">No recently verified content yet.</p>;
+  } else {
+    recentlyVerifiedBody = (
+      <ul className="-mx-6 flex flex-col divide-y divide-border">
+        {recentlyVerified.map((item) => (
+          <li key={`${item.kind}-${item.id}`}>
+            <VerifiedItemCard
+              item={item}
+              onClick={() => navigate(`/discover/${item.kind}/${item.id}`)}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">Announcements</h2>
-        {/* Phase 6.3: error checked first, ahead of loading and empty, per
-            discover-list.tsx's established ordering, an error is a more
-            specific and more serious condition than either "still waiting"
-            or "completed with nothing to show." text-destructive reused
-            as-is, this codebase's one existing error-message convention. */}
-        {announcementsError ? (
-          <p className="text-sm text-destructive">{announcementsError}</p>
-        ) : announcementsLoading ? (
-          <SectionSkeleton />
-        ) : announcements.length === 0 ? (
-          // Phase 6.2: distinct wording per section, ux-ui-guidelines.md's
-          // Label Rules ban restating the same idea twice, these are two
-          // different concepts (nothing published vs nothing verified yet).
-          <p className="text-sm text-muted-foreground">No announcements yet.</p>
-        ) : (
-          <ul className="-mx-6 flex flex-col divide-y divide-border">
-            {announcements.map((announcement) => (
-              <li key={announcement.id}>
-                <AnnouncementCard
-                  announcement={announcement}
-                  onClick={() => navigate(`/events/${announcement.id}`)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        {announcementsBody}
       </div>
 
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">Recently verified</h2>
-        {recentlyVerifiedError ? (
-          <p className="text-sm text-destructive">{recentlyVerifiedError}</p>
-        ) : recentlyVerifiedLoading ? (
-          <SectionSkeleton />
-        ) : recentlyVerified.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No recently verified content yet.</p>
-        ) : (
-          <ul className="-mx-6 flex flex-col divide-y divide-border">
-            {recentlyVerified.map((item) => (
-              <li key={`${item.kind}-${item.id}`}>
-                <VerifiedItemCard
-                  item={item}
-                  onClick={() => navigate(`/discover/${item.kind}/${item.id}`)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        {recentlyVerifiedBody}
       </div>
     </div>
   );

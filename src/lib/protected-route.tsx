@@ -13,7 +13,7 @@ interface ProtectedRouteProps {
   requiredPermission?: SystemPermission;
 }
 
-export function ProtectedRoute({ children, requireStaff, requireAdmin, requiredPermission }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requireStaff, requireAdmin, requiredPermission }: Readonly<ProtectedRouteProps>) {
   const { session, profile, loading } = useAuth();
 
   if (loading) return null;

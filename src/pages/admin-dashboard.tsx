@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Landmark, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -151,6 +151,33 @@ export default function AdminDashboardPage() {
     });
   }, [canPlaces, canBusinesses]);
 
+  // Extracted from a nested ternary (activity === null ? ... : activity.length
+  // === 0 ? ... : ...) inline in the Recent activity section below.
+  let activityBody: ReactNode;
+  if (activity === null) {
+    activityBody = <p className="text-sm text-muted-foreground">Loading…</p>;
+  } else if (activity.length === 0) {
+    activityBody = <p className="text-sm text-muted-foreground">No review actions yet.</p>;
+  } else {
+    activityBody = (
+      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+        {activity.map((entry) => (
+          <li key={entry.id} className="flex flex-col gap-1 p-4">
+            <p className="text-sm text-foreground">
+              {entry.staff_name ?? "Staff"} {ACTION_LABEL[entry.action] ?? entry.action} {ENTITY_LABEL[entry.section]}
+            </p>
+            {entry.notes && (
+              <p className="text-sm text-muted-foreground">{entry.notes}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {new Date(entry.created_at).toLocaleString()}
+            </p>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
@@ -184,27 +211,7 @@ export default function AdminDashboardPage() {
 
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-foreground">Recent activity</h2>
-        {activity === null ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : activity.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No review actions yet.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-            {activity.map((entry) => (
-              <li key={entry.id} className="flex flex-col gap-1 p-4">
-                <p className="text-sm text-foreground">
-                  {entry.staff_name ?? "Staff"} {ACTION_LABEL[entry.action] ?? entry.action} {ENTITY_LABEL[entry.section]}
-                </p>
-                {entry.notes && (
-                  <p className="text-sm text-muted-foreground">{entry.notes}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  {new Date(entry.created_at).toLocaleString()}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
+        {activityBody}
       </div>
     </div>
   );

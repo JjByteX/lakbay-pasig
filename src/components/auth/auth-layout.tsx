@@ -20,7 +20,7 @@ interface AuthLayoutProps {
  * single-purpose flow outside the public/admin shells, so it gets its own
  * standalone shell per the Layout Pattern Rules.
  */
-export function AuthLayout({ tagline, children }: AuthLayoutProps) {
+export function AuthLayout({ tagline, children }: Readonly<AuthLayoutProps>) {
   return (
     <div className="flex min-h-screen">
       <div

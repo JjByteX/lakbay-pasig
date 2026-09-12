@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchPublishedTrails } from "@/lib/trail-query";
 import type { TrailSummary } from "@/lib/trail-types";
@@ -75,39 +75,42 @@ export default function TrailsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Extracted from a nested ternary (error ? ... : loading ? ... :
+  // trails.length === 0 ? ... : ...) inline in the render below. States
+  // ordered error, then loading, then empty, then loaded, same order
+  // discover-list.tsx and home.tsx already establish.
+  let body: ReactNode;
+  if (error) {
+    body = (
+      <div className="flex items-center justify-center px-6 py-10 text-center text-sm text-destructive">
+        {error}
+      </div>
+    );
+  } else if (loading) {
+    body = <TrailListSkeleton />;
+  } else if (trails.length === 0) {
+    body = (
+      <div className="flex items-center justify-center px-6 py-10 text-center text-sm text-muted-foreground">
+        No published trails yet.
+      </div>
+    );
+  } else {
+    body = (
+      <ul className="mx-auto flex max-w-md flex-col divide-y divide-border">
+        {trails.map((trail) => (
+          <li key={trail.id}>
+            <TrailCard trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
     <div className="flex h-full w-full flex-col py-6">
       <h1 className="mx-auto w-full max-w-md px-6 text-xl font-semibold text-foreground">Trails</h1>
 
-      <div className="mt-4">
-        {error ? (
-          // Checked first, ahead of loading and empty, matching discover-
-          // list.tsx's and home.tsx's established ordering.
-          <div className="flex items-center justify-center px-6 py-10 text-center text-sm text-destructive">
-            {error}
-          </div>
-        ) : loading ? (
-          <TrailListSkeleton />
-        ) : trails.length === 0 ? (
-          // Phase 2.4/6.3: one clear, specific line, no second phrase
-          // restating it, per ux-ui-guidelines.md's Label Rules. Distinct
-          // wording from Discover's and Home's own empty states ("No
-          // results match your search and filters.", "No announcements
-          // yet.", "No recently verified content yet."), per home.tsx's
-          // own precedent of per-section distinct copy.
-          <div className="flex items-center justify-center px-6 py-10 text-center text-sm text-muted-foreground">
-            No published trails yet.
-          </div>
-        ) : (
-          <ul className="mx-auto flex max-w-md flex-col divide-y divide-border">
-            {trails.map((trail) => (
-              <li key={trail.id}>
-                <TrailCard trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <div className="mt-4">{body}</div>
     </div>
   );
 }
