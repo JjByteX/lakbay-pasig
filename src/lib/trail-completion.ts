@@ -1,4 +1,6 @@
 import { supabase } from "./supabase";
+import type { TrailSummary } from "./trail-types";
+import { fetchCredentialNamesByRouteId } from "./trail-query";
 
 /**
  * Step 7, Phase 5.1-5.2: completion writes, own file matching every other
@@ -14,9 +16,18 @@ import { supabase } from "./supabase";
  * anywhere in this path, per admin-panel-spec.md's Trail Publishing
  * section (no second reviewer on the player-facing completion path
  * either). Both are cohort-stat sources only per the same migration's own
- * comment and competitive-positioning.md -- this file only ever inserts,
- * it has no read function, since no per-user ranking or "your Nth visit"
- * query should exist to read them back that way.
+ * comment and competitive-positioning.md.
+ *
+ * Step 8, Phase 1.1 update: this file originally had no read function at
+ * all, on the reasoning that no per-user ranking or "your Nth visit"
+ * query should exist to read completed_routes back. fetchCompletedRoutes
+ * below does not change that stance, it still never counts, ranks, or
+ * compares across users. It reads one signed-in user's own rows only, for
+ * the Saved page's Completed Trails section, the same "personal record,
+ * not a cohort stat" shape isRouteCompleted below already uses for its
+ * own read. A list of your own finished trails is the personal-record
+ * case navigation-and-access-control.md's Saved tab describes, not the
+ * leaderboard case this file was written to keep out.
  */
 
 /**
@@ -72,4 +83,57 @@ export async function completeTrail(userId: string, routeId: string, credentialI
     .from("user_credentials")
     .insert({ user_id: userId, credential_id: credentialId });
   if (credentialError) throw credentialError;
+}
+
+/**
+ * Step 8, Phase 1.1: completed-trails list, Saved page's Completed Trails
+ * section. Same two step shape fetchSavedRoutes uses in saved-routes.ts:
+ * this user's completed_routes rows first (completed_routes_own, one
+ * user's own rows only, per this file's header comment above), then the
+ * matching routes rows, merged client side, plus this file's own
+ * completed_at column carried straight through. Credential name resolved
+ * with trail-query.ts's exported fetchCredentialNamesByRouteId, same
+ * lookup fetchSavedRoutes already reuses, not a third copy of it.
+ *
+ * Returns TrailSummary & { completed_at }, not a new type: a completed
+ * trail is a TrailSummary plus exactly one extra fact, when it was
+ * finished. No count, no rank, no "Nth person" framing anywhere in this
+ * function, matching this file's own header comment and
+ * competitive-positioning.md.
+ */
+export async function fetchCompletedRoutes(
+  userId: string
+): Promise<(TrailSummary & { completed_at: string })[]> {
+  const { data: completedRows, error: completedError } = await supabase
+    .from("completed_routes")
+    .select("route_id, completed_at")
+    .eq("user_id", userId);
+
+  if (completedError) throw completedError;
+  const rows = completedRows ?? [];
+  if (rows.length === 0) return [];
+
+  const completedAtByRouteId = new Map(rows.map((row) => [row.route_id, row.completed_at]));
+  const routeIds = rows.map((row) => row.route_id);
+
+  const { data: routes, error: routesError } = await supabase
+    .from("routes")
+    .select("id, name, theme, estimated_duration, estimated_budget, run_type")
+    .in("id", routeIds);
+
+  if (routesError) throw routesError;
+  const routeRows = routes ?? [];
+
+  const credentialNames = await fetchCredentialNamesByRouteId(routeRows.map((r) => r.id));
+
+  return routeRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    theme: row.theme,
+    estimated_duration: row.estimated_duration,
+    estimated_budget: row.estimated_budget,
+    run_type: row.run_type,
+    credentialName: credentialNames.get(row.id) ?? null,
+    completed_at: completedAtByRouteId.get(row.id) ?? "",
+  }));
 }

@@ -98,6 +98,58 @@ leaflet: `package.json` no longer lists leaflet, react-leaflet, or @types/leafle
 
 ---
 
+**#:** 4
+**Date:** Step 8, Phase 1
+**Milestone:** Step 8, Phase 1 — Saved and Profile lib functions
+
+**Context:**
+Three new list-fetch functions (fetchSavedPlaces, fetchSavedRoutes, fetchCompletedRoutes) all needed the same route-id-to-credential-name lookup trail-query.ts's fetchPublishedTrails already resolves internally via a private fetchCredentialNamesByRouteId. Separately, trail-completion.ts's own file header explicitly stated it has no read function, on the reasoning that no per-user ranking or cohort query should exist over completed_routes; fetchCompletedRoutes adds exactly such a read function to that file.
+
+**Options Considered:**
+- credential lookup — Option A: copy the same lookup logic into saved-routes.ts and trail-completion.ts separately.
+- credential lookup — Option B: export the existing private function from trail-query.ts, import it in both new callers.
+- completed_routes read — Option A: leave the file's no-read-function stance as an absolute rule, put fetchCompletedRoutes in a new file instead.
+- completed_routes read — Option B: add the function to trail-completion.ts, update the file's own header comment to state why this read doesn't violate the original reasoning.
+
+**Community Consensus:**
+Not applicable to either half. Both are same-codebase reuse and scope-clarification choices, not technology or pattern decisions with an external best-practice debate.
+
+**Decision:**
+credential lookup — Option B. Copying the lookup into two more files creates three copies of the same logic for no reason, directly against constraints.md's Inventory Before Suggesting rule and ponytail's reuse-before-writing ladder. fetchCredentialNamesByRouteId is now exported from trail-query.ts and imported by saved-routes.ts and trail-completion.ts.
+
+completed_routes read — Option B. A new file just to hold one read function, when trail-completion.ts already owns every other read and write against this table, would fragment a single table's data access across two files for no structural reason. The original no-read-function comment was reacting to a specific risk (a per-user leaderboard or "your Nth visit" query), not to reads in general; fetchCompletedRoutes reads one user's own rows only, same shape as isRouteCompleted already uses, and is the personal-record case navigation-and-access-control.md's Saved tab describes. Flagged here rather than silently reversing the file's stated stance, per constraints.md's No Silent Overrides rule. The file's header comment now explains this distinction directly, so a future reader doesn't see the reversal as unexplained drift.
+
+**Consequences:**
+Any future code needing a route-id-to-credential-name map should import fetchCredentialNamesByRouteId from trail-query.ts, not write a fourth copy. trail-completion.ts is no longer a write-only file; any future addition to it that reads across users (a count, a rank, a "most completed" query) should still be treated as the violation the original comment was written to prevent, fetchCompletedRoutes does not open the door to that, it is scoped to `.eq("user_id", userId)` and nothing wider.
+
+---
+
+**#:** 5
+**Date:** Step 8, Phase 3
+**Milestone:** Step 8, Phase 3 — Saved page loaded state
+
+**Context:**
+Two related problems surfaced building the Saved page's three sections. First, save-button.tsx and save-route-button.tsx are both self-contained: neither had any way to tell a parent list that a toggle succeeded, but step-8-plan.md's Saved page scope explicitly requires the unsave heart to remove its own row ("Saved is not read only"), and neither existing call site (discover-place-detail.tsx, trail-detail.tsx) needed that signal before now. Second, a row that needs both a tap-to-navigate area and a heart control can't nest the heart inside trail-card.tsx's or verified-item-card.tsx's existing single-`<button>` row shape, a button cannot contain another interactive button.
+
+**Options Considered:**
+- onToggle signal — Option A: have the Saved page re-fetch its whole section after any heart tap, skip a callback prop entirely.
+- onToggle signal — Option B: add an optional `onToggle?: (saved: boolean) => void` prop to both heart components, fired only after the underlying toggle call resolves.
+- Row composition — Option A: modify trail-card.tsx and verified-item-card.tsx themselves to accept an optional trailing-control slot.
+- Row composition — Option B: leave both components unchanged, add small sibling-composition wrapper rows (saved-place-row.tsx, saved-trail-row.tsx, completed-trail-row.tsx) specific to the Saved page.
+
+**Community Consensus:**
+Not applicable to either half. Both are same-codebase composition and prop-shape choices, not technology or pattern decisions with an external best-practice debate.
+
+**Decision:**
+onToggle signal — Option B. A full section re-fetch on every heart tap is a real network round trip for a purely local list-membership change the caller already knows the outcome of; the optional prop is additive (both existing call sites pass none and are unaffected) and fires only on confirmed success, so a failed toggle that reverts never fires it and a stale row is never removed.
+
+Row composition — Option A was rejected: trail-card.tsx is trails.tsx's own catalog row with no per-user save state, and verified-item-card.tsx's prop type is home-types.ts's RecentlyVerifiedItem, which requires a verified_at field fetchSavedPlaces's DiscoverPlace return has no reason to carry (already resolved once in Step 8, Phase 1's own entry above). Reshaping either shared component to fit one new caller's layout need risks the same component serving two different jobs. Option B: three small wrapper/row components, each specific to the Saved page, composing the existing shared component as a sibling next to a heart rather than modifying it, per constraints.md's Inventory Before Suggesting rule (extend by wrapping, don't reshape a component every other caller already relies on).
+
+**Consequences:**
+Any future list that needs a heart-toggle-and-tap row (place or route) should follow the same sibling-composition shape these three row components establish, not nest a heart inside trail-card.tsx or verified-item-card.tsx directly. save-button.tsx and save-route-button.tsx's onToggle prop is now available to any future caller needing the same "tell me when this succeeded" signal, not just the Saved page.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**

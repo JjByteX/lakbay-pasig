@@ -23,7 +23,7 @@ What to build, in order. Each step assumes the ones before it exist.
 - [ ] 7. **Public app: Trails**
       Trail catalog, trail detail, stop sequencing, GPS proximity unlock, trail completion, credential on finish. Guest preview access, sign-in gate only on state changing actions.
 
-- [ ] 8. **Public app: Saved and Profile**
+- [x] 8. **Public app: Saved and Profile**
       Saved places, saved trails, completed trails, credentials. Profile account info and preferences. Vendor mode toggle entry point lives here.
 
 - [ ] 9. **Vendor mode**

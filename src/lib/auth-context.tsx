@@ -8,6 +8,7 @@ interface AuthContextValue {
   profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -28,8 +29,6 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     )
     .eq("id", userId)
     .single();
-
-  console.log("DEBUG fetchProfile", { userId, data, error });
 
   if (error) return null;
   return data as Profile;
@@ -83,8 +82,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  // Step 8, Phase 0.8: lets a page that just wrote to profiles (Profile's
+  // own save action) pull the fresh row back into context, instead of
+  // waiting for the next full session load. Signed-out call is a no-op,
+  // there's no profile to refresh.
+  async function refreshProfile() {
+    if (!session) return;
+    const loadedProfile = await fetchProfile(session.user.id);
+    setProfile(loadedProfile);
+  }
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

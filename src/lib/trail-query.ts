@@ -15,7 +15,13 @@ import type { TrailCredential, TrailDetail, TrailDiscoveryContent, TrailStop, Tr
 // route has none, per supabase/seed.sql section 14's own comment), and a
 // left-join embed plus a "did any come back" check is more code than one
 // extra round trip for a list this small.
-async function fetchCredentialNamesByRouteId(routeIds: string[]): Promise<Map<string, string>> {
+//
+// Exported as of Step 8, Phase 1: saved-routes.ts's fetchSavedRoutes and
+// trail-completion.ts's fetchCompletedRoutes both build TrailSummary rows
+// too and need this same route-id-to-credential-name lookup. Reused here
+// rather than copied twice, per constraints.md's Inventory Before
+// Suggesting rule.
+export async function fetchCredentialNamesByRouteId(routeIds: string[]): Promise<Map<string, string>> {
   if (routeIds.length === 0) return new Map();
 
   const { data, error } = await supabase
