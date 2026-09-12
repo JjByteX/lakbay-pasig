@@ -209,7 +209,7 @@ async function insertNewStops(
 // Save button label for the discovery-entry form: saving takes priority
 // over which mode the form is in, then "new" vs "editing" pick the verb.
 // Extracted from a nested ternary in DiscoveryContentModalBody's JSX below.
-function discoveryEntrySaveLabel(discoverySaving: boolean, editingEntryId: string | "new" | null): string {
+function discoveryEntrySaveLabel(discoverySaving: boolean, editingEntryId: string | null): string {
   if (discoverySaving) return "Saving…";
   return editingEntryId === "new" ? "Add" : "Save Changes";
 }
@@ -241,7 +241,7 @@ function DiscoveryContentModalBody({
   discoveryError: string | null;
   discoveryLoading: boolean;
   discoverySaving: boolean;
-  editingEntryId: string | "new" | null;
+  editingEntryId: string | null;
   discoveryForm: DiscoveryContentFormState;
   setDiscoveryForm: Dispatch<SetStateAction<DiscoveryContentFormState>>;
   canSubmitDiscoveryEntry: boolean;
@@ -429,7 +429,7 @@ export default function AdminTrailBuilderPage() {
   // the list-for-that-stop view; editingEntryId then narrows to the add/edit
   // form within it.
   const [discoveryModalStopId, setDiscoveryModalStopId] = useState<string | null>(null);
-  const [editingEntryId, setEditingEntryId] = useState<string | "new" | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [discoveryForm, setDiscoveryForm] = useState<DiscoveryContentFormState>(EMPTY_DISCOVERY_FORM);
 
   // 5.4: Review and Publish. Mirrors admin-trails.tsx's publish gate exactly
@@ -1089,7 +1089,7 @@ export default function AdminTrailBuilderPage() {
                     >
                       <BookOpen className="h-4 w-4" />
                       Discovery Content
-                      {discoveryContent.filter((d) => d.route_stop_id === stop.id).length > 0 && (
+                      {discoveryContent.some((d) => d.route_stop_id === stop.id) && (
                         <Badge variant="secondary" className="ml-1">
                           {discoveryContent.filter((d) => d.route_stop_id === stop.id).length}
                         </Badge>

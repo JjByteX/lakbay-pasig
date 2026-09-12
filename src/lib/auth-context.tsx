@@ -34,6 +34,10 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
   return data as Profile;
 }
 
+async function signOut() {
+  await supabase.auth.signOut();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -77,10 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  async function signOut() {
-    await supabase.auth.signOut();
-  }
 
   // Step 8, Phase 0.8: lets a page that just wrote to profiles (Profile's
   // own save action) pull the fresh row back into context, instead of

@@ -95,7 +95,7 @@ export default function AdminStaffDetailPage() {
       .eq("id", id)
       .single()
       .then(({ data, error: fetchError }) => {
-        if (fetchError || !data || !data.staff_role) {
+        if (fetchError || !data?.staff_role) {
           setNotFound(true);
           setLoading(false);
           return;
