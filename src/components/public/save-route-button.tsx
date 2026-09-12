@@ -8,6 +8,14 @@ import { cn } from "@/lib/utils";
 
 interface SaveRouteButtonProps {
   routeId: string;
+  // Step 8, Phase 3.2: mirrors save-button.tsx's own Phase 3.1 addition
+  // exactly, same reasoning: optional and additive, trail-detail.tsx's
+  // existing call site passes none and is unaffected. The Saved page's
+  // Saved Trails section passes this to remove its own row the moment a
+  // trail is unsaved. Fires only after toggleSavedRoute resolves, not on
+  // the optimistic flip, so a failed unsave that reverts below never
+  // fires this.
+  onToggle?: (saved: boolean) => void;
 }
 
 /**
@@ -31,7 +39,7 @@ interface SaveRouteButtonProps {
  * Also enforced independently at the database layer, saved_routes_own
  * (migration 0007) has no policy allowing an unauthenticated insert.
  */
-export function SaveRouteButton({ routeId }: SaveRouteButtonProps) {
+export function SaveRouteButton({ routeId, onToggle }: SaveRouteButtonProps) {
   const { session } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
@@ -61,6 +69,7 @@ export function SaveRouteButton({ routeId }: SaveRouteButtonProps) {
     const nextSaved = !saved;
     setSaved(nextSaved); // optimistic, reversible personal action
     toggleSavedRoute(session.user.id, routeId, saved)
+      .then(() => onToggle?.(nextSaved))
       .catch(() => {
         setSaved(saved); // revert on failure
         setError(

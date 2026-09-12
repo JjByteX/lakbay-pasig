@@ -1,6 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
 import { fetchAnnouncements, fetchRecentlyVerified } from "@/lib/home-query";
 import type { Announcement, RecentlyVerifiedItem } from "@/lib/home-types";
 import { AnnouncementCard } from "@/components/public/announcement-card";
@@ -47,7 +46,6 @@ function SectionSkeleton() {
 }
 
 export default function HomePage() {
-  const { session, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -140,22 +138,6 @@ export default function HomePage() {
           </ul>
         )}
       </div>
-
-      {session ? (
-        <button
-          onClick={signOut}
-          className="w-fit rounded-lg bg-secondary px-4 py-2 text-base font-semibold text-secondary-foreground"
-        >
-          Log out
-        </button>
-      ) : (
-        <Link
-          to="/login"
-          className="w-fit rounded-lg bg-primary px-4 py-2 text-base font-semibold text-primary-foreground"
-        >
-          Log in
-        </Link>
-      )}
     </div>
   );
 }

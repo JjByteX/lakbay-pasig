@@ -8,6 +8,15 @@ import { cn } from "@/lib/utils";
 
 interface SaveButtonProps {
   placeId: string;
+  // Step 8, Phase 3.1: optional, additive prop. Existing call sites
+  // (discover-place-detail.tsx) pass none and are unaffected. The Saved
+  // page's SavedPlaceRow passes this to remove its own row from the list
+  // the moment a place is unsaved, since a heart toggle inside this
+  // component has no other way to tell a parent list the row's state
+  // changed. Fires only on the successful toggle (after toggleSavedPlace
+  // resolves), not on the optimistic flip, so a failed unsave that
+  // reverts below never fires this and the row correctly stays put.
+  onToggle?: (saved: boolean) => void;
 }
 
 /**
@@ -30,7 +39,7 @@ interface SaveButtonProps {
  * a permanent visible "Save" / "Saved" label next to it would compete with
  * the page's own title for attention in a small header row.
  */
-export function SaveButton({ placeId }: SaveButtonProps) {
+export function SaveButton({ placeId, onToggle }: SaveButtonProps) {
   const { session } = useAuth();
   const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
@@ -63,6 +72,7 @@ export function SaveButton({ placeId }: SaveButtonProps) {
     const nextSaved = !saved;
     setSaved(nextSaved); // optimistic, reversible personal action
     toggleSavedPlace(session.user.id, placeId, saved)
+      .then(() => onToggle?.(nextSaved))
       .catch(() => {
         setSaved(saved); // revert on failure
         setError(

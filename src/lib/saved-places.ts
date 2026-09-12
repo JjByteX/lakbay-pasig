@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import type { DiscoverPlace } from "./discover-types";
 
 /**
  * Phase 6.5-6.6 (step-5-phases.md): saved_places (migration 0007, owner-
@@ -51,4 +52,50 @@ export async function toggleSavedPlace(
     .insert({ user_id: userId, place_id: placeId });
   if (error) throw error;
   return true;
+}
+
+/**
+ * Step 8, Phase 1.2: saved-places list, Saved page's Saved Places section.
+ * Two step fetch, same shape discover-query.ts's fetchPlaces already
+ * establishes: plain select scoped by an owner-only RLS policy first
+ * (saved_places_own, this user's rows only), then the matching places
+ * rows for display fields, merged client side. saved_places has no
+ * embedded place columns of its own, so a join back to places is required
+ * either way; done as two queries rather than a Postgrest embed for the
+ * same reason trail-query.ts's fetchCredentialNamesByRouteId gives, one
+ * extra round trip is less code than an embed plus a null-shape check.
+ *
+ * Returns DiscoverPlace, not a new type: a saved place is still a place,
+ * every field Discover already renders for one applies here unchanged.
+ * verification_status is always "verified" for the same reason
+ * discover-query.ts's fetchPlaces narrows it, places_select_public only
+ * ever returns verified rows, so a saved place can't be anything else.
+ */
+export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]> {
+  const { data: savedRows, error: savedError } = await supabase
+    .from("saved_places")
+    .select("place_id")
+    .eq("user_id", userId);
+
+  if (savedError) throw savedError;
+  const placeIds = (savedRows ?? []).map((row) => row.place_id);
+  if (placeIds.length === 0) return [];
+
+  const { data: places, error: placesError } = await supabase
+    .from("places")
+    .select("id, name, category, description, latitude, longitude, verification_status")
+    .in("id", placeIds);
+
+  if (placesError) throw placesError;
+
+  return (places ?? []).map((row) => ({
+    kind: "place" as const,
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    description: row.description,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    verification_status: row.verification_status as "verified",
+  }));
 }
