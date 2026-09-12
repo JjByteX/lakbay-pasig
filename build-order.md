@@ -17,10 +17,10 @@ What to build, in order. Each step assumes the ones before it exist.
 - [x] 5. **Public app: Discover**
       Search and map lookup for Places and Businesses. Verification label on every result. This is the daily habit tab, build it early.
 
-- [ ] 6. **Public app: Home**
+- [x] 6. **Public app: Home**
       Feed of published announcements and recently verified content. Depends on step 4 having real content to show.
 
-- [ ] 7. **Public app: Trails**
+- [x] 7. **Public app: Trails**
       Trail catalog, trail detail, stop sequencing, GPS proximity unlock, trail completion, credential on finish. Guest preview access, sign-in gate only on state changing actions.
 
 - [x] 8. **Public app: Saved and Profile**

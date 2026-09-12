@@ -11,6 +11,8 @@ import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
 import EventDetailPage from "@/pages/event-detail";
 import SavedPage from "@/pages/saved";
 import ProfilePage from "@/pages/profile";
+import VendorDashboardPage from "@/pages/vendor-dashboard";
+import VendorItemsPage from "@/pages/vendor-items";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
 import AdminPage from "@/pages/admin";
@@ -68,6 +70,12 @@ export default function App() {
           <Route path="events/:id" element={<EventDetailPage />} />
           <Route path="saved" element={<SavedPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* Step 9, Phase 2.1: no ProtectedRoute wrapper, same reasoning
+              as saved and profile above, navigation-and-access-control.md
+              treats Vendor entry as locked-with-prompt, not redirected.
+              Each page owns its own signed-in check. */}
+          <Route path="vendor" element={<VendorDashboardPage />} />
+          <Route path="vendor/items" element={<VendorItemsPage />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />

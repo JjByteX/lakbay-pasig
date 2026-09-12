@@ -81,6 +81,11 @@ export default function ProfilePage() {
 
   const [vendorBusiness, setVendorBusiness] = useState<VendorBusiness | null>(null);
   const [vendorError, setVendorError] = useState<string | null>(null);
+  // Step 9, Phase 2.2: distinct from vendorBusiness === null (confirmed no
+  // business). Without this, "List your business" would flash for an
+  // actual vendor too, for the moment between mount and the fetch below
+  // resolving, since vendorBusiness starts at null either way.
+  const [vendorChecked, setVendorChecked] = useState(false);
 
   // 4.1: seed the editable fields from context whenever profile loads or
   // changes (including after 4.3's own refreshProfile call), not just once
@@ -103,7 +108,8 @@ export default function ProfilePage() {
       .then(setVendorBusiness)
       .catch((err: unknown) => {
         setVendorError(errorMessageFrom(err, "Could not check vendor status."));
-      });
+      })
+      .finally(() => setVendorChecked(true));
   }, [session]);
 
   if (loading) return null;
@@ -259,9 +265,15 @@ export default function ProfilePage() {
         </Button>
       </form>
 
-      {/* 4.5: no row found renders nothing here, not a greyed out section,
-          per the plan's own instruction. vendorError is a genuine query
-          failure, distinct from "not a vendor." */}
+      {/* 4.5: no row found is a valid, common outcome, not surfaced as an
+          error -- only a real query failure sets vendorError. Step 9,
+          Phase 2.2: the has-a-business branch below is unchanged from
+          Step 8; this adds the missing no-business-yet branch, since
+          before this step a Registered User with no listing saw nothing
+          here at all, no way to reach /vendor in the first place. One
+          entry point either way, never both at once (vendorBusiness is
+          exclusively one or the other), per ux-ui-guidelines.md's "one
+          label, one place" rule. */}
       {vendorError && <p className="text-base text-destructive">{vendorError}</p>}
       {vendorBusiness && (
         // Phase 6.5 fix: businesses.name (migration 0004) has no length
@@ -277,6 +289,15 @@ export default function ProfilePage() {
         >
           <Store className="h-4 w-4 shrink-0" />
           <span className="min-w-0 break-words">Managing {vendorBusiness.name}</span>
+        </Link>
+      )}
+      {!vendorError && vendorChecked && vendorBusiness === null && (
+        <Link
+          to="/vendor"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
+        >
+          <Store className="h-4 w-4 shrink-0" />
+          <span>List your business</span>
         </Link>
       )}
 
