@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { BottomNav } from "./bottom-nav";
 
 // Search slot: only Discover fills it (step 5), every other tab renders the
@@ -23,9 +23,10 @@ export function useTopBarSlot() {
 
 export function PublicShell() {
   const [content, setContent] = useState<ReactNode>(null);
+  const topBarSlotValue = useMemo(() => ({ content, setContent }), [content]);
 
   return (
-    <TopBarSlotContext.Provider value={{ content, setContent }}>
+    <TopBarSlotContext.Provider value={topBarSlotValue}>
       <div className="flex min-h-svh flex-col bg-background">
         <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b border-border bg-card px-4">
           <div className="mx-auto flex w-full max-w-md items-center">{content}</div>

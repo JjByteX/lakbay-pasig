@@ -175,7 +175,7 @@ function compareRows<T>(a: T, b: T, key: string, dir: "asc" | "desc"): number {
   }
   const da = Date.parse(String(av));
   const db = Date.parse(String(bv));
-  if (!isNaN(da) && !isNaN(db)) {
+  if (!Number.isNaN(da) && !Number.isNaN(db)) {
     return dir === "asc" ? da - db : db - da;
   }
   const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });

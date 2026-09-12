@@ -70,11 +70,11 @@ export function SaveButton({ placeId, onToggle }: SaveButtonProps) {
     setLoading(true);
     setError(null);
     const nextSaved = !saved;
-    setSaved(nextSaved); // optimistic, reversible personal action
+    setSaved((prev) => !prev); // optimistic, reversible personal action
     toggleSavedPlace(session.user.id, placeId, saved)
       .then(() => onToggle?.(nextSaved))
       .catch(() => {
-        setSaved(saved); // revert on failure
+        setSaved((prev) => !prev); // revert on failure
         setError(
           nextSaved ? "Couldn't save this place. Try again." : "Couldn't remove this place. Try again."
         );

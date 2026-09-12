@@ -67,11 +67,11 @@ export function SaveRouteButton({ routeId, onToggle }: SaveRouteButtonProps) {
     setLoading(true);
     setError(null);
     const nextSaved = !saved;
-    setSaved(nextSaved); // optimistic, reversible personal action
+    setSaved((prev) => !prev); // optimistic, reversible personal action
     toggleSavedRoute(session.user.id, routeId, saved)
       .then(() => onToggle?.(nextSaved))
       .catch(() => {
-        setSaved(saved); // revert on failure
+        setSaved((prev) => !prev); // revert on failure
         setError(
           nextSaved ? "Couldn't save this trail. Try again." : "Couldn't remove this trail. Try again."
         );
