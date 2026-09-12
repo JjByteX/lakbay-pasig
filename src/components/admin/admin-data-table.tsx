@@ -144,6 +144,17 @@ function isActionsColumn<T>(col: AdminColumn<T>) {
   return col.key === "actions" || col.key === "_actions" || col.label === "";
 }
 
+// Extracted from AdminDataTable's row-render JSX: was a nested ternary
+// (actionsCol ? ... : col.render ? ... : ...) inline in the TableCell body.
+// Named here so the cell's fallback chain (custom render -> raw field ->
+// em dash) reads as one sequence of steps instead of adding its own nested
+// branch to AdminDataTable's cognitive complexity.
+function renderCellContent<T>(row: T, col: AdminColumn<T>): ReactNode {
+  const content = col.render ? col.render(row) : ((readField(row, col.key) as ReactNode) ?? "—");
+  if (!isActionsColumn(col)) return content;
+  return <div className="flex items-center justify-center gap-1">{content}</div>;
+}
+
 // T is intentionally unconstrained (a plain page-defined interface, not
 // Record<string, unknown> — an interface has no index signature, so a
 // Record constraint rejects every real column type the pages pass in).
@@ -154,6 +165,61 @@ function isActionsColumn<T>(col: AdminColumn<T>) {
 // gets the real, fully-typed row.
 function readField<T>(row: T, key: string): unknown {
   return (row as unknown as Record<string, unknown>)[key];
+}
+
+function compareRows<T>(a: T, b: T, key: string, dir: "asc" | "desc"): number {
+  const av = (readField(a, key) as string | number | null | undefined) ?? "";
+  const bv = (readField(b, key) as string | number | null | undefined) ?? "";
+  if (typeof av === "number" && typeof bv === "number") {
+    return dir === "asc" ? av - bv : bv - av;
+  }
+  const da = Date.parse(String(av));
+  const db = Date.parse(String(bv));
+  if (!isNaN(da) && !isNaN(db)) {
+    return dir === "asc" ? da - db : db - da;
+  }
+  const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
+  return dir === "asc" ? cmp : -cmp;
+}
+
+function SortableHeaderCell<T>({
+  col,
+  sortState,
+  onSort,
+}: Readonly<{
+  col: AdminColumn<T>;
+  sortState: typeof sortInitial;
+  onSort: (key: string) => void;
+}>) {
+  const actionsCol = isActionsColumn(col);
+  const displayLabel = actionsCol ? "Actions" : col.label;
+  const isSortable = !actionsCol && col.sortable !== false;
+  const effectiveKey = col.sortKey ?? col.key;
+  const isActive = isSortable && sortState.key === effectiveKey;
+  const sortDirLabel = sortState.dir === "asc" ? "ascending" : "descending";
+
+  return (
+    <TableHead
+      key={col.key}
+      style={{ width: col.width }}
+      className={cn(actionsCol && "w-px text-center", col.align === "right" && "text-right")}
+      aria-sort={isSortable ? (isActive ? sortDirLabel : "none") : undefined}
+    >
+      {isSortable ? (
+        <button
+          type="button"
+          onClick={() => onSort(effectiveKey)}
+          aria-label={`Sort by ${displayLabel}${isActive ? `, currently ${sortDirLabel}` : ""}`}
+          className={cn("inline-flex items-center gap-1", isActive ? "text-foreground" : "text-muted-foreground")}
+        >
+          {displayLabel}
+          <SortIcon active={isActive} dir={sortState.dir} />
+        </button>
+      ) : (
+        <span className={cn("inline-flex items-center", actionsCol && "justify-center w-full")}>{displayLabel}</span>
+      )}
+    </TableHead>
+  );
 }
 
 export default function AdminDataTable<T>({
@@ -188,20 +254,7 @@ export default function AdminDataTable<T>({
   const sortedRows = useMemo(() => {
     if (!sortState.key) return rows;
     const key = sortState.key;
-    return [...rows].sort((a, b) => {
-      const av = (readField(a, key) as string | number | null | undefined) ?? "";
-      const bv = (readField(b, key) as string | number | null | undefined) ?? "";
-      if (typeof av === "number" && typeof bv === "number") {
-        return sortState.dir === "asc" ? av - bv : bv - av;
-      }
-      const da = Date.parse(String(av));
-      const db = Date.parse(String(bv));
-      if (!isNaN(da) && !isNaN(db)) {
-        return sortState.dir === "asc" ? da - db : db - da;
-      }
-      const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" });
-      return sortState.dir === "asc" ? cmp : -cmp;
-    });
+    return [...rows].sort((a, b) => compareRows(a, b, key, sortState.dir));
   }, [rows, sortState.key, sortState.dir]);
 
   function handleSort(key: string) {
@@ -241,43 +294,9 @@ export default function AdminDataTable<T>({
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card" ref={apsHeaderRef}>
               <TableRow>
-                {columns.map((col) => {
-                  const actionsCol = isActionsColumn(col);
-                  const displayLabel = actionsCol ? "Actions" : col.label;
-                  const isSortable = !actionsCol && col.sortable !== false;
-                  const effectiveKey = col.sortKey ?? col.key;
-                  const isActive = isSortable && sortState.key === effectiveKey;
-
-                  return (
-                    <TableHead
-                      key={col.key}
-                      style={{ width: col.width }}
-                      className={cn(actionsCol && "w-px text-center", col.align === "right" && "text-right")}
-                      aria-sort={
-                        isSortable ? (isActive ? (sortState.dir === "asc" ? "ascending" : "descending") : "none") : undefined
-                      }
-                    >
-                      {isSortable ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSort(effectiveKey)}
-                          aria-label={`Sort by ${displayLabel}${isActive ? `, currently ${sortState.dir === "asc" ? "ascending" : "descending"}` : ""}`}
-                          className={cn(
-                            "inline-flex items-center gap-1",
-                            isActive ? "text-foreground" : "text-muted-foreground"
-                          )}
-                        >
-                          {displayLabel}
-                          <SortIcon active={isActive} dir={sortState.dir} />
-                        </button>
-                      ) : (
-                        <span className={cn("inline-flex items-center", actionsCol && "justify-center w-full")}>
-                          {displayLabel}
-                        </span>
-                      )}
-                    </TableHead>
-                  );
-                })}
+                {columns.map((col) => (
+                  <SortableHeaderCell key={col.key} col={col} sortState={sortState} onSort={handleSort} />
+                ))}
               </TableRow>
             </TableHeader>
 
@@ -304,15 +323,7 @@ export default function AdminDataTable<T>({
                               !actionsCol && col.align === "right" && "text-right"
                             )}
                           >
-                            {actionsCol ? (
-                              <div className="flex items-center justify-center gap-1">
-                                {col.render ? col.render(row) : (readField(row, col.key) as ReactNode) ?? "—"}
-                              </div>
-                            ) : col.render ? (
-                              col.render(row)
-                            ) : (
-                              ((readField(row, col.key) as ReactNode) ?? "—")
-                            )}
+                            {renderCellContent(row, col)}
                           </TableCell>
                         );
                       })}

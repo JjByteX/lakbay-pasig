@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -119,6 +119,281 @@ const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
   sequence_order: "",
   unlock_radius: "",
 };
+
+// Extracted from persistStops (4.5/5.4 comment above still applies): the
+// "renumber surviving stops" two-pass sequence (see the Phase 1/Phase 2
+// comments this function now owns). Pulled out for the same reason
+// insertNewStops was: persistStops's own body reads as one sequence of
+// steps (delete removed, renumber survivors, insert new, merge state)
+// instead of owning every loop and its own error branch inline. Same
+// offset-then-finalize behavior as before, unchanged — see the Phase 1/
+// Phase 2 comments below for why two passes are needed.
+async function renumberSurvivors(
+  survivors: StopRow[],
+  nextStops: StopRow[]
+): Promise<{ ok: true } | { error: string }> {
+  // Phase 1: push every survivor out of the (route_id, sequence_order)
+  // range any row could currently hold, so phase 2's real values can
+  // never collide with a survivor still sitting at its old position.
+  for (const [index, s] of survivors.entries()) {
+    const { error: offsetError } = await supabase
+      .from("route_stops")
+      .update({ sequence_order: -1 * (index + 1) })
+      .eq("id", s.id);
+    if (offsetError) return { error: offsetError.message };
+  }
+
+  // Phase 2: set every survivor's real final sequence_order, matching
+  // its position in nextStops.
+  for (const s of survivors) {
+    const { error: finalizeError } = await supabase
+      .from("route_stops")
+      .update({ sequence_order: nextStops.indexOf(s) })
+      .eq("id", s.id);
+    if (finalizeError) return { error: finalizeError.message };
+  }
+
+  return { ok: true };
+}
+
+// Extracted from persistStops (4.5/5.4 comment above still applies): this
+// is the "insert newly picked stops" branch. Pulled out as its own
+// function so persistStops's own branching (survivor offset/finalize
+// passes, this insert call, final state merge) reads as one sequence of
+// steps instead of one function owning every nested validation branch
+// itself. Same re-verify-against-the-table behavior as before, unchanged.
+async function insertNewStops(
+  routeId: string,
+  newStops: StopRow[],
+  nextStops: StopRow[]
+): Promise<{ rows: { id: string; stop_type: string; stop_id: string; sequence_order: number }[] } | { error: string }> {
+  const newPlaceIds = newStops.filter((s) => s.stop_type === "place").map((s) => s.stop_id);
+  const newBusinessIds = newStops.filter((s) => s.stop_type === "business").map((s) => s.stop_id);
+
+  const [{ data: validPlaces }, { data: validBusinesses }] = await Promise.all([
+    newPlaceIds.length > 0
+      ? supabase.from("places").select("id").eq("verification_status", "verified").in("id", newPlaceIds)
+      : Promise.resolve({ data: [] as { id: string }[] }),
+    newBusinessIds.length > 0
+      ? supabase.from("businesses").select("id").eq("verification_status", "verified").in("id", newBusinessIds)
+      : Promise.resolve({ data: [] as { id: string }[] }),
+  ]);
+
+  const validIds = new Set([...(validPlaces ?? []), ...(validBusinesses ?? [])].map((r) => r.id));
+  const invalidStop = newStops.find((s) => !validIds.has(s.stop_id));
+
+  if (invalidStop) {
+    return {
+      error: `"${invalidStop.name}" is no longer available to add — it may have been removed or is no longer verified. Refresh and try again.`,
+    };
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("route_stops")
+    .insert(
+      newStops.map((s) => ({
+        route_id: routeId,
+        stop_type: s.stop_type,
+        stop_id: s.stop_id,
+        sequence_order: nextStops.indexOf(s),
+      }))
+    )
+    .select("id, stop_type, stop_id, sequence_order");
+
+  if (insertError || !inserted) {
+    return { error: insertError?.message ?? "Could not save stop order." };
+  }
+  return { rows: inserted };
+}
+
+// Save button label for the discovery-entry form: saving takes priority
+// over which mode the form is in, then "new" vs "editing" pick the verb.
+// Extracted from a nested ternary in DiscoveryContentModalBody's JSX below.
+function discoveryEntrySaveLabel(discoverySaving: boolean, editingEntryId: string | "new" | null): string {
+  if (discoverySaving) return "Saving…";
+  return editingEntryId === "new" ? "Add" : "Save Changes";
+}
+
+// Extracted from AdminTrailBuilderPage's render (previously an inline IIFE
+// inside the Dialog's DialogContent). Same two-mode body: a list view
+// (editingEntryId === null) or the add/edit form, same markup and
+// behavior, just named and pulled out of the parent function so its own
+// loading/empty/list and add/edit branches aren't counted against
+// AdminTrailBuilderPage's complexity.
+function DiscoveryContentModalBody({
+  activeStop,
+  entriesForStop,
+  discoveryError,
+  discoveryLoading,
+  discoverySaving,
+  editingEntryId,
+  discoveryForm,
+  setDiscoveryForm,
+  canSubmitDiscoveryEntry,
+  onStartNew,
+  onStartEdit,
+  onDelete,
+  onCancelEdit,
+  onSave,
+}: Readonly<{
+  activeStop: StopRow;
+  entriesForStop: DiscoveryContentRow[];
+  discoveryError: string | null;
+  discoveryLoading: boolean;
+  discoverySaving: boolean;
+  editingEntryId: string | "new" | null;
+  discoveryForm: DiscoveryContentFormState;
+  setDiscoveryForm: Dispatch<SetStateAction<DiscoveryContentFormState>>;
+  canSubmitDiscoveryEntry: boolean;
+  onStartNew: (stop: StopRow) => void;
+  onStartEdit: (entry: DiscoveryContentRow) => void;
+  onDelete: (entryId: string) => void;
+  onCancelEdit: () => void;
+  onSave: (stop: StopRow) => void;
+}>) {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Discovery Content: {activeStop.name}</DialogTitle>
+      </DialogHeader>
+
+      {discoveryError && <p className="text-sm text-destructive">{discoveryError}</p>}
+
+      {editingEntryId === null ? (
+        <div className="flex flex-col gap-3">
+          {discoveryLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : entriesForStop.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No discovery content yet.</p>
+          ) : (
+            <ul className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
+              {entriesForStop.map((entry) => (
+                <li key={entry.id} className="flex items-start justify-between gap-3 p-3">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">
+                        {entry.sequence_order}
+                      </span>
+                      <span className="truncate text-sm font-semibold text-foreground">{entry.title}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Unlocks within {entry.unlock_radius}m</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onStartEdit(entry)}>
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">Edit</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      disabled={discoverySaving}
+                      onClick={() => onDelete(entry.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div>
+            <Button type="button" variant="outline" onClick={() => onStartNew(activeStop)}>
+              Add Discovery Content
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="discovery_title">Title</Label>
+            <Input
+              id="discovery_title"
+              value={discoveryForm.title}
+              onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, title: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="discovery_content_text">Content</Label>
+            <Textarea
+              id="discovery_content_text"
+              className="min-h-30"
+              value={discoveryForm.content}
+              onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, content: e.target.value }))}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="discovery_sequence_order">Sequence Order</Label>
+              <Input
+                id="discovery_sequence_order"
+                type="number"
+                min={1}
+                value={discoveryForm.sequence_order}
+                onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, sequence_order: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="discovery_unlock_radius">Unlock Radius (meters)</Label>
+              <Input
+                id="discovery_unlock_radius"
+                type="number"
+                min={1}
+                value={discoveryForm.unlock_radius}
+                onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, unlock_radius: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onCancelEdit}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => onSave(activeStop)} disabled={!canSubmitDiscoveryEntry}>
+              {discoveryEntrySaveLabel(discoverySaving, editingEntryId)}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Extracted from AdminTrailBuilderPage's Review and Publish step (previously
+// an inline IIFE). Same early-return-when-none behavior, same markup.
+function FlaggedForReview({
+  discoveryContent,
+  stops,
+}: Readonly<{ discoveryContent: DiscoveryContentRow[]; stops: StopRow[] }>) {
+  const flaggedEntries = discoveryContent.filter((entry) => entry.needs_place_review);
+  if (flaggedEntries.length === 0) return null;
+  const stopNameById = new Map(stops.map((s) => [s.id, s.name]));
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-semibold text-foreground">Flagged for review</span>
+      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+        {flaggedEntries.map((entry) => (
+          <li key={entry.id} className="flex items-center justify-between gap-3 p-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-foreground">{entry.title}</span>
+              <span className="text-xs text-muted-foreground">
+                Stop: {stopNameById.get(entry.route_stop_id) ?? "(unknown stop)"}
+              </span>
+            </div>
+            <Link to={`/admin/places/discovery/${entry.id}`} className="text-sm underline underline-offset-2">
+              Review it
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default function AdminTrailBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -293,6 +568,12 @@ export default function AdminTrailBuilderPage() {
 
   const canSaveInfo = info.name.trim().length > 0 && !saving;
 
+  // Extracted from a nested ternary in the Info step's Save button JSX.
+  function saveInfoButtonLabel(): string {
+    if (saving) return "Saving…";
+    return routeId ? "Save and Continue" : "Create Trail";
+  }
+
   // 4.3: saves as a routes row with status = draft, per step-4-phases.md.
   // Info step only ever creates/updates the routes row itself — stops and
   // publish status are handled by their own steps.
@@ -384,33 +665,11 @@ export default function AdminTrailBuilderPage() {
       }
     }
 
-    // Phase 1: push every survivor out of the (route_id, sequence_order)
-    // range any row could currently hold, so phase 2's real values can
-    // never collide with a survivor still sitting at its old position.
-    for (const [index, s] of survivors.entries()) {
-      const { error: offsetError } = await supabase
-        .from("route_stops")
-        .update({ sequence_order: -1 * (index + 1) })
-        .eq("id", s.id);
-      if (offsetError) {
-        setSavingStops(false);
-        setStopsError(offsetError.message);
-        return;
-      }
-    }
-
-    // Phase 2: set every survivor's real final sequence_order, matching
-    // its position in nextStops.
-    for (const s of survivors) {
-      const { error: finalizeError } = await supabase
-        .from("route_stops")
-        .update({ sequence_order: nextStops.indexOf(s) })
-        .eq("id", s.id);
-      if (finalizeError) {
-        setSavingStops(false);
-        setStopsError(finalizeError.message);
-        return;
-      }
+    const renumberResult = await renumberSurvivors(survivors, nextStops);
+    if ("error" in renumberResult) {
+      setSavingStops(false);
+      setStopsError(renumberResult.error);
+      return;
     }
 
     let insertedRows: { id: string; stop_type: string; stop_id: string; sequence_order: number }[] = [];
@@ -423,48 +682,14 @@ export default function AdminTrailBuilderPage() {
       // modal stays open. Re-verify each newly picked id against its own
       // table right before insert, same verified-only bar the picker
       // itself queries against, rather than trusting the payload handlePick
-      // already had in hand.
-      const newPlaceIds = newStops.filter((s) => s.stop_type === "place").map((s) => s.stop_id);
-      const newBusinessIds = newStops.filter((s) => s.stop_type === "business").map((s) => s.stop_id);
-
-      const [{ data: validPlaces }, { data: validBusinesses }] = await Promise.all([
-        newPlaceIds.length > 0
-          ? supabase.from("places").select("id").eq("verification_status", "verified").in("id", newPlaceIds)
-          : Promise.resolve({ data: [] as { id: string }[] }),
-        newBusinessIds.length > 0
-          ? supabase.from("businesses").select("id").eq("verification_status", "verified").in("id", newBusinessIds)
-          : Promise.resolve({ data: [] as { id: string }[] }),
-      ]);
-
-      const validIds = new Set([...(validPlaces ?? []), ...(validBusinesses ?? [])].map((r) => r.id));
-      const invalidStop = newStops.find((s) => !validIds.has(s.stop_id));
-
-      if (invalidStop) {
+      // already had in hand. See insertNewStops above.
+      const result = await insertNewStops(routeId, newStops, nextStops);
+      if ("error" in result) {
         setSavingStops(false);
-        setStopsError(
-          `"${invalidStop.name}" is no longer available to add — it may have been removed or is no longer verified. Refresh and try again.`
-        );
+        setStopsError(result.error);
         return;
       }
-
-      const { data: inserted, error: insertError } = await supabase
-        .from("route_stops")
-        .insert(
-          newStops.map((s) => ({
-            route_id: routeId,
-            stop_type: s.stop_type,
-            stop_id: s.stop_id,
-            sequence_order: nextStops.indexOf(s),
-          }))
-        )
-        .select("id, stop_type, stop_id, sequence_order");
-
-      if (insertError || !inserted) {
-        setSavingStops(false);
-        setStopsError(insertError?.message ?? "Could not save stop order.");
-        return;
-      }
-      insertedRows = inserted;
+      insertedRows = result.rows;
     }
 
     setSavingStops(false);
@@ -713,6 +938,12 @@ export default function AdminTrailBuilderPage() {
     setStatus(nextStatus);
   }
 
+  // Extracted from a nested ternary in the Review and Publish step's button.
+  function publishButtonLabel(): string {
+    if (publishSaving) return "Saving…";
+    return status === "published" ? "Unpublish" : "Publish";
+  }
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
@@ -818,7 +1049,7 @@ export default function AdminTrailBuilderPage() {
               Cancel
             </Button>
             <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo}>
-              {saving ? "Saving…" : routeId ? "Save and Continue" : "Create Trail"}
+              {saveInfoButtonLabel()}
             </Button>
           </div>
         </div>
@@ -938,131 +1169,22 @@ export default function AdminTrailBuilderPage() {
                   .sort((a, b) => a.sequence_order - b.sequence_order);
 
                 return (
-                  <>
-                    <DialogHeader>
-                      <DialogTitle>Discovery Content: {activeStop.name}</DialogTitle>
-                    </DialogHeader>
-
-                    {discoveryError && <p className="text-sm text-destructive">{discoveryError}</p>}
-
-                    {editingEntryId === null ? (
-                      <div className="flex flex-col gap-3">
-                        {discoveryLoading ? (
-                          <p className="text-sm text-muted-foreground">Loading…</p>
-                        ) : entriesForStop.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No discovery content yet.</p>
-                        ) : (
-                          <ul className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
-                            {entriesForStop.map((entry) => (
-                              <li key={entry.id} className="flex items-start justify-between gap-3 p-3">
-                                <div className="flex min-w-0 flex-col gap-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">
-                                      {entry.sequence_order}
-                                    </span>
-                                    <span className="truncate text-sm font-semibold text-foreground">
-                                      {entry.title}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    Unlocks within {entry.unlock_radius}m
-                                  </p>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => startEditDiscoveryEntry(entry)}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                    <span className="sr-only">Edit</span>
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive"
-                                    disabled={discoverySaving}
-                                    onClick={() => handleDeleteDiscoveryEntry(entry.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    <span className="sr-only">Delete</span>
-                                  </Button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        <div>
-                          <Button type="button" variant="outline" onClick={() => startNewDiscoveryEntry(activeStop)}>
-                            Add Discovery Content
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="discovery_title">Title</Label>
-                          <Input
-                            id="discovery_title"
-                            value={discoveryForm.title}
-                            onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, title: e.target.value }))}
-                            required
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="discovery_content_text">Content</Label>
-                          <Textarea
-                            id="discovery_content_text"
-                            className="min-h-30"
-                            value={discoveryForm.content}
-                            onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, content: e.target.value }))}
-                            required
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex flex-col gap-2">
-                            <Label htmlFor="discovery_sequence_order">Sequence Order</Label>
-                            <Input
-                              id="discovery_sequence_order"
-                              type="number"
-                              min={1}
-                              value={discoveryForm.sequence_order}
-                              onChange={(e) =>
-                                setDiscoveryForm((prev) => ({ ...prev, sequence_order: e.target.value }))
-                              }
-                              required
-                            />
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <Label htmlFor="discovery_unlock_radius">Unlock Radius (meters)</Label>
-                            <Input
-                              id="discovery_unlock_radius"
-                              type="number"
-                              min={1}
-                              value={discoveryForm.unlock_radius}
-                              onChange={(e) =>
-                                setDiscoveryForm((prev) => ({ ...prev, unlock_radius: e.target.value }))
-                              }
-                              required
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button type="button" variant="outline" onClick={() => setEditingEntryId(null)}>
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => handleSaveDiscoveryEntry(activeStop)}
-                            disabled={!canSubmitDiscoveryEntry}
-                          >
-                            {discoverySaving ? "Saving…" : editingEntryId === "new" ? "Add" : "Save Changes"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <DiscoveryContentModalBody
+                    activeStop={activeStop}
+                    entriesForStop={entriesForStop}
+                    discoveryError={discoveryError}
+                    discoveryLoading={discoveryLoading}
+                    discoverySaving={discoverySaving}
+                    editingEntryId={editingEntryId}
+                    discoveryForm={discoveryForm}
+                    setDiscoveryForm={setDiscoveryForm}
+                    canSubmitDiscoveryEntry={canSubmitDiscoveryEntry}
+                    onStartNew={startNewDiscoveryEntry}
+                    onStartEdit={startEditDiscoveryEntry}
+                    onDelete={handleDeleteDiscoveryEntry}
+                    onCancelEdit={() => setEditingEntryId(null)}
+                    onSave={handleSaveDiscoveryEntry}
+                  />
                 );
               })()}
             </DialogContent>
@@ -1099,35 +1221,7 @@ export default function AdminTrailBuilderPage() {
               links to admin-discovery-content-review.tsx, the same review
               destination admin-trails.tsx's list-page gate already links to
               (Phase 5.3). */}
-          {(() => {
-            const flaggedEntries = discoveryContent.filter((entry) => entry.needs_place_review);
-            if (flaggedEntries.length === 0) return null;
-            const stopNameById = new Map(stops.map((s) => [s.id, s.name]));
-
-            return (
-              <div className="flex flex-col gap-2">
-                <span className="text-sm font-semibold text-foreground">Flagged for review</span>
-                <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-                  {flaggedEntries.map((entry) => (
-                    <li key={entry.id} className="flex items-center justify-between gap-3 p-3">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-foreground">{entry.title}</span>
-                        <span className="text-xs text-muted-foreground">
-                          Stop: {stopNameById.get(entry.route_stop_id) ?? "(unknown stop)"}
-                        </span>
-                      </div>
-                      <Link
-                        to={`/admin/places/discovery/${entry.id}`}
-                        className="text-sm underline underline-offset-2"
-                      >
-                        Review it
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })()}
+          <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
 
           {publishError && (
             <p className="text-sm text-destructive">
@@ -1154,7 +1248,7 @@ export default function AdminTrailBuilderPage() {
                   (stops.length === 0 || discoveryContent.some((entry) => entry.needs_place_review)))
               }
             >
-              {publishSaving ? "Saving…" : status === "published" ? "Unpublish" : "Publish"}
+              {publishButtonLabel()}
             </Button>
           </div>
         </div>

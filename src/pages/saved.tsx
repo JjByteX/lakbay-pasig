@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
@@ -101,6 +102,49 @@ function ThreeLineSectionSkeleton() {
  * step-8-plan.md's scope line exactly: Saved Places, Saved Trails,
  * Completed Trails.
  */
+// Phase 6-plus cleanup: the three sections below (Saved Places, Saved
+// Trails, Completed Trails) all follow the exact same error/loading/empty/
+// loaded order (this file's own established convention, re-confirmed as
+// recently as Step 8 Phase 6.1's re-check pass). Extracted here as one
+// shared section shell instead of three near-identical inline blocks --
+// same output, same per-section skeleton and copy, just one place that
+// owns the branching order instead of three.
+function SavedSection({
+  title,
+  error,
+  loading,
+  skeleton,
+  isEmpty,
+  emptyText,
+  children,
+}: Readonly<{
+  title: string;
+  error: string | null;
+  loading: boolean;
+  skeleton: ReactNode;
+  isEmpty: boolean;
+  emptyText: string;
+  children: ReactNode;
+}>) {
+  let body: ReactNode;
+  if (error) {
+    body = <p className="text-sm text-destructive">{error}</p>;
+  } else if (loading) {
+    body = skeleton;
+  } else if (isEmpty) {
+    body = <p className="text-sm text-muted-foreground">{emptyText}</p>;
+  } else {
+    body = children;
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      {body}
+    </div>
+  );
+}
+
 export default function SavedPage() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
@@ -183,70 +227,64 @@ export default function SavedPage() {
     <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
       <h1 className="text-xl font-semibold text-foreground">Saved</h1>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-foreground">Saved Places</h2>
-        {placesError ? (
-          <p className="text-sm text-destructive">{placesError}</p>
-        ) : placesLoading ? (
-          <ThreeLineSectionSkeleton />
-        ) : places.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No saved places yet.</p>
-        ) : (
-          <ul className="-mx-6 flex flex-col divide-y divide-border">
-            {places.map((place) => (
-              <li key={place.id}>
-                <SavedPlaceRow
-                  place={place}
-                  onClick={() => navigate(`/discover/place/${place.id}`)}
-                  onUnsave={() => setPlaces((prev) => prev.filter((p) => p.id !== place.id))}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <SavedSection
+        title="Saved Places"
+        error={placesError}
+        loading={placesLoading}
+        skeleton={<ThreeLineSectionSkeleton />}
+        isEmpty={places.length === 0}
+        emptyText="No saved places yet."
+      >
+        <ul className="-mx-6 flex flex-col divide-y divide-border">
+          {places.map((place) => (
+            <li key={place.id}>
+              <SavedPlaceRow
+                place={place}
+                onClick={() => navigate(`/discover/place/${place.id}`)}
+                onUnsave={() => setPlaces((prev) => prev.filter((p) => p.id !== place.id))}
+              />
+            </li>
+          ))}
+        </ul>
+      </SavedSection>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-foreground">Saved Trails</h2>
-        {trailsError ? (
-          <p className="text-sm text-destructive">{trailsError}</p>
-        ) : trailsLoading ? (
-          <TwoLineSectionSkeleton />
-        ) : trails.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No saved trails yet.</p>
-        ) : (
-          <ul className="-mx-6 flex flex-col divide-y divide-border">
-            {trails.map((trail) => (
-              <li key={trail.id}>
-                <SavedTrailRow
-                  trail={trail}
-                  onClick={() => navigate(`/trails/${trail.id}`)}
-                  onUnsave={() => setTrails((prev) => prev.filter((t) => t.id !== trail.id))}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <SavedSection
+        title="Saved Trails"
+        error={trailsError}
+        loading={trailsLoading}
+        skeleton={<TwoLineSectionSkeleton />}
+        isEmpty={trails.length === 0}
+        emptyText="No saved trails yet."
+      >
+        <ul className="-mx-6 flex flex-col divide-y divide-border">
+          {trails.map((trail) => (
+            <li key={trail.id}>
+              <SavedTrailRow
+                trail={trail}
+                onClick={() => navigate(`/trails/${trail.id}`)}
+                onUnsave={() => setTrails((prev) => prev.filter((t) => t.id !== trail.id))}
+              />
+            </li>
+          ))}
+        </ul>
+      </SavedSection>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-foreground">Completed Trails</h2>
-        {completedError ? (
-          <p className="text-sm text-destructive">{completedError}</p>
-        ) : completedLoading ? (
-          <TwoLineSectionSkeleton />
-        ) : completed.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No completed trails yet.</p>
-        ) : (
-          <ul className="-mx-6 flex flex-col divide-y divide-border">
-            {completed.map((trail) => (
-              <li key={trail.id}>
-                <CompletedTrailRow trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <SavedSection
+        title="Completed Trails"
+        error={completedError}
+        loading={completedLoading}
+        skeleton={<TwoLineSectionSkeleton />}
+        isEmpty={completed.length === 0}
+        emptyText="No completed trails yet."
+      >
+        <ul className="-mx-6 flex flex-col divide-y divide-border">
+          {completed.map((trail) => (
+            <li key={trail.id}>
+              <CompletedTrailRow trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
+            </li>
+          ))}
+        </ul>
+      </SavedSection>
     </div>
   );
 }
