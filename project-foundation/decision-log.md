@@ -220,6 +220,40 @@ Two now-established instances of "no Switch primitive, use a styled native check
 
 ---
 
+**#:** 9
+**Date:** Global search
+**Milestone:** Shell-level global search, replacing Discover's own search bar
+
+**Context:**
+Discover previously owned the only search bar in the app, rendered into public-shell.tsx's top bar slot only while Discover was mounted (every other tab rendered that slot empty), and scoped to places and businesses only. A request came in to make search "always at the top," matching common practice in Spotify, Notion, and similar apps. This is a real scope increase, not a styling tweak: it touches navigation-and-access-control.md's tab model (Discover is specifically framed as "the daily habit... search tab," Home is deliberately passive with "no search needed") and requires deciding what a global search actually returns across four different content types. Flagged before building anything, per project-brief.md's rule to flag scope changes rather than silently build them, and open-questions.md's rule not to guess.
+
+**Options Considered:**
+- Scope — Option A: keep search Discover-only, no change.
+- Scope — Option B: global search bar visible on every tab, querying only content types that have something searchable (Places, Businesses, Trails, Events), reached from wherever it lives rather than requiring a tab switch first.
+- Query shape — Option A: a router that jumps the person to the right existing tab/page with the query applied, no merged query.
+- Query shape — Option B: a real merged query, one function hitting all four tables in parallel, returning a unified grouped result rendered in a dropdown under the bar.
+- Placement — Option A: all five tabs including Profile.
+- Placement — Option B: Home, Trails, Discover, Saved -- not Profile.
+- Discover's own existing search bar — Option A: keep it separate, alongside the new global one.
+- Discover's own existing search bar — Option B: replaced by the same global bar, with Discover's live list/map filtering continuing to run off the same shared query text.
+
+**Community Consensus:**
+Not applicable, this is a project-specific scope and architecture decision (what this app's nav model should do), not a technology or pattern choice with an external best-practice debate to search for.
+
+**Decision:**
+Scope — Option B, confirmed directly ("Global search. Only go through other pages if the thing in that page is not searchable."). Four tables are genuinely name-searchable and public per data-model.md and each table's own RLS policy, confirmed directly rather than assumed: places (places_select_public, verified only), businesses (businesses_select_public, verified or pending), routes/trails (routes_select_public, published only), events (events_select_public, published = true, confirmed directly from migration 0006 before writing any code). Saved and Profile carry no independent searchable content of their own.
+
+Query shape — Option B, confirmed directly. A router-only approach would still require building a per-tab "apply this query" wiring for four different pages and loses the "see results across everything without leaving where you are" behavior a merged dropdown gives; the merged query is more work up front but is what "global search" in the Spotify/Notion sense actually means, matching the explicit ask.
+
+Placement — Option B, confirmed directly. Profile is a full account-settings page the person scrolls through top to bottom, not a lookup surface, the same reasoning navigation-and-access-control.md already gives Home for staying passive.
+
+Discover's own search bar — Option B, confirmed directly. One search concept, one control, per ux-ui-guidelines.md's Label Rules ("one label per concept, one place per label") applied to controls generally -- keeping a second, narrower search input on Discover alongside a global one would be two overlapping search experiences on the same screen.
+
+**Consequences:**
+public-shell.tsx's TopBarSlotContext (a page pushed rendered content into the shell, discover.tsx was its only caller) is fully replaced by GlobalSearchContext (the shell owns query state directly and renders GlobalSearchBar itself, gated per route). This is a full replacement, not an addition alongside the old mechanism, flagged here per constraints.md's No Silent Overrides rule since it changes an existing architectural piece rather than only adding a new one. discover.tsx no longer owns its own search input; its filterDiscoverResults call is unchanged, only the source of the query text moved from local state to the shell's shared context via the new useGlobalSearchQuery hook. Any future tab that needs the search bar visible should be added to public-shell.tsx's SEARCH_VISIBLE_PATHS list rather than reintroducing a page-level slot mechanism. Any future fifth searchable content type should follow global-search.ts's existing per-table-function-plus-Promise.all shape, matching how discover-query.ts's fetchDiscoverResults and home-query.ts's fetchRecentlyVerified are already structured, rather than a new merged-query pattern.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**

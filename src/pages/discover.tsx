@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { List, Map as MapIcon, Search } from "lucide-react";
+import { List, Map as MapIcon } from "lucide-react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
-import { useTopBarSlot } from "@/components/public/public-shell";
+import { useGlobalSearchQuery } from "@/components/public/public-shell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,22 +27,24 @@ const ALL_CATEGORIES = "all";
  * screen with a toggled surface per step-5-plan.md's Shape section, not a
  * second tab or route. Owns the combined query (moved up from
  * discover-map.tsx, Phase 3.1-3.2), geolocation request (moved up from
- * discover-map.tsx, Phase 4.2), and the search/category filter state
- * (5.3-5.4), since both the map and the list need the identical filtered
- * set and the same user location, per step-5-plan.md's "narrows both map
- * markers and the list together." Search bar fills the shell's existing
- * top bar slot (Phase 2.3), per ux-ui-guidelines.md's Layout Shell Rules,
- * search lives in the top bar chrome, not inside this page's own layout.
+ * discover-map.tsx, Phase 4.2), and the category/price filter state
+ * (5.4, 7.1), since both the map and the list need the identical filtered
+ * set and the same user location, per step-5-plan.md's "narrows both
+ * map markers and the list together." Search text itself now comes from
+ * the shell's shared global search bar (public-shell.tsx's
+ * useGlobalSearchQuery), not a page-local input -- per the resolved global
+ * search spec, Discover's own search bar was replaced by the shell-level
+ * one, with this page's live list/map filtering continuing to run off the
+ * same shared query text rather than a second, disconnected input.
  */
 export default function DiscoverPage() {
-  const setTopBarContent = useTopBarSlot();
+  const { query } = useGlobalSearchQuery();
 
   const [results, setResults] = useState<DiscoverResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(true);
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
-  const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -111,30 +113,6 @@ export default function DiscoverPage() {
     () => filterDiscoverResults(results, query, category, priceRange),
     [results, query, category, priceRange]
   );
-
-  // Search bar rendered into the shell's top bar (Phase 2.3's slot), only
-  // while Discover is mounted. Cleared on unmount so the next tab doesn't
-  // inherit it, per public-shell.tsx's own comment that every other tab
-  // renders the bar title-only or empty.
-  useEffect(() => {
-    setTopBarContent(
-      <div className="relative w-full">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search places and businesses"
-          aria-label="Search Discover"
-          className="pl-9"
-        />
-      </div>
-    );
-
-    return () => setTopBarContent(null);
-    // query/setTopBarContent intentionally both deps: the slotted input is
-    // a controlled element, its value must stay in sync with this page's
-    // own query state on every keystroke.
-  }, [query, setTopBarContent]);
 
   return (
     <div className="flex h-full w-full flex-col">

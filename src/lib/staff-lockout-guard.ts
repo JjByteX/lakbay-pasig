@@ -1,10 +1,11 @@
 import { supabase } from "./supabase";
 
 // Phase 3.5 (step-4-phases.md): shared by admin-staff.tsx (row action
-// toggle) and admin-staff-detail.tsx (edit form's demote/deactivate
-// controls), so the "does at least one other active Admin exist" check
-// lives in one place, per constraints.md's Inventory Before Suggesting
-// rule against parallel copies of the same logic.
+// toggle) and staff-form-dialog.tsx (edit form's demote/deactivate
+// controls, formerly admin-staff-detail.tsx before New/Edit staff moved
+// into a modal), so the "does at least one other active Admin exist"
+// check lives in one place, per constraints.md's Inventory Before
+// Suggesting rule against parallel copies of the same logic.
 //
 // RLS: profiles_select_admin (0009, via is_admin()) already lets any
 // Admin read every profiles row, so this plain select needs no service

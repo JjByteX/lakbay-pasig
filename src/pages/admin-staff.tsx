@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -20,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import StaffFormDialog from "@/components/admin/staff-form-dialog";
 import { countOtherActiveAdmins } from "@/lib/staff-lockout-guard";
 
 // Phase 3.1: table per step-4-phases.md — full name (display_name), position,
@@ -27,6 +27,13 @@ import { countOtherActiveAdmins } from "@/lib/staff-lockout-guard";
 // toggle active status. Same list-page shape as admin-businesses.tsx and
 // admin-places.tsx: fetch on mount, table, row action dropdown, no invented
 // pattern per constraints.md's Inventory Before Suggesting rule.
+//
+// New/Edit staff now open in a modal (StaffFormDialog) instead of a
+// separate /admin/staff/new or /admin/staff/:id route, per
+// ux-ui-guidelines.md's Modal vs panel rule: the form is a focused task
+// that fits a single viewport, so it doesn't need its own page. The
+// route and page (admin-staff-detail.tsx) were removed; all form logic
+// moved into the dialog component unchanged.
 //
 // Access: this whole page only renders for staff_role === 'admin', per
 // protected-route.tsx's requireAdmin on the /admin/staff route (App.tsx),
@@ -83,7 +90,6 @@ function PermissionsCell({ row }: Readonly<{ row: StaffRow }>) {
 }
 
 export default function AdminStaffPage() {
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffRow[] | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -92,7 +98,12 @@ export default function AdminStaffPage() {
   const [roleFilter, setRoleFilter] = useState<(typeof ROLE_OPTIONS)[number]>("all");
   const [activeFilter, setActiveFilter] = useState<(typeof ACTIVE_OPTIONS)[number]>("all");
 
-  useEffect(() => {
+  // Dialog state: null means closed, "new" means the New Staff Account
+  // form, any other string is the staff id being edited. Replaces the
+  // former navigate("/admin/staff/new" | `/admin/staff/${id}`) calls.
+  const [dialogTarget, setDialogTarget] = useState<"new" | string | null>(null);
+
+  function fetchStaff() {
     let cancelled = false;
 
     supabase
@@ -107,13 +118,18 @@ export default function AdminStaffPage() {
     return () => {
       cancelled = true;
     };
+  }
+
+  useEffect(() => {
+    const cancel = fetchStaff();
+    return cancel;
   }, []);
 
   // Phase 3.5: self-lockout guard. An Admin deactivating their own account
   // must not be allowed to do so with no other active Admin left, per
   // step-4-phases.md 3.5 and ux-ui-guidelines.md's Disabled/gated rule
   // (block with a clear message, don't let it through silently). This is
-  // the row-action entry point; admin-staff-detail.tsx repeats the same
+  // the row-action entry point; staff-form-dialog.tsx repeats the same
   // check for the edit form's own toggle, since both surfaces can trigger
   // the same action.
   async function handleToggleActive(row: StaffRow) {
@@ -203,7 +219,7 @@ export default function AdminStaffPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/admin/staff/${row.id}`)}>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setDialogTarget(row.id)}>Edit</DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleToggleActive(row)}>
               {row.active_status === "active" ? "Deactivate" : "Activate"}
             </DropdownMenuItem>
@@ -217,7 +233,7 @@ export default function AdminStaffPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Staff</h1>
-        <Button onClick={() => navigate("/admin/staff/new")}>New Staff Account</Button>
+        <Button onClick={() => setDialogTarget("new")}>New Staff Account</Button>
       </div>
 
       {toggleError && <p className="text-sm text-destructive">{toggleError}</p>}
@@ -258,6 +274,15 @@ export default function AdminStaffPage() {
             </Select>
           </AdminFilterBar>
         }
+      />
+
+      <StaffFormDialog
+        open={dialogTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDialogTarget(null);
+        }}
+        staffId={dialogTarget === "new" ? null : dialogTarget}
+        onSaved={fetchStaff}
       />
     </div>
   );

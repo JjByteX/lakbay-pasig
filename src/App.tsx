@@ -28,7 +28,6 @@ import AdminEventDetailPage from "@/pages/admin-event-detail";
 import AdminTrailsPage from "@/pages/admin-trails";
 import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
 import AdminStaffPage from "@/pages/admin-staff";
-import AdminStaffDetailPage from "@/pages/admin-staff-detail";
 
 export default function App() {
   return (
@@ -202,27 +201,16 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* New/Edit staff open in a modal (StaffFormDialog, rendered from
+              AdminStaffPage itself) instead of separate routes, per
+              ux-ui-guidelines.md's Modal vs panel rule. staff/new and
+              staff/:id previously routed to admin-staff-detail.tsx, now
+              removed. */}
           <Route
             path="staff"
             element={
               <ProtectedRoute requireAdmin>
                 <AdminStaffPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="staff/new"
-            element={
-              <ProtectedRoute requireAdmin>
-                <AdminStaffDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="staff/:id"
-            element={
-              <ProtectedRoute requireAdmin>
-                <AdminStaffDetailPage />
               </ProtectedRoute>
             }
           />

@@ -106,11 +106,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   //
   // SonarQube flagged the Provider's value object being rebuilt on every
   // render (L96), same fix shape as public-shell.tsx's
-  // TopBarSlotContext.Provider and sidebar.tsx's SidebarContext.Provider,
-  // both already in this codebase: wrap the value in useMemo, and wrap any
-  // function inside that value in useCallback so its own reference stays
-  // stable across renders unless something it actually reads changes.
-  // refreshProfile reads session, so it depends on it here.
+  // GlobalSearchContext.Provider (formerly TopBarSlotContext.Provider,
+  // renamed when global search replaced the per-page top bar slot) and
+  // sidebar.tsx's SidebarContext.Provider, both already in this codebase:
+  // wrap the value in useMemo, and wrap any function inside that value in
+  // useCallback so its own reference stays stable across renders unless
+  // something it actually reads changes. refreshProfile reads session, so
+  // it depends on it here.
   const refreshProfile = useCallback(async () => {
     if (!session) return;
     const loadedProfile = await fetchProfile(session.user.id);
