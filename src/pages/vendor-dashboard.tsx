@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Store } from "lucide-react";
+import type { Session } from "@supabase/supabase-js";
 import { useAuth } from "@/lib/auth-context";
 import { fetchOwnBusiness, createBusiness, updateBusiness } from "@/lib/vendor-business";
 import { fetchTrailInclusions } from "@/lib/vendor-dashboard";
@@ -111,6 +112,22 @@ function formToPayload(form: BusinessFormState): VendorBusinessPayload {
   };
 }
 
+// SonarCloud L385/L409: nested ternary flagged inside the MetricLine JSX.
+// Pulled into named functions, one branch per statement, same copy as
+// before -- no ternary nesting left to read, and each has an obvious name
+// at the call site instead of an inline conditional expression.
+function trailInclusionText(count: number): string {
+  if (count === 0) return "Not included in any published trail yet.";
+  const plural = count === 1 ? "" : "s";
+  return `Included in ${count} trail${plural}.`;
+}
+
+function itemsMissingPriceText(items: VendorItem[]): string {
+  if (items.length === 0) return "No items listed yet.";
+  const plural = items.length === 1 ? "" : "s";
+  return `${missingPriceCount(items)} of ${items.length} item${plural} missing a price.`;
+}
+
 // 4.2: trail inclusion and item metrics each fetch independently (same
 // per-section independence saved.tsx already established -- a slow trail
 // query and a slow items query are unrelated causes), so each gets its
@@ -126,34 +143,20 @@ function MetricLine({
   return <p className="text-base text-foreground">{children}</p>;
 }
 
-export default function VendorDashboardPage() {
-  const { session, loading } = useAuth();
+// SonarCloud L129: VendorDashboardPage's cognitive complexity (25, limit
+// 15) came from three independent data-fetch effects each carrying their
+// own branching living inside the one component function. Pulled into two
+// small local hooks below, same state shape and same effect bodies, no
+// behavior change -- this mirrors how save-button.tsx and the other
+// signed-in-only fetch effects in this codebase are already structured as
+// self-contained units, just given a name and moved out of the render
+// function instead of inlined into it.
 
+/** Loads (or after create, reloads) the caller's own business row. */
+function useOwnBusiness(session: Session | null) {
   const [business, setBusiness] = useState<VendorBusinessDetail | null>(null);
   const [checking, setChecking] = useState(true);
   const [checkError, setCheckError] = useState<string | null>(null);
-
-  const [form, setForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-
-  // 4.3: edit entry point. Opens the same field set as the create form,
-  // pre-filled from the loaded row, submit calls updateBusiness with the
-  // same allow-list formToPayload already builds for create.
-  const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  // 4.2: metrics section state. Each independent, per this file's own
-  // MetricLine comment above.
-  const [trails, setTrails] = useState<TrailInclusion[]>([]);
-  const [trailsLoading, setTrailsLoading] = useState(true);
-  const [trailsError, setTrailsError] = useState<string | null>(null);
-
-  const [items, setItems] = useState<VendorItem[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(true);
-  const [itemsError, setItemsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -167,34 +170,73 @@ export default function VendorDashboardPage() {
       .finally(() => setChecking(false));
   }, [session]);
 
-  // 4.2: trail inclusion and item metrics only make sense once a business
-  // exists, so both effects guard on business, matching save-button.tsx's
-  // own signed-in-only fetch guard shape.
+  return { business, setBusiness, checking, setChecking, checkError };
+}
+
+/**
+ * 4.2: trail inclusion and item metrics. Both only make sense once a
+ * business exists, so both effects guard on businessId, matching
+ * save-button.tsx's own signed-in-only fetch guard shape. Each stays
+ * independent (its own loading/error), same reasoning as this file's own
+ * MetricLine comment: a slow trail query and a slow items query are
+ * unrelated causes, not one shared spinner.
+ */
+function useVendorMetrics(businessId: string | undefined) {
+  const [trails, setTrails] = useState<TrailInclusion[]>([]);
+  const [trailsLoading, setTrailsLoading] = useState(true);
+  const [trailsError, setTrailsError] = useState<string | null>(null);
+
+  const [items, setItems] = useState<VendorItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!business) return;
+    if (!businessId) return;
     setTrailsLoading(true);
     setTrailsError(null);
-    fetchTrailInclusions(business.id)
+    fetchTrailInclusions(businessId)
       .then(setTrails)
       .catch((err: unknown) => {
         setTrailsError(errorMessageFrom(err, "Could not load trail inclusions."));
         setTrails([]);
       })
       .finally(() => setTrailsLoading(false));
-  }, [business]);
+  }, [businessId]);
 
   useEffect(() => {
-    if (!business) return;
+    if (!businessId) return;
     setItemsLoading(true);
     setItemsError(null);
-    fetchItems(business.id)
+    fetchItems(businessId)
       .then(setItems)
       .catch((err: unknown) => {
         setItemsError(errorMessageFrom(err, "Could not load your items."));
         setItems([]);
       })
       .finally(() => setItemsLoading(false));
-  }, [business]);
+  }, [businessId]);
+
+  return { trails, trailsLoading, trailsError, items, itemsLoading, itemsError };
+}
+
+export default function VendorDashboardPage() {
+  const { session, loading } = useAuth();
+
+  const { business, setBusiness, checking, setChecking, checkError } = useOwnBusiness(session);
+  const { trails, trailsLoading, trailsError, items, itemsLoading, itemsError } =
+    useVendorMetrics(business?.id);
+
+  const [form, setForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // 4.3: edit entry point. Opens the same field set as the create form,
+  // pre-filled from the loaded row, submit calls updateBusiness with the
+  // same allow-list formToPayload already builds for create.
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (loading) return null;
 
@@ -380,9 +422,7 @@ export default function VendorDashboardPage() {
         <div className="flex flex-col gap-3">
           <h2 className="text-base font-semibold text-foreground">Trail Inclusion</h2>
           <MetricLine loading={trailsLoading} error={trailsError}>
-            {trails.length === 0
-              ? "Not included in any published trail yet."
-              : `Included in ${trails.length} trail${trails.length === 1 ? "" : "s"}.`}
+            {trailInclusionText(trails.length)}
           </MetricLine>
           {!trailsLoading && !trailsError && trails.length > 0 && (
             <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
@@ -403,11 +443,7 @@ export default function VendorDashboardPage() {
         <div className="flex flex-col gap-3">
           <h2 className="text-base font-semibold text-foreground">Items</h2>
           <MetricLine loading={itemsLoading} error={itemsError}>
-            {items.length === 0
-              ? "No items listed yet."
-              : `${missingPriceCount(items)} of ${items.length} item${
-                  items.length === 1 ? "" : "s"
-                } missing a price.`}
+            {itemsMissingPriceText(items)}
           </MetricLine>
         </div>
 
