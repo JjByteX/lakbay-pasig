@@ -132,7 +132,7 @@ function sortReducer(
   return sortInitial;
 }
 
-function SortIcon({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
+function SortIcon({ active, dir }: Readonly<{ active: boolean; dir: "asc" | "desc" }>) {
   const className = cn("h-3 w-3 shrink-0", active ? "text-foreground" : "text-muted-foreground");
   if (active) {
     return dir === "asc" ? <ChevronUp className={className} /> : <ChevronDown className={className} />;

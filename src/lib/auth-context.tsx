@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useCallback, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { Profile } from "./auth-types";
@@ -86,14 +86,27 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // own save action) pull the fresh row back into context, instead of
   // waiting for the next full session load. Signed-out call is a no-op,
   // there's no profile to refresh.
-  async function refreshProfile() {
+  //
+  // SonarQube flagged the Provider's value object being rebuilt on every
+  // render (L96), same fix shape as public-shell.tsx's
+  // TopBarSlotContext.Provider and sidebar.tsx's SidebarContext.Provider,
+  // both already in this codebase: wrap the value in useMemo, and wrap any
+  // function inside that value in useCallback so its own reference stays
+  // stable across renders unless something it actually reads changes.
+  // refreshProfile reads session, so it depends on it here.
+  const refreshProfile = useCallback(async () => {
     if (!session) return;
     const loadedProfile = await fetchProfile(session.user.id);
     setProfile(loadedProfile);
-  }
+  }, [session]);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ session, profile, loading, signOut, refreshProfile }),
+    [session, profile, loading, signOut, refreshProfile]
+  );
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
