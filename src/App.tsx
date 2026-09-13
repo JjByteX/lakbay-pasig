@@ -66,7 +66,7 @@ export default function App() {
           {/* Phase 4.4 (step-6-phases.md): same nesting as the two discover
               detail routes above, not top level, so the bottom nav and top
               bar stay visible per ux-ui-guidelines.md's Layout Shell Rules.
-              Reached from AnnouncementCard's row tap (home.tsx). */}
+              Reached from AnnouncementCarousel's tile click (home.tsx). */}
           <Route path="events/:id" element={<EventDetailPage />} />
           <Route path="saved" element={<SavedPage />} />
           <Route path="profile" element={<ProfilePage />} />

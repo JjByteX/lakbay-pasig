@@ -45,7 +45,8 @@ function formatDateTime(iso: string | null): string | null {
 
 /**
  * Phase 4.1-4.4: full detail page for an announcement, reached from
- * AnnouncementCard's row tap (home.tsx, wired in Phase 4.5). Same
+ * AnnouncementCarousel's tile click (home.tsx; originally AnnouncementCard's
+ * row tap when wired in Phase 4.5, same onOpen/navigate target since). Same
  * structure discover-place-detail.tsx already established: back button
  * top left, loading/not-found/loaded states. Nested under PublicShell
  * (App.tsx), not a top level route, so the bottom nav and top bar stay

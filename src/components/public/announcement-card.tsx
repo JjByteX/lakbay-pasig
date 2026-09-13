@@ -15,7 +15,7 @@ import type { Announcement } from "@/lib/home-types";
  * meaning, per ux-ui-guidelines.md's "same icon/style per concept
  * everywhere" rule.
  */
-function formatDateTime(iso: string | null): string | null {
+export function formatDateTime(iso: string | null): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleString(undefined, {
     month: "short",

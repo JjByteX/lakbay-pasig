@@ -230,7 +230,7 @@ function HeaderFilterArea({
 // "/events" is included even though it isn't one of the bottom-nav tabs:
 // App.tsx nests events/:id directly under the shell at the top
 // level (not under any tab's own path prefix), reached from Home's
-// AnnouncementCard row tap, so it's still part of the Home surface the
+// AnnouncementCarousel's tile click, so it's still part of the Home surface the
 // search bar should stay mounted across, same reasoning as the trails/
 // discover/saved detail-route case below.
 const SEARCH_VISIBLE_PATHS = ["/", "/trails", "/discover", "/saved", "/events"];

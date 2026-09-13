@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
 import { fetchAnnouncements, fetchRecentlyVerified } from "@/lib/home-query";
 import type { Announcement, RecentlyVerifiedItem } from "@/lib/home-types";
-import { AnnouncementCard } from "@/components/public/announcement-card";
+import { AnnouncementCarousel } from "@/components/public/announcement-carousel";
 import { VerifiedItemCard } from "@/components/public/verified-item-card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -100,16 +100,10 @@ export default function HomePage() {
     announcementsBody = <p className="text-sm text-muted-foreground">No announcements yet.</p>;
   } else {
     announcementsBody = (
-      <ul className="-mx-6 flex flex-col divide-y divide-border">
-        {announcements.map((announcement) => (
-          <li key={announcement.id}>
-            <AnnouncementCard
-              announcement={announcement}
-              onClick={() => navigate(`/events/${announcement.id}`)}
-            />
-          </li>
-        ))}
-      </ul>
+      <AnnouncementCarousel
+        announcements={announcements}
+        onOpen={(id) => navigate(`/events/${id}`)}
+      />
     );
   }
 
