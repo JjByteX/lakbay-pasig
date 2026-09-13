@@ -1,16 +1,20 @@
-import { Home, Map, Compass, Bookmark, User } from "lucide-react";
+import { Home, Map, Compass, Bookmark } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 // Fixed left-to-right order per navigation-and-access-control.md's Bottom Nav
-// Order: Home, Trails, Discover (center), Saved, Profile. Icons from
-// lucide-react per ux-ui-guidelines.md's icon rules, each paired with a
-// visible text label (not universally-iconic-enough to drop the label).
+// Order, minus Profile: Home, Trails, Discover (center), Saved. Profile
+// moved to the shell header's top-right account menu (public-shell.tsx),
+// per direct instruction -- confirmed to remove it from here rather than
+// keep it in both places, so there's exactly one way to reach Profile, not
+// two competing entry points for the same destination (ux-ui-guidelines.md's
+// "one action, one trigger, one place"). Icons from lucide-react per
+// ux-ui-guidelines.md's icon rules, each paired with a visible text label
+// (not universally-iconic-enough to drop the label).
 const TABS = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/trails", label: "Trails", icon: Map, end: false },
   { to: "/discover", label: "Discover", icon: Compass, end: false },
   { to: "/saved", label: "Saved", icon: Bookmark, end: false },
-  { to: "/profile", label: "Profile", icon: User, end: false },
 ] as const;
 
 export function BottomNav() {
