@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null, adminOnly: false },
   { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const, adminOnly: false },
   { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const, adminOnly: false },
-  { to: "/admin/events", label: "Events & Announcements", icon: CalendarDays, permission: "publish_events" as const, adminOnly: false },
+  { to: "/admin/events", label: "Announcements", icon: CalendarDays, permission: "publish_events" as const, adminOnly: false },
   { to: "/admin/trails", label: "Trails", icon: Map, permission: "build_trails" as const, adminOnly: false },
   { to: "/admin/staff", label: "Staff", icon: Users, permission: null, adminOnly: true },
 ];

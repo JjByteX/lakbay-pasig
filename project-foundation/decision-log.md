@@ -150,6 +150,28 @@ Any future list that needs a heart-toggle-and-tap row (place or route) should fo
 
 ---
 
+**#:** 6
+**Date:** Events: end date/time
+**Milestone:** Admin Events form — optional end date and time
+
+**Context:**
+Events (migration 0006, data-model.md) only ever had a single Date and Time field. A request came in for an end date/time toggle on the admin event form. This needs a new nullable column, schema is on architecture-notes.md's never-touch-without-approval list, and it's new scope beyond data-model.md's documented Event/Announcement fields, so both required flagging before writing anything, per constraints.md's No Silent Overrides rule.
+
+**Options Considered:**
+- Option A: new nullable `end_date_time` column, toggle reveals a second `datetime-local` input, no ordering validation.
+- Option B: same schema change, plus a client-side check blocking submit when `end_date_time` is at or before `date_time`, with a visible inline reason.
+
+**Community Consensus:**
+Not applicable, this is a same-codebase schema-shape and validation-posture choice, not a technology or pattern choice with an external best-practice debate.
+
+**Decision:**
+Option B, requested directly after being asked which option better follows ux-ui-guidelines.md. Justification: the State Rules section requires every interactive element to have a defined error state, an end date/time field has an obvious failure mode (ending before it starts) that Option A leaves uncaught; and the Disabled/gated rule already requires a visible reason when a primary action is blocked, exactly the pattern `canPublish`'s `missingRequiredFields` message uses elsewhere in this same file. Extending that established pattern to the new field is also more consistent with the Consistency Rules section than leaving one gated field unvalidated next to another that already is.
+
+**Consequences:**
+Migration 0020 adds `events.end_date_time`, nullable, same optional-per-row shape as 0017's `verified_at`. admin-event-detail.tsx's `canSubmit` and `canPublish` both now also depend on `!endBeforeStart`, so a bad range blocks Create/Save, not just Publish. No other file needed a change: `announcement-card.tsx`, `event-detail.tsx`, `admin-events.tsx`'s list/table, and `home-query.ts`/`home-types.ts` all display `date_time` alone and were not asked to show a range. Any future UI that needs to show or filter by an event's end (a calendar view, a public-facing "ends at" line) should read `end_date_time` directly rather than deriving it, and should treat a null value as "no defined end," not as an error.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**

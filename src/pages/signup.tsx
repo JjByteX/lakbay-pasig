@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -79,9 +80,8 @@ export default function SignupPage() {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -96,9 +96,8 @@ export default function SignupPage() {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="confirm-password">Confirm password</Label>
-            <Input
+            <PasswordInput
               id="confirm-password"
-              type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

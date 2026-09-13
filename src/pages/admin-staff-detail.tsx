@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { countOtherActiveAdmins } from "@/lib/staff-lockout-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,7 +39,7 @@ import {
 const SYSTEM_PERMISSIONS = [
   { value: "manage_places", label: "Places" },
   { value: "review_businesses", label: "Businesses" },
-  { value: "publish_events", label: "Events & Announcements" },
+  { value: "publish_events", label: "Announcements" },
   { value: "build_trails", label: "Trails" },
 ] as const;
 
@@ -329,9 +330,8 @@ export default function AdminStaffDetailPage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 value={form.password}
                 onChange={(e) => updateField("password", e.target.value)}
                 placeholder="At least 8 characters"

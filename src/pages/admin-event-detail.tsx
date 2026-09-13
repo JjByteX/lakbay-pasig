@@ -47,6 +47,7 @@ interface EventFormState {
   category: string;
   related_program: string;
   date_time: string;
+  end_date_time: string;
   location: string;
   related_place_id: string;
   enrollment_info: string;
@@ -59,6 +60,7 @@ const EMPTY_FORM: EventFormState = {
   category: "",
   related_program: "",
   date_time: "",
+  end_date_time: "",
   location: "",
   related_place_id: "",
   enrollment_info: "",
@@ -88,6 +90,7 @@ export default function AdminEventDetailPage() {
   const { profile } = useAuth();
 
   const [form, setForm] = useState<EventFormState>(EMPTY_FORM);
+  const [hasEndDateTime, setHasEndDateTime] = useState(false);
   const [published, setPublished] = useState(false);
   const [lifecycleStatus, setLifecycleStatus] = useState<(typeof LIFECYCLE_STATUSES)[number]>("upcoming");
   const [loading, setLoading] = useState(!isNew);
@@ -114,7 +117,7 @@ export default function AdminEventDetailPage() {
     supabase
       .from("events")
       .select(
-        "title, description, category, related_program, date_time, location, related_place_id, enrollment_info, language, published, lifecycle_status"
+        "title, description, category, related_program, date_time, end_date_time, location, related_place_id, enrollment_info, language, published, lifecycle_status"
       )
       .eq("id", id)
       .single()
@@ -130,11 +133,13 @@ export default function AdminEventDetailPage() {
           category: data.category ?? "",
           related_program: data.related_program ?? "",
           date_time: toDatetimeLocalValue(data.date_time),
+          end_date_time: toDatetimeLocalValue(data.end_date_time),
           location: data.location ?? "",
           related_place_id: data.related_place_id ?? "",
           enrollment_info: data.enrollment_info ?? "",
           language: data.language ?? "",
         });
+        setHasEndDateTime(Boolean(data.end_date_time));
         setPublished(data.published);
         setLifecycleStatus(data.lifecycle_status);
         setLoading(false);
@@ -145,7 +150,17 @@ export default function AdminEventDetailPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const canSubmit = form.title.trim().length > 0 && !saving;
+  // Toggle-driven optional field (0020: events.end_date_time). Only
+  // validated when the toggle is on and both dates are present, same
+  // "don't block on an optional field" posture data-model.md already uses
+  // for related_program/location/enrollment_info/language on this form.
+  const endBeforeStart =
+    hasEndDateTime &&
+    form.date_time.length > 0 &&
+    form.end_date_time.length > 0 &&
+    new Date(form.end_date_time) <= new Date(form.date_time);
+
+  const canSubmit = form.title.trim().length > 0 && !saving && !endBeforeStart;
 
   // 2.4: "Disabled publish button if required fields are missing," per
   // ux-ui-guidelines.md's Disabled/gated rule ("must be visibly disabled
@@ -163,7 +178,7 @@ export default function AdminEventDetailPage() {
   if (form.description.trim().length === 0) missingRequiredFields.push("Description");
   if (form.category.trim().length === 0) missingRequiredFields.push("Category");
   if (form.date_time.trim().length === 0) missingRequiredFields.push("Date and Time");
-  const canPublish = missingRequiredFields.length === 0;
+  const canPublish = missingRequiredFields.length === 0 && !endBeforeStart;
   // Note: this reads live form state, not the last-saved row. An edit made
   // after load but not yet saved can flip canPublish before Save Changes is
   // clicked; handleTogglePublished only ever writes the published column,
@@ -185,6 +200,7 @@ export default function AdminEventDetailPage() {
       category: form.category || null,
       related_program: form.related_program || null,
       date_time: form.date_time ? new Date(form.date_time).toISOString() : null,
+      end_date_time: hasEndDateTime && form.end_date_time ? new Date(form.end_date_time).toISOString() : null,
       location: form.location || null,
       related_place_id: form.related_place_id || null,
       enrollment_info: form.enrollment_info || null,
@@ -314,6 +330,12 @@ export default function AdminEventDetailPage() {
         </p>
       )}
 
+      {endBeforeStart && (
+        <p className="text-sm text-destructive">
+          End must be after the start date and time.
+        </p>
+      )}
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
@@ -375,6 +397,34 @@ export default function AdminEventDetailPage() {
               onChange={(e) => updateField("date_time", e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="has_end_date_time" className="flex w-fit items-center gap-2 text-sm text-foreground">
+            <input
+              id="has_end_date_time"
+              type="checkbox"
+              checked={hasEndDateTime}
+              onChange={(e) => {
+                setHasEndDateTime(e.target.checked);
+                if (!e.target.checked) updateField("end_date_time", "");
+              }}
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            This event has an end date and time
+          </label>
+          {hasEndDateTime && (
+            <div className="flex flex-col gap-2 sm:w-1/2 sm:pr-2">
+              <Label htmlFor="end_date_time">End Date and Time</Label>
+              <Input
+                id="end_date_time"
+                type="datetime-local"
+                value={form.end_date_time}
+                onChange={(e) => updateField("end_date_time", e.target.value)}
+                aria-invalid={endBeforeStart}
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

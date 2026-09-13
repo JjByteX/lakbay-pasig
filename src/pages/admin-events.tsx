@@ -222,7 +222,7 @@ export default function AdminEventsPage() {
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">Events & Announcements</h1>
+        <h1 className="text-xl font-semibold text-foreground">Announcements</h1>
         <Button onClick={() => navigate("/admin/events/new")}>New Event</Button>
       </div>
 
