@@ -104,6 +104,15 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
       },
     },
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+    // Every symbol layer below sets its own text-font: "Noto Sans Regular",
+    // the only fontstack OpenFreeMap actually hosts. Without an explicit
+    // text-font, maplibre-gl falls back to its hardcoded default stack
+    // ("Open Sans Regular, Arial Unicode MS Regular"), which 404s against
+    // OpenFreeMap on every glyph request (Arial isn't open-source, was
+    // never hosted there) and silently degrades to slow per-codepoint
+    // local rendering. Confirmed via OpenFreeMap's own font directory and
+    // a maintainer thread on this exact default-stack 404 (maplibre-gl-js
+    // discussion #4737).
     layers: [
       { id: "background", type: "background", paint: { "background-color": palette.base } },
       {
@@ -211,7 +220,7 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "water_name",
-        layout: { "text-field": ["get", "name"], "text-size": 12 },
+        layout: { "text-field": ["get", "name"], "text-size": 12, "text-font": ["Noto Sans Regular"] },
         paint: {
           "text-color": palette.sapphire,
           "text-halo-color": palette.base,
@@ -223,7 +232,7 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "transportation_name",
-        layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-size": 11 },
+        layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-size": 11, "text-font": ["Noto Sans Regular"] },
         paint: {
           "text-color": palette.text,
           "text-halo-color": palette.base,
@@ -236,7 +245,7 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
         source: "openmaptiles",
         "source-layer": "place",
         filter: ["match", ["get", "class"], ["city", "town", "village"], true, false],
-        layout: { "text-field": ["get", "name"], "text-size": 13 },
+        layout: { "text-field": ["get", "name"], "text-size": 13, "text-font": ["Noto Sans Regular"] },
         paint: {
           "text-color": palette.text,
           "text-halo-color": palette.base,

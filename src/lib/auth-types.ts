@@ -19,4 +19,6 @@ export interface Profile {
   preferred_categories: string[] | null;
   position: string | null;
   system_permission: SystemPermission[] | null;
+  theme_preference: "light" | "dark" | null;
+  font_size_preference: "small" | "default" | "large" | null;
 }

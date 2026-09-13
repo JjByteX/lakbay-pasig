@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Store } from "lucide-react";
+import { Store, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
@@ -300,6 +300,22 @@ export default function ProfilePage() {
           <span>List your business</span>
         </Link>
       )}
+
+      {/* Settings: Personalization, Phase 2.4: same visual pattern as the
+          vendor entry rows above (icon plus label, one tap target), not a
+          second Profile-page section competing with account info in the
+          same card -- per ux-ui-guidelines.md's Card fragmentation rule,
+          Settings is its own concern, not a field group bolted onto the
+          account-info card. Icon and "Settings" label together per Phase
+          2.5 and the Icon Rules -- gear is not one of the icons exempt
+          from a visible label. */}
+      <Link
+        to="/profile/settings"
+        className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
+      >
+        <SettingsIcon className="h-4 w-4 shrink-0" />
+        <span>Settings</span>
+      </Link>
 
       {/* 4.6: sign out lives here now, same signOut function home.tsx
           currently calls (removed from that page in Phase 5). */}

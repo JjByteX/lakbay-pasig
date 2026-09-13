@@ -172,6 +172,54 @@ Migration 0020 adds `events.end_date_time`, nullable, same optional-per-row shap
 
 ---
 
+**#:** 7
+**Date:** Settings: Personalization, Phase 0
+**Milestone:** Settings sub-page — theme and font size preference schema
+
+**Context:**
+settings-personalization-plan.md confirmed dark mode and font size as new controls living on a Settings sub-page reached from Profile. Neither preference exists anywhere in the schema today: data-model.md's End User field list has no theme or font size field, and no `profiles` column backs either. Storage is confirmed synced to account (not local-only), so both need a home on `profiles`. Schema is on architecture-notes.md's never-touch-without-approval list, and this is new scope beyond the documented data model, so both required flagging before writing anything, per constraints.md's No Silent Overrides rule.
+
+**Options Considered:**
+- Storage — Option A: local-only (browser storage), no schema change, preference does not follow the user across devices or sessions.
+- Storage — Option B: two new nullable columns on `profiles` (`theme_preference`, `font_size_preference`), synced to account, same shape as 0017's `verified_at` and 0020's `end_date_time`.
+- Unset-value meaning — Option A: store an explicit default value at write time (e.g. `'light'`, `'default'`) for every new row.
+- Unset-value meaning — Option B: leave both columns nullable with no stored default; the app decides what null means at read time (Phase 1's scope).
+
+**Community Consensus:**
+Not applicable, this is a same-codebase schema-shape choice (matching two existing sibling patterns already in this migration set), not a technology or pattern choice with an external best-practice debate.
+
+**Decision:**
+Storage — Option B, confirmed directly (`settings-personalization-plan.md`'s Storage section: "Confirmed. New nullable columns on `profiles`"). Matches the nullable-optional-column shape 0017 and 0020 already established, rather than inventing a new storage mechanism for what is structurally the same kind of per-row, per-user preference.
+
+Unset-value meaning — Option B. Storing an explicit default at write time bakes today's UI decision (light is default, "small" font is default) into every row, so a future change to what the default means would require a data migration instead of a one-line code change. Nullable-means-unset keeps the column a pure preference record; Phase 1 of this feature owns translating null into a concrete value at read/apply time.
+
+**Consequences:**
+Migration 0021 adds `profiles.theme_preference` (text, `'light'`/`'dark'`, nullable) and `profiles.font_size_preference` (text, `'small'`/`'default'`/`'large'`, nullable), each with an inline check constraint permitting null, same pattern 0002's `system_permission_values` and 0003/0004's category/status columns already use. `auth-types.ts`'s `Profile` interface and `auth-context.tsx`'s `fetchProfile` select list both widened to include the two new columns, so every profile load carries them from this point forward. No RLS policy change needed: `profiles_update_own` (0001) already guards the row, and both columns are self-service preferences the signed-in user is expected to write to themselves, not staff-only fields requiring a new column-level boundary note. Any future preference stored per-account (not per-device) should follow this same nullable-column shape on `profiles` rather than introducing a separate preferences table for a two-column feature.
+
+---
+
+**#:** 8
+**Date:** Settings: Personalization, Phase 3
+**Milestone:** Settings sub-page — dark mode control primitive
+
+**Context:**
+settings-personalization-phases.md's Phase 3.1 specifies a Switch control for the dark mode row, but explicitly requires checking `src/components/ui` first, since architecture-notes.md's own changelog records admin-event-detail.tsx hitting this identical gap for its end-date toggle: no Switch primitive existed at that time, so a native checkbox was used instead. Confirmed again before writing this phase: `src/components/ui` still has no `switch.tsx`, and `@radix-ui/react-switch` is not in `package.json`'s dependencies (shadcn's Switch requires it). Adding it means an `npm install`, which this session is not running.
+
+**Options Considered:**
+- Option A: add `@radix-ui/react-switch` and a new `src/components/ui/switch.tsx`, matching shadcn's standard Switch setup.
+- Option B: reuse the native-checkbox-styled-as-a-toggle fallback admin-event-detail.tsx's own end-date toggle already established for this exact same gap.
+
+**Community Consensus:**
+Not applicable, this is a same-codebase consistency choice (matching an already-established fallback for an already-encountered gap), not a technology or pattern choice with an external best-practice debate.
+
+**Decision:**
+Option B. Per constraints.md's Inventory Before Suggesting rule, a second instance of "no Switch exists yet" should reuse the fallback this codebase already chose once, not introduce a new dependency and a new primitive for a single control while an identical gap sits one file away already solved. The checkbox is styled identically to admin-event-detail.tsx's own (`h-4 w-4 rounded border-input accent-primary`, wrapped in a native `<label>` with the control and its text as siblings), adapted only for this page's own text size convention (`text-base`, matching profile.tsx and the rest of the public surface, not admin's `text-sm`).
+
+**Consequences:**
+Two now-established instances of "no Switch primitive, use a styled native checkbox" exist in this codebase (admin-event-detail.tsx, settings.tsx). If a third toggle is needed anywhere, or if dark mode's own control ever needs true Switch semantics (a11y role, drag gesture, etc.) beyond what a checkbox provides, that is the point to revisit adding `@radix-ui/react-switch` and a shared `switch.tsx` component once, covering all toggles at once rather than converting them one at a time. Until then, any future toggle should check for this same pattern before reaching for a new dependency, matching this entry's own reasoning rather than re-debating it.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**

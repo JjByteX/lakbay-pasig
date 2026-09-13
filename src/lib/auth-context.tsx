@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useCallback, useState, t
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { Profile } from "./auth-types";
+import { applyTheme, applyFontSize } from "./preferences";
 
 interface AuthContextValue {
   session: Session | null;
@@ -21,11 +22,21 @@ function isInactiveStaff(profile: Profile | null): boolean {
   return !!profile?.staff_role && profile.active_status === "inactive";
 }
 
+// Phase 1.3/1.4: applies both preferences from a resolved profile.
+// A null profile (guest, signed out, or a just-signed-out inactive
+// staff account) has no row to read, so this passes null through to
+// each function, which already resolves null to its own default
+// (light, default font size) per preferences.ts's Phase 1.2 handling.
+function applyPreferences(profile: Profile | null): void {
+  applyTheme(profile?.theme_preference ?? null);
+  applyFontSize(profile?.font_size_preference ?? null);
+}
+
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, role, staff_role, active_status, display_name, contact_number, date_of_birth, preferred_language, preferred_categories, position, system_permission"
+      "id, role, staff_role, active_status, display_name, contact_number, date_of_birth, preferred_language, preferred_categories, position, system_permission, theme_preference, font_size_preference"
     )
     .eq("id", userId)
     .single();
@@ -51,13 +62,16 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           await supabase.auth.signOut();
           setSession(null);
           setProfile(null);
+          applyPreferences(null);
           setLoading(false);
           return;
         }
         setSession(data.session);
         setProfile(loadedProfile);
+        applyPreferences(loadedProfile);
       } else {
         setSession(data.session);
+        applyPreferences(null);
       }
       setLoading(false);
     });
@@ -69,13 +83,16 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           await supabase.auth.signOut();
           setSession(null);
           setProfile(null);
+          applyPreferences(null);
           return;
         }
         setSession(newSession);
         setProfile(loadedProfile);
+        applyPreferences(loadedProfile);
       } else {
         setSession(newSession);
         setProfile(null);
+        applyPreferences(null);
       }
     });
 

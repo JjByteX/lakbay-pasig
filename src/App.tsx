@@ -11,6 +11,7 @@ import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
 import EventDetailPage from "@/pages/event-detail";
 import SavedPage from "@/pages/saved";
 import ProfilePage from "@/pages/profile";
+import SettingsPage from "@/pages/settings";
 import VendorDashboardPage from "@/pages/vendor-dashboard";
 import VendorItemsPage from "@/pages/vendor-items";
 import LoginPage from "@/pages/login";
@@ -70,6 +71,13 @@ export default function App() {
           <Route path="events/:id" element={<EventDetailPage />} />
           <Route path="saved" element={<SavedPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* Settings: Personalization, Phase 2.1: no ProtectedRoute
+              wrapper, same reasoning as saved, profile, and vendor above --
+              navigation-and-access-control.md's Profile is "locked, prompt
+              to sign in" for a Guest, not redirected. Nested under profile
+              since Settings lives inside Profile per settings-
+              personalization-plan.md, not a sixth bottom-nav destination. */}
+          <Route path="profile/settings" element={<SettingsPage />} />
           {/* Step 9, Phase 2.1: no ProtectedRoute wrapper, same reasoning
               as saved and profile above, navigation-and-access-control.md
               treats Vendor entry as locked-with-prompt, not redirected.
