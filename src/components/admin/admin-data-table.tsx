@@ -198,18 +198,42 @@ function SortableHeaderCell<T>({
   const isActive = isSortable && sortState.key === effectiveKey;
   const sortDirLabel = sortState.dir === "asc" ? "ascending" : "descending";
 
+  // Extracted from a nested ternary (isSortable ? (isActive ? sortDirLabel
+  // : "none") : undefined) inline in aria-sort below, same reasoning as
+  // renderCellContent and tableBody above: name the three states (not
+  // sortable, sortable but inactive, sortable and active) as one
+  // statement instead of a second branch nested inside the first.
+  let ariaSortValue: "ascending" | "descending" | "none" | undefined;
+  if (!isSortable) {
+    ariaSortValue = undefined;
+  } else if (isActive) {
+    ariaSortValue = sortDirLabel;
+  } else {
+    ariaSortValue = "none";
+  }
+
+  // Extracted from a nested template literal (`Sort by ${displayLabel}${
+  // isActive ? `, currently ${sortDirLabel}` : ""}`) inline in aria-label
+  // below. Same fix shape as the ternary above: the inactive case is just
+  // the column name, the active case appends the current direction, built
+  // as one plain string instead of a template literal nested inside
+  // another template literal's interpolation.
+  const sortAriaLabel = isActive
+    ? `Sort by ${displayLabel}, currently ${sortDirLabel}`
+    : `Sort by ${displayLabel}`;
+
   return (
     <TableHead
       key={col.key}
       style={{ width: col.width }}
       className={cn(actionsCol && "w-px text-center", col.align === "right" && "text-right")}
-      aria-sort={isSortable ? (isActive ? sortDirLabel : "none") : undefined}
+      aria-sort={ariaSortValue}
     >
       {isSortable ? (
         <button
           type="button"
           onClick={() => onSort(effectiveKey)}
-          aria-label={`Sort by ${displayLabel}${isActive ? `, currently ${sortDirLabel}` : ""}`}
+          aria-label={sortAriaLabel}
           className={cn("inline-flex items-center gap-1", isActive ? "text-foreground" : "text-muted-foreground")}
         >
           {displayLabel}
