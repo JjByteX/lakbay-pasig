@@ -140,6 +140,17 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
+
+        {/* Guest browsing needs no gate: "/" already renders PublicShell
+            with no auth check (App.tsx), and every page it contains reads
+            session as nullable and handles that case on its own (home.tsx,
+            discover.tsx, trails.tsx render unconditionally; saved.tsx and
+            profile.tsx show their own "sign in to..." prompt per
+            navigation-and-access-control.md's Guest column). This link
+            needs no new state, no new route: it only needs to exist. */}
+        <Link to="/" className="text-base text-muted-foreground underline">
+          Continue as Guest
+        </Link>
       </div>
     </AuthLayout>
   );
