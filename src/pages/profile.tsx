@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SignOutDialog } from "@/components/sign-out-dialog";
 
 // Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
 // own CATEGORIES constant use for Local Historical Place. Reused as-is,
@@ -68,7 +69,12 @@ function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
  * sub-task pulled into its own view.
  */
 export default function ProfilePage() {
-  const { session, profile, loading, signOut, refreshProfile } = useAuth();
+  const { session, profile, loading, refreshProfile } = useAuth();
+
+  // Log-out confirmation: this button no longer calls signOut directly,
+  // it opens SignOutDialog, which owns the actual signOut() call. See
+  // sign-out-dialog.tsx.
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
@@ -318,10 +324,14 @@ export default function ProfilePage() {
       </Link>
 
       {/* 4.6: sign out lives here now, same signOut function home.tsx
-          currently calls (removed from that page in Phase 5). */}
-      <Button variant="secondary" onClick={signOut} className="w-fit">
+          currently calls (removed from that page in Phase 5). Now opens
+          SignOutDialog for a confirmation step instead of calling
+          signOut directly. */}
+      <Button variant="secondary" onClick={() => setSignOutOpen(true)} className="w-fit">
         Sign out
       </Button>
+
+      <SignOutDialog open={signOutOpen} onOpenChange={setSignOutOpen} />
     </div>
   );
 }

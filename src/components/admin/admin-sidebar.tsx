@@ -1,5 +1,6 @@
 import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Users, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { SignOutDialog } from "@/components/sign-out-dialog";
 
 // Sidebar Sections per admin-panel-spec.md. Dashboard always visible.
 // Places needs manage_places or admin, Businesses needs review_businesses or
@@ -32,9 +34,16 @@ const NAV_ITEMS = [
 ];
 
 export function AdminSidebar() {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const { pathname: currentPath } = useLocation();
   const isAdmin = profile?.staff_role === "admin";
+
+  // Log-out confirmation: the footer icon button no longer calls
+  // signOut directly, it opens SignOutDialog (owns the actual signOut()
+  // call), same shared component and pattern public-shell.tsx's
+  // AccountMenu and profile.tsx's Sign out button use. See
+  // sign-out-dialog.tsx.
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   // Filtered items do not render at all, no greyed out state, per
   // admin-panel-spec.md Access Rule and 3.2. adminOnly items need staff_role
@@ -137,13 +146,15 @@ export function AdminSidebar() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0 group-data-[collapsible=icon]:hidden"
-            onClick={signOut}
+            onClick={() => setSignOutOpen(true)}
           >
             <LogOut />
             <span className="sr-only">Log out</span>
           </Button>
         </div>
       </SidebarFooter>
+
+      <SignOutDialog open={signOutOpen} onOpenChange={setSignOutOpen} />
     </Sidebar>
   );
 }

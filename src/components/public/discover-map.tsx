@@ -360,6 +360,13 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
     }
   }, [userLocation]);
 
+  // No container-resize handling: this component always renders into the
+  // shell's fixed <main> region (public-shell.tsx) at a constant height.
+  // Discover's filter drag (public-shell.tsx's HeaderFilterArea, merged
+  // into the header) only grows the header above this component, it never
+  // resizes or repositions this container, so MapLibre never needs an
+  // imperative resize() call here.
+
   // Markers: cleared and redrawn on every results change, same
   // filter-out-missing-coordinates rule as before.
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { Store } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Store } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { useAuth } from "@/lib/auth-context";
 import { fetchOwnBusiness, createBusiness, updateBusiness } from "@/lib/vendor-business";
@@ -221,6 +221,7 @@ function useVendorMetrics(businessId: string | undefined) {
 
 export default function VendorDashboardPage() {
   const { session, loading } = useAuth();
+  const navigate = useNavigate();
 
   const { business, setBusiness, checking, setChecking, checkError } = useOwnBusiness(session);
   const { trails, trailsLoading, trailsError, items, itemsLoading, itemsError } =
@@ -478,6 +479,20 @@ export default function VendorDashboardPage() {
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+      {/* Back button: this screen is reached from Profile's "List your
+          business" row (profile.tsx), the same navigate(-1)/ArrowLeft/
+          ghost-icon pattern every other detail page (discover-place-
+          detail.tsx, trail-detail.tsx, event-detail.tsx) already uses top-
+          left, per ux-ui-guidelines.md's Familiarity principle -- reused,
+          not a new pattern. Scoped to this create branch only: the
+          has-a-business branch above is reached the same way but is the
+          vendor's own home base once they have a listing, same reasoning
+          vendor-items.tsx's own no-back-button choice already established
+          for a page one hop from /vendor. */}
+      <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
+        <ArrowLeft className="h-5 w-5" />
+      </Button>
+
       <div className="flex items-center gap-2">
         <Store className="h-5 w-5 shrink-0 text-foreground" />
         <h1 className="text-xl font-semibold text-foreground">List your business</h1>

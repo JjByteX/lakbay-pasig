@@ -139,9 +139,17 @@ export function sortDiscoverResults(
  * feeds the map markers and the list together, per step-5-plan.md's Shape
  * section. Search matches on name only, case-insensitive substring, per
  * step-5-plan.md's "filters both map markers and the list by name." Empty
- * query, null category, and null priceRange are all no-ops so the base
- * list still shows everything, matching vendor-mode-spec.md's Filter
+ * query, empty category array, and null priceRange are all no-ops so the
+ * base list still shows everything, matching vendor-mode-spec.md's Filter
  * Behavior line that a filter narrows, it never hides by default.
+ *
+ * Category (multi-select): `categories` is a list, not a single value --
+ * a result matches if its own category is anywhere in the list (OR, not
+ * AND, since a place or business only ever carries one category itself,
+ * there's nothing to intersect against). An empty list is the no-op case
+ * (same meaning the old single `category: string | null`'s `null` had),
+ * not "match nothing" -- matches discover.tsx's "All categories" chip
+ * selecting every category rather than filtering down to zero results.
  *
  * Price range (Phase 7.1): narrows to businesses with at least one item
  * priced inside [min, max] inclusive; a place never has itemPrices to
@@ -156,14 +164,15 @@ export function sortDiscoverResults(
 export function filterDiscoverResults(
   results: DiscoverResult[],
   query: string,
-  category: string | null,
+  categories: string[],
   priceRange: { min: number | null; max: number | null } | null = null
 ): DiscoverResult[] {
   const q = query.trim().toLowerCase();
 
   return results.filter((result) => {
     if (q && !result.name.toLowerCase().includes(q)) return false;
-    if (category && result.category !== category) return false;
+    if (categories.length > 0 && !categories.includes(result.category ?? ""))
+      return false;
 
     if (priceRange) {
       if (result.kind !== "business") return false;

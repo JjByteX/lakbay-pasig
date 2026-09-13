@@ -68,7 +68,7 @@ for human approval before creating anything.
 List the main modules or features and what each one is responsible for.
 - Home → recently verified content, CATO announcements, program updates
 - Global Search → shell-owned search bar (public-shell.tsx), visible on Home, Trails, Discover, Saved, and the Events detail route -- not Profile. Fans out to Places, Businesses, Trails, and Events (the four name-searchable public tables) on every keystroke, shows only non-empty groups, taps navigate to each item's existing detail route. Discover's own former search input was replaced by this bar; Discover's live list/map filtering still runs off the same shared query text
-- Discover → map lookup for places and businesses with category/price filters, verification labels shown on every result. Search itself is now the shell-level Global Search bar above, not a Discover-owned input
+- Discover → map lookup for places and businesses with category/price filters, verification labels shown on every result. The Map/List toggle, Category, and Min/Max price controls render inside the shell header itself (public-shell.tsx's useDiscoverFilters hook), fused with the Global Search bar as one element -- a drag on the header's handle reveals them in place, Discover-only, every other tab's header renders unchanged
 - Trails → trail catalog, trail detail with sequenced stops, Discovery content unlock, trail completion and credentials
 - Saved → saved places, saved trails, completed trails, earned credentials
 - Profile → account info, preferences, vendor mode toggle entry point
@@ -89,6 +89,7 @@ Which files depend on which? What breaks if X changes?
 - src/lib/saved-routes.ts, src/lib/trail-completion.ts → depend on → src/lib/trail-query.ts's exported fetchCredentialNamesByRouteId (Step 8, Phase 1), same lookup fetchPublishedTrails uses internally
 - src/lib/vendor-status.ts → depends on → businesses (0004), specifically businesses_select_own
 - src/lib/global-search.ts → depends on → places_select_public (0003), businesses_select_public (0015), routes_select_public (0005), events_select_public (0006). src/components/public/global-search-bar.tsx → depends on → global-search.ts, result-card.tsx's exported VerificationBadge. src/components/public/public-shell.tsx → depends on → global-search-bar.tsx; src/pages/discover.tsx → depends on → public-shell.tsx's exported useGlobalSearchQuery (replaces the removed useTopBarSlot)
+- src/pages/discover.tsx → depends on → public-shell.tsx's exported useDiscoverFilters (renders Discover's filter markup inside the shared header)
 - route_stops.stop_id and discovery_content.related_location_id → depends on → places.id or businesses.id, no foreign key enforces this, app layer must guarantee stop_type/related_location_type matches a real row
 
 **Database Schema (Build 2, Core Data Models):**

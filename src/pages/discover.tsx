@@ -2,25 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { List, Map as MapIcon } from "lucide-react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
-import { useGlobalSearchQuery } from "@/components/public/public-shell";
+import {
+  useDiscoverFilters,
+  useGlobalSearchQuery,
+} from "@/components/public/public-shell";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { Coordinates } from "@/lib/discover-query";
-import { fetchDiscoverResults, filterDiscoverResults } from "@/lib/discover-query";
+import {
+  fetchDiscoverResults,
+  filterDiscoverResults,
+} from "@/lib/discover-query";
 import { DISCOVER_CATEGORIES, type DiscoverResult } from "@/lib/discover-types";
-
-// Sentinel for the Select's "no category filter" option: Radix's Select
-// does not accept an empty string as an item value, so "all" is mapped
-// back to `null` (filterDiscoverResults' no-op case) at the call site.
-const ALL_CATEGORIES = "all";
 
 /**
  * Phase 5 (step-5-phases.md): search and list on top of Phase 4's map, one
@@ -30,12 +25,24 @@ const ALL_CATEGORIES = "all";
  * discover-map.tsx, Phase 4.2), and the category/price filter state
  * (5.4, 7.1), since both the map and the list need the identical filtered
  * set and the same user location, per step-5-plan.md's "narrows both
- * map markers and the list together." Search text itself now comes from
+ * map markers and the list together." Search text itself comes from
  * the shell's shared global search bar (public-shell.tsx's
- * useGlobalSearchQuery), not a page-local input -- per the resolved global
- * search spec, Discover's own search bar was replaced by the shell-level
- * one, with this page's live list/map filtering continuing to run off the
- * same shared query text rather than a second, disconnected input.
+ * useGlobalSearchQuery), not a page-local input.
+ *
+ * Drag-reveal filters: the Map/List toggle, Category filter, and Min/Max
+ * price row are not always visible above the map/list. This page hands
+ * its filter markup to the shell via `useDiscoverFilters` (public-shell.tsx)
+ * -- the shell renders it inside the same header element the search bar
+ * lives in, and owns the one drag gesture that reveals it. Search bar and
+ * filters are one fused element: dragging grows the header's own height.
+ * Every other tab never calls `useDiscoverFilters`, so the header there
+ * has no filter area and no drag handle -- this capability exists only
+ * for Discover, even though the mechanism that renders it lives in the
+ * shared shell.
+ *
+ * The map/list itself is unaffected by any of this: it renders as
+ * ordinary full-bleed content directly in this page, the same fixed
+ * `<main>` region every other tab renders into (public-shell.tsx).
  */
 export default function DiscoverPage() {
   const { query } = useGlobalSearchQuery();
@@ -45,7 +52,11 @@ export default function DiscoverPage() {
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
-  const [category, setCategory] = useState<string | null>(null);
+  // Multi-select: every selected category is a match (OR), empty array is
+  // the "All categories" no-op state (filterDiscoverResults' own empty-list
+  // case), not "match nothing" -- widened from the original single
+  // `category: string | null` per direct request.
+  const [categories, setCategories] = useState<string[]>([]);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
@@ -63,7 +74,7 @@ export default function DiscoverPage() {
         // Denied or unavailable: no-op, Pasig default stays in place,
         // per step-5-phases.md 4.2, geolocation here is a fallback, not a
         // required permission, so no error state blocks either surface.
-      }
+      },
     );
   }, []);
 
@@ -88,7 +99,10 @@ export default function DiscoverPage() {
         // like a fetch() rejection before a response is even received)
         // falls back to one still-specific sentence naming what failed.
         const message =
-          err && typeof err === "object" && "message" in err && typeof err.message === "string"
+          err &&
+          typeof err === "object" &&
+          "message" in err &&
+          typeof err.message === "string"
             ? err.message
             : "Could not reach the server to load places and businesses.";
         setResultsError(message);
@@ -106,29 +120,47 @@ export default function DiscoverPage() {
     if (!minPrice && !maxPrice) return null;
     const min = minPrice ? Number(minPrice) : null;
     const max = maxPrice ? Number(maxPrice) : null;
-    return { min: min != null && !Number.isNaN(min) ? min : null, max: max != null && !Number.isNaN(max) ? max : null };
+    return {
+      min: min != null && !Number.isNaN(min) ? min : null,
+      max: max != null && !Number.isNaN(max) ? max : null,
+    };
   }, [minPrice, maxPrice]);
 
   const filtered = useMemo(
-    () => filterDiscoverResults(results, query, category, priceRange),
-    [results, query, category, priceRange]
+    () => filterDiscoverResults(results, query, categories, priceRange),
+    [results, query, categories, priceRange],
   );
 
-  return (
-    <div className="flex h-full w-full flex-col">
-      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-6 py-3">
+  // "All categories" reads as selected both when nothing is picked (the
+  // empty-array no-op state) and when every individual category has been
+  // picked by hand, since both leave nothing actually excluded. See the
+  // All-chip's own onClick below for what toggling it does with this.
+  const allSelected =
+    categories.length === 0 || categories.length === DISCOVER_CATEGORIES.length;
+
+  useDiscoverFilters(
+    // gap-4 (16px) between the two filter rows, py-4 (16px) top and bottom
+    // of the whole panel -- both on the 8px grid per ux-ui-guidelines.md's
+    // Spacing Rules. Previously each row carried its own one-sided padding
+    // (pt-2 on the top row, pb-3 on the bottom row, no padding between
+    // them), which left the two rows touching directly and the whole
+    // panel flush against the search bar above and the drag handle below.
+    <div className="flex flex-col gap-4 bg-background px-6 py-4">
+      <div className="mx-auto flex w-full max-w-md items-center justify-center gap-3">
         {/* Phase 5.1: map/list toggle, local component state only, no
-            second bottom-nav tab and no separate route, per step-5-plan.md
-            and step-5-phases.md 5.1. Reuses the existing Tabs primitive as
-            a segmented control (no dedicated toggle-group component exists
-            in this codebase yet, per constraints.md's Inventory Before
-            Suggesting rule); TabsContent is intentionally not used, this
-            component controls which surface renders itself so the map
-            instance stays mounted across a toggle instead of remounting.
-            shrink-0: this control's own content (two short labeled tabs)
-            sets its natural minimum width, the category Select is the one
-            that should give up space first at narrow widths, not this. */}
-        <Tabs value={view} onValueChange={(v) => setView(v as "map" | "list")} className="shrink-0">
+                  second bottom-nav tab and no separate route, per step-5-plan.md
+                  and step-5-phases.md 5.1. Reuses the existing Tabs primitive as
+                  a segmented control (no dedicated toggle-group component exists
+                  in this codebase yet, per constraints.md's Inventory Before
+                  Suggesting rule); TabsContent is intentionally not used, this
+                  component controls which surface renders itself so the map
+                  instance stays mounted across a toggle instead of remounting.
+                  Centered (justify-center): this row now holds only the toggle
+                  since the category filter moved to its own grid below it, so
+                  centering here keeps it visually aligned with the centered
+                  category grid and price row beneath it, rather than sitting
+                  left-aligned as the sole leftover of the old two-control row. */}
+        <Tabs value={view} onValueChange={(v) => setView(v as "map" | "list")}>
           <TabsList>
             <TabsTrigger value="map" className="gap-1">
               <MapIcon className="h-4 w-4" />
@@ -140,68 +172,79 @@ export default function DiscoverPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+      </div>
 
-        {/* Phase 5.4: category filter, options from DISCOVER_CATEGORIES
-            (discover-types.ts), the fixed list places.category's check
-            constraint enforces. Applies to the combined result set, so it
-            narrows both the map markers and the list together.
-            Phase 8.4 fix: was a fixed `w-40` (160px), which combined with
-            the Tabs control's own intrinsic width overflowed this row's
-            available content width at narrow mobile viewports (320px,
-            still a real device width) since flex items default to
-            `min-width: auto` and refuse to shrink below their content size
-            inside a `justify-between` row with no wrap. SelectTrigger's
-            own base class already sets `w-full` (components/ui/select.tsx),
-            so `flex-1 min-w-0` here lets it take the remaining row width
-            fluidly and actually shrink, rather than holding a fixed pixel
-            width past what the row has left; the Tabs control above keeps
-            its natural size (`shrink-0`) since a segmented control
-            collapsing its own labels would be a worse outcome than the
-            Select's text simply eliding. `[&>span]:line-clamp-1` on the
-            trigger clamps SelectValue's rendered span to one line with an
-            ellipsis at the tightest widths (the longest options, "Heritage
-            Site" and "Cultural Site", would otherwise wrap or overflow past
-            the chevron icon once the trigger is this narrow); this is the
-            same child-selector approach shadcn's own SelectTrigger uses by
-            default in newer versions, applied locally here rather than
-            edited into the shared components/ui/select.tsx primitive,
-            since that file is used by every Select in the app (including
-            every admin page), out of scope for a Discover-only responsive
-            pass. */}
-        <Select
-          value={category ?? ALL_CATEGORIES}
-          onValueChange={(v) => setCategory(v === ALL_CATEGORIES ? null : v)}
+      {/* Category filter: multi-select grid of pill buttons, replacing the
+                previous Select dropdown per direct request/reference image, then
+                widened from single- to multi-select per a later direct request.
+                Options still come from DISCOVER_CATEGORIES (discover-types.ts),
+                the fixed list places.category's check constraint enforces, plus
+                a leading "All categories" chip. Reuses the exact Button-toggle
+                convention admin-place-detail.tsx's facilities field already
+                established (variant={"default"|"outline"} keyed on an `active`
+                boolean, the same shape that field already uses for its own
+                genuinely multi-select case), per constraints.md's Inventory
+                Before Suggesting rule, rather than inventing a new chip
+                component -- only the shape differs here (grid-cols-2 +
+                rounded-full for a pill look matching the reference image).
+                No icons, per direct instruction, so each chip is label-only
+                text, sized generously (h-11) since a pill with no icon needs
+                its own text to carry the full tap target.
+                allSelected: true both when nothing is picked (categories is
+                empty, filterDiscoverResults' own no-op/show-everything case)
+                and when every individual category has been picked by hand --
+                both states mean "no category is actually excluding anything,"
+                so "All categories" reads as active either way, matching the
+                request that selecting everything individually should look the
+                same as the All chip itself being selected. Clicking All while
+                it reads active resets to the empty no-op array (same visual
+                result, cheaper state); clicking it while inactive selects
+                every category explicitly. Clicking an individual chip toggles
+                only that one category in or out of the array, never touching
+                the others. */}
+      <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant={allSelected ? "default" : "outline"}
+          className="h-11 justify-start rounded-full px-4 font-normal"
+          onClick={() =>
+            setCategories(allSelected ? [] : [...DISCOVER_CATEGORIES])
+          }
         >
-          <SelectTrigger
-            aria-label="Filter by category"
-            className="min-w-0 flex-1 [&>span]:line-clamp-1"
+          All categories
+        </Button>
+        {DISCOVER_CATEGORIES.map((c) => (
+          <Button
+            key={c}
+            type="button"
+            variant={categories.includes(c) ? "default" : "outline"}
+            className="h-11 justify-start rounded-full px-4 font-normal"
+            onClick={() =>
+              setCategories((prev) =>
+                prev.includes(c)
+                  ? prev.filter((existing) => existing !== c)
+                  : [...prev, c],
+              )
+            }
           >
-            <SelectValue placeholder="All categories" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_CATEGORIES}>All categories</SelectItem>
-            {DISCOVER_CATEGORIES.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            {c}
+          </Button>
+        ))}
       </div>
 
       {/* Phase 7.1: price range filter, businesses only per step-5-plan.md
-          section 3. Own row beneath the toggle/category row rather than
-          crammed into it, the max-w-md mobile container (public-shell.tsx)
-          doesn't have room for a third control inline without shrinking
-          the existing two below a usable tap target, per ux-ui-
-          guidelines.md's Responsive Rules and Component Sizing Rules.
-          Plain number inputs, not a new Slider dependency, since price has
-          no fixed band list to pick from (unlike category's check-
-          constraint values) and a min/max pair is the native way to
-          express an open-ended range, per ponytail's native-feature-first
-          rung. Label text states the unit, since ₱ alone in a placeholder
-          disappears once the person starts typing. */}
-      <div className="mx-auto flex w-full max-w-md items-end gap-3 px-6 pb-3">
+                section 3. Own row beneath the toggle/category row rather than
+                crammed into it, the max-w-md mobile container (public-shell.tsx)
+                doesn't have room for a third control inline without shrinking
+                the existing two below a usable tap target, per ux-ui-
+                guidelines.md's Responsive Rules and Component Sizing Rules.
+                Plain number inputs, not a new Slider dependency, since price has
+                no fixed band list to pick from (unlike category's check-
+                constraint values) and a min/max pair is the native way to
+                express an open-ended range, per ponytail's native-feature-first
+                rung. Label text states the unit, since ₱ alone in a placeholder
+                disappears once the person starts typing. */}
+      <div className="mx-auto flex w-full max-w-md items-end justify-center gap-3">
         <div className="flex flex-col gap-1">
           <Label htmlFor="discover-price-min">Min price (₱)</Label>
           <Input
@@ -229,27 +272,32 @@ export default function DiscoverPage() {
           />
         </div>
       </div>
+    </div>,
+  );
 
+  return (
+    <div className="relative h-full w-full">
       {/* Phase 4.1's full-bleed, no-card-wrapper rule applies to the map
           only; the list is ordinary scrollable page content, so only the
-          map branch keeps the unconstrained h-full/w-full wrapper. */}
-      <div className="min-h-0 flex-1">
-        {view === "map" ? (
-          <DiscoverMap
-            results={filtered}
-            userLocation={userLocation}
-            resultsLoading={resultsLoading}
-            resultsError={resultsError}
-          />
-        ) : (
-          <DiscoverList
-            results={filtered}
-            userLocation={userLocation}
-            resultsLoading={resultsLoading}
-            resultsError={resultsError}
-          />
-        )}
-      </div>
+          map branch keeps the unconstrained h-full/w-full wrapper. This
+          renders directly into the shell's fixed <main> region
+          (public-shell.tsx) -- the filter drag lives entirely in the
+          header above and never resizes or repositions this element. */}
+      {view === "map" ? (
+        <DiscoverMap
+          results={filtered}
+          userLocation={userLocation}
+          resultsLoading={resultsLoading}
+          resultsError={resultsError}
+        />
+      ) : (
+        <DiscoverList
+          results={filtered}
+          userLocation={userLocation}
+          resultsLoading={resultsLoading}
+          resultsError={resultsError}
+        />
+      )}
     </div>
   );
 }
