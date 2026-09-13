@@ -4,17 +4,15 @@ import { Star } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  BusinessFields,
+  CharCount,
+  EMPTY_BUSINESS_FORM,
+  type BusinessFormState,
+} from "@/components/business/business-fields";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +66,11 @@ interface BusinessReviewRow {
 // 6.4 — name, business type, category, description, address, contact, hours,
 // business story, unique specialty, accessibility info, social links,
 // language. Column names taken from 0004_businesses.sql, not re-derived.
+// Field-list JSX now lives in the shared BusinessFields component
+// (src/components/business/business-fields.tsx), imported above, since it
+// was duplicated verbatim in vendor-dashboard.tsx and flagged by
+// SonarQube (93 duplicated lines) and constraints.md's own "do not create
+// duplicate functions, features, or components" rule.
 //
 // Edit-only, no create flow: unlike Places (staff create and edit directly,
 // per admin-panel-spec.md's Places section), businesses.submitted_by is
@@ -78,39 +81,6 @@ interface BusinessReviewRow {
 //
 // Verify/reject dialog (6.6), Featured toggle (6.7), and the Review
 // History tab (6.8) are all implemented below.
-
-const BUSINESS_TYPES = ["Product", "Service", "Both"] as const;
-const LANGUAGES = ["English", "Filipino", "Both"] as const;
-
-interface BusinessFormState {
-  name: string;
-  business_type: string;
-  category: string;
-  description: string;
-  address: string;
-  contact: string;
-  opening_hours: string;
-  business_story: string;
-  unique_specialty: string;
-  accessibility_info: string;
-  social_media_links: string;
-  language: string;
-}
-
-const EMPTY_FORM: BusinessFormState = {
-  name: "",
-  business_type: "",
-  category: "",
-  description: "",
-  address: "",
-  contact: "",
-  opening_hours: "",
-  business_story: "",
-  unique_specialty: "",
-  accessibility_info: "",
-  social_media_links: "",
-  language: "",
-};
 
 type VerificationStatus = "pending" | "verified" | "unverified";
 type FeaturedStatus = "listed" | "featured";
@@ -146,26 +116,13 @@ const STATUS_VARIANT = {
   unverified: "destructive",
 } as const;
 
-// admin-form-fields-plan.md #2: every maxLength needs a visible counter
-// nearby so the cap isn't a silent wall. Same helper as
-// admin-place-detail.tsx's own CharCount, kept as a page-local copy per
-// this codebase's existing convention (see profile.tsx's errorMessageFrom
-// comment) rather than a new shared module for one small component.
-function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
-  return (
-    <span className="self-end text-xs text-muted-foreground">
-      {value.length}/{max}
-    </span>
-  );
-}
-
 export default function AdminBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [form, setForm] = useState<BusinessFormState>(EMPTY_FORM);
+  const [form, setForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
   const [status, setStatus] = useState<VerificationStatus | null>(null);
   const [featuredStatus, setFeaturedStatus] = useState<FeaturedStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -552,154 +509,7 @@ export default function AdminBusinessDetailPage() {
 
         <TabsContent value="info" className="flex flex-col gap-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Business Name</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => updateField("name", e.target.value)}
-                required
-                maxLength={150}
-              />
-              <CharCount value={form.name} max={150} />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="business_type">Business Type</Label>
-              <Select value={form.business_type} onValueChange={(v) => updateField("business_type", v)}>
-                <SelectTrigger id="business_type">
-                  <SelectValue placeholder="Select a type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BUSINESS_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="category">Category</Label>
-            <Input
-              id="category"
-              value={form.category}
-              onChange={(e) => updateField("category", e.target.value)}
-              maxLength={100}
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              placeholder="One line, what the business sells or offers"
-              value={form.description}
-              onChange={(e) => updateField("description", e.target.value)}
-              maxLength={300}
-            />
-            <CharCount value={form.description} max={300} />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="address">Address</Label>
-            <Input
-              id="address"
-              placeholder="Source of truth, map coordinates are generated from this"
-              value={form.address}
-              onChange={(e) => updateField("address", e.target.value)}
-              required
-              maxLength={300}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="contact">Contact</Label>
-              <Input
-                id="contact"
-                value={form.contact}
-                onChange={(e) => updateField("contact", e.target.value)}
-                maxLength={150}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="opening_hours">Opening Hours</Label>
-              <Input
-                id="opening_hours"
-                value={form.opening_hours}
-                onChange={(e) => updateField("opening_hours", e.target.value)}
-                maxLength={150}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="business_story">Business Story</Label>
-            <Textarea
-              id="business_story"
-              placeholder="The longer background, why it exists, how it started"
-              value={form.business_story}
-              onChange={(e) => updateField("business_story", e.target.value)}
-              className="min-h-30"
-              maxLength={5000}
-            />
-            <CharCount value={form.business_story} max={5000} />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="unique_specialty">Unique Specialty</Label>
-            <Textarea
-              id="unique_specialty"
-              value={form.unique_specialty}
-              onChange={(e) => updateField("unique_specialty", e.target.value)}
-              maxLength={300}
-            />
-            <CharCount value={form.unique_specialty} max={300} />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="accessibility_info">Accessibility Info</Label>
-            <Textarea
-              id="accessibility_info"
-              placeholder="Parking, wheelchair access, nearby transport"
-              value={form.accessibility_info}
-              onChange={(e) => updateField("accessibility_info", e.target.value)}
-              maxLength={300}
-            />
-            <CharCount value={form.accessibility_info} max={300} />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="social_media_links">Social Media Links</Label>
-              <Input
-                id="social_media_links"
-                placeholder="Comma separated"
-                value={form.social_media_links}
-                onChange={(e) => updateField("social_media_links", e.target.value)}
-                maxLength={500}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="language">Language</Label>
-              <Select value={form.language} onValueChange={(v) => updateField("language", v)}>
-                <SelectTrigger id="language">
-                  <SelectValue placeholder="Select a language" />
-                </SelectTrigger>
-                <SelectContent>
-                  {LANGUAGES.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {l}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <BusinessFields form={form} onChange={updateField} nameAndTypeInRow />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
