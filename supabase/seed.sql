@@ -288,7 +288,7 @@ insert into public.places (
    'One of the few remaining examples of pre-war residential architecture in the area, illustrating domestic life of the period.',
    'Early 1900s', 'CATO heritage archive, oral history interviews (2019)',
    '123 Demo Heritage Street, Pasig City', 14.5764, 121.0851,
-   '9:00 AM - 5:00 PM, Tuesday to Sunday', 'Free', '45 minutes',
+   '9:00 AM - 5:00 PM, Tuesday to Sunday', 0, '45 minutes',
    'Ground floor wheelchair accessible, second floor stairs only',
    array['restrooms', 'info desk'], 'Near Demo Plaza and Demo Riverside Walk',
    'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '12 days'),
@@ -299,7 +299,7 @@ insert into public.places (
    'Represents the city''s ongoing river cleanup and public space revival efforts.',
    '2015', 'City Planning Office records',
    '45 Demo Riverside Avenue, Pasig City', 14.5731, 121.0899,
-   'Open 24 hours', 'Free', '30 minutes',
+   'Open 24 hours', 0, '30 minutes',
    'Fully paved, wheelchair accessible', array['restrooms', 'parking', 'waiting area'],
    'Near Demo Heritage House', 'English', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '20 days'),
 
@@ -309,7 +309,7 @@ insert into public.places (
    'Listed as a point of interest for its retablo craftsmanship and continuous use since construction.',
    '1780s', 'Archdiocesan parish records',
    '8 Demo Church Square, Pasig City', 14.5700, 121.0825,
-   '6:00 AM - 7:00 PM daily', 'Free', '20 minutes',
+   '6:00 AM - 7:00 PM daily', 0, '20 minutes',
    'Main entrance ramp available', array['restrooms', 'parking'],
    'Near Demo Public Market', 'Filipino', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '35 days'),
 
@@ -319,7 +319,7 @@ insert into public.places (
    'Serves as the city''s primary repository of everyday material culture, not just ceremonial artifacts.',
    '1998', 'CATO museum accession log',
    '77 Demo Museum Road, Pasig City', 14.5690, 121.0790,
-   '9:00 AM - 4:00 PM, Wednesday to Sunday', 'PHP 50', '1 hour',
+   '9:00 AM - 4:00 PM, Wednesday to Sunday', 50, '1 hour',
    'Elevator available, wheelchair accessible', array['restrooms', 'info desk', 'parking'],
    'Near Demo City Hall', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '8 days'),
 
@@ -329,7 +329,7 @@ insert into public.places (
    'One of the few monuments in the city naming individual residents rather than a generic dedication.',
    '1965', 'Civic association commemorative plaque',
    '30 Demo Memorial Park, Pasig City', 14.5745, 121.0860,
-   'Open 24 hours', 'Free', '15 minutes',
+   'Open 24 hours', 0, '15 minutes',
    'Fully accessible, paved plaza', array['parking'],
    'Near Demo Riverside Walk', 'English', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '50 days'),
 
@@ -339,7 +339,7 @@ insert into public.places (
    'Documents an early piece of civic infrastructure central to the growth of trade in the area.',
    '1932', 'Public works historical registry',
    '2 Demo Old Bridge Street, Pasig City', 14.5712, 121.0871,
-   'Open 24 hours', 'Free', '10 minutes',
+   'Open 24 hours', 0, '10 minutes',
    'Sidewalk level, accessible', array[]::text[],
    'Near Demo Riverside Walk', 'Filipino', 'pending', null, now() - interval '2 days'),
 
@@ -349,7 +349,7 @@ insert into public.places (
    'Active site of intangible cultural heritage, not a static exhibit.',
    '2010', 'Cooperative founding charter',
    '19 Demo Weavers Lane, Pasig City', 14.5678, 121.0803,
-   '10:00 AM - 3:00 PM, Monday to Friday', 'Free to visit, workshop fees vary', '40 minutes',
+   '10:00 AM - 3:00 PM, Monday to Friday', null, '40 minutes',
    'Ground floor accessible', array['restrooms', 'info desk'],
    'Near Demo City Museum', 'Both', 'pending', null, now() - interval '1 days'),
 
@@ -359,7 +359,7 @@ insert into public.places (
    'Illustrative of the area''s flood history and how earlier structures responded to it.',
    '1850s', 'Parish historical notes, CATO field survey (2021)',
    '5 Demo Chapel Path, Pasig City', 14.5721, 121.0838,
-   '8:00 AM - 5:00 PM daily', 'Free', '15 minutes',
+   '8:00 AM - 5:00 PM daily', 0, '15 minutes',
    'Uneven ground, limited accessibility', array[]::text[],
    'Near Demo Parish Church', 'English', 'rejected', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '15 days'),
 
@@ -369,7 +369,7 @@ insert into public.places (
    'Functions as the informal town square for cultural programming.',
    '2019', 'City Planning Office records',
    '60 Demo Plaza Center, Pasig City', 14.5705, 121.0845,
-   'Open 24 hours, markets Saturday and Sunday', 'Free', '30 minutes',
+   'Open 24 hours, markets Saturday and Sunday', 0, '30 minutes',
    'Fully paved, wheelchair accessible', array['restrooms', 'parking', 'waiting area'],
    'Near Demo Heritage House', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '6 days'),
 
@@ -379,7 +379,7 @@ insert into public.places (
    'A rare surviving example of colonial-period river surveillance infrastructure in the city.',
    '1790s', 'CATO field survey (2022)',
    '11 Demo Watchtower Rise, Pasig City', 14.5688, 121.0912,
-   'Open 24 hours', 'Free', '20 minutes',
+   'Open 24 hours', 0, '20 minutes',
    'Steep unpaved path, not wheelchair accessible', array[]::text[],
    'Near Demo Riverside Walk', 'English', 'pending', null, now() - interval '4 days');
 
@@ -593,15 +593,15 @@ insert into public.routes (
   run_type, status, created_by, updated_at
 ) values
   ('c594515a-227e-4483-a2ea-88beb8d344e8', 'Demo Heritage Walk: Old Pasig', 'heritage walk',
-   '2 hours', 'PHP 100 - 200', 'Morning, before 10:00 AM', 'self guided',
+   '2 hours', null, 'Morning, before 10:00 AM', 'self guided',
    'published', '6456adca-58a3-48c3-b0e6-6a086d03734f', now() - interval '20 days'),
 
   ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'Demo Pasig Food Crawl', 'food crawl',
-   '3 hours', 'PHP 300 - 500', 'Late afternoon into evening', 'self guided',
+   '3 hours', null, 'Late afternoon into evening', 'self guided',
    'published', '6456adca-58a3-48c3-b0e6-6a086d03734f', now() - interval '9 days'),
 
   ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'Demo Cultural Tour: Craft and Community', 'cultural tour',
-   '2.5 hours', 'PHP 150 - 300', 'Weekday afternoons, workshop hours', 'CATO guided',
+   '2.5 hours', null, 'Weekday afternoons, workshop hours', 'CATO guided',
    'draft', 'e283c6fb-4dcd-455f-a60c-e35add77a330', now() - interval '2 days');
    -- Draft trail, still exercises the build-then-publish flow: staff with
    -- build_trails can see and edit it, routes_select_public correctly hides
