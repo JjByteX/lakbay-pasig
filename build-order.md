@@ -26,7 +26,7 @@ What to build, in order. Each step assumes the ones before it exist.
 - [x] 8. **Public app: Saved and Profile**
       Saved places, saved trails, completed trails, credentials. Profile account info and preferences. Vendor mode toggle entry point lives here.
 
-- [ ] 9. **Vendor mode**
+- [x] 9. **Vendor mode**
       Mode switch from Registered User. Basic listing (instant live, Pending badge) and Featured listing (staff toggle, no application flow). Item list with optional pricing. Vendor dashboard with trail inclusion metrics.
 
 - [ ] 10. **Abuse prevention layer**
