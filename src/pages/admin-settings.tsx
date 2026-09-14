@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { supabase } from "@/lib/supabase";
-import { applyTheme, applyFontSize, type FontSizePreference } from "@/lib/preferences";
+import {
+  handleDarkModeChange,
+  handleFontSizeChange,
+  FONT_SIZE_LABELS,
+  FONT_SIZES,
+  type FontSizePreference,
+} from "@/lib/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -39,14 +44,18 @@ import { usePageTitle } from "@/lib/page-title";
  *     other admin page's plain text-xl h1 (admin-dashboard.tsx,
  *     admin-staff.tsx, etc.), not profile.tsx's icon-label pattern
  *     Settings borrowed for its own Profile-nested context.
+ *
+ * Step 8 cleanup: this page's own handleDarkModeChange/handleFontSizeChange
+ * closures and its own FONT_SIZE_LABELS/FONT_SIZES were byte-identical
+ * (apart from settings.tsx's extra ctx plumbing, itself only there for a
+ * Cognitive Complexity reason that file's comment explains) to settings.
+ * tsx's copies. Both now come from preferences.ts, the file that already
+ * owns FontSizePreference and the two apply* functions underneath them --
+ * this page just supplies its own state and refreshProfile through the
+ * same ctx shape settings.tsx already calls with, rather than keeping a
+ * second hand-written copy of the same optimistic-write-then-persist
+ * logic in sync by hand.
  */
-const FONT_SIZE_LABELS: Record<Exclude<FontSizePreference, null>, string> = {
-  small: "Small",
-  default: "Default",
-  large: "Large",
-};
-const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePreference, null>[];
-
 export default function AdminSettingsPage() {
   usePageTitle("Settings");
   const { session, profile, refreshProfile } = useAuth();
@@ -69,67 +78,6 @@ export default function AdminSettingsPage() {
     setFontSize(profile.font_size_preference ?? "default");
   }, [profile]);
 
-  // Same optimistic-then-persist shape as settings.tsx's own
-  // handleDarkModeChange: apply immediately, write, revert both the
-  // control and the applied value on failure, refreshProfile() on
-  // success. session is guaranteed here by ProtectedRoute requireStaff
-  // (App.tsx), unlike settings.tsx which still guards on it directly
-  // since that page can render with no session at all.
-  async function handleDarkModeChange(checked: boolean) {
-    if (!session || themeSaving) return;
-
-    const previous = darkMode;
-    const nextTheme = checked ? "dark" : "light";
-
-    setDarkMode(checked);
-    setThemeError(null);
-    applyTheme(nextTheme);
-    setThemeSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ theme_preference: nextTheme })
-      .eq("id", session.user.id);
-
-    setThemeSaving(false);
-
-    if (error) {
-      setDarkMode(previous);
-      applyTheme(previous ? "dark" : "light");
-      setThemeError(error.message);
-      return;
-    }
-
-    await refreshProfile();
-  }
-
-  async function handleFontSizeChange(next: Exclude<FontSizePreference, null>) {
-    if (!session || fontSizeSaving) return;
-
-    const previous = fontSize;
-
-    setFontSize(next);
-    setFontSizeError(null);
-    applyFontSize(next);
-    setFontSizeSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ font_size_preference: next })
-      .eq("id", session.user.id);
-
-    setFontSizeSaving(false);
-
-    if (error) {
-      setFontSize(previous);
-      applyFontSize(previous);
-      setFontSizeError(error.message);
-      return;
-    }
-
-    await refreshProfile();
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold text-foreground">Settings</h1>
@@ -145,7 +93,17 @@ export default function AdminSettingsPage() {
             id="admin_dark_mode"
             type="checkbox"
             checked={darkMode}
-            onChange={(e) => handleDarkModeChange(e.target.checked)}
+            onChange={(e) =>
+              handleDarkModeChange(e.target.checked, {
+                session,
+                themeSaving,
+                darkMode,
+                setDarkMode,
+                setThemeError,
+                setThemeSaving,
+                refreshProfile,
+              })
+            }
             disabled={themeSaving}
             className="h-4 w-4 rounded border-input accent-primary"
           />
@@ -160,7 +118,17 @@ export default function AdminSettingsPage() {
         </label>
         <Select
           value={fontSize}
-          onValueChange={(v) => handleFontSizeChange(v as Exclude<FontSizePreference, null>)}
+          onValueChange={(v) =>
+            handleFontSizeChange(v as Exclude<FontSizePreference, null>, {
+              session,
+              fontSizeSaving,
+              fontSize,
+              setFontSize,
+              setFontSizeError,
+              setFontSizeSaving,
+              refreshProfile,
+            })
+          }
           disabled={fontSizeSaving}
         >
           <SelectTrigger id="admin_font_size">

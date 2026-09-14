@@ -4,7 +4,13 @@ import type { Session } from "@supabase/supabase-js";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
-import { applyTheme, applyFontSize, type FontSizePreference } from "@/lib/preferences";
+import {
+  handleDarkModeChange,
+  handleFontSizeChange,
+  FONT_SIZE_LABELS,
+  FONT_SIZES,
+  type FontSizePreference,
+} from "@/lib/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,12 +31,13 @@ const MIN_PASSWORD_LENGTH = 8;
 // primitive: src/components/ui/select.tsx already exists and is already
 // used elsewhere in this codebase, per constraints.md's Inventory Before
 // Suggesting rule.
-const FONT_SIZE_LABELS: Record<Exclude<FontSizePreference, null>, string> = {
-  small: "Small",
-  default: "Default",
-  large: "Large",
-};
-const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePreference, null>[];
+//
+// Step 8 cleanup: FONT_SIZE_LABELS/FONT_SIZES and the handleDarkModeChange/
+// handleFontSizeChange module-scope handlers below were byte-identical
+// (apart from ctx plumbing) to admin-settings.tsx's own copies -- all
+// four now live in preferences.ts, the file that already owns
+// FontSizePreference and the two apply* functions these build on, and
+// both pages import from there instead of each declaring its own.
 
 /**
  * Settings: Personalization, Phase 2. Settings sub-page, reached from
@@ -225,13 +232,16 @@ export default function SettingsPage() {
     setContactNumber((prev) => ({ ...prev, value: profile.contact_number ?? "" }));
   }, [profile]);
 
-  // 3.3/3.4/4.3/4.4/8.4/8.5/8.7: handlers below are declared at module
-  // scope (handleDarkModeChange, handleFontSizeChange, saveAccountField)
+  // 3.3/3.4/4.3/4.4/8.4/8.5/8.7: handlers are declared at module scope
   // rather than nested in this component -- same behavior, same
   // optimistic-then-persist shape each already had, just pulled out so
   // this component's own branching stays flat instead of nesting inside
   // five separate closures (SonarCloud's Cognitive Complexity rule
   // counts nested function bodies against the enclosing function).
+  // Step 8 cleanup: handleDarkModeChange/handleFontSizeChange now live in
+  // preferences.ts (shared with admin-settings.tsx, see that file's own
+  // comment); saveAccountField below stays local, this page's Account
+  // Settings section has no admin-side counterpart to share it with.
   // Contact Number: same digits-only, 15-char cap as profile.tsx's own
   // updateContactNumber, so the field behaves identically in both places
   // it appears in the app.
@@ -538,100 +548,6 @@ export default function SettingsPage() {
       </div>
     </div>
   );
-}
-
-// 3.3/3.4: optimistic update -- applyTheme fires immediately for instant
-// feedback, then the write. On failure, revert both the switch and the
-// applied class back to the prior state and show an inline error, same
-// text-destructive treatment profile.tsx's saveError and vendorError
-// already use. No separate Save button, per the Automation First rule, a
-// two-state preference needs no confirmation step. Lives at module scope
-// (not nested in SettingsPage) so its branches count toward this
-// function's own Cognitive Complexity, not SettingsPage's.
-async function handleDarkModeChange(
-  checked: boolean,
-  ctx: {
-    session: Session | null;
-    themeSaving: boolean;
-    darkMode: boolean;
-    setDarkMode: Dispatch<SetStateAction<boolean>>;
-    setThemeError: Dispatch<SetStateAction<string | null>>;
-    setThemeSaving: Dispatch<SetStateAction<boolean>>;
-    refreshProfile: () => Promise<void>;
-  }
-) {
-  const { session, themeSaving, darkMode, setDarkMode, setThemeError, setThemeSaving, refreshProfile } = ctx;
-  if (!session || themeSaving) return;
-
-  const previous = darkMode;
-  const nextTheme = checked ? "dark" : "light";
-
-  setDarkMode(checked);
-  setThemeError(null);
-  applyTheme(nextTheme);
-  setThemeSaving(true);
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ theme_preference: nextTheme })
-    .eq("id", session.user.id);
-
-  setThemeSaving(false);
-
-  if (error) {
-    setDarkMode(previous);
-    applyTheme(previous ? "dark" : "light");
-    setThemeError(error.message);
-    return;
-  }
-
-  // 3.5: profile.tsx's Phase 0.8 refreshProfile, so context (and any
-  // other open tab reading it) reflects the write without a reload.
-  await refreshProfile();
-}
-
-// 4.3/4.4: same optimistic-then-persist shape as handleDarkModeChange
-// above. applyFontSize fires immediately, then the write; on failure,
-// revert both the selection and the applied size, show the same inline
-// text-destructive error line. Same module-scope reasoning as above.
-async function handleFontSizeChange(
-  next: Exclude<FontSizePreference, null>,
-  ctx: {
-    session: Session | null;
-    fontSizeSaving: boolean;
-    fontSize: Exclude<FontSizePreference, null>;
-    setFontSize: Dispatch<SetStateAction<Exclude<FontSizePreference, null>>>;
-    setFontSizeError: Dispatch<SetStateAction<string | null>>;
-    setFontSizeSaving: Dispatch<SetStateAction<boolean>>;
-    refreshProfile: () => Promise<void>;
-  }
-) {
-  const { session, fontSizeSaving, fontSize, setFontSize, setFontSizeError, setFontSizeSaving, refreshProfile } = ctx;
-  if (!session || fontSizeSaving) return;
-
-  const previous = fontSize;
-
-  setFontSize(next);
-  setFontSizeError(null);
-  applyFontSize(next);
-  setFontSizeSaving(true);
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ font_size_preference: next })
-    .eq("id", session.user.id);
-
-  setFontSizeSaving(false);
-
-  if (error) {
-    setFontSize(previous);
-    applyFontSize(previous);
-    setFontSizeError(error.message);
-    return;
-  }
-
-  // 4.5: same refreshProfile() call as Phase 3.5.
-  await refreshProfile();
 }
 
 // 8.4/8.5/8.7: one Save action per field, not a shared submit, so one
