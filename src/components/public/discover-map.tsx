@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
-import { MapPin, X } from "lucide-react";
+import { LocateFixed, MapPin, X } from "lucide-react";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
@@ -281,6 +281,14 @@ interface DiscoverMapProps {
   userLocation: Coordinates | null;
   resultsLoading: boolean;
   resultsError: string | null;
+  // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
+  // control update discover.tsx's own userLocation state (same setter its
+  // one-shot geolocation effect already uses), so this file never owns a
+  // second copy of the coordinate -- discover-list.tsx's distance sort
+  // stays in sync with whatever the button just set. Optional so this
+  // component still type-checks for any other future caller that has no
+  // locate button to wire up.
+  onLocationFound?: (coords: Coordinates) => void;
 }
 
 // Feature-request-phases.md Phase 1.1/1.4: the map draws exactly two marker
@@ -443,6 +451,80 @@ function MapLegend({
   );
 }
 
+// locate-me-and-directions-phases.md Phase 1: floating locate-me control,
+// bottom-right (1.3's placement, clear of MapLegend's own bottom-left
+// corner and the top-center status/loading pills). Built as our own button
+// calling navigator.geolocation directly, not maplibre-gl's GeolocateControl
+// -- Phase 0.3 found GeolocateControl's default DOM/CSS (its own button
+// chrome, plus a pulsing accuracy-circle ring drawn on the map itself,
+// maplibregl-user-location-dot-pulse) doesn't match this file's existing
+// bg-card/h-9 w-9 icon-button convention and reads close to
+// ux-ui-guidelines.md's no-glow rule without an explicit showAccuracyCircle
+// override. A plain button reusing this component's own existing pattern
+// (MapLegend's toggle above) is the smaller diff and needs no restyle.
+//
+// States (ux-ui-guidelines.md's State Rules): idle icon, a muted/disabled
+// look while a request is in flight (same shape as MapLegend's own
+// disabled-while-loading treatment), and a specific inline error string on
+// denial or when geolocation isn't available -- never a silent failure.
+function LocateMeControl({
+  onLocationFound,
+}: Readonly<{ onLocationFound?: (coords: Coordinates) => void }>) {
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleClick = () => {
+    if (!onLocationFound) return;
+    if (!navigator.geolocation) {
+      setStatus("error");
+      setError("Location isn't supported on this device.");
+      return;
+    }
+    setStatus("loading");
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setStatus("idle");
+        onLocationFound({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      (err) => {
+        setStatus("error");
+        setError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location access was denied. Enable it in your browser settings to use this."
+            : "Couldn't get your location. Try again.",
+        );
+      },
+    );
+  };
+
+  return (
+    <div className="absolute bottom-3 right-3 z-[1000] flex flex-col items-end gap-2">
+      {status === "error" && error && (
+        <span className="max-w-56 break-words rounded-md border border-border bg-card px-3 py-1.5 text-right text-xs text-destructive shadow">
+          {error}
+        </span>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-9 w-9 rounded-full bg-card shadow"
+        aria-label="Find my location"
+        onClick={handleClick}
+        disabled={status === "loading"}
+      >
+        <LocateFixed
+          className={status === "loading" ? "h-4 w-4 animate-spin text-muted-foreground" : "h-4 w-4"}
+        />
+      </Button>
+    </div>
+  );
+}
+
 // Phase 1.5-1.7: hover preview, desktop only (1.6's "hover has no mobile
 // equivalent"), reusing result-card.tsx's own summary fields (name,
 // category, verification label, one-line description) rather than a new
@@ -492,8 +574,16 @@ function HoverPreview({
  * -- no schema change, discover.tsx still calls this component with the
  * exact same four props it always has, per this phase's own "isolated to
  * Discover's map" scope.
+ *
+ * locate-me-and-directions-phases.md Phase 1: adds a fifth, optional prop
+ * (onLocationFound) and a bottom-right LocateMeControl (above) that calls
+ * it on a successful geolocation read. No new userLocation state lives
+ * here -- discover.tsx's existing setUserLocation is passed straight
+ * through, so the existing userLocation recenter effect below already
+ * handles the camera move, whether the coordinate came from page load or
+ * this button.
  */
-export function DiscoverMap({ results, userLocation, resultsLoading, resultsError }: Readonly<DiscoverMapProps>) {
+export function DiscoverMap({ results, userLocation, resultsLoading, resultsError, onLocationFound }: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -708,6 +798,8 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
         businessCategories={businessCategories}
         loading={categoriesLoading}
       />
+
+      <LocateMeControl onLocationFound={onLocationFound} />
 
       {previewResult && (
         <HoverPreview result={previewResult.result} x={previewResult.x} y={previewResult.y} />

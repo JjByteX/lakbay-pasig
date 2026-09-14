@@ -48,6 +48,13 @@ import { usePageTitle } from "@/lib/page-title";
  * The map/list itself is unaffected by any of this: it renders as
  * ordinary full-bleed content directly in this page, the same fixed
  * `<main>` region every other tab renders into (public-shell.tsx).
+ *
+ * locate-me-and-directions-phases.md Phase 1: userLocation can now also be
+ * set by a tap on DiscoverMap's own locate-me control, via the
+ * onLocationFound prop below -- setUserLocation is passed straight through,
+ * not wrapped, so this stays the single source of truth the one-shot
+ * geolocation effect above already established. discover-list.tsx's
+ * distance sort reads the same state either way.
  */
 export default function DiscoverPage() {
   usePageTitle("Discover");
@@ -399,6 +406,7 @@ export default function DiscoverPage() {
           userLocation={userLocation}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
+          onLocationFound={setUserLocation}
         />
       ) : (
         <DiscoverList
