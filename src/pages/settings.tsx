@@ -1,5 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { Link } from "react-router-dom";
+import type { Session } from "@supabase/supabase-js";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
@@ -224,109 +225,13 @@ export default function SettingsPage() {
     setContactNumber((prev) => ({ ...prev, value: profile.contact_number ?? "" }));
   }, [profile]);
 
-  // 3.3/3.4: optimistic update -- applyTheme fires immediately for
-  // instant feedback, then the write. On failure, revert both the
-  // switch and the applied class back to the prior state and show an
-  // inline error, same text-destructive treatment profile.tsx's
-  // saveError and vendorError already use. No separate Save button,
-  // per the Automation First rule, a two-state preference needs no
-  // confirmation step.
-  async function handleDarkModeChange(checked: boolean) {
-    if (!session || themeSaving) return;
-
-    const previous = darkMode;
-    const nextTheme = checked ? "dark" : "light";
-
-    setDarkMode(checked);
-    setThemeError(null);
-    applyTheme(nextTheme);
-    setThemeSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ theme_preference: nextTheme })
-      .eq("id", session.user.id);
-
-    setThemeSaving(false);
-
-    if (error) {
-      setDarkMode(previous);
-      applyTheme(previous ? "dark" : "light");
-      setThemeError(error.message);
-      return;
-    }
-
-    // 3.5: profile.tsx's Phase 0.8 refreshProfile, so context (and any
-    // other open tab reading it) reflects the write without a reload.
-    await refreshProfile();
-  }
-
-  // 4.3/4.4: same optimistic-then-persist shape as handleDarkModeChange
-  // above. applyFontSize fires immediately, then the write; on failure,
-  // revert both the selection and the applied size, show the same inline
-  // text-destructive error line.
-  async function handleFontSizeChange(next: Exclude<FontSizePreference, null>) {
-    if (!session || fontSizeSaving) return;
-
-    const previous = fontSize;
-
-    setFontSize(next);
-    setFontSizeError(null);
-    applyFontSize(next);
-    setFontSizeSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ font_size_preference: next })
-      .eq("id", session.user.id);
-
-    setFontSizeSaving(false);
-
-    if (error) {
-      setFontSize(previous);
-      applyFontSize(previous);
-      setFontSizeError(error.message);
-      return;
-    }
-
-    // 4.5: same refreshProfile() call as Phase 3.5.
-    await refreshProfile();
-  }
-
-  // 8.4/8.5/8.7: one Save action per field, not a shared submit, so one
-  // field's error never blocks another's already-valid write -- same
-  // independence Phase 3/4's two preference controls already have from
-  // each other. Contact Number reuses profile.tsx's exact digits-only/
-  // 15-char-cap updateContactNumber treatment; Username/First/Last Name
-  // trim to null-when-empty, same "unset means unset" convention 0021/0030
-  // already establish for every nullable profiles column. Username
-  // collisions surface via error.message from the profiles_username_unique
-  // partial index (migration 0030), same DB-is-source-of-truth convention
-  // category-form-dialog.tsx's own 3.4 already uses for category names.
-  async function saveAccountField(
-    field: AccountFieldKey,
-    setState: Dispatch<SetStateAction<AccountFieldState>>,
-    rawValue: string
-  ) {
-    if (!session) return;
-
-    const value = rawValue.trim() || null;
-    setState((prev) => ({ ...prev, saving: true, error: null }));
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ [field]: value })
-      .eq("id", session.user.id);
-
-    if (error) {
-      setState((prev) => ({ ...prev, saving: false, error: error.message }));
-      return;
-    }
-
-    setState((prev) => ({ ...prev, saving: false, error: null }));
-    await refreshProfile();
-  }
-
+  // 3.3/3.4/4.3/4.4/8.4/8.5/8.7: handlers below are declared at module
+  // scope (handleDarkModeChange, handleFontSizeChange, saveAccountField)
+  // rather than nested in this component -- same behavior, same
+  // optimistic-then-persist shape each already had, just pulled out so
+  // this component's own branching stays flat instead of nesting inside
+  // five separate closures (SonarCloud's Cognitive Complexity rule
+  // counts nested function bodies against the enclosing function).
   // Contact Number: same digits-only, 15-char cap as profile.tsx's own
   // updateContactNumber, so the field behaves identically in both places
   // it appears in the app.
@@ -360,58 +265,31 @@ export default function SettingsPage() {
   // wins over a generic "fill in the fields" catch-all, and nothing shows
   // once the field-level messages (newPassword's length line, confirm's
   // mismatch line) already cover it, so the reason is never said twice.
-  const passwordBlockedReason =
-    currentPassword.length === 0
-      ? "Enter your current password."
-      : newPassword.length === 0
-        ? "Enter a new password."
-        : !newPasswordLongEnough
-          ? null // already shown inline below the New password field
-          : confirmNewPassword.length === 0
-            ? "Confirm your new password."
-            : !newPasswordsMatch
-              ? null // already shown inline below the Confirm field
-              : null;
+  const passwordBlockedReason = getPasswordBlockedReason({
+    currentPassword,
+    newPassword,
+    confirmNewPassword,
+    newPasswordLongEnough,
+    newPasswordsMatch,
+  });
 
-  // 8.6: re-verify the typed current password by silently signing in
-  // with it (fails visibly if wrong, same shared "Incorrect email or
-  // password." line login.tsx already uses -- this never confirms or
-  // denies the email itself, since the email is this user's own and
-  // already known), then update to the new password. A second explicit
-  // auth call, not a trust of the already-active session, since a
-  // password change is the one place this app asks a signed-in user to
-  // re-prove who they are.
-  async function handleChangePassword() {
+  // 8.6: handleChangePassword itself now lives at module scope (see
+  // below this component) for the same Cognitive Complexity reason as
+  // the other handlers above -- behavior unchanged, still re-verifies
+  // the typed current password before updating to the new one.
+  async function onChangePassword() {
     if (!session?.user.email || !canSavePassword) return;
-
-    setPasswordSaving(true);
-    setPasswordError(null);
-    setPasswordSuccess(false);
-
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
+    await handleChangePassword({
       email: session.user.email,
-      password: currentPassword,
+      currentPassword,
+      newPassword,
+      setPasswordSaving,
+      setPasswordError,
+      setPasswordSuccess,
+      setCurrentPassword,
+      setNewPassword,
+      setConfirmNewPassword,
     });
-
-    if (reauthError) {
-      setPasswordSaving(false);
-      setPasswordError("Incorrect email or password.");
-      return;
-    }
-
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-
-    setPasswordSaving(false);
-
-    if (updateError) {
-      setPasswordError(updateError.message);
-      return;
-    }
-
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmNewPassword("");
-    setPasswordSuccess(true);
   }
 
   if (loading) return null;
@@ -461,7 +339,17 @@ export default function SettingsPage() {
               id="dark_mode"
               type="checkbox"
               checked={darkMode}
-              onChange={(e) => handleDarkModeChange(e.target.checked)}
+              onChange={(e) =>
+                handleDarkModeChange(e.target.checked, {
+                  session,
+                  themeSaving,
+                  darkMode,
+                  setDarkMode,
+                  setThemeError,
+                  setThemeSaving,
+                  refreshProfile,
+                })
+              }
               disabled={themeSaving}
               className="h-4 w-4 rounded border-input accent-primary"
             />
@@ -479,7 +367,17 @@ export default function SettingsPage() {
           </label>
           <Select
             value={fontSize}
-            onValueChange={(v) => handleFontSizeChange(v as Exclude<FontSizePreference, null>)}
+            onValueChange={(v) =>
+              handleFontSizeChange(v as Exclude<FontSizePreference, null>, {
+                session,
+                fontSizeSaving,
+                fontSize,
+                setFontSize,
+                setFontSizeError,
+                setFontSizeSaving,
+                refreshProfile,
+              })
+            }
             disabled={fontSizeSaving}
           >
             <SelectTrigger id="font_size">
@@ -510,7 +408,7 @@ export default function SettingsPage() {
           label="Username"
           state={username}
           onValueChange={(v) => setUsername((prev) => ({ ...prev, value: v }))}
-          onSave={(v) => saveAccountField("username", setUsername, v)}
+          onSave={(v) => saveAccountField("username", setUsername, v, session, refreshProfile)}
           originalValue={profile?.username ?? ""}
           maxLength={30}
         />
@@ -520,7 +418,7 @@ export default function SettingsPage() {
           label="First Name"
           state={firstName}
           onValueChange={(v) => setFirstName((prev) => ({ ...prev, value: v }))}
-          onSave={(v) => saveAccountField("first_name", setFirstName, v)}
+          onSave={(v) => saveAccountField("first_name", setFirstName, v, session, refreshProfile)}
           originalValue={profile?.first_name ?? ""}
           maxLength={75}
         />
@@ -530,7 +428,7 @@ export default function SettingsPage() {
           label="Last Name"
           state={lastName}
           onValueChange={(v) => setLastName((prev) => ({ ...prev, value: v }))}
-          onSave={(v) => saveAccountField("last_name", setLastName, v)}
+          onSave={(v) => saveAccountField("last_name", setLastName, v, session, refreshProfile)}
           originalValue={profile?.last_name ?? ""}
           maxLength={75}
         />
@@ -547,7 +445,7 @@ export default function SettingsPage() {
           label="Contact Number"
           state={contactNumber}
           onValueChange={updateContactNumberValue}
-          onSave={(v) => saveAccountField("contact_number", setContactNumber, v)}
+          onSave={(v) => saveAccountField("contact_number", setContactNumber, v, session, refreshProfile)}
           originalValue={profile?.contact_number ?? ""}
           maxLength={15}
           type="tel"
@@ -621,7 +519,7 @@ export default function SettingsPage() {
             variant="secondary"
             disabled={!canSavePassword}
             title={passwordBlockedReason ?? undefined}
-            onClick={handleChangePassword}
+            onClick={onChangePassword}
           >
             {passwordSaving ? "Updating..." : "Update password"}
           </Button>
@@ -640,6 +538,198 @@ export default function SettingsPage() {
       </div>
     </div>
   );
+}
+
+// 3.3/3.4: optimistic update -- applyTheme fires immediately for instant
+// feedback, then the write. On failure, revert both the switch and the
+// applied class back to the prior state and show an inline error, same
+// text-destructive treatment profile.tsx's saveError and vendorError
+// already use. No separate Save button, per the Automation First rule, a
+// two-state preference needs no confirmation step. Lives at module scope
+// (not nested in SettingsPage) so its branches count toward this
+// function's own Cognitive Complexity, not SettingsPage's.
+async function handleDarkModeChange(
+  checked: boolean,
+  ctx: {
+    session: Session | null;
+    themeSaving: boolean;
+    darkMode: boolean;
+    setDarkMode: Dispatch<SetStateAction<boolean>>;
+    setThemeError: Dispatch<SetStateAction<string | null>>;
+    setThemeSaving: Dispatch<SetStateAction<boolean>>;
+    refreshProfile: () => Promise<void>;
+  }
+) {
+  const { session, themeSaving, darkMode, setDarkMode, setThemeError, setThemeSaving, refreshProfile } = ctx;
+  if (!session || themeSaving) return;
+
+  const previous = darkMode;
+  const nextTheme = checked ? "dark" : "light";
+
+  setDarkMode(checked);
+  setThemeError(null);
+  applyTheme(nextTheme);
+  setThemeSaving(true);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ theme_preference: nextTheme })
+    .eq("id", session.user.id);
+
+  setThemeSaving(false);
+
+  if (error) {
+    setDarkMode(previous);
+    applyTheme(previous ? "dark" : "light");
+    setThemeError(error.message);
+    return;
+  }
+
+  // 3.5: profile.tsx's Phase 0.8 refreshProfile, so context (and any
+  // other open tab reading it) reflects the write without a reload.
+  await refreshProfile();
+}
+
+// 4.3/4.4: same optimistic-then-persist shape as handleDarkModeChange
+// above. applyFontSize fires immediately, then the write; on failure,
+// revert both the selection and the applied size, show the same inline
+// text-destructive error line. Same module-scope reasoning as above.
+async function handleFontSizeChange(
+  next: Exclude<FontSizePreference, null>,
+  ctx: {
+    session: Session | null;
+    fontSizeSaving: boolean;
+    fontSize: Exclude<FontSizePreference, null>;
+    setFontSize: Dispatch<SetStateAction<Exclude<FontSizePreference, null>>>;
+    setFontSizeError: Dispatch<SetStateAction<string | null>>;
+    setFontSizeSaving: Dispatch<SetStateAction<boolean>>;
+    refreshProfile: () => Promise<void>;
+  }
+) {
+  const { session, fontSizeSaving, fontSize, setFontSize, setFontSizeError, setFontSizeSaving, refreshProfile } = ctx;
+  if (!session || fontSizeSaving) return;
+
+  const previous = fontSize;
+
+  setFontSize(next);
+  setFontSizeError(null);
+  applyFontSize(next);
+  setFontSizeSaving(true);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ font_size_preference: next })
+    .eq("id", session.user.id);
+
+  setFontSizeSaving(false);
+
+  if (error) {
+    setFontSize(previous);
+    applyFontSize(previous);
+    setFontSizeError(error.message);
+    return;
+  }
+
+  // 4.5: same refreshProfile() call as Phase 3.5.
+  await refreshProfile();
+}
+
+// 8.4/8.5/8.7: one Save action per field, not a shared submit, so one
+// field's error never blocks another's already-valid write -- same
+// independence Phase 3/4's two preference controls already have from
+// each other. Contact Number reuses profile.tsx's exact digits-only/
+// 15-char-cap updateContactNumber treatment; Username/First/Last Name
+// trim to null-when-empty, same "unset means unset" convention 0021/0030
+// already establish for every nullable profiles column. Username
+// collisions surface via error.message from the profiles_username_unique
+// partial index (migration 0030), same DB-is-source-of-truth convention
+// category-form-dialog.tsx's own 3.4 already uses for category names.
+// Same module-scope reasoning as the handlers above.
+async function saveAccountField(
+  field: AccountFieldKey,
+  setState: Dispatch<SetStateAction<AccountFieldState>>,
+  rawValue: string,
+  session: Session | null,
+  refreshProfile: () => Promise<void>
+) {
+  if (!session) return;
+
+  const value = rawValue.trim() || null;
+  setState((prev) => ({ ...prev, saving: true, error: null }));
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ [field]: value })
+    .eq("id", session.user.id);
+
+  if (error) {
+    setState((prev) => ({ ...prev, saving: false, error: error.message }));
+    return;
+  }
+
+  setState((prev) => ({ ...prev, saving: false, error: null }));
+  await refreshProfile();
+}
+
+// 8.6: re-verify the typed current password by silently signing in with
+// it (fails visibly if wrong, same shared "Incorrect email or password."
+// line login.tsx already uses -- this never confirms or denies the email
+// itself, since the email is this user's own and already known), then
+// update to the new password. A second explicit auth call, not a trust
+// of the already-active session, since a password change is the one
+// place this app asks a signed-in user to re-prove who they are. Same
+// module-scope reasoning as the handlers above.
+async function handleChangePassword(ctx: {
+  email: string;
+  currentPassword: string;
+  newPassword: string;
+  setPasswordSaving: Dispatch<SetStateAction<boolean>>;
+  setPasswordError: Dispatch<SetStateAction<string | null>>;
+  setPasswordSuccess: Dispatch<SetStateAction<boolean>>;
+  setCurrentPassword: Dispatch<SetStateAction<string>>;
+  setNewPassword: Dispatch<SetStateAction<string>>;
+  setConfirmNewPassword: Dispatch<SetStateAction<string>>;
+}) {
+  const {
+    email,
+    currentPassword,
+    newPassword,
+    setPasswordSaving,
+    setPasswordError,
+    setPasswordSuccess,
+    setCurrentPassword,
+    setNewPassword,
+    setConfirmNewPassword,
+  } = ctx;
+
+  setPasswordSaving(true);
+  setPasswordError(null);
+  setPasswordSuccess(false);
+
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email,
+    password: currentPassword,
+  });
+
+  if (reauthError) {
+    setPasswordSaving(false);
+    setPasswordError("Incorrect email or password.");
+    return;
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+  setPasswordSaving(false);
+
+  if (updateError) {
+    setPasswordError(updateError.message);
+    return;
+  }
+
+  setCurrentPassword("");
+  setNewPassword("");
+  setConfirmNewPassword("");
+  setPasswordSuccess(true);
 }
 
 // 8.3/8.4/8.5/8.7/8.8: one field row shared by all four Account Settings
@@ -756,4 +846,28 @@ function validateContactNumber(trimmedValue: string): string | null {
   return PH_MOBILE_PATTERN.test(trimmedValue)
     ? null
     : "Enter an 11-digit mobile number starting with 09 (e.g. 09171234567).";
+}
+
+// 8.7: extracted out of the nested ternary that used to sit inline in
+// SettingsPage -- same priority order as before (most specific,
+// already-visible reason wins over a generic one; nothing shows once a
+// field-level message already covers it), just as early returns instead
+// of four stacked ternaries, so each branch is its own visible line
+// rather than one expression that was easy to misread as always
+// resolving to the same fallback.
+function getPasswordBlockedReason(fields: {
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+  newPasswordLongEnough: boolean;
+  newPasswordsMatch: boolean;
+}): string | null {
+  const { currentPassword, newPassword, confirmNewPassword, newPasswordLongEnough, newPasswordsMatch } = fields;
+
+  if (currentPassword.length === 0) return "Enter your current password.";
+  if (newPassword.length === 0) return "Enter a new password.";
+  if (!newPasswordLongEnough) return null; // already shown inline below the New password field
+  if (confirmNewPassword.length === 0) return "Confirm your new password.";
+  if (!newPasswordsMatch) return null; // already shown inline below the Confirm field
+  return null;
 }

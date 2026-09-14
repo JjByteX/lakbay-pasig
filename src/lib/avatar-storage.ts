@@ -43,10 +43,10 @@ function storagePathFromPublicUrl(publicUrl: string): string | null {
 
 // Phase 6.7: specific error states, not a generic "upload failed" line.
 export const AVATAR_MAX_BYTES = 5 * 1024 * 1024; // 5MB
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export function validateAvatarFile(file: File): string | null {
-  if (!ACCEPTED_TYPES.includes(file.type)) {
+  if (!ACCEPTED_TYPES.has(file.type)) {
     return "Please choose a JPG, PNG, WEBP, or GIF image.";
   }
   if (file.size > AVATAR_MAX_BYTES) {
