@@ -1,0 +1,18 @@
+-- Ensures pgcrypto is present (idempotent: hosted Supabase installs this
+-- by default into the `extensions` schema, so this is normally a no-op,
+-- kept here so a fresh non-Supabase Postgres target isn't left without it).
+--
+-- This statement alone did NOT fix the original
+-- "function gen_salt(unknown) does not exist" (SQLSTATE 42883) error seen
+-- during `supabase db reset --linked`'s seed step: pgcrypto being
+-- installed is not the same as gen_salt()/crypt() being resolvable,
+-- since name resolution also depends on search_path, and the seed step
+-- runs over a connection whose search_path doesn't reliably include
+-- `extensions` -- confirmed against multiple supabase/cli GitHub issues
+-- (#318, #568, #4640) reporting this identical failure at this exact
+-- step even with the extension already enabled. The actual fix is in
+-- supabase/seed.sql: every crypt()/gen_salt() call is schema-qualified
+-- (extensions.crypt(...), extensions.gen_salt(...)), which resolves
+-- regardless of search_path. This migration is kept anyway as a real,
+-- if redundant, safety net for the extension's presence.
+create extension if not exists pgcrypto with schema extensions;

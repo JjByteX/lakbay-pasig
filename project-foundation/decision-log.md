@@ -254,6 +254,30 @@ public-shell.tsx's TopBarSlotContext (a page pushed rendered content into the sh
 
 ---
 
+**#:** 11
+**Date:** Post-Category-Directory-Expansion, deploy fix
+**Milestone:** `supabase db push` failure — migration 0026's backfill guard
+
+**Context:**
+`supabase db push` failed applying 0026 with "place_facilities backfill incomplete: 7 places have a facility_ids count that does not match their old facilities count" — 0026's own guard (added deliberately per this file's entry-adjacent architecture-notes.md row, to stop and flag rather than silently drop an unmatched facility) working exactly as designed against pre-existing dirty data on the remote database. Separately, `supabase db reset --linked` failed at the seed step with `gen_salt(unknown) does not exist`, an unrelated missing-extension issue surfaced only because reset gets further than push (it starts from empty tables, so 0026's guard never fires there). Root cause of the 7-row mismatch confirmed against data-model.md's closed Available Facilities list (restrooms, parking, info desk, waiting area) and FACILITY_OPTIONS' own git history (admin-place-detail.tsx, commit 856226b^, identical four strings) — no fifth facility name was ever a legitimate value, so the mismatch has to be null/blank noise inside the old places.facilities arrays (or, less likely, a genuinely unseeded name), not a real fifth category needing a decision.
+
+**Options Considered:**
+- Option A: diagnose interactively first (inspect the 7 rows via a read-only query, confirm the exact bad values with the human before writing anything).
+- Option B: ship a repair migration directly — strip null/blank entries and de-dupe each row's old facilities array, re-run 0026's own backfill query against the cleaned data, keep 0026's exact guard in place so a genuinely unseeded name (not just null/blank noise) still stops the migration rather than being silently dropped.
+
+**Community Consensus:**
+Not applicable, this is a same-codebase data-repair choice, not a technology or pattern choice with an external best-practice debate.
+
+**Decision:**
+Option B, per explicit direct instruction ("instead of diagnosing, just fix the issue, make it migrations"). Flagged here rather than silently proceeding since data-model.md/architecture-notes.md's schema table are both on constraints.md's read-first list and this touches a migration path, per the No Silent Overrides rule — logged after the fact since the human's instruction was to act, not pause. The fix is scoped to null/blank/duplicate noise only: it never invents, renames, or guesses at a facility value, and 0026's own guard is re-run verbatim after cleanup so a real unseeded name still halts the migration instead of being dropped. New migration 0028 (facility repair) rather than editing 0026 directly, since 0026 already applied successfully wherever a prior reset ran clean, and this only needs to run where the old `facilities` column still exists (guarded via an `information_schema` check, no-op otherwise). New migration 0029 separately enables the `pgcrypto` extension, unrelated root cause, kept as its own migration rather than folded into 0028.
+
+**Consequences:**
+If any of the 7 places' mismatches turn out to be a genuinely new, never-seeded facility name rather than null/blank noise, 0028's guard will still raise and stop the migration — at that point the actual string needs a human decision (add it to `place_facilities` first, or intentionally drop it), the same choice 0026's original guard was already built to force. `supabase/migrations` now ends at 0029; any future facility-related migration should build on top of 0028's cleaned state, not assume 0026 alone reflects what's live on remote. `pgcrypto` (0029) should be treated as a project baseline extension going forward, same as `pgcrypto`/`pgjwt` any future Supabase project template ships with — if a fresh project ever skips it again, this entry is the reference for why it's needed.
+
+**Correction, found after a full `db reset --linked` rehearsal:** 0028 and 0029 resolved the facility-backfill guard as intended (all 29 migrations applied cleanly against a fresh reset), but 0029's `create extension if not exists pgcrypto` alone did NOT resolve the `gen_salt(unknown) does not exist` error at the seed step — it recurred identically on a clean reset with 0029 already applied. Root cause was misdiagnosed the first pass: the extension was not missing (hosted Supabase installs pgcrypto by default), the actual issue is that `db reset --linked`'s seed step runs over a connection whose `search_path` doesn't reliably include the `extensions` schema pgcrypto lives in, confirmed against three separate supabase/cli GitHub issues (#318, #568, #4640) reporting this exact failure at this exact step. Real fix applied to `supabase/seed.sql` directly: all 18 `crypt(...)/gen_salt(...)` calls schema-qualified to `extensions.crypt(...)/extensions.gen_salt(...)`, which resolves regardless of search_path. 0029 is kept as a harmless, real safety net (covers a future non-Supabase Postgres target that genuinely lacks the extension) but its comment was corrected to stop overstating what it fixes. Any future extension-dependent call in seed.sql should be schema-qualified from the start rather than relying on search_path, per this entry.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**
