@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,9 +89,12 @@ export default function AdminTrailsPage() {
   }, []);
 
   async function loadTrails(): Promise<TrailRow[]> {
+    // Category Directory Phase 1.7: theme is now a joined trail_categories.
+    // name (migration 0023), flattened below so TrailRow's own theme field
+    // stays string | null, unchanged.
     const { data: routes } = await supabase
       .from("routes")
-      .select("id, name, theme, status")
+      .select("id, name, status, trail_categories(name)")
       .order("updated_at", { ascending: false });
 
     if (!routes || routes.length === 0) return [];
@@ -126,7 +130,7 @@ export default function AdminTrailsPage() {
     return routes.map((r) => ({
       id: r.id,
       name: r.name,
-      theme: r.theme,
+      theme: readEmbeddedName(r.trail_categories),
       status: r.status,
       stop_count: stopCounts.get(r.id) ?? 0,
       blockingEntry: blockingByRoute.get(r.id) ?? null,

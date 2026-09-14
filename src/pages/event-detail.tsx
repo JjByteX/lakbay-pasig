@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -20,6 +21,13 @@ import { Badge } from "@/components/ui/badge";
 // Supabase types a to-one embed as an array even for a single FK, same
 // shape those two existing call sites already account for. A null
 // related_place_id simply yields an empty array here, not an error.
+//
+// Category Directory Phase 1.10: category is now a joined event_
+// categories.name (migration 0024, category_id replaces the old plain
+// text column). This file's own related_place embed above already proves
+// Postgrest can return a to-one embed as an array rather than a bare
+// object, so the event_categories embed is read through readEmbeddedName
+// (place-categories.ts) rather than assumed to be either shape.
 interface EventDetail {
   id: string;
   title: string;
@@ -67,7 +75,7 @@ export default function EventDetailPage() {
     supabase
       .from("events")
       .select(
-        "id, title, description, category, date_time, location, enrollment_info, related_place_id, places(name)"
+        "id, title, description, date_time, location, enrollment_info, related_place_id, places(name), event_categories(name)"
       )
       .eq("id", id)
       .eq("published", true)
@@ -82,7 +90,10 @@ export default function EventDetailPage() {
           setLoading(false);
           return;
         }
-        setEvent(data as EventDetail);
+        const { event_categories, ...rest } = data as typeof data & {
+          event_categories: { name: string } | { name: string }[] | null;
+        };
+        setEvent({ ...rest, category: readEmbeddedName(event_categories) } as EventDetail);
         setLoading(false);
       });
   }, [id]);

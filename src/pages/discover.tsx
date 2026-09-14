@@ -15,7 +15,9 @@ import {
   fetchDiscoverResults,
   filterDiscoverResults,
 } from "@/lib/discover-query";
-import { DISCOVER_CATEGORIES, type DiscoverResult } from "@/lib/discover-types";
+import type { DiscoverResult } from "@/lib/discover-types";
+import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
+import { getCategoryIcon } from "@/lib/place-category-icons";
 
 /**
  * Phase 5 (step-5-phases.md): search and list on top of Phase 4's map, one
@@ -60,9 +62,21 @@ export default function DiscoverPage() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
+  // 5.3: place_categories, active only, replacing the removed
+  // DISCOVER_CATEGORIES constant. place-categories.ts (Phase 1.1) is
+  // reused as-is -- the same fetchActiveCategories the admin Categories
+  // page and admin-place-detail.tsx's own picker both already call, no
+  // second fetch function written for this one caller.
+  const [categoryOptions, setCategoryOptions] = useState<PlaceCategory[]>([]);
+
+  useEffect(() => {
+    fetchActiveCategories()
+      .then(setCategoryOptions)
+      .catch(() => setCategoryOptions([]));
+  }, []);
+
   useEffect(() => {
     if (!navigator.geolocation) return;
-
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setUserLocation({
@@ -136,7 +150,7 @@ export default function DiscoverPage() {
   // picked by hand, since both leave nothing actually excluded. See the
   // All-chip's own onClick below for what toggling it does with this.
   const allSelected =
-    categories.length === 0 || categories.length === DISCOVER_CATEGORIES.length;
+    categories.length === 0 || categories.length === categoryOptions.length;
 
   useDiscoverFilters(
     // gap-4 (16px) between the two filter rows, py-4 (16px) top and bottom
@@ -177,19 +191,26 @@ export default function DiscoverPage() {
       {/* Category filter: multi-select grid of pill buttons, replacing the
                 previous Select dropdown per direct request/reference image, then
                 widened from single- to multi-select per a later direct request.
-                Options still come from DISCOVER_CATEGORIES (discover-types.ts),
-                the fixed list places.category's check constraint enforces, plus
-                a leading "All categories" chip. Reuses the exact Button-toggle
-                convention admin-place-detail.tsx's facilities field already
-                established (variant={"default"|"outline"} keyed on an `active`
-                boolean, the same shape that field already uses for its own
-                genuinely multi-select case), per constraints.md's Inventory
-                Before Suggesting rule, rather than inventing a new chip
-                component -- only the shape differs here (grid-cols-2 +
-                rounded-full for a pill look matching the reference image).
-                No icons, per direct instruction, so each chip is label-only
-                text, sized generously (h-11) since a pill with no icon needs
-                its own text to carry the full tap target.
+                Options now come from place_categories (fetchActiveCategories,
+                Category Directory Phase 5.3), replacing the removed
+                DISCOVER_CATEGORIES constant -- the admin-managed, active-only
+                list every other category picker in this app already reads
+                from, plus a leading "All categories" chip. Reuses the exact
+                Button-toggle convention admin-place-detail.tsx's facilities
+                field already established (variant={"default"|"outline"} keyed
+                on an `active` boolean, the same shape that field already uses
+                for its own genuinely multi-select case), per constraints.md's
+                Inventory Before Suggesting rule, rather than inventing a new
+                chip component -- only the child content changes (5.4: each
+                chip's own icon, via place-category-icons.ts's getCategoryIcon,
+                now renders beside its name; grid-cols-2 + rounded-full pill
+                shape is unchanged).
+                Filter matching itself (5.5) is unchanged: still a plain
+                category-name string comparison in filterDiscoverResults
+                (discover-query.ts), a business's own free-text category still
+                falls back the same way it always has -- only the source list
+                these chips are built from moved from a fixed constant to
+                fetchActiveCategories's live rows.
                 allSelected: true both when nothing is picked (categories is
                 empty, filterDiscoverResults' own no-op/show-everything case)
                 and when every individual category has been picked by hand --
@@ -208,28 +229,32 @@ export default function DiscoverPage() {
           variant={allSelected ? "default" : "outline"}
           className="h-11 justify-start rounded-full px-4 font-normal"
           onClick={() =>
-            setCategories(allSelected ? [] : [...DISCOVER_CATEGORIES])
+            setCategories(allSelected ? [] : categoryOptions.map((c) => c.name))
           }
         >
           All categories
         </Button>
-        {DISCOVER_CATEGORIES.map((c) => (
-          <Button
-            key={c}
-            type="button"
-            variant={categories.includes(c) ? "default" : "outline"}
-            className="h-11 justify-start rounded-full px-4 font-normal"
-            onClick={() =>
-              setCategories((prev) =>
-                prev.includes(c)
-                  ? prev.filter((existing) => existing !== c)
-                  : [...prev, c],
-              )
-            }
-          >
-            {c}
-          </Button>
-        ))}
+        {categoryOptions.map((c) => {
+          const Icon = getCategoryIcon(c.icon);
+          return (
+            <Button
+              key={c.id}
+              type="button"
+              variant={categories.includes(c.name) ? "default" : "outline"}
+              className="h-11 justify-start gap-2 rounded-full px-4 font-normal"
+              onClick={() =>
+                setCategories((prev) =>
+                  prev.includes(c.name)
+                    ? prev.filter((existing) => existing !== c.name)
+                    : [...prev, c.name],
+                )
+              }
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {c.name}
+            </Button>
+          );
+        })}
       </div>
 
       {/* Phase 7.1: price range filter, businesses only per step-5-plan.md

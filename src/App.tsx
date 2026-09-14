@@ -27,6 +27,7 @@ import AdminEventsPage from "@/pages/admin-events";
 import AdminEventDetailPage from "@/pages/admin-event-detail";
 import AdminTrailsPage from "@/pages/admin-trails";
 import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
+import AdminCategoriesPage from "@/pages/admin-categories";
 import AdminStaffPage from "@/pages/admin-staff";
 
 export default function App() {
@@ -198,6 +199,31 @@ export default function App() {
             element={
               <ProtectedRoute requiredPermission="build_trails">
                 <AdminTrailBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Category Directory, Phase 2.2: one tabbed page (Places /
+              Trails / Announcements), not three routes. Permission check
+              is "any of manage_places, build_trails, or publish_events,"
+              since any one of the three tabs qualifies someone to open
+              the page at all -- which tabs actually render once inside is
+              decided per tab (Phase 2.4), this route only gates entry to
+              the page as a whole. admin bypasses this check the same way
+              it bypasses every other requiredPermission, per
+              protected-route.tsx's existing admin-bypass behavior.
+
+              Category Directory Expansion, Phase 2.2: review_businesses
+              added, mirroring admin-sidebar.tsx's own Phase 2.1 edit, so
+              the route guard and the sidebar visibility stay in sync --
+              the new Business Category tab (Phase 2.3) now qualifies a
+              staff member with only that permission to open this page. */}
+          <Route
+            path="categories"
+            element={
+              <ProtectedRoute
+                requiredPermission={["manage_places", "build_trails", "publish_events", "review_businesses"]}
+              >
+                <AdminCategoriesPage />
               </ProtectedRoute>
             }
           />

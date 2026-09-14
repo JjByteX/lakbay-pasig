@@ -25,6 +25,7 @@ import {
   PlaceBusinessPicker,
   type PickedLocation,
 } from "@/components/admin/place-business-picker";
+import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
 
 // Phase 4.2 (step-4-phases.md): stepper layout, not sidebar-style, per
 // ux-ui-guidelines.md's Layout Pattern Rules ("linear flow ... never use a
@@ -57,12 +58,20 @@ import {
 const STEPS = ["Info", "Stops", "Discovery Content", "Review and Publish"] as const;
 type Step = (typeof STEPS)[number];
 
-const THEMES = ["heritage walk", "food crawl", "cultural tour"] as const;
+// Category Directory Phase 6.1: Theme renamed Category per direct
+// instruction (category-directory-phases.md 6.1, category-directory-
+// plan.md's Admin: Each Content Form section). The hardcoded THEMES
+// const is gone -- migration 0023 dropped routes.theme entirely, so this
+// page's category picker now reads from trail_categories via
+// fetchActiveCategories (Phase 1.5 lib), same fetch/render shape admin-
+// place-detail.tsx's Phase 5.1 already established for its own Category
+// field, reused rather than reinvented per constraints.md's Inventory
+// Before Suggesting rule.
 const RUN_TYPES = ["CATO guided", "self guided"] as const;
 
 interface TrailInfoFormState {
   name: string;
-  theme: string;
+  category_id: string;
   estimated_duration: string;
   estimated_budget: string; // numeric column (migration 0019), kept as a string here since the number input's value must be a string; parsed to a number or null at submit time
   recommended_time: string;
@@ -71,7 +80,7 @@ interface TrailInfoFormState {
 
 const EMPTY_INFO: TrailInfoFormState = {
   name: "",
-  theme: "",
+  category_id: "",
   estimated_duration: "",
   estimated_budget: "",
   recommended_time: "",
@@ -437,6 +446,26 @@ export default function AdminTrailBuilderPage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
+  // Category Directory Phase 6.1: category picker source, active rows
+  // only, same fetchActiveCategories/effect shape admin-place-detail.tsx's
+  // Phase 5.1 already established for its own Category field, reused
+  // rather than reinvented per constraints.md's Inventory Before
+  // Suggesting rule. Loaded once on mount, independent of isNew/routeId,
+  // since a new trail's Info step needs the picker just as much as an
+  // existing one's does.
+  const [categories, setCategories] = useState<TrailCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchActiveCategories()
+      .then(setCategories)
+      .catch((err: unknown) => {
+        setCategoriesError(
+          err instanceof Error ? err.message : "Could not load categories."
+        );
+      });
+  }, []);
+
   const [stops, setStops] = useState<StopRow[]>([]);
   const [stopsLoading, setStopsLoading] = useState(!isNew);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -472,7 +501,13 @@ export default function AdminTrailBuilderPage() {
     setNotFound(false);
     supabase
       .from("routes")
-      .select("id, name, theme, estimated_duration, estimated_budget, recommended_time, run_type, status")
+      // Category Directory Phase 6.1: theme (migration 0023) is gone,
+      // category_id selected directly off routes -- this form never
+      // displays the category's name here, only writes/reads the id, so
+      // a flat select is enough, no trail_categories embed needed. Same
+      // reasoning admin-place-detail.tsx's Phase 5.1 entry already gives
+      // for its own category_id select.
+      .select("id, name, category_id, estimated_duration, estimated_budget, recommended_time, run_type, status")
       .eq("id", routeId)
       .single()
       .then(({ data, error: fetchError }) => {
@@ -483,7 +518,7 @@ export default function AdminTrailBuilderPage() {
         }
         setInfo({
           name: data.name ?? "",
-          theme: data.theme ?? "",
+          category_id: data.category_id ?? "",
           estimated_duration: data.estimated_duration ?? "",
           estimated_budget: data.estimated_budget !== null ? String(data.estimated_budget) : "",
           recommended_time: data.recommended_time ?? "",
@@ -615,7 +650,11 @@ export default function AdminTrailBuilderPage() {
     // must become a real number or null before it reaches the payload.
     const payload = {
       name: info.name.trim(),
-      theme: info.theme || null,
+      // Category Directory Phase 6.1: writes category_id (migration
+      // 0023), nullable, matching theme's own prior optionality -- not
+      // forced required, same reasoning 0023's own comment gives for why
+      // category_id stays nullable on routes.
+      category_id: info.category_id || null,
       estimated_duration: info.estimated_duration || null,
       estimated_budget: info.estimated_budget.trim() ? Number(info.estimated_budget) : null,
       recommended_time: info.recommended_time || null,
@@ -1095,19 +1134,20 @@ export default function AdminTrailBuilderPage() {
               <CharCount value={info.name} max={150} />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="theme">Theme</Label>
-              <Select value={info.theme} onValueChange={(v) => updateInfoField("theme", v)}>
-                <SelectTrigger id="theme">
-                  <SelectValue placeholder="Select a theme" />
+              <Label htmlFor="category">Category</Label>
+              <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {THEMES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
             </div>
           </div>
 

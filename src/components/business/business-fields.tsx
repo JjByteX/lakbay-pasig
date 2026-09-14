@@ -1,6 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { BusinessCategory } from "@/lib/business-categories";
 import {
   Select,
   SelectContent,
@@ -22,6 +23,18 @@ import {
  * BUSINESS_TYPES, LANGUAGES, REGISTERED_OR_INFORMAL, and BusinessFormState
  * move here as the single source. Both pages now import from here instead
  * of each keeping a page-local copy.
+ *
+ * Category Directory Expansion, Phase 4.1: Category field changes from a
+ * free text Input to a Select pulling from business_categories (migration
+ * 0027), same Select pattern this file's own Business Type and Language
+ * fields already use. BusinessFormState.category (string) becomes
+ * category_id (string), matching place/trail/event category's own
+ * category_id shape -- a business category is now a real fixed list, not
+ * free text, for the first time. The picker's own active-row list is
+ * fetched by each caller (admin-business-detail.tsx, vendor-dashboard.tsx),
+ * same shape as admin-place-detail.tsx's own categories fetch, and passed
+ * in as a prop here rather than fetched inside this shared field block, so
+ * neither caller pays for a second independent fetch of the same list.
  */
 
 export const BUSINESS_TYPES = ["Product", "Service", "Both"] as const;
@@ -39,7 +52,7 @@ export const REGISTERED_OR_INFORMAL = ["registered", "informal"] as const;
 export interface BusinessFormState {
   name: string;
   business_type: string;
-  category: string;
+  category_id: string;
   description: string;
   address: string;
   contact: string;
@@ -55,7 +68,7 @@ export interface BusinessFormState {
 export const EMPTY_BUSINESS_FORM: BusinessFormState = {
   name: "",
   business_type: "",
-  category: "",
+  category_id: "",
   description: "",
   address: "",
   contact: "",
@@ -103,6 +116,15 @@ interface BusinessFieldsProps {
   /** Off for admin, on for vendor. See BusinessFormState's own comment
    *  above on why this field is optional. */
   showRegisteredOrInformal?: boolean;
+  /**
+   * Category Directory Expansion, Phase 4.1: active business_categories
+   * rows for the Category Select, fetched by the caller (same shape
+   * admin-place-detail.tsx's own categories/categoriesError props for its
+   * Place Category field) rather than fetched inside this shared block, so
+   * neither admin nor vendor pays for a second independent fetch.
+   */
+  categories: BusinessCategory[];
+  categoriesError?: string | null;
 }
 
 export function BusinessFields({
@@ -112,6 +134,8 @@ export function BusinessFields({
   addressPlaceholder = "Source of truth, map coordinates are generated from this",
   nameAndTypeInRow = false,
   showRegisteredOrInformal = false,
+  categories,
+  categoriesError = null,
 }: Readonly<BusinessFieldsProps>) {
   const nameField = (
     <div className="flex flex-col gap-2">
@@ -161,12 +185,19 @@ export function BusinessFields({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="category">Category</Label>
-        <Input
-          id="category"
-          value={form.category}
-          onChange={(e) => onChange("category", e.target.value)}
-          maxLength={100}
-        />
+        <Select value={form.category_id} onValueChange={(v) => onChange("category_id", v)}>
+          <SelectTrigger id="category">
+            <SelectValue placeholder="Select a category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
       </div>
 
       <div className="flex flex-col gap-2">

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover-types";
 
 // Phase 3.1: places (places_select_public, migration 0003, verified only,
@@ -10,9 +11,14 @@ import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover
 // name, category, coordinates, verification_status, plus a one-line
 // description for the result card. Full detail fields are Phase 6's concern.
 async function fetchPlaces(): Promise<DiscoverPlace[]> {
+  // Phase 1.4 (place-category-directory-phases.md): category is now a
+  // joined place_categories.name (migration 0022, category_id replaces
+  // the old plain text column), embedded here rather than a flat select,
+  // flattened right below so DiscoverPlace's own category field stays
+  // string, unchanged for every existing caller.
   const { data, error } = await supabase
     .from("places")
-    .select("id, name, category, description, latitude, longitude, verification_status");
+    .select("id, name, description, latitude, longitude, verification_status, place_categories(name)");
 
   if (error) throw error;
 
@@ -20,7 +26,7 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
     kind: "place" as const,
     id: row.id,
     name: row.name,
-    category: row.category,
+    category: readEmbeddedName(row.place_categories) ?? "",
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -38,10 +44,17 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
   // follows the parent business's own visibility (verified or pending), so
   // this embed returns exactly the rows Discover is allowed to see, no
   // extra filtering needed here for RLS reasons.
+  //
+  // Category Directory Expansion, Phase 1.7: category is now a joined
+  // business_categories.name (migration 0027, category_id replaces the
+  // old plain text column), embedded here rather than a flat select,
+  // flattened right below so DiscoverBusiness's own category field stays
+  // string | null, unchanged for every existing caller, same pattern
+  // fetchPlaces above already uses for place_categories.
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, category, description, latitude, longitude, verification_status, business_items(price)"
+      "id, name, business_categories(name), description, latitude, longitude, verification_status, business_items(price)"
     );
 
   if (error) throw error;
@@ -50,7 +63,7 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
     kind: "business" as const,
     id: row.id,
     name: row.name,
-    category: row.category,
+    category: readEmbeddedName(row.business_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -134,7 +147,9 @@ export function sortDiscoverResults(
 /**
  * Phase 5.3-5.4, 7.1-7.2 (step-5-phases.md): narrows the combined result
  * set by name search (in place, no separate search page per step-5-plan.md
- * section 1), by category (DISCOVER_CATEGORIES, discover-types.ts), and by
+ * section 1), by category (place_categories, via Discover's own
+ * fetchActiveCategories call -- Category Directory Phase 5.3, replacing
+ * the removed DISCOVER_CATEGORIES constant), and by
  * price range (businesses only). All three apply to the same set that
  * feeds the map markers and the list together, per step-5-plan.md's Shape
  * section. Search matches on name only, case-insensitive substring, per

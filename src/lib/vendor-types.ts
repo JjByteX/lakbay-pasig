@@ -21,7 +21,7 @@ export interface VendorBusinessDetail {
   id: string;
   name: string;
   business_type: string;
-  category: string | null;
+  category_id: string | null;
   description: string | null;
   address: string;
   contact: string | null;
@@ -53,7 +53,7 @@ export interface VendorBusinessDetail {
 export interface VendorBusinessPayload {
   name: string;
   business_type: string;
-  category: string | null;
+  category_id: string | null;
   description: string | null;
   address: string;
   contact: string | null;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -10,6 +11,11 @@ import { Badge } from "@/components/ui/badge";
 // businesses_select_public policy from Phase 1 (verified or pending).
 // Field list matches step-5-plan.md section 2: description, hours,
 // contact, item list with prices where set.
+//
+// Category Directory Expansion, Phase 1.7: category is now a joined
+// business_categories.name (migration 0027, category_id replaces the old
+// plain text column), flattened at fetch time so this field and every
+// render below it stay unchanged.
 interface BusinessDetail {
   id: string;
   name: string;
@@ -52,7 +58,7 @@ export default function DiscoverBusinessDetailPage() {
 
     supabase
       .from("businesses")
-      .select("id, name, category, description, opening_hours, contact, verification_status")
+      .select("id, name, description, opening_hours, contact, verification_status, business_categories(name)")
       .eq("id", id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -65,7 +71,15 @@ export default function DiscoverBusinessDetailPage() {
           setLoading(false);
           return;
         }
-        setBusiness(data as BusinessDetail);
+        // Category Directory Expansion, Phase 1.7: category is now a
+        // joined business_categories.name (migration 0027), flattened
+        // here so BusinessDetail's own category field stays unchanged.
+        // readEmbeddedName handles either embed shape Postgrest may
+        // return, same helper place-categories.ts already established.
+        const { business_categories, ...rest } = data as typeof data & {
+          business_categories: { name: string } | { name: string }[] | null;
+        };
+        setBusiness({ ...rest, category: readEmbeddedName(business_categories) });
         setLoading(false);
       });
 

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 import type { Announcement, RecentlyVerifiedBusiness, RecentlyVerifiedItem, RecentlyVerifiedPlace } from "./home-types";
 
 // Phase 2.2 (step-6-phases.md): "Feed of published announcements," per
@@ -14,14 +15,24 @@ import type { Announcement, RecentlyVerifiedBusiness, RecentlyVerifiedItem, Rece
 // holds regardless of which policy matched the caller. Newest first, per
 // Home's "what's new" framing (navigation-and-access-control.md).
 export async function fetchAnnouncements(): Promise<Announcement[]> {
+  // Category Directory Phase 1.10: category is now a joined event_
+  // categories.name (migration 0024, category_id replaces the old plain
+  // text column), embedded here rather than a flat select, flattened
+  // below so Announcement's own category field stays string | null,
+  // unchanged for every existing caller.
   const { data, error } = await supabase
     .from("events")
-    .select("id, title, description, category, date_time, location, related_place_id")
+    .select("id, title, description, date_time, location, related_place_id, event_categories(name)")
     .eq("published", true)
     .order("date_time", { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => {
+    const { event_categories, ...rest } = row as typeof row & {
+      event_categories: { name: string } | { name: string }[] | null;
+    };
+    return { ...rest, category: readEmbeddedName(event_categories) };
+  });
 }
 
 // Phase 2.3: places (places_select_public, verified only) and businesses
@@ -34,9 +45,12 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
 // category, description, coordinates) plus verified_at (migration 0017),
 // which Discover's query has no reason to select.
 async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
+  // Phase 1.4 (place-category-directory-phases.md): category is now a
+  // joined place_categories.name (migration 0022), embedded and flattened
+  // the same way discover-query.ts's fetchPlaces was fixed.
   const { data, error } = await supabase
     .from("places")
-    .select("id, name, category, description, latitude, longitude, verification_status, verified_at")
+    .select("id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name)")
     .not("verified_at", "is", null)
     .order("verified_at", { ascending: false })
     .limit(10);
@@ -47,7 +61,7 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
     kind: "place" as const,
     id: row.id,
     name: row.name,
-    category: row.category,
+    category: readEmbeddedName(row.place_categories) ?? "",
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -57,9 +71,20 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
 }
 
 async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusiness[]> {
+  // Category Directory Expansion, Phase 1.7: category is now a joined
+  // business_categories.name (migration 0027, category_id replaces the
+  // old plain text column), embedded and flattened the same way
+  // fetchRecentlyVerifiedPlaces above already handles place_categories.
+  // Not one of the expansion phases doc's own enumerated 1.7 consumers,
+  // but the same display-only reasoning applies (this feed never writes a
+  // category back) -- caught here since the old flat "category" select
+  // would otherwise error against the dropped column, per constraints.md's
+  // File Traversal rule.
   const { data, error } = await supabase
     .from("businesses")
-    .select("id, name, category, description, latitude, longitude, verification_status, verified_at, business_items(price)")
+    .select(
+      "id, name, business_categories(name), description, latitude, longitude, verification_status, verified_at, business_items(price)"
+    )
     .eq("verification_status", "verified")
     .not("verified_at", "is", null)
     .order("verified_at", { ascending: false })
@@ -67,18 +92,23 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
-    kind: "business" as const,
-    id: row.id,
-    name: row.name,
-    category: row.category,
-    description: row.description,
-    latitude: row.latitude,
-    longitude: row.longitude,
-    verification_status: "verified" as const,
-    itemPrices: (row.business_items ?? []).map((item: { price: number | null }) => item.price),
-    verified_at: row.verified_at as string,
-  }));
+  return (data ?? []).map((row) => {
+    const { business_categories, ...rest } = row as typeof row & {
+      business_categories: { name: string } | { name: string }[] | null;
+    };
+    return {
+      kind: "business" as const,
+      id: rest.id,
+      name: rest.name,
+      category: readEmbeddedName(business_categories),
+      description: rest.description,
+      latitude: rest.latitude,
+      longitude: rest.longitude,
+      verification_status: "verified" as const,
+      itemPrices: (rest.business_items ?? []).map((item: { price: number | null }) => item.price),
+      verified_at: rest.verified_at as string,
+    };
+  });
 }
 
 /**

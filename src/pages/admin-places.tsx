@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,7 +101,10 @@ export default function AdminPlacesPage() {
 
   async function loadQueue(): Promise<QueueRow[]> {
     const [placesRes, flaggedRes] = await Promise.all([
-      supabase.from("places").select("id, name, category, verification_status, updated_at"),
+      // Phase 1.4 (place-category-directory-phases.md): category is now a
+      // joined place_categories.name (migration 0022), flattened below so
+      // PlaceQueueRow's own category field stays string, unchanged.
+      supabase.from("places").select("id, name, verification_status, updated_at, place_categories(name)"),
       // No updated_at on discovery_content (migration 0005 doesn't define
       // one), so flagged rows have nothing to sort by within their own
       // priority tier except id, same tie-break gap "pending"/"rejected"
@@ -114,10 +118,14 @@ export default function AdminPlacesPage() {
     const placeRows: PlaceQueueRow[] = ((placesRes.data ?? []) as {
       id: string;
       name: string;
-      category: string;
       verification_status: "pending" | "verified" | "rejected";
       updated_at: string;
-    }[]).map((p) => ({ kind: "place", ...p }));
+      place_categories: { name: string } | { name: string }[] | null;
+    }[]).map(({ place_categories, ...p }) => ({
+      kind: "place",
+      ...p,
+      category: readEmbeddedName(place_categories) ?? "",
+    }));
 
     const flagged = (flaggedRes.data ?? []) as {
       id: string;

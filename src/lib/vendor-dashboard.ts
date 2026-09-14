@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 import type { TrailInclusion } from "./vendor-types";
 
 /**
@@ -30,12 +31,19 @@ export async function fetchTrailInclusions(businessId: string): Promise<TrailInc
   const routeIds = [...new Set((stopRows ?? []).map((row) => row.route_id))];
   if (routeIds.length === 0) return [];
 
+  // Category Directory Phase 1.7: theme is now a joined trail_categories.
+  // name (migration 0023), embedded and flattened, same pattern as
+  // trail-query.ts's fetchPublishedTrails.
   const { data: routes, error: routesError } = await supabase
     .from("routes")
-    .select("id, name, theme")
+    .select("id, name, trail_categories(name)")
     .eq("status", "published")
     .in("id", routeIds);
 
   if (routesError) throw routesError;
-  return (routes ?? []) as TrailInclusion[];
+  return (routes ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    theme: readEmbeddedName(row.trail_categories),
+  }));
 }

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 import type { TrailSummary } from "./trail-types";
 import { fetchCredentialNamesByRouteId } from "./trail-query";
 
@@ -78,9 +79,11 @@ export async function fetchSavedRoutes(userId: string): Promise<TrailSummary[]> 
   const routeIds = (savedRows ?? []).map((row) => row.route_id);
   if (routeIds.length === 0) return [];
 
+  // Category Directory Phase 1.7: same embed-and-flatten fix as
+  // trail-query.ts's fetchPublishedTrails.
   const { data: routes, error: routesError } = await supabase
     .from("routes")
-    .select("id, name, theme, estimated_duration, estimated_budget, run_type")
+    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
     .in("id", routeIds);
 
   if (routesError) throw routesError;
@@ -91,7 +94,7 @@ export async function fetchSavedRoutes(userId: string): Promise<TrailSummary[]> 
   return routeRows.map((row) => ({
     id: row.id,
     name: row.name,
-    theme: row.theme,
+    theme: readEmbeddedName(row.trail_categories),
     estimated_duration: row.estimated_duration,
     estimated_budget: row.estimated_budget,
     run_type: row.run_type,

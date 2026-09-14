@@ -38,23 +38,3 @@ export interface DiscoverBusiness {
 }
 
 export type DiscoverResult = DiscoverPlace | DiscoverBusiness;
-
-// Phase 5.4 (step-5-phases.md): "fixed category lists already enforced by
-// the places and businesses check constraints." places.category has a
-// check constraint (migration 0003); businesses.category does not
-// (migration 0004, free text, no fixed list at the DB layer — noted in
-// architecture-notes.md's Phase 3 entry and deferred here). So the filter's
-// option list is places' five values only, matching admin-place-detail.tsx's
-// own CATEGORIES constant (same five, kept in sync manually since that one
-// is a page-local const, not exported). Applied to the combined result set
-// by exact match on the category field either kind carries, a business
-// whose free-text category happens to match one of the five still filters
-// in correctly; one not matching any of the five just won't appear under
-// a specific category, it still shows under "All categories".
-export const DISCOVER_CATEGORIES = [
-  "Heritage Site",
-  "Museum",
-  "Monument",
-  "Church",
-  "Cultural Site",
-] as const;

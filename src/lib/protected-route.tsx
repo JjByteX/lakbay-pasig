@@ -9,8 +9,16 @@ interface ProtectedRouteProps {
   requireStaff?: boolean;
   /** Require profile.staff_role to be exactly admin. Used for the Staff section, per admin-panel-spec.md, Staff role has no access there. */
   requireAdmin?: boolean;
-  /** Require this permission in system_permission, unless staff_role is admin (admin bypasses every permission check per admin-panel-spec.md). */
-  requiredPermission?: SystemPermission;
+  /**
+   * Require this permission in system_permission, unless staff_role is
+   * admin (admin bypasses every permission check per admin-panel-spec.md).
+   * Pass an array for an "any of" gate — e.g. the Categories route (Phase
+   * 2.2), where any one of Places/Trails/Announcements' own permission
+   * qualifies someone to open the page at all, per the plan doc's tab
+   * visibility model. A single SystemPermission still works exactly as
+   * before, every existing call site is unaffected.
+   */
+  requiredPermission?: SystemPermission | SystemPermission[];
 }
 
 export function ProtectedRoute({ children, requireStaff, requireAdmin, requiredPermission }: Readonly<ProtectedRouteProps>) {
@@ -36,8 +44,10 @@ export function ProtectedRoute({ children, requireStaff, requireAdmin, requiredP
     return <Navigate to="/admin" replace />;
   }
 
-  if (requiredPermission && profile?.staff_role !== "admin" && !profile?.system_permission?.includes(requiredPermission)) {
-    return <Navigate to="/admin" replace />;
+  if (requiredPermission && profile?.staff_role !== "admin") {
+    const required = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
+    const hasAny = required.some((p) => profile?.system_permission?.includes(p));
+    if (!hasAny) return <Navigate to="/admin" replace />;
   }
 
   return <>{children}</>;

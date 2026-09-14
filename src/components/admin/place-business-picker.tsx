@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readEmbeddedName } from "@/lib/place-categories";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
@@ -51,22 +52,49 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
     // allowed value sets differ (places: pending/verified/rejected,
     // businesses: pending/verified/unverified per 0003 and 0004's check
     // constraints), so this queries both tables directly rather than
-    // trying to express one union query across them.
+    // trying to express one union query across them. Phase 1.4 (place-
+    // category-directory-phases.md): places.category is now a joined
+    // place_categories.name (migration 0022), flattened below.
+    //
+    // Category Directory Expansion, Phase 1.7: businesses.category is now
+    // a joined business_categories.name (migration 0027, category_id
+    // replaces the old plain text column), flattened the same way, same
+    // pattern the places query above already uses for place_categories.
     Promise.all([
       supabase
         .from("places")
-        .select("id, name, category")
+        .select("id, name, place_categories(name)")
         .eq("verification_status", "verified")
         .order("name", { ascending: true }),
       supabase
         .from("businesses")
-        .select("id, name, category")
+        .select("id, name, business_categories(name)")
         .eq("verification_status", "verified")
         .order("name", { ascending: true }),
     ]).then(([placesRes, businessesRes]) => {
       if (cancelled) return;
-      setPlaces((placesRes.data ?? []) as PlaceRow[]);
-      setBusinesses((businessesRes.data ?? []) as BusinessRow[]);
+      const placeRows = (placesRes.data ?? []) as {
+        id: string;
+        name: string;
+        place_categories: { name: string } | { name: string }[] | null;
+      }[];
+      setPlaces(
+        placeRows.map(({ place_categories, ...p }) => ({
+          ...p,
+          category: readEmbeddedName(place_categories) ?? "",
+        }))
+      );
+      const businessRows = (businessesRes.data ?? []) as {
+        id: string;
+        name: string;
+        business_categories: { name: string } | { name: string }[] | null;
+      }[];
+      setBusinesses(
+        businessRows.map(({ business_categories, ...b }) => ({
+          ...b,
+          category: readEmbeddedName(business_categories),
+        }))
+      );
     });
 
     return () => {

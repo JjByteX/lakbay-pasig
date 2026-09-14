@@ -14,6 +14,7 @@ const BOUNDED_LIST_ROUTES = new Set([
   "/admin/businesses",
   "/admin/events",
   "/admin/trails",
+  "/admin/categories",
   "/admin/staff",
 ]);
 

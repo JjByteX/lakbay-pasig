@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 import type { TrailCredential, TrailDetail, TrailDiscoveryContent, TrailStop, TrailSummary } from "./trail-types";
 
 // Step 7, Phase 1.2: catalog fetch, mirrors discover-query.ts's
@@ -45,9 +46,14 @@ export async function fetchCredentialNamesByRouteId(routeIds: string[]): Promise
  * own surface.
  */
 export async function fetchPublishedTrails(): Promise<TrailSummary[]> {
+  // Category Directory Phase 1.7: theme is now a joined trail_categories.
+  // name (migration 0023, category_id replaces the old plain text
+  // column), embedded here rather than a flat select, flattened right
+  // below so TrailSummary's own theme field stays string | null,
+  // unchanged for every existing caller.
   const { data, error } = await supabase
     .from("routes")
-    .select("id, name, theme, estimated_duration, estimated_budget, run_type");
+    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)");
 
   if (error) throw error;
   const routes = data ?? [];
@@ -57,7 +63,7 @@ export async function fetchPublishedTrails(): Promise<TrailSummary[]> {
   return routes.map((row) => ({
     id: row.id,
     name: row.name,
-    theme: row.theme,
+    theme: readEmbeddedName(row.trail_categories),
     estimated_duration: row.estimated_duration,
     estimated_budget: row.estimated_budget,
     run_type: row.run_type,
@@ -172,9 +178,11 @@ async function fetchCredential(routeId: string): Promise<TrailCredential | null>
  * show."
  */
 export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | null> {
+  // Category Directory Phase 1.7: same embed-and-flatten fix as
+  // fetchPublishedTrails above.
   const { data: route, error: routeError } = await supabase
     .from("routes")
-    .select("id, name, theme, estimated_duration, estimated_budget, run_type")
+    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
     .eq("id", routeId)
     .maybeSingle();
 
@@ -213,7 +221,7 @@ export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | n
   return {
     id: route.id,
     name: route.name,
-    theme: route.theme,
+    theme: readEmbeddedName(route.trail_categories),
     estimated_duration: route.estimated_duration,
     estimated_budget: route.estimated_budget,
     run_type: route.run_type,

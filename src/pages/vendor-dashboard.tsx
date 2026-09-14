@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchOwnBusiness, createBusiness, updateBusiness } from "@/lib/vendor-business";
 import { fetchTrailInclusions } from "@/lib/vendor-dashboard";
 import { fetchItems, missingPriceCount } from "@/lib/vendor-items";
+import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
 import type {
   VendorBusinessDetail,
   VendorBusinessPayload,
@@ -39,6 +40,17 @@ import {
  * the admin side. Metrics (4.2), edit entry point (4.3), and item
  * management entry point (4.4) all added below; create-branch form (Phase
  * 3) and its handleSubmit are otherwise unchanged.
+ *
+ * Category Directory Expansion, Phase 4.3: this file's businessToForm/
+ * formToPayload already read and wrote category_id (both moved off the
+ * dropped category column earlier), but neither of this file's two
+ * BusinessFields call sites (create branch, edit branch) ever passed the
+ * now-required categories prop, so both branches failed to satisfy
+ * BusinessFieldsProps. Closes the other half of decision-log/architecture-
+ * notes' flagged 1.8 gap: a categories/categoriesError fetch was added
+ * below, same fetchActiveCategories-on-mount shape admin-business-
+ * detail.tsx's own Phase 4.2 effect already uses, and both call sites now
+ * pass it through.
  */
 
 // Shared with saved.tsx, trails.tsx, and profile.tsx's own page-local
@@ -75,7 +87,7 @@ function businessToForm(business: VendorBusinessDetail): BusinessFormState {
   return {
     name: business.name,
     business_type: business.business_type,
-    category: business.category ?? "",
+    category_id: business.category_id ?? "",
     description: business.description ?? "",
     address: business.address,
     contact: business.contact ?? "",
@@ -93,7 +105,7 @@ function formToPayload(form: BusinessFormState): VendorBusinessPayload {
   return {
     name: form.name,
     business_type: form.business_type,
-    category: form.category || null,
+    category_id: form.category_id || null,
     description: form.description || null,
     address: form.address,
     contact: form.contact || null,
@@ -230,6 +242,22 @@ export default function VendorDashboardPage() {
   const [form, setForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Category Directory Expansion, Phase 4.3: category picker source for
+  // both the create form (below) and the edit form, same
+  // fetchActiveCategories-on-mount shape admin-business-detail.tsx's own
+  // Phase 4.2 effect already uses, independent of session/business state
+  // since a first-time vendor's create form needs the picker too.
+  const [categories, setCategories] = useState<BusinessCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchActiveCategories()
+      .then(setCategories)
+      .catch((err: unknown) => {
+        setCategoriesError(errorMessageFrom(err, "Could not load categories."));
+      });
+  }, []);
 
   // 4.3: edit entry point. Opens the same field set as the create form,
   // pre-filled from the loaded row, submit calls updateBusiness with the
@@ -374,6 +402,8 @@ export default function VendorDashboardPage() {
               requiredMarkers
               addressPlaceholder="Source of truth for your location"
               showRegisteredOrInformal
+              categories={categories}
+              categoriesError={categoriesError}
             />
 
             {saveError && <p className="text-base text-destructive">{saveError}</p>}
@@ -505,6 +535,8 @@ export default function VendorDashboardPage() {
           requiredMarkers
           addressPlaceholder="Source of truth for your location"
           showRegisteredOrInformal
+          categories={categories}
+          categoriesError={categoriesError}
         />
 
         {createError && <p className="text-base text-destructive">{createError}</p>}

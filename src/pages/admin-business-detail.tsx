@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Star } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -133,6 +134,14 @@ export default function AdminBusinessDetailPage() {
   const [items, setItems] = useState<BusinessItem[] | null>(null);
   const [reviews, setReviews] = useState<BusinessReviewEntry[] | null>(null);
 
+  // 4.2: category picker source, active rows only, same fetchActiveCategories
+  // shape admin-place-detail.tsx's own category picker already uses (place-
+  // categories.ts), applied here to business_categories (business-
+  // categories.ts, Phase 1.5 lib). Loaded once on mount, independent of the
+  // business-record effect below, same reasoning as that file's own comment.
+  const [categories, setCategories] = useState<BusinessCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
   const [reviewAction, setReviewAction] = useState<ReviewAction | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
@@ -142,6 +151,16 @@ export default function AdminBusinessDetailPage() {
   const [featureError, setFeatureError] = useState<string | null>(null);
 
   useEffect(() => {
+    fetchActiveCategories()
+      .then(setCategories)
+      .catch((err: unknown) => {
+        setCategoriesError(
+          err instanceof Error ? err.message : "Could not load categories."
+        );
+      });
+  }, []);
+
+  useEffect(() => {
     if (!id) return;
 
     setLoading(true);
@@ -149,7 +168,7 @@ export default function AdminBusinessDetailPage() {
     supabase
       .from("businesses")
       .select(
-        "id, name, business_type, category, description, address, contact, opening_hours, business_story, unique_specialty, accessibility_info, social_media_links, language, verification_status, featured_status"
+        "id, name, business_type, category_id, description, address, contact, opening_hours, business_story, unique_specialty, accessibility_info, social_media_links, language, verification_status, featured_status"
       )
       .eq("id", id)
       .single()
@@ -162,7 +181,7 @@ export default function AdminBusinessDetailPage() {
         setForm({
           name: data.name ?? "",
           business_type: data.business_type ?? "",
-          category: data.category ?? "",
+          category_id: data.category_id ?? "",
           description: data.description ?? "",
           address: data.address ?? "",
           contact: data.contact ?? "",
@@ -268,7 +287,7 @@ export default function AdminBusinessDetailPage() {
     const payload = {
       name: form.name,
       business_type: form.business_type || null,
-      category: form.category || null,
+      category_id: form.category_id || null,
       description: form.description || null,
       address: form.address,
       contact: form.contact || null,
@@ -509,7 +528,13 @@ export default function AdminBusinessDetailPage() {
 
         <TabsContent value="info" className="flex flex-col gap-6">
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <BusinessFields form={form} onChange={updateField} nameAndTypeInRow />
+          <BusinessFields
+            form={form}
+            onChange={updateField}
+            nameAndTypeInRow
+            categories={categories}
+            categoriesError={categoriesError}
+          />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

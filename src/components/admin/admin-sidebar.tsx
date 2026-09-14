@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Users, LogOut } from "lucide-react";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Users, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -24,12 +24,40 @@ import { SignOutDialog } from "@/components/sign-out-dialog";
 // admin. Staff is adminOnly: true, admin role only per admin-panel-spec.md's
 // Staff Roles section, no system_permission string grants it, unlike the
 // other sections.
+//
+// Categories (category-directory-phases.md Phase 2.1): one entry, not one
+// per content type — the destination page is a single tabbed screen
+// (Places / Trails / Announcements tabs), matching the plan doc's "one
+// Categories sidebar section, not three" call. This entry uses
+// `permissions` (plural, any-of) instead of the single `permission` field
+// the other content-type items use: a staff member needs at least one of
+// manage_places, build_trails, publish_events, or review_businesses to see
+// it at all, per admin-panel-spec.md's Access Rule ("unauthorized areas do
+// not appear at all"), same reasoning the route guard below applies
+// (Phase 2.2). Which of the now-five tabs a staff member can actually use
+// once inside is decided per tab (Phase 2.4); this item only decides
+// whether the page shows up in the sidebar at all.
+//
+// Category Directory Expansion, Phase 2.1: review_businesses added to the
+// array, since the page's new Business Category tab (Phase 2.3) gives a
+// staff member with only that permission a real tab to use here for the
+// first time — the prior comment's "someone with only review_businesses
+// has no tab to use on this page" no longer holds once this phase ships.
+// Facilities needs no array change: manage_places already covers it, same
+// permission Places itself already uses.
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null, adminOnly: false },
   { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const, adminOnly: false },
   { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const, adminOnly: false },
   { to: "/admin/events", label: "Announcements", icon: CalendarDays, permission: "publish_events" as const, adminOnly: false },
   { to: "/admin/trails", label: "Trails", icon: Map, permission: "build_trails" as const, adminOnly: false },
+  {
+    to: "/admin/categories",
+    label: "Categories",
+    icon: Tags,
+    permissions: ["manage_places", "build_trails", "publish_events", "review_businesses"] as const,
+    adminOnly: false,
+  },
   { to: "/admin/staff", label: "Staff", icon: Users, permission: null, adminOnly: true },
 ];
 
@@ -51,6 +79,9 @@ export function AdminSidebar() {
   // permission string is never enough on its own for those items.
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (item.adminOnly) return isAdmin;
+    if ("permissions" in item) {
+      return isAdmin || item.permissions.some((p) => profile?.system_permission?.includes(p));
+    }
     return item.permission === null || isAdmin || profile?.system_permission?.includes(item.permission);
   });
 

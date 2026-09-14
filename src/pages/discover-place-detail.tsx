@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { readEmbeddedName } from "@/lib/place-categories";
+import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SaveButton } from "@/components/public/save-button";
@@ -13,6 +15,21 @@ import { SaveButton } from "@/components/public/save-button";
 // entrance fee, facilities, plus name/category for the header and the
 // verification badge every result already carries (navigation-and-access-
 // control.md's v1 scope, no named contributor credit).
+//
+// Category Directory Expansion, Phase 1.3: facilities is now a joined
+// place_facilities[] (migration 0026, facility_ids replaces the old
+// places.facilities text[]), flattened at fetch time so this field needed
+// no render change beyond the embed itself, per the expansion phases doc's
+// own "no change to the render JSX" goal for that phase.
+//
+// Phase 3.3: the chip row's own scope now explicitly changes, gaining an
+// icon beside each facility name (matching Discover's place category
+// chips), so each row also carries the facility's icon, not just its name.
+interface PlaceFacilityChip {
+  name: string;
+  icon: string;
+}
+
 interface PlaceDetail {
   id: string;
   name: string;
@@ -21,7 +38,7 @@ interface PlaceDetail {
   historical_background: string | null;
   operating_hours: string | null;
   entrance_fee: string | null;
-  facilities: string[] | null;
+  facilities: PlaceFacilityChip[];
   verification_status: "verified";
 }
 
@@ -52,7 +69,7 @@ export default function DiscoverPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, category, description, historical_background, operating_hours, entrance_fee, facilities, verification_status"
+        "id, name, description, historical_background, operating_hours, entrance_fee, verification_status, place_categories(name), place_facilities(name, icon)"
       )
       .eq("id", id)
       .maybeSingle()
@@ -67,7 +84,40 @@ export default function DiscoverPlaceDetailPage() {
           setLoading(false);
           return;
         }
-        setPlace(data as PlaceDetail);
+        // Phase 1.4/1.10 (category-directory-phases.md): category is now
+        // a joined place_categories.name (migration 0022), flattened here
+        // so PlaceDetail's own category field and every render below it
+        // stay unchanged. readEmbeddedName handles either embed shape
+        // Postgrest may return, confirmed necessary by event-detail.tsx's
+        // own existing places(name) embed coming back as an array despite
+        // related_place_id being a plain single-value foreign key, the
+        // same shape category_id has.
+        //
+        // Category Directory Expansion, Phase 1.3: facilities is now a
+        // joined place_facilities[] via facility_ids (migration 0026), a
+        // to-many relationship rather than the to-one category_id above.
+        // Phase 3.3: the embed now also carries icon, not just name, so
+        // the chip row below can render each facility's own icon --
+        // flattened here directly into a {name, icon} row list rather than
+        // through readEmbeddedNames (place-facilities.ts's plural helper),
+        // since that helper only ever returns plain name strings and would
+        // drop the icon. Same defensive array-or-single-object handling
+        // place_categories gets just above, for the same Postgrest embed-
+        // shape uncertainty.
+        const { place_categories, place_facilities, ...rest } = data as typeof data & {
+          place_categories: { name: string } | { name: string }[] | null;
+          place_facilities: PlaceFacilityChip[] | PlaceFacilityChip | null;
+        };
+        const facilityRows = Array.isArray(place_facilities)
+          ? place_facilities
+          : place_facilities
+            ? [place_facilities]
+            : [];
+        setPlace({
+          ...rest,
+          category: readEmbeddedName(place_categories) ?? "",
+          facilities: facilityRows,
+        });
         setLoading(false);
       });
   }, [id]);
@@ -122,15 +172,19 @@ export default function DiscoverPlaceDetailPage() {
             </div>
           )}
 
-          {place.facilities && place.facilities.length > 0 && (
+          {place.facilities.length > 0 && (
             <div className="flex flex-col gap-2">
               <h2 className="text-base font-semibold text-foreground">Facilities</h2>
               <div className="flex flex-wrap gap-2">
-                {place.facilities.map((facility) => (
-                  <Badge key={facility} variant="secondary">
-                    {facility}
-                  </Badge>
-                ))}
+                {place.facilities.map((facility) => {
+                  const Icon = getFacilityIcon(facility.icon);
+                  return (
+                    <Badge key={facility.name} variant="secondary" className="gap-2">
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      {facility.name}
+                    </Badge>
+                  );
+                })}
               </div>
             </div>
           )}

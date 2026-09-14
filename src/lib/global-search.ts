@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 
 // Global search, per the resolved spec: a search bar visible on every tab
 // except Profile (navigation-and-access-control.md's tab list minus
@@ -73,23 +74,34 @@ export function hasAnyResults(results: GlobalSearchResults): boolean {
 
 async function searchPlaces(q: string): Promise<SearchPlaceHit[]> {
   // places_select_public (0003): verified only, same policy discover-
-  // query.ts's fetchPlaces reads through, unchanged here.
+  // query.ts's fetchPlaces reads through, unchanged here. Phase 1.4
+  // (place-category-directory-phases.md): category is now a joined
+  // place_categories.name (migration 0022), flattened below.
   const { data, error } = await supabase
     .from("places")
-    .select("id, name, category")
+    .select("id, name, place_categories(name)")
     .ilike("name", `%${q}%`)
     .limit(RESULT_LIMIT);
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({ kind: "place" as const, ...row }));
+  return (data ?? []).map((row) => ({
+    kind: "place" as const,
+    id: row.id,
+    name: row.name,
+    category: readEmbeddedName(row.place_categories) ?? "",
+  }));
 }
 
 async function searchBusinesses(q: string): Promise<SearchBusinessHit[]> {
   // businesses_select_public (0015): verified or pending, same policy
   // discover-query.ts's fetchBusinesses reads through, unchanged here.
+  // Category Directory Expansion, Phase 1.7: category is now a joined
+  // business_categories.name (migration 0027, category_id replaces the
+  // old plain text column), flattened below, same pattern searchPlaces
+  // above already uses for place_categories.
   const { data, error } = await supabase
     .from("businesses")
-    .select("id, name, category, verification_status")
+    .select("id, name, business_categories(name), verification_status")
     .ilike("name", `%${q}%`)
     .limit(RESULT_LIMIT);
 
@@ -98,7 +110,7 @@ async function searchBusinesses(q: string): Promise<SearchBusinessHit[]> {
     kind: "business" as const,
     id: row.id,
     name: row.name,
-    category: row.category,
+    category: readEmbeddedName(row.business_categories),
     verification_status: row.verification_status as "verified" | "pending",
   }));
 }
@@ -106,14 +118,21 @@ async function searchBusinesses(q: string): Promise<SearchBusinessHit[]> {
 async function searchTrails(q: string): Promise<SearchTrailHit[]> {
   // routes_select_public (0005): published only, same policy trail-
   // query.ts's fetchPublishedTrails reads through, unchanged here.
+  // Category Directory Phase 1.7: theme is now a joined trail_categories.
+  // name (migration 0023), flattened below.
   const { data, error } = await supabase
     .from("routes")
-    .select("id, name, theme")
+    .select("id, name, trail_categories(name)")
     .ilike("name", `%${q}%`)
     .limit(RESULT_LIMIT);
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({ kind: "trail" as const, ...row }));
+  return (data ?? []).map((row) => ({
+    kind: "trail" as const,
+    id: row.id,
+    name: row.name,
+    theme: readEmbeddedName(row.trail_categories),
+  }));
 }
 
 async function searchEvents(q: string): Promise<SearchEventHit[]> {
@@ -124,16 +143,22 @@ async function searchEvents(q: string): Promise<SearchEventHit[]> {
   // published check of its own and could otherwise leak drafts to a
   // signed-in staff account browsing the public surface -- same reasoning
   // applies here, so the same explicit filter is repeated rather than
-  // relying on RLS alone).
+  // relying on RLS alone). Category Directory Phase 1.10: category is now
+  // a joined event_categories.name (migration 0024), flattened below.
   const { data, error } = await supabase
     .from("events")
-    .select("id, title, category")
+    .select("id, title, event_categories(name)")
     .eq("published", true)
     .ilike("title", `%${q}%`)
     .limit(RESULT_LIMIT);
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({ kind: "event" as const, ...row }));
+  return (data ?? []).map((row) => ({
+    kind: "event" as const,
+    id: row.id,
+    title: row.title,
+    category: readEmbeddedName(row.event_categories),
+  }));
 }
 
 /**

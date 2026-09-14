@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { fetchActiveCategories, type EventCategory } from "@/lib/event-categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +20,17 @@ import {
 // and form/save states, per step-4-phases.md. No photos, no review dialog,
 // events have no review queue per admin-panel-spec.md, so this stays a
 // single form, not the tabbed shape admin-place-detail.tsx uses.
+//
+// Category Directory Phase 7.1: migration 0024 dropped events.category.
+// The hardcoded CATEGORIES const and its Select are replaced with
+// fetchActiveCategories() (event-categories.ts, Phase 1.8), same
+// fetch/effect/Select shape admin-place-detail.tsx's Phase 5.1 and
+// admin-trail-builder.tsx's Phase 6.1 already established for their own
+// category_id fields, reused rather than reinvented per constraints.md's
+// Inventory Before Suggesting rule. Form state and the save payload move
+// from category: string to category_id: string. This closes 1.10's
+// flagged gap ("this is Phase 7's real work, done here instead of twice").
 
-const CATEGORIES = ["workshop", "festival", "heritage walk", "program enrollment", "general announcement"] as const;
 const LANGUAGES = ["English", "Filipino", "Both"] as const;
 const LIFECYCLE_STATUSES = ["upcoming", "ongoing", "past"] as const;
 
@@ -44,7 +54,7 @@ function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
 interface EventFormState {
   title: string;
   description: string;
-  category: string;
+  category_id: string;
   related_program: string;
   date_time: string;
   end_date_time: string;
@@ -57,7 +67,7 @@ interface EventFormState {
 const EMPTY_FORM: EventFormState = {
   title: "",
   description: "",
-  category: "",
+  category_id: "",
   related_program: "",
   date_time: "",
   end_date_time: "",
@@ -110,14 +120,37 @@ export default function AdminEventDetailPage() {
       .then(({ data }) => setPlaces((data ?? []) as PlaceOption[]));
   }, []);
 
+  // Category Directory Phase 7.1: category picker source, active rows
+  // only, same fetchActiveCategories/effect shape admin-place-detail.tsx's
+  // Phase 5.1 and admin-trail-builder.tsx's Phase 6.1 already established.
+  // Loaded once on mount, independent of isNew/id, since a new event's
+  // form needs the picker just as much as an existing one's does.
+  const [categories, setCategories] = useState<EventCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchActiveCategories()
+      .then(setCategories)
+      .catch((err: unknown) => {
+        setCategoriesError(
+          err instanceof Error ? err.message : "Could not load categories."
+        );
+      });
+  }, []);
+
   useEffect(() => {
     if (isNew) return;
 
     setLoading(true);
     supabase
       .from("events")
+      // Category Directory Phase 7.1: category (migration 0024) is gone,
+      // category_id selected directly off events -- this form never
+      // displays the category's name here, only writes/reads the id, same
+      // flat-select reasoning admin-place-detail.tsx's and admin-trail-
+      // builder.tsx's own category_id selects already established.
       .select(
-        "title, description, category, related_program, date_time, end_date_time, location, related_place_id, enrollment_info, language, published, lifecycle_status"
+        "title, description, category_id, related_program, date_time, end_date_time, location, related_place_id, enrollment_info, language, published, lifecycle_status"
       )
       .eq("id", id)
       .single()
@@ -130,7 +163,7 @@ export default function AdminEventDetailPage() {
         setForm({
           title: data.title ?? "",
           description: data.description ?? "",
-          category: data.category ?? "",
+          category_id: data.category_id ?? "",
           related_program: data.related_program ?? "",
           date_time: toDatetimeLocalValue(data.date_time),
           end_date_time: toDatetimeLocalValue(data.end_date_time),
@@ -176,7 +209,7 @@ export default function AdminEventDetailPage() {
   const missingRequiredFields: string[] = [];
   if (form.title.trim().length === 0) missingRequiredFields.push("Event Title");
   if (form.description.trim().length === 0) missingRequiredFields.push("Description");
-  if (form.category.trim().length === 0) missingRequiredFields.push("Category");
+  if (form.category_id.trim().length === 0) missingRequiredFields.push("Category");
   if (form.date_time.trim().length === 0) missingRequiredFields.push("Date and Time");
   const canPublish = missingRequiredFields.length === 0 && !endBeforeStart;
   // Note: this reads live form state, not the last-saved row. An edit made
@@ -197,7 +230,9 @@ export default function AdminEventDetailPage() {
     const payload = {
       title: form.title,
       description: form.description || null,
-      category: form.category || null,
+      // Category Directory Phase 7.1: writes category_id (migration 0024),
+      // same nullable-if-blank shape the old category field had.
+      category_id: form.category_id || null,
       related_program: form.related_program || null,
       date_time: form.date_time ? new Date(form.date_time).toISOString() : null,
       end_date_time: hasEndDateTime && form.end_date_time ? new Date(form.end_date_time).toISOString() : null,
@@ -351,18 +386,19 @@ export default function AdminEventDetailPage() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="category">Category</Label>
-            <Select value={form.category} onValueChange={(v) => updateField("category", v)}>
+            <Select value={form.category_id} onValueChange={(v) => updateField("category_id", v)}>
               <SelectTrigger id="category">
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
           </div>
         </div>
 

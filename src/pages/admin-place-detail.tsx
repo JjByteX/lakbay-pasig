@@ -3,6 +3,9 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
+import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
+import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,13 +47,11 @@ function getStoragePathFromPublicUrl(publicUrl: string): string | null {
   return decodeURIComponent(publicUrl.slice(index + marker.length));
 }
 
-const CATEGORIES = ["Heritage Site", "Museum", "Monument", "Church", "Cultural Site"] as const;
 const LANGUAGES = ["English", "Filipino", "Both"] as const;
-const FACILITY_OPTIONS = ["Restrooms", "Parking", "Info Desk", "Waiting Area"] as const;
 
 interface PlaceFormState {
   name: string;
-  category: string;
+  category_id: string;
   description: string;
   historical_background: string;
   historical_significance: string;
@@ -61,14 +62,14 @@ interface PlaceFormState {
   entrance_fee: string; // numeric column (migration 0019), kept as a string here since the number input's value must be a string; parsed to a number or null at submit time
   visit_duration: string;
   accessibility_info: string;
-  facilities: string[];
+  facility_ids: string[];
   nearby_places: string;
   language: string;
 }
 
 const EMPTY_FORM: PlaceFormState = {
   name: "",
-  category: "",
+  category_id: "",
   description: "",
   historical_background: "",
   historical_significance: "",
@@ -79,7 +80,7 @@ const EMPTY_FORM: PlaceFormState = {
   entrance_fee: "",
   visit_duration: "",
   accessibility_info: "",
-  facilities: [],
+  facility_ids: [],
   nearby_places: "",
   language: "",
 };
@@ -155,10 +156,49 @@ export default function AdminPlaceDetailPage() {
 
   const [reviews, setReviews] = useState<PlaceReviewEntry[] | null>(null);
 
+  // 5.1: category picker source, active rows only, same fetchActiveCategories
+  // the Discover filter also reads (Phase 1.1 lib), replacing the hardcoded
+  // CATEGORIES const this page used to render its Select from. Loaded once
+  // on mount, independent of isNew/id, since a new place's form needs the
+  // picker just as much as an existing one's does.
+  const [categories, setCategories] = useState<PlaceCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+
+  // 3.1: facility picker source, active rows only, same fetchActiveCategories
+  // shape as the category picker above (place-facilities.ts, Phase 1.1 lib),
+  // replacing the hardcoded FACILITY_OPTIONS const this page used to render
+  // its Button-toggle grid from. Loaded once on mount, independent of
+  // isNew/id, same reasoning as categories above.
+  const [facilities, setFacilities] = useState<PlaceFacility[]>([]);
+  const [facilitiesError, setFacilitiesError] = useState<string | null>(null);
+
   const [reviewAction, setReviewAction] = useState<"verify" | "reject" | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 5.1: independent of isNew/id (unlike the place-record effect below,
+    // which only runs for an existing place) -- a new place's form needs
+    // this list too. fetchActiveCategories throws on failure (place-
+    // categories.ts), so a fetch failure here surfaces as a specific
+    // message instead of a silently empty picker with no explanation.
+    fetchActiveCategories()
+      .then(setCategories)
+      .catch((err: unknown) => {
+        setCategoriesError(
+          err instanceof Error ? err.message : "Could not load categories."
+        );
+      });
+
+    fetchActiveFacilities()
+      .then(setFacilities)
+      .catch((err: unknown) => {
+        setFacilitiesError(
+          err instanceof Error ? err.message : "Could not load facilities."
+        );
+      });
+  }, []);
 
   useEffect(() => {
     if (isNew) return;
@@ -167,7 +207,7 @@ export default function AdminPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, category, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facilities, nearby_places, language, verification_status, reviewed_by"
+        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places, language, verification_status, reviewed_by, category_id"
       )
       .eq("id", id)
       .single()
@@ -179,7 +219,7 @@ export default function AdminPlaceDetailPage() {
         }
         setForm({
           name: data.name ?? "",
-          category: data.category ?? "",
+          category_id: data.category_id ?? "",
           description: data.description ?? "",
           historical_background: data.historical_background ?? "",
           historical_significance: data.historical_significance ?? "",
@@ -190,7 +230,7 @@ export default function AdminPlaceDetailPage() {
           entrance_fee: data.entrance_fee !== null ? String(data.entrance_fee) : "",
           visit_duration: data.visit_duration ?? "",
           accessibility_info: data.accessibility_info ?? "",
-          facilities: data.facilities ?? [],
+          facility_ids: data.facility_ids ?? [],
           nearby_places: data.nearby_places ?? "",
           language: data.language ?? "",
         });
@@ -256,16 +296,16 @@ export default function AdminPlaceDetailPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleFacility(facility: string) {
+  function toggleFacility(facilityId: string) {
     setForm((prev) => ({
       ...prev,
-      facilities: prev.facilities.includes(facility)
-        ? prev.facilities.filter((f) => f !== facility)
-        : [...prev.facilities, facility],
+      facility_ids: prev.facility_ids.includes(facilityId)
+        ? prev.facility_ids.filter((f) => f !== facilityId)
+        : [...prev.facility_ids, facilityId],
     }));
   }
 
-  const canSubmit = form.name.trim().length > 0 && form.category.length > 0 && form.address.trim().length > 0 && !saving;
+  const canSubmit = form.name.trim().length > 0 && form.category_id.length > 0 && form.address.trim().length > 0 && !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -502,6 +542,10 @@ export default function AdminPlaceDetailPage() {
             form={form}
             updateField={updateField}
             toggleFacility={toggleFacility}
+            categories={categories}
+            categoriesError={categoriesError}
+            facilities={facilities}
+            facilitiesError={facilitiesError}
           />
 
           <p className="text-sm text-muted-foreground">
@@ -532,6 +576,10 @@ export default function AdminPlaceDetailPage() {
                 form={form}
                 updateField={updateField}
                 toggleFacility={toggleFacility}
+                categories={categories}
+                categoriesError={categoriesError}
+                facilities={facilities}
+                facilitiesError={facilitiesError}
               />
 
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -620,10 +668,18 @@ function PlaceFormFields({
   form,
   updateField,
   toggleFacility,
+  categories,
+  categoriesError,
+  facilities,
+  facilitiesError,
 }: Readonly<{
   form: PlaceFormState;
   updateField: <K extends keyof PlaceFormState>(key: K, value: PlaceFormState[K]) => void;
-  toggleFacility: (facility: string) => void;
+  toggleFacility: (facilityId: string) => void;
+  categories: PlaceCategory[];
+  categoriesError: string | null;
+  facilities: PlaceFacility[];
+  facilitiesError: string | null;
 }>) {
   return (
     <>
@@ -642,18 +698,19 @@ function PlaceFormFields({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="category">Category</Label>
-          <Select value={form.category} onValueChange={(v) => updateField("category", v)}>
+          <Select value={form.category_id} onValueChange={(v) => updateField("category_id", v)}>
             <SelectTrigger id="category">
               <SelectValue placeholder="Select a category" />
             </SelectTrigger>
             <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
         </div>
       </div>
 
@@ -800,21 +857,25 @@ function PlaceFormFields({
       <div className="flex flex-col gap-2">
         <Label>Available Facilities</Label>
         <div className="flex flex-wrap gap-2">
-          {FACILITY_OPTIONS.map((facility) => {
-            const active = form.facilities.includes(facility);
+          {facilities.map((facility) => {
+            const active = form.facility_ids.includes(facility.id);
+            const Icon = getFacilityIcon(facility.icon);
             return (
               <Button
-                key={facility}
+                key={facility.id}
                 type="button"
                 variant={active ? "default" : "outline"}
                 size="sm"
-                onClick={() => toggleFacility(facility)}
+                className="gap-2"
+                onClick={() => toggleFacility(facility.id)}
               >
-                {facility}
+                <Icon className="h-4 w-4 shrink-0" />
+                {facility.name}
               </Button>
             );
           })}
         </div>
+        {facilitiesError && <p className="text-sm text-destructive">{facilitiesError}</p>}
       </div>
 
       <div className="flex flex-col gap-2">

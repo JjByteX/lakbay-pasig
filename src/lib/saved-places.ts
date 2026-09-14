@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readEmbeddedName } from "./place-categories";
 import type { DiscoverPlace } from "./discover-types";
 
 /**
@@ -83,16 +84,20 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
 
   const { data: places, error: placesError } = await supabase
     .from("places")
-    .select("id, name, category, description, latitude, longitude, verification_status")
+    .select("id, name, description, latitude, longitude, verification_status, place_categories(name)")
     .in("id", placeIds);
 
   if (placesError) throw placesError;
 
+  // Phase 1.4 (place-category-directory-phases.md): category is now a
+  // joined place_categories.name (migration 0022), flattened here so
+  // DiscoverPlace's own category field stays string, matching discover-
+  // query.ts's fetchPlaces fix for the same schema change.
   return (places ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
     name: row.name,
-    category: row.category,
+    category: readEmbeddedName(row.place_categories) ?? "",
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,

@@ -85,12 +85,24 @@ export default function AdminEventsPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // Category Directory Phase 1.10: category is now a joined event_
+    // categories.name (migration 0024), flattened below so EventRow's
+    // own category field stays string | null, unchanged.
     supabase
       .from("events")
-      .select("id, title, category, date_time, lifecycle_status, published")
+      .select("id, title, date_time, lifecycle_status, published, event_categories(name)")
       .order("date_time", { ascending: true, nullsFirst: false })
       .then(({ data }) => {
-        if (!cancelled) setEvents((data ?? []) as EventRow[]);
+        if (cancelled) return;
+        const rows = (data ?? []) as (Omit<EventRow, "category"> & {
+          event_categories: { name: string } | null;
+        })[];
+        setEvents(
+          rows.map(({ event_categories, ...rest }) => ({
+            ...rest,
+            category: event_categories?.name ?? null,
+          }))
+        );
       });
 
     return () => {
