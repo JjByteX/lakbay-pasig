@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PasswordInput } from "@/components/ui/password-input";
 import { usePageTitle } from "@/lib/page-title";
+
+// 8.6: same minimum this repo already enforces at signup (signup.tsx),
+// so "too short" reads the same reason in both places a password is ever
+// set.
+const MIN_PASSWORD_LENGTH = 8;
 
 // 4.1: three fixed options, single-select -- a Select reads better here
 // than a three-button toggle group (profile.tsx's own multi-select Button
@@ -128,11 +134,38 @@ const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePreference, 
  * unchanged value, and a collision surfaces inline once Postgres reports
  * it, same plain error.message convention this repo already uses.
  *
- * 8.6 (password change, routed through Supabase Auth) and 8.9 (guest
- * check) are separately scoped: 8.6 touches auth logic, on the never-
- * touch-without-approval list, so it is intentionally not built here.
- * 8.9 is already satisfied by this page's existing !session branch below,
- * which this section sits behind unchanged.
+ * 8.6: Change Password, its own card, confirmed separately before
+ * building since it touches auth logic (architecture-notes.md's never-
+ * touch-without-approval list covers auth-context.tsx/auth-types.ts
+ * specifically, not every auth-adjacent UI -- this section calls
+ * supabase.auth.signInWithPassword/updateUser directly from this page,
+ * touching neither file). Confirmed: its own card, not folded into
+ * Account Settings above -- per the Card Fragmentation rule, username/
+ * first/last name/contact number are one "who I am" concept that already
+ * share one save pattern (a plain profiles column write), whereas a
+ * password change is a distinct "account security" concept with its own
+ * confirmation step and a completely different write path (Supabase
+ * Auth, not a profiles column), so it gets its own state, its own action,
+ * its own card, matching this same file's own Personalization/Account
+ * Settings card split above (8.10 note): same concept together, distinct
+ * concepts apart. Confirmed: requires the current password, re-verified
+ * by silently calling signInWithPassword with the typed current password
+ * (fails visibly if wrong, same "Incorrect email or password." shared
+ * line login.tsx already uses so a wrong current password reveals
+ * nothing extra) before calling updateUser with the new one -- a second,
+ * separate auth call rather than trusting the already-active session, so
+ * a password change still demands proof of the current one even though
+ * the user is already signed in. New password reuses signup.tsx's exact
+ * MIN_PASSWORD_LENGTH=8 and PasswordInput, and its own confirm-field
+ * mismatch treatment, so "how long" and "how it's typed" read identically
+ * everywhere a password is ever set in this app. All three fields clear
+ * on success (nothing to re-show once the change is done); a specific
+ * success line confirms it, since this card's Save button doesn't change
+ * label to show completion the way AccountField's inline "Saving..." /
+ * revert-on-error does.
+ *
+ * 8.9 (guest check) is already satisfied by this page's existing
+ * !session branch below, which this section sits behind unchanged.
  */
 type AccountFieldKey = "username" | "first_name" | "last_name" | "contact_number";
 
@@ -301,6 +334,86 @@ export default function SettingsPage() {
     setContactNumber((prev) => ({ ...prev, value: raw.replace(/\D/g, "").slice(0, 15) }));
   }
 
+  // 8.6: current/new/confirm, all local to this card -- none of these
+  // are profile fields, so they get no AccountFieldState/profiles seed
+  // effect, unlike the four fields above.
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const newPasswordLongEnough = newPassword.length >= MIN_PASSWORD_LENGTH;
+  const newPasswordsMatch = newPassword.length > 0 && newPassword === confirmNewPassword;
+  const canSavePassword =
+    !passwordSaving &&
+    currentPassword.length > 0 &&
+    newPasswordLongEnough &&
+    newPasswordsMatch;
+
+  // 8.7: same "disabled with a visible reason" shape AccountField's title
+  // attr already gives username/first/last/contact number below -- this
+  // card gets its own version since the gating conditions are different
+  // (three fields, not one). Priority mirrors the inline messages already
+  // shown per-field above each: the most specific, already-visible reason
+  // wins over a generic "fill in the fields" catch-all, and nothing shows
+  // once the field-level messages (newPassword's length line, confirm's
+  // mismatch line) already cover it, so the reason is never said twice.
+  const passwordBlockedReason =
+    currentPassword.length === 0
+      ? "Enter your current password."
+      : newPassword.length === 0
+        ? "Enter a new password."
+        : !newPasswordLongEnough
+          ? null // already shown inline below the New password field
+          : confirmNewPassword.length === 0
+            ? "Confirm your new password."
+            : !newPasswordsMatch
+              ? null // already shown inline below the Confirm field
+              : null;
+
+  // 8.6: re-verify the typed current password by silently signing in
+  // with it (fails visibly if wrong, same shared "Incorrect email or
+  // password." line login.tsx already uses -- this never confirms or
+  // denies the email itself, since the email is this user's own and
+  // already known), then update to the new password. A second explicit
+  // auth call, not a trust of the already-active session, since a
+  // password change is the one place this app asks a signed-in user to
+  // re-prove who they are.
+  async function handleChangePassword() {
+    if (!session?.user.email || !canSavePassword) return;
+
+    setPasswordSaving(true);
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: session.user.email,
+      password: currentPassword,
+    });
+
+    if (reauthError) {
+      setPasswordSaving(false);
+      setPasswordError("Incorrect email or password.");
+      return;
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+    setPasswordSaving(false);
+
+    if (updateError) {
+      setPasswordError(updateError.message);
+      return;
+    }
+
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setPasswordSuccess(true);
+  }
+
   if (loading) return null;
 
   if (!session) {
@@ -441,6 +554,89 @@ export default function SettingsPage() {
           inputMode="numeric"
           validate={validateContactNumber}
         />
+      </div>
+
+      {/* 8.6: its own card, not a fifth row in Account Settings above --
+          see the doc comment at the top of this component for why a
+          password change is a distinct concept from account identity,
+          per the Card Fragmentation rule. Same card shape/heading
+          pattern as Personalization and Account Settings (8.10). */}
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="text-base font-semibold text-foreground">Change Password</h2>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="current_password">Current password</Label>
+          <PasswordInput
+            id="current_password"
+            value={currentPassword}
+            onChange={(e) => {
+              setCurrentPassword(e.target.value);
+              setPasswordSuccess(false);
+            }}
+            maxLength={72}
+            disabled={passwordSaving}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="new_password">New password</Label>
+          <PasswordInput
+            id="new_password"
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              setPasswordSuccess(false);
+            }}
+            maxLength={72}
+            disabled={passwordSaving}
+          />
+          {newPassword.length > 0 && !newPasswordLongEnough && (
+            <p className="text-base text-destructive">
+              Password must be at least {MIN_PASSWORD_LENGTH} characters.
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="confirm_new_password">Confirm new password</Label>
+          <PasswordInput
+            id="confirm_new_password"
+            value={confirmNewPassword}
+            onChange={(e) => {
+              setConfirmNewPassword(e.target.value);
+              setPasswordSuccess(false);
+            }}
+            maxLength={72}
+            disabled={passwordSaving}
+          />
+          {confirmNewPassword.length > 0 && !newPasswordsMatch && (
+            <p className="text-base text-destructive">Passwords do not match.</p>
+          )}
+        </div>
+
+        <div>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={!canSavePassword}
+            title={passwordBlockedReason ?? undefined}
+            onClick={handleChangePassword}
+          >
+            {passwordSaving ? "Updating..." : "Update password"}
+          </Button>
+        </div>
+
+        {/* 8.8: this card's own status line, separate from the per-field
+            format messages above -- same "specific message, not one
+            shared line" posture 8.8 already applies to the four
+            AccountField rows, just scoped to this card's one action
+            instead of one line per field, since Update password is a
+            single combined action over three fields, not three
+            independent saves. */}
+        {passwordBlockedReason && <p className="text-base text-destructive">{passwordBlockedReason}</p>}
+        {passwordError && <p className="text-base text-destructive">{passwordError}</p>}
+        {passwordSuccess && <p className="text-base text-muted-foreground">Password updated.</p>}
       </div>
     </div>
   );
