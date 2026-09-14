@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1 (step-4-phases.md): table — name, theme, status (draft/published)
 // badge, stop count. Row action: edit, publish/unpublish if no blocking
@@ -67,6 +68,7 @@ const STATUS_VARIANT = {
 const STATUS_OPTIONS = ["all", "draft", "published"] as const;
 
 export default function AdminTrailsPage() {
+  usePageTitle("Trails");
   const navigate = useNavigate();
   const [trails, setTrails] = useState<TrailRow[] | null>(null);
   // 5.4: carries an optional link so the blocked-publish message can point

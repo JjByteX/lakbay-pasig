@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePageTitle } from "@/lib/page-title";
 
 /**
  * Step 9, Phase 5: item management page, mounted at /vendor/items.
@@ -143,6 +144,13 @@ export default function VendorItemsPage() {
   const [deleteTarget, setDeleteTarget] = useState<VendorItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // "Items" matches every early-return branch's own h1 below (signed-out,
+  // loading, error); the loaded branch's h1 shows the business's own name
+  // instead, business is null in every other branch so this one expression
+  // covers all of them, same reasoning discover-business-detail.tsx's
+  // usePageTitle call already established for an identical shape.
+  usePageTitle(business?.name ?? "Items");
 
   useEffect(() => {
     if (!session) return;

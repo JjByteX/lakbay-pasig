@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.2-2.4: create/edit form, publish and lifecycle_status actions,
 // and form/save states, per step-4-phases.md. No photos, no review dialog,
@@ -100,6 +101,7 @@ export default function AdminEventDetailPage() {
   const { profile } = useAuth();
 
   const [form, setForm] = useState<EventFormState>(EMPTY_FORM);
+  usePageTitle(isNew ? "New Event" : form.title || "Edit Event");
   const [hasEndDateTime, setHasEndDateTime] = useState(false);
   const [published, setPublished] = useState(false);
   const [lifecycleStatus, setLifecycleStatus] = useState<(typeof LIFECYCLE_STATUSES)[number]>("upcoming");

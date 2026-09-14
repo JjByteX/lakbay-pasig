@@ -12,6 +12,7 @@ import type { TrailSummary } from "@/lib/trail-types";
 import { SavedPlaceRow } from "@/components/public/saved-place-row";
 import { SavedTrailRow } from "@/components/public/saved-trail-row";
 import { CompletedTrailRow } from "@/components/public/completed-trail-row";
+import { usePageTitle } from "@/lib/page-title";
 
 /**
  * Step 8, Phase 2.1: guest locked state. saved.tsx carries no
@@ -146,6 +147,7 @@ function SavedSection({
 }
 
 export default function SavedPage() {
+  usePageTitle("Saved");
   const { session, loading } = useAuth();
   const navigate = useNavigate();
 

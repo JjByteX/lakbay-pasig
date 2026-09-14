@@ -5,6 +5,7 @@ import type { Announcement, RecentlyVerifiedItem } from "@/lib/home-types";
 import { AnnouncementCarousel } from "@/components/public/announcement-carousel";
 import { VerifiedItemCard } from "@/components/public/verified-item-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6 (step-6-phases.md): cross-cutting loading/empty/error pass across
 // both sections, run as one dedicated pass rather than baked into Phase 3/5,
@@ -46,6 +47,7 @@ function SectionSkeleton() {
 }
 
 export default function HomePage() {
+  usePageTitle(null);
   const navigate = useNavigate();
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);

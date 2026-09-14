@@ -25,6 +25,7 @@ import {
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { readEmbeddedName } from "@/lib/place-categories";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.1: columns per step-4-phases.md, title, category,
 // lifecycle_status badge, published badge, date_time. No review queue for
@@ -75,6 +76,7 @@ function publishedFilterOptionLabel(option: (typeof PUBLISHED_OPTIONS)[number]):
 }
 
 export default function AdminEventsPage() {
+  usePageTitle("Announcements");
   const navigate = useNavigate();
   const [events, setEvents] = useState<EventRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);

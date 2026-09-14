@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 5.3 (step-4-phases.md, step-4-plan.md's review exception): the
 // Places queue (admin-places.tsx) reuses "the same table and verify/reject
@@ -90,6 +91,7 @@ export default function AdminDiscoveryContentReviewPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [entry, setEntry] = useState<DiscoveryContentDetail | null>(null);
+  usePageTitle(entry?.title ?? "Places");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [reviews, setReviews] = useState<ReviewEntry[] | null>(null);

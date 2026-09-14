@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { applyTheme, applyFontSize, type FontSizePreference } from "@/lib/preferences";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePageTitle } from "@/lib/page-title";
 
 // 4.1: three fixed options, single-select -- a Select reads better here
 // than a three-button toggle group (profile.tsx's own multi-select Button
@@ -80,6 +81,7 @@ const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePreference, 
  * success, same as Phase 3.5.
  */
 export default function SettingsPage() {
+  usePageTitle("Settings");
   const { session, profile, loading, refreshProfile } = useAuth();
 
   // 3.2: seeded from profile.theme_preference on load, same pattern

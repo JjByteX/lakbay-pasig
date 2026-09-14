@@ -21,6 +21,7 @@ import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import StaffFormDialog from "@/components/admin/staff-form-dialog";
 import { countOtherActiveAdmins } from "@/lib/staff-lockout-guard";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 3.1: table per step-4-phases.md — full name (display_name), position,
 // active_status badge, permission summary (badge group). Row action: edit,
@@ -90,6 +91,7 @@ function PermissionsCell({ row }: Readonly<{ row: StaffRow }>) {
 }
 
 export default function AdminStaffPage() {
+  usePageTitle("Staff");
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffRow[] | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
@@ -101,7 +103,12 @@ export default function AdminStaffPage() {
   // Dialog state: null means closed, "new" means the New Staff Account
   // form, any other string is the staff id being edited. Replaces the
   // former navigate("/admin/staff/new" | `/admin/staff/${id}`) calls.
-  const [dialogTarget, setDialogTarget] = useState<"new" | string | null>(null);
+  // Typed as plain string | null, not "new" | string | null: string
+  // already includes the "new" literal, so the union added nothing but a
+  // Sonar redundant-literal warning -- the "new" case is still
+  // distinguished at runtime by the === "new" checks elsewhere in this
+  // file, the type doesn't need to repeat it.
+  const [dialogTarget, setDialogTarget] = useState<string | null>(null);
 
   function fetchStaff() {
     let cancelled = false;

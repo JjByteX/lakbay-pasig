@@ -21,6 +21,7 @@ import {
   EMPTY_BUSINESS_FORM,
   type BusinessFormState,
 } from "@/components/business/business-fields";
+import { usePageTitle } from "@/lib/page-title";
 
 /**
  * Step 9, Phase 3: create-branch form. Field-list JSX now lives in the
@@ -266,6 +267,20 @@ export default function VendorDashboardPage() {
   const [editForm, setEditForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Covers every render branch below: signed-out/loading/error states all
+  // show "Vendor" (matching their own h1), editing shows "Edit your
+  // listing", a loaded business shows its own name, and the not-yet-listed
+  // create form shows "List your business" — same string each branch's own
+  // h1 already renders, computed once here since usePageTitle must run
+  // unconditionally ahead of this component's several early returns.
+  let pageTitle = "Vendor";
+  if (business) {
+    pageTitle = editing ? "Edit your listing" : business.name;
+  } else if (!checking && !checkError && session) {
+    pageTitle = "List your business";
+  }
+  usePageTitle(pageTitle);
 
   if (loading) return null;
 

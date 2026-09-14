@@ -18,6 +18,7 @@ import {
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
+import { usePageTitle } from "@/lib/page-title";
 
 /**
  * Phase 5 (step-5-phases.md): search and list on top of Phase 4's map, one
@@ -47,6 +48,7 @@ import { getCategoryIcon } from "@/lib/place-category-icons";
  * `<main>` region every other tab renders into (public-shell.tsx).
  */
 export default function DiscoverPage() {
+  usePageTitle("Discover");
   const { query } = useGlobalSearchQuery();
 
   const [results, setResults] = useState<DiscoverResult[]>([]);

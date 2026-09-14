@@ -4,6 +4,7 @@ import { fetchPublishedTrails } from "@/lib/trail-query";
 import type { TrailSummary } from "@/lib/trail-types";
 import { TrailCard } from "@/components/public/trail-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.4: same PostgrestError shape-check home.tsx's errorMessageFrom
 // and discover.tsx's Phase 8.3 catch both already use (a plain object
@@ -58,6 +59,7 @@ function TrailListSkeleton() {
  * cross-cutting polish pass is Phase 6.
  */
 export default function TrailsPage() {
+  usePageTitle("Trails");
   const navigate = useNavigate();
   const [trails, setTrails] = useState<TrailSummary[]>([]);
   const [loading, setLoading] = useState(true);

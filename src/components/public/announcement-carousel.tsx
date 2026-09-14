@@ -168,12 +168,12 @@ function AnnouncementFilmstripInner({
   offset,
   containerWidthPx,
   onOpen,
-}: {
+}: Readonly<{
   announcements: Announcement[];
   offset: MotionValue<number>;
   containerWidthPx: number;
   onOpen: (id: string) => void;
-}) {
+}>) {
   const [liveOffset, setLiveOffset] = useState(() => offset.get());
   useMotionValueEvent(offset, "change", (v) => setLiveOffset(v));
 

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import { usePageTitle } from "@/lib/page-title";
 
 interface PlaceQueueRow {
   kind: "place";
@@ -83,6 +84,7 @@ function typeFilterOptionLabel(option: (typeof TYPE_OPTIONS)[number]): string {
 }
 
 export default function AdminPlacesPage() {
+  usePageTitle("Places");
   const navigate = useNavigate();
   const [rows, setRows] = useState<QueueRow[] | null>(null);
   const [search, setSearch] = useState("");

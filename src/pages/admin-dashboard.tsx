@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Landmark, Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { usePageTitle } from "@/lib/page-title";
 
 interface ActivityEntry {
   id: string;
@@ -38,6 +39,7 @@ interface ReviewActivityRow {
 }
 
 export default function AdminDashboardPage() {
+  usePageTitle("Dashboard");
   const { profile } = useAuth();
   const isAdmin = profile?.staff_role === "admin";
   const canPlaces = isAdmin || !!profile?.system_permission?.includes("manage_places");

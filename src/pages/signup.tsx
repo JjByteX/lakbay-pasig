@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { usePageTitle } from "@/lib/page-title";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -16,6 +17,7 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  usePageTitle(submitted ? "Check your email" : "Create your account");
 
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const passwordLongEnough = password.length >= MIN_PASSWORD_LENGTH;

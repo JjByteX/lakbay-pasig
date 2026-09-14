@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SignOutDialog } from "@/components/sign-out-dialog";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
 // own CATEGORIES constant use for Local Historical Place. Reused as-is,
@@ -69,6 +70,7 @@ function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
  * sub-task pulled into its own view.
  */
 export default function ProfilePage() {
+  usePageTitle("Profile");
   const { session, profile, loading, refreshProfile } = useAuth();
 
   // Log-out confirmation: this button no longer calls signOut directly,

@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePageTitle } from "@/lib/page-title";
 
 // Storage bucket for place photos. Not yet created by any migration in this
 // repo, per architecture-notes.md's "what must never be touched without
@@ -145,6 +146,7 @@ export default function AdminPlaceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [form, setForm] = useState<PlaceFormState>(EMPTY_FORM);
+  usePageTitle(isNew ? "New Place" : form.name || "Edit Place");
   const [status, setStatus] = useState<PlaceRecord["verification_status"] | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);

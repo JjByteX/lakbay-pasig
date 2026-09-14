@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1-4.2 (step-6-phases.md): full record fields from events
 // (migration 0006), scoped to published = true. No save action, events
@@ -64,6 +65,7 @@ export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [event, setEvent] = useState<EventDetail | null>(null);
+  usePageTitle(event?.title ?? "Home");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 

@@ -26,6 +26,7 @@ import {
   type PickedLocation,
 } from "@/components/admin/place-business-picker";
 import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.2 (step-4-phases.md): stepper layout, not sidebar-style, per
 // ux-ui-guidelines.md's Layout Pattern Rules ("linear flow ... never use a
@@ -441,6 +442,7 @@ export default function AdminTrailBuilderPage() {
   const [status, setStatus] = useState<"draft" | "published">("draft");
 
   const [info, setInfo] = useState<TrailInfoFormState>(EMPTY_INFO);
+  usePageTitle(isNew && !routeId ? "New Trail" : info.name || "Edit Trail");
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

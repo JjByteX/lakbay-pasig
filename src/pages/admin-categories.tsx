@@ -31,6 +31,7 @@ import { getTrailCategoryIcon, TRAIL_CATEGORY_ICONS } from "@/lib/trail-category
 import { getEventCategoryIcon, EVENT_CATEGORY_ICONS } from "@/lib/event-category-icons";
 import { getFacilityIcon, FACILITY_ICONS } from "@/lib/place-facility-icons";
 import { getBusinessCategoryIcon, BUSINESS_CATEGORY_ICONS } from "@/lib/business-category-icons";
+import { usePageTitle } from "@/lib/page-title";
 
 /**
  * Category Directory admin page, Phase 2.3/2.4/2.5 of category-directory-
@@ -241,7 +242,18 @@ const TAB_ORDER: TabKey[] = ["places", "facilities", "business_categories", "tra
  */
 const ACTIVE_OPTIONS = ["all", "active", "inactive"] as const;
 
+// Extracted from a nested ternary (option === "all" ? ... : option ===
+// "active" ? ... : ...) inline in the Status filter's option labels
+// below, same fix admin-businesses.tsx's featuredFilterOptionLabel
+// already applied to an identical shape.
+function activeFilterOptionLabel(option: (typeof ACTIVE_OPTIONS)[number]): string {
+  if (option === "all") return "All statuses";
+  if (option === "active") return "Active";
+  return "Inactive";
+}
+
 export default function AdminCategoriesPage() {
+  usePageTitle("Categories");
   const { profile } = useAuth();
   const isAdmin = profile?.staff_role === "admin";
 
@@ -264,8 +276,12 @@ export default function AdminCategoriesPage() {
 
   // Dialog state: null closed, "new" the add form, any other string the
   // id of the row being edited -- same null/"new"/id shape admin-staff.tsx
-  // already established (Phase 3.5's own instruction).
-  const [dialogTarget, setDialogTarget] = useState<"new" | string | null>(null);
+  // already established (Phase 3.5's own instruction). Typed as plain
+  // string | null, not "new" | string | null: string already includes
+  // the "new" literal, so the union added nothing but a Sonar redundant-
+  // literal warning -- the "new" case is still distinguished at runtime
+  // by the === "new" checks below, the type doesn't need to repeat it.
+  const [dialogTarget, setDialogTarget] = useState<string | null>(null);
 
   function fetchRows() {
     let cancelled = false;
@@ -414,7 +430,7 @@ export default function AdminCategoriesPage() {
               <SelectContent>
                 {ACTIVE_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
-                    {option === "all" ? "All statuses" : option === "active" ? "Active" : "Inactive"}
+                    {activeFilterOptionLabel(option)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -24,6 +24,7 @@ import {
   type BusinessQueueCandidate,
   type PrioritizedBusiness,
 } from "@/lib/business-queue-priority";
+import { usePageTitle } from "@/lib/page-title";
 
 // 6.2: columns per build-3-phases-plan.md 6.2 — name, business type,
 // verification status, featured status, flagged indicator. Row action menu:
@@ -72,6 +73,7 @@ interface BusinessRow extends PrioritizedBusiness {
 }
 
 export default function AdminBusinessesPage() {
+  usePageTitle("Businesses");
   const navigate = useNavigate();
   const [businesses, setBusinesses] = useState<BusinessRow[] | null>(null);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());

@@ -11,6 +11,7 @@ import { TrailStop } from "@/components/public/trail-stop";
 import { SaveRouteButton } from "@/components/public/save-route-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.4's same PostgrestError shape-check (trails.tsx, home.tsx,
 // discover.tsx's Phase 8.3 catch all already use this), no shared helper
@@ -190,6 +191,7 @@ export default function TrailDetailPage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const [trail, setTrail] = useState<TrailDetail | null>(null);
+  usePageTitle(trail?.name ?? "Trails");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePageTitle } from "@/lib/page-title";
 
 // 6.5: read only list of business_items for staff review, name and price
 // per item, missing price shown plainly, not hidden, per
@@ -124,6 +125,7 @@ export default function AdminBusinessDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [form, setForm] = useState<BusinessFormState>(EMPTY_BUSINESS_FORM);
+  usePageTitle(form.name || "Business");
   const [status, setStatus] = useState<VerificationStatus | null>(null);
   const [featuredStatus, setFeaturedStatus] = useState<FeaturedStatus | null>(null);
   const [loading, setLoading] = useState(true);

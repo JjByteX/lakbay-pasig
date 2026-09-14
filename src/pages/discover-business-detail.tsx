@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6.4 (step-5-phases.md): full record fields from businesses and
 // business_items (migration 0004), scoped through the widened
@@ -47,6 +48,7 @@ export default function DiscoverBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [business, setBusiness] = useState<BusinessDetail | null>(null);
+  usePageTitle(business?.name ?? "Discover");
   const [items, setItems] = useState<BusinessItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);

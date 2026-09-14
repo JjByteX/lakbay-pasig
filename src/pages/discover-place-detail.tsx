@@ -7,6 +7,7 @@ import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SaveButton } from "@/components/public/save-button";
+import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6.3 (step-5-phases.md): full record fields from places (migration
 // 0003), scoped through places_select_public, unchanged this step (verified
@@ -58,6 +59,7 @@ export default function DiscoverPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [place, setPlace] = useState<PlaceDetail | null>(null);
+  usePageTitle(place?.name ?? "Discover");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -108,11 +110,14 @@ export default function DiscoverPlaceDetailPage() {
           place_categories: { name: string } | { name: string }[] | null;
           place_facilities: PlaceFacilityChip[] | PlaceFacilityChip | null;
         };
-        const facilityRows = Array.isArray(place_facilities)
-          ? place_facilities
-          : place_facilities
-            ? [place_facilities]
-            : [];
+        let facilityRows: PlaceFacilityChip[];
+        if (Array.isArray(place_facilities)) {
+          facilityRows = place_facilities;
+        } else if (place_facilities) {
+          facilityRows = [place_facilities];
+        } else {
+          facilityRows = [];
+        }
         setPlace({
           ...rest,
           category: readEmbeddedName(place_categories) ?? "",

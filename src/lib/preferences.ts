@@ -30,8 +30,7 @@ export function applyTheme(theme: ThemePreference): void {
 // the baseline per Phase 1.2 (the plan's instruction to bump today's
 // look up a step). This also covers guest/signed-out (Phase 1.4).
 export function applyFontSize(size: FontSizePreference): void {
-  const step = size ?? "default";
-  document.documentElement.style.fontSize = `${FONT_SIZE_PX[step]}px`;
+  document.documentElement.style.fontSize = `${FONT_SIZE_PX[size ?? "default"]}px`;
 }
 
 // Phase 1.5: ponytail's non-trivial-logic rule, smallest runnable check,
