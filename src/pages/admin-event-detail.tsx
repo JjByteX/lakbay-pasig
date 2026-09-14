@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { DateTimeField } from "@/components/ui/datetime-field";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePageTitle } from "@/lib/page-title";
+import { isoToDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/datetime";
 
 // Phase 2.2-2.4: create/edit form, publish and lifecycle_status actions,
 // and form/save states, per step-4-phases.md. No photos, no review dialog,
@@ -81,17 +83,6 @@ const EMPTY_FORM: EventFormState = {
 interface PlaceOption {
   id: string;
   name: string;
-}
-
-// datetime-local inputs need "YYYY-MM-DDTHH:mm" with no timezone suffix.
-// events.date_time is timestamptz, stored and returned as a full ISO
-// string, so reading a record back needs trimming to what the input
-// accepts. Native input, no date picker dependency, per ponytail's ladder.
-function toDatetimeLocalValue(isoString: string | null): string {
-  if (!isoString) return "";
-  const date = new Date(isoString);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export default function AdminEventDetailPage() {
@@ -167,8 +158,8 @@ export default function AdminEventDetailPage() {
           description: data.description ?? "",
           category_id: data.category_id ?? "",
           related_program: data.related_program ?? "",
-          date_time: toDatetimeLocalValue(data.date_time),
-          end_date_time: toDatetimeLocalValue(data.end_date_time),
+          date_time: isoToDateTimeLocalValue(data.date_time),
+          end_date_time: isoToDateTimeLocalValue(data.end_date_time),
           location: data.location ?? "",
           related_place_id: data.related_place_id ?? "",
           enrollment_info: data.enrollment_info ?? "",
@@ -428,11 +419,10 @@ export default function AdminEventDetailPage() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="date_time">Date and Time</Label>
-            <Input
+            <DateTimeField
               id="date_time"
-              type="datetime-local"
               value={form.date_time}
-              onChange={(e) => updateField("date_time", e.target.value)}
+              onChange={(v) => updateField("date_time", v)}
             />
           </div>
         </div>
@@ -454,11 +444,11 @@ export default function AdminEventDetailPage() {
           {hasEndDateTime && (
             <div className="flex flex-col gap-2 sm:w-1/2 sm:pr-2">
               <Label htmlFor="end_date_time">End Date and Time</Label>
-              <Input
+              <DateTimeField
                 id="end_date_time"
-                type="datetime-local"
                 value={form.end_date_time}
-                onChange={(e) => updateField("end_date_time", e.target.value)}
+                onChange={(v) => updateField("end_date_time", v)}
+                minDate={parseDateTimeLocalValue(form.date_time) ?? undefined}
                 aria-invalid={endBeforeStart}
               />
             </div>

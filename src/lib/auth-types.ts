@@ -13,6 +13,10 @@ export interface Profile {
   staff_role: StaffRole | null;
   active_status: ActiveStatus;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  username: string | null;
+  profile_picture: string | null;
   contact_number: string | null;
   date_of_birth: string | null;
   preferred_language: string | null;

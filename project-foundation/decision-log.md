@@ -278,6 +278,94 @@ If any of the 7 places' mismatches turn out to be a genuinely new, never-seeded 
 
 ---
 
+**#:** 12
+**Date:** Phase 6.1-6.3 / Phase 8.2, bundled
+**Milestone:** Profile picture, username, first/last name — profiles schema
+
+**Context:**
+feature-request-phases.md's suggested build order groups Phase 6.1-6.3 (profile picture upload's schema and storage decision) with Phase 8.2 (Account Settings' schema confirmation) since both touch `profiles` and neither should require its own migration round. Checked directly against data-model.md, every prior migration (0001/0002), and auth-types.ts's `Profile` interface before writing anything, per constraints.md's No Silent Overrides rule:
+- Profile Picture: listed in data-model.md for both End User and CATO Staff, no column exists. Confirmed gap — public-shell.tsx's own AccountMenu comment already states "there is no profile-picture field in the data model to show a real photo."
+- Username: listed in data-model.md for End User (and implied for Staff by symmetry with other shared fields), no column exists, not in auth-types.ts. Confirmed gap.
+- Contact Number: already exists (`contact_number`, migration 0002). No column change needed, feature-request-phases.md's 8.2 wording was checked and confirmed this one is not actually missing.
+- First Name / Last Name: data-model.md never lists these as separate fields from Display Name — End User and Staff have only ever had one `display_name` column (0002), used identically by every existing consumer (profile.tsx, staff-form-dialog.tsx, admin-sidebar.tsx, public-shell.tsx). Splitting this is new scope beyond the documented model, flagged rather than assumed.
+
+**Options Considered:**
+- Profile picture storage — Option A: Supabase Storage, a public bucket holding the file, `profiles.profile_picture` stores the resulting public URL (text), matching place_photos.photo_url (0003) and admin-place-detail.tsx's already-coded (bucket not yet created) upload flow exactly.
+- Profile picture storage — Option B: a plain hosted-URL text field, no upload or bucket, the value is whatever external URL the user supplies.
+- First/Last Name — Option A: keep `display_name` as the only name field, Settings edits it as one input, no schema change for names.
+- First/Last Name — Option B: add `first_name`/`last_name` as two new nullable columns, keep `display_name` in place (not dropped) rather than migrating or splitting existing values.
+
+**Community Consensus:**
+Not applicable, these are same-codebase schema-shape choices (matching existing sibling patterns already in this migration set), not technology or pattern choices with an external best-practice debate.
+
+**Decision:**
+Profile picture storage — Option A, confirmed directly. Reuses the photo-storage convention this codebase already established for place/business photos (public URL as text, not a raw storage path or a second free-text-URL mechanism), per constraints.md's Inventory Before Suggesting rule, and gives consistent lifecycle control (upload/replace/remove) that a plain hosted-URL field would not, relevant to 6.7's states-pass requirement (upload success/error, remove picture). New bucket `avatars`, same public-bucket-plus-stored-public-URL shape as the flagged-but-uncreated `place-photos` bucket; path shape `{user_id}/{uuid}-{filename}`, mirroring admin-place-detail.tsx's `{id}/{photoType}/{uuid}-{filename}` (no `photoType` segment needed, one picture per profile, not a typed list).
+
+Username — added now (`profiles.username`, nullable, unique via a partial index so multiple unset rows don't collide). Genuinely missing, confirmed against three sources rather than one, and Phase 8.4's Username field has no column to write to without it.
+
+Contact Number — no migration. `profiles.contact_number` (0002) already covers Phase 8.5's field.
+
+First/Last Name — Option B, confirmed directly. `display_name` is kept rather than dropped or renamed, so no existing read (profile.tsx, staff-form-dialog.tsx, both Avatar-adjacent initial derivations) breaks mid-migration. How a name is composed from the two new fields, and whether/how existing `display_name` values migrate into them, is Settings' own UI concern (Phase 8.3/8.4), not this migration's.
+
+**Consequences:**
+Migration 0030 adds `profiles.profile_picture` (text, nullable), `profiles.username` (text, nullable, unique via partial index), `profiles.first_name` and `profiles.last_name` (text, nullable each). `auth-types.ts`'s `Profile` interface and `auth-context.tsx`'s `fetchProfile` select list both widened to include all four columns, so every profile load carries them from this point forward, same as 0021's own Phase 0 entry did for theme/font size preference. No RLS policy change needed: `profiles_update_own` (0001) already guards the row, and all four are self-service fields the signed-in user is expected to write to themselves. No UI yet — Phase 6.4-6.8 (upload control, avatar display, states) and Phase 8.3-8.10 (Account Settings section) both build on this schema and are scoped to later steps per the suggested build order, not this milestone. Any future upload flow in this codebase (place photos, business photos, or this one) should follow the same bucket-plus-stored-public-URL shape rather than inventing a fourth variant. `display_name` staying live alongside the new `first_name`/`last_name` is a deliberate, temporary duplication until Phase 8's UI decides the migration path for existing values — flagged here so it isn't mistaken for an oversight later.
+
+---
+
+**#:** 13
+**Date:** Discover: Map Legend and Hover Preview, Phase 1
+**Milestone:** Phase 1.1/1.2/1.4 — legend content scope
+
+**Context:**
+feature-request-phases.md's Phase 1.2 asks for "one row per active place category and one row per business type" in the map legend, and 1.4 requires every marker style to have a matching legend row. Checked directly before writing anything, per constraints.md's No Silent Overrides rule: "business type" (business-fields.tsx's `business_type` field, values Product/Service/Both) has no icon anywhere in this codebase, and `DiscoverBusiness` (discover-types.ts) carries no `business_type` field at all — Discover has never read this field, confirmed by a repo-wide grep. Separately, the map's actual marker rendering (markerElement, unchanged by this phase) draws exactly two visual styles today, verified and pending, differentiated by color only — no per-category marker color or icon exists, so "category" is not currently a marker style in the sense 1.4 means.
+
+**Options Considered:**
+- Legend content — Option A: build the "business type" row against `business_type` (Product/Service/Both), inventing a new icon for each of the three values since none exist today.
+- Legend content — Option B: build the row against Business Category (`business_categories`, migration 0027), the icon-bearing concept already backing Discover's own category filter chips, reading 1.2's "business type" as loosely worded for the concept that actually has icons and actually appears in Discover today.
+- Marker parity (1.4) — Option A: add a new per-category marker icon/color system to discover-map.tsx so every legend row (including categories) has a literal marker style to match, a larger visual change to the map itself.
+- Marker parity (1.4) — Option B: scope the legend's marker-parity section to the two marker styles the map actually draws (verified/pending), and list categories as a separate reference section, not tied to a marker's visual encoding since none exists.
+
+**Community Consensus:**
+Not applicable, this is a same-codebase scope-interpretation choice (matching an existing sibling concept already in this feature set), not a technology or pattern choice with an external best-practice debate.
+
+**Decision:**
+Legend content — Option B. `business_type` has nothing this feature could reuse (no icon, no Discover read path), while Business Category is the exact reusable, icon-bearing, Discover-relevant concept 1.1's own "reuse getCategoryIcon and getFacilityIcon rather than a new icon map" instruction points at. Building against `business_type` would mean inventing a new icon shortlist for three values with no established visual identity anywhere else in the app, directly against constraints.md's Inventory Before Suggesting rule.
+
+Marker parity (1.4) — Option B. Adding a new marker-icon system is a scope increase beyond this phase's own "isolated to Discover's map, no schema change" framing, and 1.4's own wording ("no marker style should exist without an entry a user can look up") is satisfied by matching the two styles that actually exist. Categories are listed for reference (matching Discover's own existing icon+label chip convention) without claiming they are a marker style, which would misrepresent what the map currently shows.
+
+**Consequences:**
+The map legend's "Business Categories" section reads from `business_categories`/`getBusinessCategoryIcon`, not `business_type`. If `business_type` is ever given its own visual treatment on Discover (a filter chip, a marker distinction) in a future phase, that phase should decide its own icon shortlist then, not retroactively repurpose this legend's Business Categories section for it. If a future phase adds per-category marker styling to discover-map.tsx, this legend's category rows already exist and would only need a swatch/icon added next to each, not a rebuild.
+
+---
+
+**#:** 14
+**Date:** Phase 3 / Phase 4, bundled
+**Milestone:** Admin top bar — global search and notification icon
+
+**Context:**
+feature-request-phases.md's suggested build order groups Phase 3 (admin/staff global search) and Phase 4 (notification icon) since both land in admin.tsx's header at the same time. Read admin.tsx directly first, per constraints.md's File Traversal rule: the header was a bare bar with only SidebarTrigger, confirming feature-request-phases.md's own 3.1/4.1 framing. Two scope points needed a decision before writing anything, both flagged here rather than assumed, per the No Silent Overrides rule:
+- 3.4 says search sits "next to where notification and profile will sit." Reading admin-sidebar.tsx directly showed the profile/sign-out control already lives in the sidebar footer (Avatar, display name, position, sign-out icon button), not the header — there is no header-level profile icon to sit next to today, and adding one is outside both phases' own scope (feature-request-phases.md never asks for a header profile menu, only search and notifications).
+- 3.2 scopes admin search to "Places, Businesses, Events, Trails, and Staff records." admin-staff.tsx has no per-row detail route — New/Edit already open in a controlled-state dialog (StaffFormDialog), not a route, per this file's own prior entries. A Staff search hit has nowhere to deep-link into.
+
+**Options Considered:**
+- Profile placement — Option A: build a new header-level profile/account menu now so search and the bell have a real "next to profile" anchor, matching public-shell.tsx's AccountMenu.
+- Profile placement — Option B: place search and the bell at the header's top right per ux-ui-guidelines.md's own placement convention, leave the sidebar footer as the one profile/sign-out control, no new header menu.
+- Staff search routing — Option A: skip Staff from admin search entirely, since no per-row route exists to land on.
+- Staff search routing — Option B: include Staff as a fifth searchable group, route every hit to the existing `/admin/staff` list route (not a specific row) since that's the closest existing route, matching 3.6's "reusing existing routes rather than building new ones."
+
+**Community Consensus:**
+Not applicable, both are same-codebase scope/placement choices (what already exists here, not a technology or pattern choice with an external best-practice debate).
+
+**Decision:**
+Profile placement — Option B. Building a second profile control would duplicate the sidebar footer's existing one, directly against ux-ui-guidelines.md's "one action, one trigger, one place" rule (the Sign In/Sign Out duplication example given there applies the same way to a duplicated profile menu) and against Label Rules generally. Search and the bell are placed at the header's top right as their own group (`ml-auto`), which already satisfies ux-ui-guidelines.md's placement convention on its own merits, not because it sits beside a profile icon that doesn't yet exist there.
+
+Staff search routing — Option B. Dropping Staff entirely would under-deliver 3.2's explicit five-type list over a routing inconvenience; routing to the list page (where the admin can find and open the row themselves) is the same "reuse existing routes" instruction 3.6 already gives for every other group, just resolving to a list instead of a detail page since that's the only route that exists. Consistent with 3.5 as well: `searchStaff` reads through `profiles_select_admin` (admin-only per migration 0001/0009), so a non-admin Staff member's query returns zero rows under RLS and the Staff group never renders for them, no client-side permission branch needed.
+
+**Consequences:**
+admin.tsx's header now renders `AdminSearchBar` and `AdminNotificationBell` (both new, `src/components/admin/`) inside an `ml-auto` group after `SidebarTrigger`, backed by two new lib files: `admin-global-search.ts` (mirrors global-search.ts's per-table-function-plus-Promise.all shape, reading each table's `_select_staff` policy instead of `_select_public`) and `admin-notifications.ts` (extracts admin-dashboard.tsx's own placesPending/businessesPending queries so the header can call them without importing a page component — admin-dashboard.tsx itself is unchanged, still computes its own numbers the same way, now incidentally matching what the bell shows since both read the same tables the same way). If a header-level profile menu is ever added later, that is the point to revisit whether the sidebar footer's control should move or stay duplicated, not something this phase decided. If Staff ever gets a real per-row detail route, admin-search-bar.tsx's Staff `ResultRow` should be updated to link there directly instead of `/admin/staff`.
+
+---
+
 ### Entry Format — copy this block for each new decision
 
 **#:**

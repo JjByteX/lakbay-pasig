@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SignOutDialog } from "@/components/sign-out-dialog";
+import { AvatarUpload } from "@/components/avatar-upload";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
@@ -79,6 +80,7 @@ export default function ProfilePage() {
   const [signOutOpen, setSignOutOpen] = useState(false);
 
   const [displayName, setDisplayName] = useState("");
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [contactNumber, setContactNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState("");
@@ -101,6 +103,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!profile) return;
     setDisplayName(profile.display_name ?? "");
+    setProfilePicture(profile.profile_picture ?? null);
     setContactNumber(profile.contact_number ?? "");
     setDateOfBirth(profile.date_of_birth ?? "");
     setPreferredLanguage(profile.preferred_language ?? "");
@@ -187,9 +190,41 @@ export default function ProfilePage() {
     await refreshProfile();
   }
 
+  // Phase 6.4: profile_picture writes immediately on upload/remove, not
+  // deferred to this page's own Save action -- same independence admin-
+  // place-detail.tsx's photo upload/remove already has from that page's
+  // Save button, since AvatarUpload already performs the storage write
+  // itself (avatar-storage.ts's uploadAvatar/removeAvatarFile) before
+  // calling this. A second, redundant profiles write on Save would risk
+  // the two falling out of sync if one succeeds and the other doesn't.
+  async function handleAvatarChange(url: string | null) {
+    if (!session) return;
+    setProfilePicture(url);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ profile_picture: url })
+      .eq("id", session.user.id);
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
+    await refreshProfile();
+  }
+
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
       <h1 className="text-xl font-semibold text-foreground">Profile</h1>
+
+      {/* Phase 6.4-6.7: outside the form below since it saves immediately
+          on its own (handleAvatarChange), not gated behind the form's
+          separate Save changes button -- same reasoning place photos
+          save independently of admin-place-detail.tsx's own form Save. */}
+      <AvatarUpload
+        ownerId={session.user.id}
+        displayName={displayName}
+        currentUrl={profilePicture}
+        onChange={handleAvatarChange}
+      />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">

@@ -18,6 +18,8 @@ import {
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
+import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
+import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { usePageTitle } from "@/lib/page-title";
 
 /**
@@ -75,6 +77,25 @@ export default function DiscoverPage() {
     fetchActiveCategories()
       .then(setCategoryOptions)
       .catch(() => setCategoryOptions([]));
+  }, []);
+
+  // Phase 2.2/2.3 (feature-request-phases.md): Facilities filter, places
+  // only (2.1, confirmed against data-model.md before scoping). Multi-
+  // select, same shape as `categories` above -- empty array is the no-op
+  // state (filterDiscoverResults' own AND-across-selected-facilities case
+  // with nothing selected matches everything), not "match nothing".
+  // place-facilities.ts's fetchActiveCategories (2.2) is the same function
+  // admin-place-detail.tsx's facility toggle grid already calls, aliased
+  // on import to avoid colliding with the category fetch above -- no new
+  // lib function written for this second caller, per constraints.md's
+  // Inventory Before Suggesting rule.
+  const [facilities, setFacilities] = useState<string[]>([]);
+  const [facilityOptions, setFacilityOptions] = useState<PlaceFacility[]>([]);
+
+  useEffect(() => {
+    fetchActiveFacilities()
+      .then(setFacilityOptions)
+      .catch(() => setFacilityOptions([]));
   }, []);
 
   useEffect(() => {
@@ -143,8 +164,8 @@ export default function DiscoverPage() {
   }, [minPrice, maxPrice]);
 
   const filtered = useMemo(
-    () => filterDiscoverResults(results, query, categories, priceRange),
-    [results, query, categories, priceRange],
+    () => filterDiscoverResults(results, query, categories, priceRange, facilities),
+    [results, query, categories, priceRange, facilities],
   );
 
   // "All categories" reads as selected both when nothing is picked (the
@@ -153,6 +174,17 @@ export default function DiscoverPage() {
   // All-chip's own onClick below for what toggling it does with this.
   const allSelected =
     categories.length === 0 || categories.length === categoryOptions.length;
+
+  // Same "reads as active either way" logic as allSelected above, applied
+  // to Facilities -- 2.7's combination requirement is satisfied by each
+  // filter (category, price, facilities) staying independent state that
+  // all three feed into the one shared filterDiscoverResults call, not by
+  // a new combined Reset control: no such control exists in this file
+  // today (grepped before writing this phase), so adding one would be new
+  // UI scope beyond what Phase 2 asks for. "All facilities" gives the same
+  // one-tap clear the category filter already has.
+  const allFacilitiesSelected =
+    facilities.length === 0 || facilities.length === facilityOptions.length;
 
   useDiscoverFilters(
     // gap-4 (16px) between the two filter rows, py-4 (16px) top and bottom
@@ -254,6 +286,57 @@ export default function DiscoverPage() {
             >
               <Icon className="h-4 w-4 shrink-0" />
               {c.name}
+            </Button>
+          );
+        })}
+      </div>
+
+      {/* Phase 2.3/2.5 (feature-request-phases.md): Facilities filter,
+                same chip-toggle grid convention as the Category filter directly
+                above -- grid-cols-2 + rounded-full pill shape, an "All
+                facilities" lead chip mirroring "All categories", each chip
+                showing its own icon beside its name (2.5) via
+                place-facility-icons.ts's getFacilityIcon, the exact icon
+                pairing admin-place-detail.tsx's own facility toggle grid
+                already establishes for this same concept -- same icon, same
+                facility, everywhere it appears, per ux-ui-guidelines.md's
+                Icon Rules. Own row beneath Category rather than merged into
+                it, since the two are independent filter concepts (place
+                category vs. place facility) and Category's grid already
+                reads as one complete unit. Places only (2.1): a business
+                never carries a facility, so this row only ever narrows
+                results that have somewhere to narrow. Matching itself
+                (2.4) is AND, not category's OR -- see filterDiscoverResults'
+                own doc comment (discover-query.ts) for why. */}
+      <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
+        <Button
+          type="button"
+          variant={allFacilitiesSelected ? "default" : "outline"}
+          className="h-11 justify-start rounded-full px-4 font-normal"
+          onClick={() =>
+            setFacilities(allFacilitiesSelected ? [] : facilityOptions.map((f) => f.id))
+          }
+        >
+          All facilities
+        </Button>
+        {facilityOptions.map((f) => {
+          const Icon = getFacilityIcon(f.icon);
+          return (
+            <Button
+              key={f.id}
+              type="button"
+              variant={facilities.includes(f.id) ? "default" : "outline"}
+              className="h-11 justify-start gap-2 rounded-full px-4 font-normal"
+              onClick={() =>
+                setFacilities((prev) =>
+                  prev.includes(f.id)
+                    ? prev.filter((existing) => existing !== f.id)
+                    : [...prev, f.id],
+                )
+              }
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {f.name}
             </Button>
           );
         })}

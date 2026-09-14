@@ -50,13 +50,21 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
   // the same way discover-query.ts's fetchPlaces was fixed.
   const { data, error } = await supabase
     .from("places")
-    .select("id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name)")
+    .select(
+      "id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name), facility_ids"
+    )
     .not("verified_at", "is", null)
     .order("verified_at", { ascending: false })
     .limit(10);
 
   if (error) throw error;
 
+  // Phase 2 (feature-request-phases.md, Discover Facility Filters):
+  // DiscoverPlace (which RecentlyVerifiedPlace extends) gained a required
+  // facility_ids field. Widened this select and mapping the same way
+  // discover-query.ts's fetchPlaces and saved-places.ts's fetchSavedPlaces
+  // both were, keeping every DiscoverPlace constructor in sync rather than
+  // leaving this one to silently miss the field.
   return (data ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
@@ -67,6 +75,7 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
     longitude: row.longitude,
     verification_status: row.verification_status as "verified",
     verified_at: row.verified_at as string,
+    facility_ids: row.facility_ids ?? [],
   }));
 }
 
