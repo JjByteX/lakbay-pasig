@@ -1,7 +1,6 @@
 import { supabase } from "./supabase";
-import { readEmbeddedName } from "./place-categories";
 import type { TrailSummary } from "./trail-types";
-import { fetchCredentialNamesByRouteId } from "./trail-query";
+import { fetchRouteSummariesByIds } from "./trail-query";
 
 /**
  * Step 7, Phase 5.1-5.2: completion writes, own file matching every other
@@ -101,6 +100,13 @@ export async function completeTrail(userId: string, routeId: string, credentialI
  * finished. No count, no rank, no "Nth person" framing anywhere in this
  * function, matching this file's own header comment and
  * competitive-positioning.md.
+ *
+ * Route-id-to-TrailSummary resolution (embed-and-flatten select plus
+ * credential-name lookup) is trail-query.ts's exported
+ * fetchRouteSummariesByIds, shared with saved-routes.ts's
+ * fetchSavedRoutes rather than kept as a second copy here, per
+ * constraints.md's Inventory Before Suggesting rule. completed_at is
+ * this file's own extra fact, merged in after the shared fetch.
  */
 export async function fetchCompletedRoutes(
   userId: string
@@ -117,26 +123,10 @@ export async function fetchCompletedRoutes(
   const completedAtByRouteId = new Map(rows.map((row) => [row.route_id, row.completed_at]));
   const routeIds = rows.map((row) => row.route_id);
 
-  // Category Directory Phase 1.7: same embed-and-flatten fix as
-  // trail-query.ts's fetchPublishedTrails.
-  const { data: routes, error: routesError } = await supabase
-    .from("routes")
-    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
-    .in("id", routeIds);
+  const summaries = await fetchRouteSummariesByIds(routeIds);
 
-  if (routesError) throw routesError;
-  const routeRows = routes ?? [];
-
-  const credentialNames = await fetchCredentialNamesByRouteId(routeRows.map((r) => r.id));
-
-  return routeRows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    theme: readEmbeddedName(row.trail_categories),
-    estimated_duration: row.estimated_duration,
-    estimated_budget: row.estimated_budget,
-    run_type: row.run_type,
-    credentialName: credentialNames.get(row.id) ?? null,
-    completed_at: completedAtByRouteId.get(row.id) ?? "",
+  return summaries.map((summary) => ({
+    ...summary,
+    completed_at: completedAtByRouteId.get(summary.id) ?? "",
   }));
 }

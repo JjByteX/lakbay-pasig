@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { createCategoryCrud } from "./category-crud";
 
 /**
  * Place Category Directory, Phase 1. Backs the admin Categories section,
@@ -35,12 +35,18 @@ export interface PlaceCategory {
   active: boolean;
 }
 
+export type { CategoryFormInput } from "./category-crud";
+
 /**
- * Public read, active rows only, ordered for display. Used anywhere a
- * Guest or a place-submission form needs the current pick list: the
- * place form's category Select, and the Discover filter's chip row.
- * place_categories_select_public (0022) covers this with no session
- * required, same shape places_select_public already has.
+ * Step 8 cleanup: fetchActiveCategories/fetchAllCategories/createCategory/
+ * updateCategory below are category-crud.ts's createCategoryCrud factory
+ * bound to place_categories, not five hand-written functions -- this file,
+ * trail-categories.ts, event-categories.ts, business-categories.ts, and
+ * place-facilities.ts all had byte-identical implementations of these four
+ * functions differing only by table name, per constraints.md's Inventory
+ * Before Suggesting rule. Exported function names/signatures are
+ * unchanged, so admin-categories.tsx's namespace imports
+ * (`placeCategories.fetchAllCategories`, etc.) need no changes.
  *
  * Ordered alphabetically by name, not sort_order -- per direct
  * instruction, manual reordering was dropped from the admin Categories
@@ -49,61 +55,15 @@ export interface PlaceCategory {
  * change was extended here too so every consumer of this list (Discover's
  * chips, the place form's picker) reads the same alphabetical order the
  * admin table now shows, rather than a frozen legacy sort_order value
- * nothing can edit anymore.
+ * nothing can edit anymore. sort_order stays on the table (not null,
+ * default 0, migration 0022) since dropping it is a schema change outside
+ * this instruction's scope, but the app layer no longer maintains it as
+ * an ordered append point -- a new row is simply inserted with whatever
+ * default the column already provides.
  */
-export async function fetchActiveCategories(): Promise<PlaceCategory[]> {
-  const { data, error } = await supabase
-    .from("place_categories")
-    .select("id, name, icon, active")
-    .eq("active", true)
-    .order("name", { ascending: true });
+const crud = createCategoryCrud<PlaceCategory>("place_categories");
 
-  if (error) throw error;
-  return (data ?? []) as PlaceCategory[];
-}
-
-/**
- * Staff read, every row regardless of active status. Used by the admin
- * Categories list, where a retired category still needs to show (and be
- * re-activated) rather than disappearing once turned off.
- * place_categories_select_staff (0022) gates this to manage_places/admin.
- * Alphabetical, same reasoning as fetchActiveCategories above.
- */
-export async function fetchAllCategories(): Promise<PlaceCategory[]> {
-  const { data, error } = await supabase
-    .from("place_categories")
-    .select("id, name, icon, active")
-    .order("name", { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []) as PlaceCategory[];
-}
-
-export interface CategoryFormInput {
-  name: string;
-  icon: string;
-  active: boolean;
-}
-
-/**
- * sort_order is no longer a meaningful sequence (see fetchActiveCategories'
- * own comment above) -- the column stays on the table (not null, default 0,
- * migration 0022) since dropping it is a schema change outside this
- * instruction's scope, but the app layer no longer maintains it as an
- * ordered append point. A new row is simply inserted with whatever default
- * the column already provides.
- */
-export async function createCategory(input: CategoryFormInput): Promise<void> {
-  const { error } = await supabase.from("place_categories").insert(input);
-
-  if (error) throw error;
-}
-
-export async function updateCategory(id: string, input: CategoryFormInput): Promise<void> {
-  const { error } = await supabase
-    .from("place_categories")
-    .update(input)
-    .eq("id", id);
-
-  if (error) throw error;
-}
+export const fetchActiveCategories = crud.fetchActiveCategories;
+export const fetchAllCategories = crud.fetchAllCategories;
+export const createCategory = crud.createCategory;
+export const updateCategory = crud.updateCategory;

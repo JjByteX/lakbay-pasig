@@ -40,6 +40,46 @@ export async function fetchCredentialNamesByRouteId(routeIds: string[]): Promise
 }
 
 /**
+ * Step 8, Phase 1: saved-routes.ts's fetchSavedRoutes and trail-
+ * completion.ts's fetchCompletedRoutes both fetch a set of routes by id
+ * and map them into TrailSummary rows -- same embed-and-flatten select,
+ * same credential-name lookup, same field-by-field mapping. Both callers
+ * already have their own route ids in hand (from saved_routes / completed_
+ * routes) and just need the TrailSummary rows back, so that shared block
+ * moves here rather than staying copy-pasted twice, per constraints.md's
+ * Inventory Before Suggesting rule -- same reasoning that already applies
+ * to fetchCredentialNamesByRouteId just above.
+ *
+ * Returns [] for an empty id list without a round trip, matching both
+ * callers' own early-return-on-empty checks before this was extracted.
+ */
+export async function fetchRouteSummariesByIds(routeIds: string[]): Promise<TrailSummary[]> {
+  if (routeIds.length === 0) return [];
+
+  // Category Directory Phase 1.7: same embed-and-flatten fix as
+  // fetchPublishedTrails below.
+  const { data: routes, error: routesError } = await supabase
+    .from("routes")
+    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
+    .in("id", routeIds);
+
+  if (routesError) throw routesError;
+  const routeRows = routes ?? [];
+
+  const credentialNames = await fetchCredentialNamesByRouteId(routeRows.map((r) => r.id));
+
+  return routeRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    theme: readEmbeddedName(row.trail_categories),
+    estimated_duration: row.estimated_duration,
+    estimated_budget: row.estimated_budget,
+    run_type: row.run_type,
+    credentialName: credentialNames.get(row.id) ?? null,
+  }));
+}
+
+/**
  * Phase 1.2: published trail catalog, trails.tsx's (Phase 2) fetch
  * target. One call, one typed list, same "one combined view" shape
  * discover-query.ts's fetchDiscoverResults already establishes for its
