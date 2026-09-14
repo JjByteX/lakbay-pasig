@@ -29,6 +29,7 @@ import AdminTrailsPage from "@/pages/admin-trails";
 import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
 import AdminCategoriesPage from "@/pages/admin-categories";
 import AdminStaffPage from "@/pages/admin-staff";
+import AdminSettingsPage from "@/pages/admin-settings";
 
 export default function App() {
   return (
@@ -240,6 +241,20 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Staff-facing Settings: theme/font size preference, same
+              profiles.theme_preference/font_size_preference columns and
+              same preferences.ts mechanism settings.tsx (Profile ->
+              Settings) already uses, but reachable from inside /admin --
+              no route under PublicShell was ever reachable by a staff
+              session, so staff had no UI for a preference the app
+              already applied for every session regardless of role. No
+              ProtectedRoute wrapper needed beyond the outer /admin
+              route's own requireStaff: this is a personal display
+              preference, not a content section, so it's visible to
+              every staff member the same way Dashboard is, no
+              requiredPermission and no adminOnly, confirmed directly
+              against admin-panel-spec.md's Access Rule before adding. */}
+          <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Routes>
     </AuthProvider>

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Users, LogOut } from "lucide-react";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Users, Settings as SettingsIcon, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -60,6 +60,12 @@ const NAV_ITEMS = [
     adminOnly: false,
   },
   { to: "/admin/staff", label: "Staff", icon: Users, permission: null, permissions: null, adminOnly: true },
+  // Personal display preference, not a content section -- visible to
+  // every staff member the same way Dashboard is (permission: null,
+  // adminOnly: false), not gated behind any system_permission or the
+  // Staff section's admin-only rule. See admin-settings.tsx's own header
+  // comment for the full reasoning.
+  { to: "/admin/settings", label: "Settings", icon: SettingsIcon, permission: null, permissions: null, adminOnly: false },
 ];
 
 export function AdminSidebar() {
