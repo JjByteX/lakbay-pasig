@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VerificationBadge } from "./result-card";
+import { ResultGroup, ResultRow } from "./search-result-list";
+import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import {
   EMPTY_SEARCH_RESULTS,
   hasAnyResults,
@@ -39,6 +41,13 @@ const DEBOUNCE_MS = 300;
  * Inventory Before Suggesting rule), so this follows the same native
  * plain-list pattern discover-list.tsx, trails.tsx, and home.tsx's own
  * result rows already establish, rather than adding a new dependency.
+ *
+ * Step 8 cleanup: ResultGroup/ResultRow (search-result-list.tsx) and the
+ * outside-click/Escape dismissal effect (use-dismiss-on-outside-or-
+ * escape.ts) were byte-identical to admin-search-bar.tsx's own copies
+ * and are now shared. Everything else stays separate -- see admin-
+ * search-bar.tsx's own file comment for why (different data sources, an
+ * extra Staff group, status badges, different route targets).
  */
 interface GlobalSearchBarProps {
   query: string;
@@ -75,22 +84,10 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   // Close on outside click and on Escape, same two dismissal paths every
   // native browser autocomplete supports, per ux-ui-guidelines.md's
   // Familiarity principle (use the cognitive map users already have).
-  useEffect(() => {
-    function handlePointerDown(e: PointerEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
+  // Step 8 cleanup: this effect was byte-identical to admin-search-bar.
+  // tsx's own copy, now shared via src/hooks/use-dismiss-on-outside-or-
+  // escape.ts.
+  useDismissOnOutsideOrEscape(containerRef, () => setOpen(false));
 
   function goTo(path: string) {
     setOpen(false);
@@ -179,46 +176,5 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
         </div>
       )}
     </div>
-  );
-}
-
-function ResultGroup({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
-  return (
-    <div className="border-b border-border py-1 last:border-b-0">
-      <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <ul className="flex flex-col">{children}</ul>
-    </div>
-  );
-}
-
-function ResultRow({
-  title,
-  subtitle,
-  badge,
-  onClick,
-}: Readonly<{
-  title: string;
-  subtitle?: string | null;
-  badge?: ReactNode;
-  onClick: () => void;
-}>) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex w-full flex-col items-start gap-1 px-4 py-2 text-left transition-colors hover:bg-muted"
-      >
-        <span className="text-sm font-semibold text-foreground">{title}</span>
-        {(subtitle || badge) && (
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            {subtitle}
-            {badge}
-          </span>
-        )}
-      </button>
-    </li>
   );
 }

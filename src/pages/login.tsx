@@ -29,12 +29,10 @@ export default function LoginPage() {
     setUnverified(false);
     setResent(false);
 
-    console.log("DEBUG 1: before signInWithPassword");
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    console.log("DEBUG 2: after signInWithPassword", { data, signInError });
 
     setSubmitting(false);
 
@@ -54,25 +52,24 @@ export default function LoginPage() {
       return;
     }
 
-    console.log("DEBUG 3: before profiles query", data.session.user.id);
-
     // staff_role, not role, is what actually gates /admin everywhere else
     // (see protected-route.tsx). role only distinguishes resident vs staff
     // account type, staff_role is null/staff/admin. Query directly here
     // instead of waiting on AuthProvider's own fetch, so navigate has a
     // value the same tick auth resolves.
     try {
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("staff_role")
         .eq("id", data.session.user.id)
         .single();
 
-      console.log("DEBUG 4: after profiles query", { profile, profileError });
-
       navigate(profile?.staff_role ? "/admin" : "/");
-    } catch (err) {
-      console.log("DEBUG 5: profiles query threw", err);
+    } catch {
+      // Profile lookup failed; fall through with no redirect rather than
+      // leaving the user stuck on a spinner. Sign-in itself already
+      // succeeded (data.session is set), so this is a best-effort role
+      // check only, not something worth surfacing as a login error.
     }
   }
 

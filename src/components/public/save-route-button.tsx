@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth-context";
 import { isRouteSaved, toggleSavedRoute } from "@/lib/saved-routes";
+import { useSavedToggle } from "@/hooks/use-saved-toggle";
 import { cn } from "@/lib/utils";
 
 interface SaveRouteButtonProps {
@@ -38,46 +36,21 @@ interface SaveRouteButtonProps {
  * Trail Preview Decision (sign-in gates state changes, not viewing).
  * Also enforced independently at the database layer, saved_routes_own
  * (migration 0007) has no policy allowing an unauthenticated insert.
+ *
+ * Step 8 cleanup: same useSavedToggle extraction as save-button.tsx,
+ * see that file's own comment. This component supplies the route-
+ * specific pieces: routeId as the generic itemId, saved-routes.ts's own
+ * isRouteSaved/toggleSavedRoute, and its own error copy.
  */
 export function SaveRouteButton({ routeId, onToggle }: Readonly<SaveRouteButtonProps>) {
-  const { session } = useAuth();
-  const navigate = useNavigate();
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(false);
-  // Same reasoning as save-button.tsx's own error state: without this,
-  // a failed toggle just silently reverts the heart with no explanation.
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!session) {
-      setSaved(false);
-      return;
-    }
-    isRouteSaved(session.user.id, routeId)
-      .then(setSaved)
-      .catch(() => setSaved(false));
-  }, [session, routeId]);
-
-  function handleClick() {
-    if (!session) {
-      navigate("/login");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    const nextSaved = !saved;
-    setSaved((prev) => !prev); // optimistic, reversible personal action
-    toggleSavedRoute(session.user.id, routeId, saved)
-      .then(() => onToggle?.(nextSaved))
-      .catch(() => {
-        setSaved((prev) => !prev); // revert on failure
-        setError(
-          nextSaved ? "Couldn't save this trail. Try again." : "Couldn't remove this trail. Try again."
-        );
-      })
-      .finally(() => setLoading(false));
-  }
+  const { saved, loading, error, handleClick } = useSavedToggle({
+    itemId: routeId,
+    fetchIsSaved: isRouteSaved,
+    toggle: toggleSavedRoute,
+    saveErrorMessage: "Couldn't save this trail. Try again.",
+    removeErrorMessage: "Couldn't remove this trail. Try again.",
+    onToggle,
+  });
 
   return (
     <div className="flex flex-col items-end gap-1">

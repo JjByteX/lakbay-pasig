@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ResultGroup, ResultRow } from "@/components/public/search-result-list";
+import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import {
   EMPTY_ADMIN_SEARCH_RESULTS,
   hasAnyAdminResults,
@@ -14,13 +16,20 @@ import {
 // right, next to where notification sits (per 3.4 and ux-ui-guidelines.md's
 // placement convention). Same debounce, dropdown, and dismissal shape as
 // global-search-bar.tsx (3.8's "same sizing, spacing, and radius" applied
-// to structure too, not just tokens) -- copied rather than shared via a
-// generic component, since the two read through different data functions
-// (searchAdminEverything vs searchEverything), render an extra Staff group
-// and status badges the public bar has no concept of, and navigate to
-// different route sets (/admin/... vs /discover/...). A shared wrapper
-// would need a results-renderer prop per group to cover both, which is
-// more indirection than two ~150-line siblings, per ponytail's ladder.
+// to structure too, not just tokens) -- the component as a whole stays a
+// separate sibling rather than a generic wrapper, since the two read
+// through different data functions (searchAdminEverything vs
+// searchEverything), render an extra Staff group and status badges the
+// public bar has no concept of, and navigate to different route sets
+// (/admin/... vs /discover/...). A shared wrapper would need a results-
+// renderer prop per group to cover both, which is more indirection than
+// two ~150-line siblings, per ponytail's ladder.
+//
+// Step 8 cleanup: ResultGroup/ResultRow and the outside-click/Escape
+// dismissal effect were the two pieces with zero divergence from global-
+// search-bar.tsx (byte-identical), so those alone now come from
+// src/components/public/search-result-list.tsx and src/hooks/use-
+// dismiss-on-outside-or-escape.ts rather than staying duplicated here.
 const DEBOUNCE_MS = 300;
 
 export function AdminSearchBar() {
@@ -60,23 +69,9 @@ export function AdminSearchBar() {
   }, [query]);
 
   // Same two dismissal paths as global-search-bar.tsx: outside click and
-  // Escape, per ux-ui-guidelines.md's Familiarity principle.
-  useEffect(() => {
-    function handlePointerDown(e: PointerEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
+  // Escape, per ux-ui-guidelines.md's Familiarity principle. Shared via
+  // use-dismiss-on-outside-or-escape.ts, see this file's header comment.
+  useDismissOnOutsideOrEscape(containerRef, () => setOpen(false));
 
   function goTo(path: string) {
     setOpen(false);
@@ -215,45 +210,4 @@ function statusLabel(status: string): string {
   if (status === "draft") return "Draft";
   if (status === "published") return "Published";
   return status;
-}
-
-function ResultGroup({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
-  return (
-    <div className="border-b border-border py-1 last:border-b-0">
-      <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <ul className="flex flex-col">{children}</ul>
-    </div>
-  );
-}
-
-function ResultRow({
-  title,
-  subtitle,
-  badge,
-  onClick,
-}: Readonly<{
-  title: string;
-  subtitle?: string | null;
-  badge?: ReactNode;
-  onClick: () => void;
-}>) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex w-full flex-col items-start gap-1 px-4 py-2 text-left transition-colors hover:bg-muted"
-      >
-        <span className="text-sm font-semibold text-foreground">{title}</span>
-        {(subtitle || badge) && (
-          <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            {subtitle}
-            {badge}
-          </span>
-        )}
-      </button>
-    </li>
-  );
 }

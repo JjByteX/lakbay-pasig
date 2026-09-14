@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth-context";
 import { isPlaceSaved, toggleSavedPlace } from "@/lib/saved-places";
+import { useSavedToggle } from "@/hooks/use-saved-toggle";
 import { cn } from "@/lib/utils";
 
 interface SaveButtonProps {
@@ -38,49 +36,23 @@ interface SaveButtonProps {
  * a detail page header is a common enough pattern to read on its own, and
  * a permanent visible "Save" / "Saved" label next to it would compete with
  * the page's own title for attention in a small header row.
+ *
+ * Step 8 cleanup: the optimistic check-on-mount / flip / revert-with-
+ * error logic below is src/hooks/use-saved-toggle.ts's useSavedToggle,
+ * shared with save-route-button.tsx rather than kept as two byte-
+ * identical copies. This component only supplies the place-specific
+ * pieces: placeId as the generic itemId, saved-places.ts's own
+ * isPlaceSaved/toggleSavedPlace, and its own error copy.
  */
 export function SaveButton({ placeId, onToggle }: Readonly<SaveButtonProps>) {
-  const { session } = useAuth();
-  const navigate = useNavigate();
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(false);
-  // Phase 8.3: the optimistic flip in handleClick below needs a way to
-  // explain itself if toggleSavedPlace fails and the heart visibly
-  // reverts; without this the person sees an unexplained flicker with no
-  // idea why their tap didn't stick, which is worse than a generic
-  // message, it's no message at all.
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!session) {
-      setSaved(false);
-      return;
-    }
-    isPlaceSaved(session.user.id, placeId)
-      .then(setSaved)
-      .catch(() => setSaved(false));
-  }, [session, placeId]);
-
-  function handleClick() {
-    if (!session) {
-      navigate("/login");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    const nextSaved = !saved;
-    setSaved((prev) => !prev); // optimistic, reversible personal action
-    toggleSavedPlace(session.user.id, placeId, saved)
-      .then(() => onToggle?.(nextSaved))
-      .catch(() => {
-        setSaved((prev) => !prev); // revert on failure
-        setError(
-          nextSaved ? "Couldn't save this place. Try again." : "Couldn't remove this place. Try again."
-        );
-      })
-      .finally(() => setLoading(false));
-  }
+  const { saved, loading, error, handleClick } = useSavedToggle({
+    itemId: placeId,
+    fetchIsSaved: isPlaceSaved,
+    toggle: toggleSavedPlace,
+    saveErrorMessage: "Couldn't save this place. Try again.",
+    removeErrorMessage: "Couldn't remove this place. Try again.",
+    onToggle,
+  });
 
   return (
     <div className="flex flex-col items-end gap-1">
