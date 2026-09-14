@@ -109,7 +109,14 @@ const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePreference, 
  * upload.tsx's per-field status shape (Phase 6.7) rather than one shared
  * section-wide status line, per 8.8. Contact Number reuses profile.tsx's
  * exact updateContactNumber digits-only/15-char-cap treatment so the same
- * field behaves identically in both places it appears.
+ * field behaves identically in both places it appears. On top of that,
+ * 8.5's own "specific inline error for an invalid format" is new here:
+ * digits-only stripping alone never rejected a too-short or too-long
+ * result, so AccountField's optional `validate` prop (Contact Number
+ * only) checks the PH mobile shape (09XXXXXXXXX or a 63-prefixed
+ * variant) and blocks Save with a specific message when it doesn't
+ * match, same disabled-with-a-visible-reason shape 8.7 already applies
+ * to the empty/unchanged case.
  *
  * Username has no existing UI or availability-check RPC anywhere in this
  * repo (confirmed via repo-wide grep) -- this is new. Per 8.7's Disabled/
@@ -417,7 +424,11 @@ export default function SettingsPage() {
 
         {/* 8.5: same digits-only/15-char-cap treatment as profile.tsx's
             own Contact Number field, via updateContactNumberValue above,
-            not the generic onValueChange the other three fields use. */}
+            not the generic onValueChange the other three fields use.
+            `validate` adds the format check 8.5 specifically asks for --
+            a specific inline error for an invalid format, not a generic
+            failure message. Username/First/Last Name pass no `validate`,
+            since neither has a defined format to check, only presence. */}
         <AccountField
           id="contact_number"
           label="Contact Number"
@@ -428,6 +439,7 @@ export default function SettingsPage() {
           maxLength={15}
           type="tel"
           inputMode="numeric"
+          validate={validateContactNumber}
         />
       </div>
     </div>
@@ -445,6 +457,17 @@ export default function SettingsPage() {
 // value is empty or unchanged from what is already saved, or while a save
 // is in flight. 8.8: default/editing/saving/error states, each field's
 // own message, not a shared status line for the whole section.
+//
+// 8.5: optional `validate` prop, used only by Contact Number below --
+// digitsOnly stripping already existed (updateContactNumberValue) but
+// nothing checked the *shape* of the result, so a 3-digit or 20-digit
+// string saved silently with no feedback. This is the one gap 8.5 asks
+// for specifically ("a specific inline error for an invalid format
+// rather than a generic failure message"), everything else in this file
+// already existed before this change. Kept as a prop rather than a
+// field-specific fork of AccountField, so Username/First/Last Name (no
+// format to validate) are unaffected and the one shared component still
+// covers all four fields, per the Inventory Before Suggesting rule.
 interface AccountFieldProps {
   id: string;
   label: string;
@@ -455,6 +478,7 @@ interface AccountFieldProps {
   maxLength: number;
   type?: string;
   inputMode?: "numeric" | "text";
+  validate?: (trimmedValue: string) => string | null;
 }
 
 function AccountField({
@@ -467,6 +491,7 @@ function AccountField({
   maxLength,
   type = "text",
   inputMode,
+  validate,
 }: Readonly<AccountFieldProps>) {
   const trimmed = state.value.trim();
   const unchanged = trimmed === originalValue.trim();
@@ -482,8 +507,15 @@ function AccountField({
   // value to react to. "unchanged" alone disables Save with no error
   // line either, since nothing being different from what's already saved
   // isn't a mistake.
-  const blockedReason = isEmpty && !unchanged ? `Enter a ${label.toLowerCase()}.` : null;
-  const canSave = !state.saving && !unchanged && !isEmpty;
+  //
+  // 8.5: format check only runs once the field is non-empty and changed,
+  // same "don't greet the page with an error" posture as the empty-field
+  // check above -- an untouched, already-saved value is never re-flagged
+  // as invalid on render. Format error takes precedence over "Enter a
+  // ___." since a non-empty value that fails validation isn't empty.
+  const formatError = !isEmpty && !unchanged ? (validate?.(trimmed) ?? null) : null;
+  const blockedReason = formatError ?? (isEmpty && !unchanged ? `Enter a ${label.toLowerCase()}.` : null);
+  const canSave = !state.saving && !unchanged && !isEmpty && !formatError;
 
   return (
     <div className="flex flex-col gap-2">
@@ -513,4 +545,19 @@ function AccountField({
       {state.error && <p className="text-base text-destructive">{state.error}</p>}
     </div>
   );
+}
+
+// 8.5: PH mobile numbers are 11 digits starting with 09 (09XXXXXXXXX),
+// the same shape already documented in profile.tsx's and staff-form-
+// dialog.tsx's own updateContactNumber comments. updateContactNumberValue
+// already strips to digits-only/15-char-cap before this ever runs, so
+// this only judges the shape of what's left, not raw characters. A
+// leading +63 country code (63XXXXXXXXXX, 12 digits) is also accepted,
+// same digits-only allowance those comments already call out.
+const PH_MOBILE_PATTERN = /^(09\d{9}|639\d{9})$/;
+
+function validateContactNumber(trimmedValue: string): string | null {
+  return PH_MOBILE_PATTERN.test(trimmedValue)
+    ? null
+    : "Enter an 11-digit mobile number starting with 09 (e.g. 09171234567).";
 }
