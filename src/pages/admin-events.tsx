@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import { readEmbeddedName } from "@/lib/place-categories";
 
 // Phase 2.1: columns per step-4-phases.md, title, category,
 // lifecycle_status badge, published badge, date_time. No review queue for
@@ -95,12 +96,12 @@ export default function AdminEventsPage() {
       .then(({ data }) => {
         if (cancelled) return;
         const rows = (data ?? []) as (Omit<EventRow, "category"> & {
-          event_categories: { name: string } | null;
+          event_categories: { name: string } | { name: string }[] | null;
         })[];
         setEvents(
           rows.map(({ event_categories, ...rest }) => ({
             ...rest,
-            category: event_categories?.name ?? null,
+            category: readEmbeddedName(event_categories),
           }))
         );
       });

@@ -46,19 +46,20 @@ import { SignOutDialog } from "@/components/sign-out-dialog";
 // Facilities needs no array change: manage_places already covers it, same
 // permission Places itself already uses.
 const NAV_ITEMS = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null, adminOnly: false },
-  { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const, adminOnly: false },
-  { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const, adminOnly: false },
-  { to: "/admin/events", label: "Announcements", icon: CalendarDays, permission: "publish_events" as const, adminOnly: false },
-  { to: "/admin/trails", label: "Trails", icon: Map, permission: "build_trails" as const, adminOnly: false },
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null, permissions: null, adminOnly: false },
+  { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const, permissions: null, adminOnly: false },
+  { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const, permissions: null, adminOnly: false },
+  { to: "/admin/events", label: "Announcements", icon: CalendarDays, permission: "publish_events" as const, permissions: null, adminOnly: false },
+  { to: "/admin/trails", label: "Trails", icon: Map, permission: "build_trails" as const, permissions: null, adminOnly: false },
   {
     to: "/admin/categories",
     label: "Categories",
     icon: Tags,
+    permission: null,
     permissions: ["manage_places", "build_trails", "publish_events", "review_businesses"] as const,
     adminOnly: false,
   },
-  { to: "/admin/staff", label: "Staff", icon: Users, permission: null, adminOnly: true },
+  { to: "/admin/staff", label: "Staff", icon: Users, permission: null, permissions: null, adminOnly: true },
 ];
 
 export function AdminSidebar() {
@@ -79,7 +80,7 @@ export function AdminSidebar() {
   // permission string is never enough on its own for those items.
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (item.adminOnly) return isAdmin;
-    if ("permissions" in item) {
+    if (item.permissions) {
       return isAdmin || item.permissions.some((p) => profile?.system_permission?.includes(p));
     }
     return item.permission === null || isAdmin || profile?.system_permission?.includes(item.permission);

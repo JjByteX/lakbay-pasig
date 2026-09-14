@@ -447,7 +447,7 @@ export default function AdminEventDetailPage() {
               }}
               className="h-4 w-4 rounded border-input accent-primary"
             />
-            This event has an end date and time
+            <span>This event has an end date and time</span>
           </label>
           {hasEndDateTime && (
             <div className="flex flex-col gap-2 sm:w-1/2 sm:pr-2">

@@ -271,18 +271,27 @@ begin;
 -- -----------------------------------------------------------------------------
 -- 3. Places (10) — spans pending / verified / rejected, all 5 categories
 -- -----------------------------------------------------------------------------
--- Column list matches migration 0003_places.sql exactly. reviewed_by is only
--- set where verification_status is verified or rejected, mirroring how the
--- real review flow in admin-place-detail.tsx only sets it on a review action
--- (see place_reviews in section 8, which logs the same action).
+-- Column list matches the current places schema after migrations 0022
+-- (category text -> category_id, references place_categories, seeded by
+-- that migration itself) and 0026 (facilities text[] -> facility_ids
+-- uuid[], references place_facilities, also self-seeded). reviewed_by is
+-- only set where verification_status is verified or rejected, mirroring
+-- how the real review flow in admin-place-detail.tsx only sets it on a
+-- review action (see place_reviews in section 8, which logs the same
+-- action). category_id and facility_ids are resolved here via subqueries
+-- against place_categories.name / place_facilities.name rather than
+-- hardcoded ids, since migrations 0022/0026 generate those ids at apply
+-- time (gen_random_uuid()), not fixed values this file could know ahead
+-- of time.
 
 insert into public.places (
-  id, name, category, description, historical_background, historical_significance,
+  id, name, category_id, description, historical_background, historical_significance,
   year_or_period, source_reference, address, latitude, longitude, operating_hours,
-  entrance_fee, visit_duration, accessibility_info, facilities, nearby_places,
+  entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places,
   language, verification_status, reviewed_by, updated_at
 ) values
-  ('6bce5398-b23e-4611-87e8-3747ea370bc4', 'Demo Heritage House', 'Heritage Site',
+  ('6bce5398-b23e-4611-87e8-3747ea370bc4', 'Demo Heritage House',
+   (select id from public.place_categories where name = 'Heritage Site'),
    'A restored ancestral house open for guided walk-throughs.',
    'Built in the early twentieth century by a local trading family, later used as a wartime billet before being restored as a heritage exhibit.',
    'One of the few remaining examples of pre-war residential architecture in the area, illustrating domestic life of the period.',
@@ -290,97 +299,113 @@ insert into public.places (
    '123 Demo Heritage Street, Pasig City', 14.5764, 121.0851,
    '9:00 AM - 5:00 PM, Tuesday to Sunday', 0, '45 minutes',
    'Ground floor wheelchair accessible, second floor stairs only',
-   array['restrooms', 'info desk'], 'Near Demo Plaza and Demo Riverside Walk',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk')),
+   'Near Demo Plaza and Demo Riverside Walk',
    'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '12 days'),
 
-  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'Demo Riverside Walk', 'Cultural Site',
+  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'Demo Riverside Walk',
+   (select id from public.place_categories where name = 'Cultural Site'),
    'A landscaped riverside promenade used for community events and evening walks.',
    'Developed as part of a river rehabilitation program, incorporating public art installations from local artists.',
    'Represents the city''s ongoing river cleanup and public space revival efforts.',
    '2015', 'City Planning Office records',
    '45 Demo Riverside Avenue, Pasig City', 14.5731, 121.0899,
    'Open 24 hours', 0, '30 minutes',
-   'Fully paved, wheelchair accessible', array['restrooms', 'parking', 'waiting area'],
+   'Fully paved, wheelchair accessible',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
    'Near Demo Heritage House', 'English', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '20 days'),
 
-  ('84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'Demo Parish Church', 'Church',
+  ('84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'Demo Parish Church',
+   (select id from public.place_categories where name = 'Church'),
    'A working parish church known for its preserved retablo and bell tower.',
    'Construction began under Spanish colonial administration and continued through several rectors, with the bell tower added later.',
    'Listed as a point of interest for its retablo craftsmanship and continuous use since construction.',
    '1780s', 'Archdiocesan parish records',
    '8 Demo Church Square, Pasig City', 14.5700, 121.0825,
    '6:00 AM - 7:00 PM daily', 0, '20 minutes',
-   'Main entrance ramp available', array['restrooms', 'parking'],
+   'Main entrance ramp available',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking')),
    'Near Demo Public Market', 'Filipino', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '35 days'),
 
-  ('290fe466-9327-4660-9766-a2c64cdf078d', 'Demo City Museum', 'Museum',
+  ('290fe466-9327-4660-9766-a2c64cdf078d', 'Demo City Museum',
+   (select id from public.place_categories where name = 'Museum'),
    'A small municipal museum covering local trade history and everyday artifacts.',
    'Founded from a donated private collection, later expanded with pieces recovered during infrastructure excavation projects.',
    'Serves as the city''s primary repository of everyday material culture, not just ceremonial artifacts.',
    '1998', 'CATO museum accession log',
    '77 Demo Museum Road, Pasig City', 14.5690, 121.0790,
    '9:00 AM - 4:00 PM, Wednesday to Sunday', 50, '1 hour',
-   'Elevator available, wheelchair accessible', array['restrooms', 'info desk', 'parking'],
+   'Elevator available, wheelchair accessible',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk', 'Parking')),
    'Near Demo City Hall', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '8 days'),
 
-  ('3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'Demo War Memorial', 'Monument',
+  ('3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'Demo War Memorial',
+   (select id from public.place_categories where name = 'Monument'),
    'A monument commemorating local residents lost during wartime occupation.',
    'Erected by a civic association two decades after the war, funded through community donations.',
    'One of the few monuments in the city naming individual residents rather than a generic dedication.',
    '1965', 'Civic association commemorative plaque',
    '30 Demo Memorial Park, Pasig City', 14.5745, 121.0860,
    'Open 24 hours', 0, '15 minutes',
-   'Fully accessible, paved plaza', array['parking'],
+   'Fully accessible, paved plaza',
+   (select array_agg(id) from public.place_facilities where name in ('Parking')),
    'Near Demo Riverside Walk', 'English', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '50 days'),
 
-  ('5f1a1879-789b-4b24-84c8-72cceaf11dd3', 'Demo Old Bridge Marker', 'Monument',
+  ('5f1a1879-789b-4b24-84c8-72cceaf11dd3', 'Demo Old Bridge Marker',
+   (select id from public.place_categories where name = 'Monument'),
    'A marker at the site of the city''s first permanent river crossing.',
    'Placed where the original bridge structure stood before being replaced by the current span.',
    'Documents an early piece of civic infrastructure central to the growth of trade in the area.',
    '1932', 'Public works historical registry',
    '2 Demo Old Bridge Street, Pasig City', 14.5712, 121.0871,
    'Open 24 hours', 0, '10 minutes',
-   'Sidewalk level, accessible', array[]::text[],
+   'Sidewalk level, accessible', '{}'::uuid[],
    'Near Demo Riverside Walk', 'Filipino', 'pending', null, now() - interval '2 days'),
 
-  ('f552df7f-30a7-42ab-b470-06968810f437', 'Demo Weaving Center', 'Cultural Site',
+  ('f552df7f-30a7-42ab-b470-06968810f437', 'Demo Weaving Center',
+   (select id from public.place_categories where name = 'Cultural Site'),
    'A community center preserving a local textile weaving tradition through workshops.',
    'Established by a cooperative of weaving families to keep the craft from disappearing as demand shifted to factory textiles.',
    'Active site of intangible cultural heritage, not a static exhibit.',
    '2010', 'Cooperative founding charter',
    '19 Demo Weavers Lane, Pasig City', 14.5678, 121.0803,
    '10:00 AM - 3:00 PM, Monday to Friday', null, '40 minutes',
-   'Ground floor accessible', array['restrooms', 'info desk'],
+   'Ground floor accessible',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk')),
    'Near Demo City Museum', 'Both', 'pending', null, now() - interval '1 days'),
 
-  ('e551915e-15e5-41ed-9ca1-a71364da7028', 'Demo Chapel Ruins', 'Church',
+  ('e551915e-15e5-41ed-9ca1-a71364da7028', 'Demo Chapel Ruins',
+   (select id from public.place_categories where name = 'Church'),
    'The partial remains of an earlier chapel structure, preserved as a viewing site.',
    'Damaged beyond repair during a historic flood, the surviving foundation and wall fragments were later fenced and preserved rather than demolished.',
    'Illustrative of the area''s flood history and how earlier structures responded to it.',
    '1850s', 'Parish historical notes, CATO field survey (2021)',
    '5 Demo Chapel Path, Pasig City', 14.5721, 121.0838,
    '8:00 AM - 5:00 PM daily', 0, '15 minutes',
-   'Uneven ground, limited accessibility', array[]::text[],
+   'Uneven ground, limited accessibility', '{}'::uuid[],
    'Near Demo Parish Church', 'English', 'rejected', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '15 days'),
 
-  ('56302e94-c04a-4e3e-8a2c-068d92e19298', 'Demo Artisan Plaza', 'Cultural Site',
+  ('56302e94-c04a-4e3e-8a2c-068d92e19298', 'Demo Artisan Plaza',
+   (select id from public.place_categories where name = 'Cultural Site'),
    'A public plaza hosting rotating craft and food markets on weekends.',
    'Converted from a former parking lot into a pedestrian plaza as part of a downtown revitalization plan.',
    'Functions as the informal town square for cultural programming.',
    '2019', 'City Planning Office records',
    '60 Demo Plaza Center, Pasig City', 14.5705, 121.0845,
    'Open 24 hours, markets Saturday and Sunday', 0, '30 minutes',
-   'Fully paved, wheelchair accessible', array['restrooms', 'parking', 'waiting area'],
+   'Fully paved, wheelchair accessible',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
    'Near Demo Heritage House', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '6 days'),
 
-  ('ffa2feac-e3cf-437d-b285-20a9dd55d11b', 'Demo Watchtower Site', 'Monument',
+  ('ffa2feac-e3cf-437d-b285-20a9dd55d11b', 'Demo Watchtower Site',
+   (select id from public.place_categories where name = 'Monument'),
    'The foundation remnants of a colonial-era watchtower overlooking the river bend.',
    'Built to monitor river traffic, decommissioned once the function became obsolete, left as a ruin rather than restored.',
    'A rare surviving example of colonial-period river surveillance infrastructure in the city.',
    '1790s', 'CATO field survey (2022)',
    '11 Demo Watchtower Rise, Pasig City', 14.5688, 121.0912,
    'Open 24 hours', 0, '20 minutes',
-   'Steep unpaved path, not wheelchair accessible', array[]::text[],
+   'Steep unpaved path, not wheelchair accessible', '{}'::uuid[],
    'Near Demo Riverside Walk', 'English', 'pending', null, now() - interval '4 days');
 
 -- -----------------------------------------------------------------------------
@@ -427,18 +452,46 @@ commit;
 begin;
 
 -- -----------------------------------------------------------------------------
+-- 5.5 Business categories — migration 0027 left this table empty on purpose
+--     (businesses.category was never a fixed list to backfill from), so
+--     unlike place_categories/trail_categories/event_categories this list
+--     exists only if seeded here. Names match the free-text category values
+--     the businesses below already use (Restaurant, Food Stall, Handicraft,
+--     Souvenirs, Printing, Tailoring, Repair), so every seeded business can
+--     resolve a real category_id below, exercising the admin Categories ->
+--     Business Category tab (admin-categories.tsx) with real rows instead
+--     of an empty state. Icons per business-category-icons.ts's shortlist,
+--     nearest semantic match for each name (Restaurant/Food Stall ->
+--     utensils, matching that file's own "Food and Beverage" label).
+-- -----------------------------------------------------------------------------
+insert into public.business_categories (name, icon, sort_order) values
+  ('Restaurant', 'utensils', 1),
+  ('Food Stall', 'utensils', 2),
+  ('Handicraft', 'gift', 3),
+  ('Souvenirs', 'gift', 4),
+  ('Printing', 'briefcase', 5),
+  ('Tailoring', 'scissors', 6),
+  ('Repair', 'wrench', 7);
+
+-- -----------------------------------------------------------------------------
 -- 6. Businesses (8) — spans pending/verified/unverified, listed/featured,
 --    Product/Service/Both, registered/informal, and every
 --    business-queue-priority.ts signal (new account, no photos, thin
 --    description, copy-pasted description, multiple submissions).
 -- -----------------------------------------------------------------------------
--- Column list matches migration 0004_businesses.sql exactly. submitted_by
--- always points at a vendor's profiles.id from section 1/2 above, never a
--- staff account — per vendor-mode-spec.md, "Vendor is not a separate account
--- type," any Registered User becomes one the moment they submit a business.
+-- Column list matches the current businesses schema after migration 0027
+-- (category renamed to category_text_legacy, kept as the original free
+-- text so nothing entered before that migration is lost, plus a new
+-- nullable category_id resolved here against the business_categories rows
+-- seeded directly above -- see that migration's own comment for why this
+-- table starts empty and needs seeding here, unlike Places/Trails/
+-- Announcements). submitted_by always points at a vendor's profiles.id from
+-- section 1/2 above, never a staff account — per vendor-mode-spec.md,
+-- "Vendor is not a separate account type," any Registered User becomes one
+-- the moment they submit a business.
 
 insert into public.businesses (
-  id, name, business_type, category, description, address, latitude, longitude,
+  id, name, business_type, category_text_legacy, category_id, description, address, latitude, longitude,
   contact, opening_hours, business_story, unique_specialty, accessibility_info,
   social_media_links, language, verification_status, reviewed_by, review_notes,
   featured_status, submitted_by, registered_or_informal, views_count, saves_count,
@@ -446,6 +499,7 @@ insert into public.businesses (
 ) values
   -- Established, verified, featured — vendor1 (400 days old)
   ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'Demo Riverside Eatery', 'Product', 'Restaurant',
+   (select id from public.business_categories where name = 'Restaurant'),
    'A family-run carinderia serving Pasig home-style dishes near the riverside promenade.',
    '14 Demo Market Street, Pasig City', 14.5733, 121.0891,
    '+639201234567', '10:00 AM - 8:00 PM daily',
@@ -458,6 +512,7 @@ insert into public.businesses (
 
   -- Verified, listed, informal — vendor2 (320 days old)
   ('6d28a284-ec7a-4da6-89f0-592dc04088e7', 'Demo Kakanin Corner', 'Product', 'Food Stall',
+   (select id from public.business_categories where name = 'Food Stall'),
    'A small stall selling traditional rice cakes made fresh every morning.',
    '5 Demo Public Market, Pasig City', 14.5741, 121.0868,
    '+639201234568', '6:00 AM - 1:00 PM daily',
@@ -469,6 +524,7 @@ insert into public.businesses (
 
   -- Pending, thin description, one photo — vendor3 (250 days old)
   ('5ae1c60e-ddbb-4e03-a782-0b72023dc381', 'Demo Grill House', 'Product', 'Restaurant',
+   (select id from public.business_categories where name = 'Restaurant'),
    'Grilled food.',
    '21 Demo Food Row, Pasig City', 14.5719, 121.0902,
    '+639201234569', '4:00 PM - 11:00 PM daily', null, null,
@@ -478,6 +534,7 @@ insert into public.businesses (
 
   -- Verified, featured, service-type — vendor1's second listing (multipleSubmissions signal)
   ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'Demo Weaving Supplies', 'Both', 'Handicraft',
+   (select id from public.business_categories where name = 'Handicraft'),
    'Sells woven textile pieces and offers short hands-on weaving demonstrations for visitors.',
    '19 Demo Weavers Lane, Pasig City', 14.5679, 121.0805,
    '+639201234570', '10:00 AM - 3:00 PM, Monday to Friday',
@@ -490,6 +547,7 @@ insert into public.businesses (
 
   -- Unverified (rejected-equivalent per 0004's check constraint) with review notes — vendor4 (45 days old)
   ('8925a576-e13a-4cc8-84d9-98f2477a5b39', 'Demo Souvenir Hub', 'Product', 'Souvenirs',
+   (select id from public.business_categories where name = 'Souvenirs'),
    'Souvenir shop selling keychains, shirts, and fridge magnets themed around the city.',
    '3 Demo Plaza Center, Pasig City', 14.5703, 121.0844,
    '+639201234571', '9:00 AM - 7:00 PM daily', null, null,
@@ -500,6 +558,7 @@ insert into public.businesses (
 
   -- Pending, new account, no photos, thin + copy-pasted description — vendor5 (3 days old)
   ('97548250-1019-48d5-9ae3-db9eef0555e1', 'Demo Print Services', 'Service', 'Printing',
+   (select id from public.business_categories where name = 'Printing'),
    'Quality service for everyone.',
    '8 Demo Commerce Ave, Pasig City', 14.5695, 121.0857,
    '+639201234572', '8:00 AM - 6:00 PM, Monday to Saturday', null, null,
@@ -510,6 +569,7 @@ insert into public.businesses (
   -- text as above on purpose) — vendor6 (1 day old), plus a second listing
   -- below from the same account to trigger the multipleSubmissions signal.
   ('1a470f8e-da17-445b-9a06-05fef0dddca3', 'Demo Tailoring Services', 'Service', 'Tailoring',
+   (select id from public.business_categories where name = 'Tailoring'),
    'Quality service for everyone.',
    '9 Demo Commerce Ave, Pasig City', 14.5696, 121.0858,
    '+639201234573', '9:00 AM - 6:00 PM, Monday to Saturday', null, null,
@@ -517,6 +577,7 @@ insert into public.businesses (
    '3541db59-0c27-4324-b685-eb66de017874', 'informal', 1, 0, now() - interval '1 days'),
 
   ('13c73f2b-6101-4e89-a6ba-2639c048fcf8', 'Demo Repair Shop', 'Service', 'Repair',
+   (select id from public.business_categories where name = 'Repair'),
    'Second listing from the same brand-new account, exercises the one-listing-flag-not-block rule from vendor-mode-spec.md.',
    '9 Demo Commerce Ave, Pasig City', 14.5696, 121.0859,
    '+639201234574', '9:00 AM - 6:00 PM, Monday to Saturday', null, null,
@@ -584,23 +645,30 @@ commit;
 begin;
 
 -- -----------------------------------------------------------------------------
--- 11. Routes (Trails) (3) — one per theme in migration 0005's check
---     constraint (heritage walk, food crawl, cultural tour), one draft to
---     exercise the build-then-publish flow from admin-panel-spec.md.
+-- 11. Routes (Trails) (3) — one per trail_categories row seeded by
+--     migration 0023 (heritage walk, food crawl, cultural tour), one draft
+--     to exercise the build-then-publish flow from admin-panel-spec.md.
+--     Column list matches the current routes schema after migration 0023
+--     (theme text -> category_id, references trail_categories, self-
+--     seeded by that migration), resolved here the same subquery way
+--     Places' category_id is resolved above.
 -- -----------------------------------------------------------------------------
 insert into public.routes (
-  id, name, theme, estimated_duration, estimated_budget, recommended_time,
+  id, name, category_id, estimated_duration, estimated_budget, recommended_time,
   run_type, status, created_by, updated_at
 ) values
-  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'Demo Heritage Walk: Old Pasig', 'heritage walk',
+  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'Demo Heritage Walk: Old Pasig',
+   (select id from public.trail_categories where name = 'heritage walk'),
    '2 hours', null, 'Morning, before 10:00 AM', 'self guided',
    'published', '6456adca-58a3-48c3-b0e6-6a086d03734f', now() - interval '20 days'),
 
-  ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'Demo Pasig Food Crawl', 'food crawl',
+  ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'Demo Pasig Food Crawl',
+   (select id from public.trail_categories where name = 'food crawl'),
    '3 hours', null, 'Late afternoon into evening', 'self guided',
    'published', '6456adca-58a3-48c3-b0e6-6a086d03734f', now() - interval '9 days'),
 
-  ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'Demo Cultural Tour: Craft and Community', 'cultural tour',
+  ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'Demo Cultural Tour: Craft and Community',
+   (select id from public.trail_categories where name = 'cultural tour'),
    '2.5 hours', null, 'Weekday afternoons, workshop hours', 'CATO guided',
    'draft', 'e283c6fb-4dcd-455f-a60c-e35add77a330', now() - interval '2 days');
    -- Draft trail, still exercises the build-then-publish flow: staff with
@@ -732,44 +800,48 @@ commit;
 begin;
 
 -- -----------------------------------------------------------------------------
--- 16. Events & Announcements (6) — spans every category in migration 0006's
---     check constraint, published/draft, and upcoming/ongoing/past. The
+-- 16. Events & Announcements (6) — spans every event_categories row seeded
+--     by migration 0024, published/draft, and upcoming/ongoing/past. The
 --     Pasig Creative Arts Academy and Youth Development Center references
 --     mirror real CATO programs named in docs/feature-scope-changes.md,
 --     reworded as demo content, not copied from any real announcement text.
+--     Column list matches the current events schema after migration 0024
+--     (category text -> category_id, references event_categories, self-
+--     seeded by that migration), resolved here the same subquery way
+--     Places' and Routes' category_id are resolved above.
 -- -----------------------------------------------------------------------------
 insert into public.events (
-  id, title, description, category, related_program, date_time, location,
+  id, title, description, category_id, related_program, date_time, location,
   related_place_id, enrollment_info, posted_by, lifecycle_status, published,
   language, updated_at
 ) values
   ('f2676343-4da4-4ecf-b685-4c6f744ad5a3', 'Demo Creative Arts Academy: New Batch Enrollment',
    'Free short courses for young Pasigueños covering visual arts, music, and crafts, run out of the Demo Youth Development Center.',
-   'program enrollment', 'Demo Creative Arts Academy',
+   (select id from public.event_categories where name = 'program enrollment'), 'Demo Creative Arts Academy',
    now() + interval '14 days', 'Demo Youth Development Center, Barangay Demo',
    null, '40 slots available, walk-in registration on enrollment day, ID and birth certificate required.',
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'upcoming', true, 'Both', now() - interval '3 days'),
 
   ('f7928bc3-b106-4729-a232-eafb9103c67c', 'Demo Guided Photo Walk: Old Pasig',
    'A CATO-led photo walk following the Demo Heritage Walk route, camera phones welcome, no professional gear required.',
-   'heritage walk', null, now() + interval '5 days', 'Meet at Demo Heritage House',
+   (select id from public.event_categories where name = 'heritage walk'), null, now() + interval '5 days', 'Meet at Demo Heritage House',
    '6bce5398-b23e-4611-87e8-3747ea370bc4', 'Free, limited to 25 participants, register via the CATO office.',
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'upcoming', true, 'English', now() - interval '2 days'),
 
   ('a53a2b79-b988-40d8-8f11-a26e59ea13f5', 'Demo Riverside Festival',
    'Annual community festival along the riverside promenade with local food stalls, craft vendors, and evening performances.',
-   'festival', null, now(), 'Demo Riverside Walk',
+   (select id from public.event_categories where name = 'festival'), null, now(), 'Demo Riverside Walk',
    'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', null,
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'ongoing', true, 'Both', now()),
 
   ('0d742e7d-2477-486d-8cff-d753c4b71ec6', 'Demo Office Hours Update',
    'The Tourism Office front desk will observe adjusted hours during the upcoming holiday period.',
-   'general announcement', null, now() - interval '2 days', 'Demo CATO Office',
+   (select id from public.event_categories where name = 'general announcement'), null, now() - interval '2 days', 'Demo CATO Office',
    null, null, 'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'English', now() - interval '2 days'),
 
   ('884dc1c7-0286-43f4-bef1-28ee6fd5bafb', 'Demo Weaving Workshop Series (Draft)',
    'Planned weekend workshop series at the Demo Weaving Center, details still being finalized with the cooperative.',
-   'workshop', null, now() + interval '30 days', 'Demo Weaving Center',
+   (select id from public.event_categories where name = 'workshop'), null, now() + interval '30 days', 'Demo Weaving Center',
    'f552df7f-30a7-42ab-b470-06968810f437', null,
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'upcoming', false, 'Filipino', now() - interval '1 days'),
    -- Draft, published = false: exercises the create/edit/publish distinction
@@ -777,7 +849,7 @@ insert into public.events (
 
   ('433471cd-43ed-4ca2-a6d6-5e9c2becca0d', 'Demo Heritage Month Kickoff (2025)',
    'Past event marking the start of last year''s heritage month programming across CATO-managed sites.',
-   'festival', null, now() - interval '200 days', 'Demo Plaza Center',
+   (select id from public.event_categories where name = 'festival'), null, now() - interval '200 days', 'Demo Plaza Center',
    '56302e94-c04a-4e3e-8a2c-068d92e19298', null,
    'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'past', true, 'Both', now() - interval '200 days');
 

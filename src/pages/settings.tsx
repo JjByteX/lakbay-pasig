@@ -220,7 +220,7 @@ export default function SettingsPage() {
             disabled={themeSaving}
             className="h-4 w-4 rounded border-input accent-primary"
           />
-          Dark mode
+          <span>Dark mode</span>
         </label>
         {themeError && <p className="text-base text-destructive">{themeError}</p>}
       </div>

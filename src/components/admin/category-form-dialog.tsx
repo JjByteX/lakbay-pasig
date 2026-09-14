@@ -225,7 +225,7 @@ export default function CategoryFormDialog({
                 onChange={(e) => updateField("active", e.target.checked)}
                 className="h-4 w-4 rounded border-input accent-primary"
               />
-              Active
+              <span>Active</span>
             </label>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
