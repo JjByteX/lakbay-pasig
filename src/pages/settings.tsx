@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { Link } from "react-router-dom";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { applyTheme, applyFontSize, type FontSizePreference } from "@/lib/preferences";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -79,7 +81,62 @@ const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePreference, 
  * both the selection and the applied size on write failure, same inline
  * text-destructive treatment as Phase 3.4. 4.5 calls refreshProfile() on
  * success, same as Phase 3.5.
+ *
+ * Phase 8.3-8.5/8.7-8.8: Account Settings section. 8.2's schema decision
+ * (decision-log.md entry #12, migration 0030) locked in profiles.username,
+ * first_name, last_name, profile_picture as new nullable columns, with
+ * contact_number already existing from migration 0002 -- this section
+ * writes to those four columns (profile_picture is out of scope here,
+ * owned by AvatarUpload on profile.tsx per Phase 6.4).
+ *
+ * 8.3: one card, not four -- username, first name, last name, and contact
+ * number are one logical account-identity concept per the Card
+ * Fragmentation rule, so they share a single per-field-gated Save flow
+ * below rather than one card each. No card.tsx primitive exists in
+ * src/components/ui (confirmed before writing this); the app's
+ * established card shape is the `rounded-lg border border-border bg-card
+ * p-4` utility-class pattern already used throughout admin/vendor pages
+ * (e.g. admin-dashboard.tsx's stat tiles, admin-discovery-content-
+ * review.tsx's row group), not a new primitive. Per 8.10, the existing
+ * Personalization block above is wrapped in the same class so the page
+ * reads as one consistent surface, not one bare and one boxed section.
+ *
+ * 8.4/8.5: each field saves independently on its own Save action (not one
+ * shared submit), same reasoning theme_preference/font_size_preference
+ * above already save independently of each other -- a username edit
+ * failing should never block an already-valid contact number write. Each
+ * field gets its own idle/editing/saving/error state, mirroring avatar-
+ * upload.tsx's per-field status shape (Phase 6.7) rather than one shared
+ * section-wide status line, per 8.8. Contact Number reuses profile.tsx's
+ * exact updateContactNumber digits-only/15-char-cap treatment so the same
+ * field behaves identically in both places it appears.
+ *
+ * Username has no existing UI or availability-check RPC anywhere in this
+ * repo (confirmed via repo-wide grep) -- this is new. Per 8.7's Disabled/
+ * gated rule and category-form-dialog.tsx's own precedent (3.4: DB unique
+ * constraint is the source of truth for a name collision, surfaced via
+ * error.message on save, not a live pre-submit availability check), the
+ * profiles_username_unique partial index (migration 0030) is what
+ * ultimately decides a collision -- Save is disabled only for an empty or
+ * unchanged value, and a collision surfaces inline once Postgres reports
+ * it, same plain error.message convention this repo already uses.
+ *
+ * 8.6 (password change, routed through Supabase Auth) and 8.9 (guest
+ * check) are separately scoped: 8.6 touches auth logic, on the never-
+ * touch-without-approval list, so it is intentionally not built here.
+ * 8.9 is already satisfied by this page's existing !session branch below,
+ * which this section sits behind unchanged.
  */
+type AccountFieldKey = "username" | "first_name" | "last_name" | "contact_number";
+
+interface AccountFieldState {
+  value: string;
+  saving: boolean;
+  error: string | null;
+}
+
+const EMPTY_ACCOUNT_FIELD_STATE: AccountFieldState = { value: "", saving: false, error: null };
+
 export default function SettingsPage() {
   usePageTitle("Settings");
   const { session, profile, loading, refreshProfile } = useAuth();
@@ -108,6 +165,23 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!profile) return;
     setFontSize(profile.font_size_preference ?? "default");
+  }, [profile]);
+
+  // 8.3/8.4/8.5: one AccountFieldState per column, each independently
+  // seeded/saved/errored -- same re-seed-on-profile-change shape as the
+  // dark mode / font size state above, so an external change (another
+  // tab, refreshProfile elsewhere) still keeps this page in sync.
+  const [username, setUsername] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
+  const [firstName, setFirstName] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
+  const [lastName, setLastName] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
+  const [contactNumber, setContactNumber] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
+
+  useEffect(() => {
+    if (!profile) return;
+    setUsername((prev) => ({ ...prev, value: profile.username ?? "" }));
+    setFirstName((prev) => ({ ...prev, value: profile.first_name ?? "" }));
+    setLastName((prev) => ({ ...prev, value: profile.last_name ?? "" }));
+    setContactNumber((prev) => ({ ...prev, value: profile.contact_number ?? "" }));
   }, [profile]);
 
   // 3.3/3.4: optimistic update -- applyTheme fires immediately for
@@ -179,6 +253,47 @@ export default function SettingsPage() {
     await refreshProfile();
   }
 
+  // 8.4/8.5/8.7: one Save action per field, not a shared submit, so one
+  // field's error never blocks another's already-valid write -- same
+  // independence Phase 3/4's two preference controls already have from
+  // each other. Contact Number reuses profile.tsx's exact digits-only/
+  // 15-char-cap updateContactNumber treatment; Username/First/Last Name
+  // trim to null-when-empty, same "unset means unset" convention 0021/0030
+  // already establish for every nullable profiles column. Username
+  // collisions surface via error.message from the profiles_username_unique
+  // partial index (migration 0030), same DB-is-source-of-truth convention
+  // category-form-dialog.tsx's own 3.4 already uses for category names.
+  async function saveAccountField(
+    field: AccountFieldKey,
+    setState: Dispatch<SetStateAction<AccountFieldState>>,
+    rawValue: string
+  ) {
+    if (!session) return;
+
+    const value = rawValue.trim() || null;
+    setState((prev) => ({ ...prev, saving: true, error: null }));
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ [field]: value })
+      .eq("id", session.user.id);
+
+    if (error) {
+      setState((prev) => ({ ...prev, saving: false, error: error.message }));
+      return;
+    }
+
+    setState((prev) => ({ ...prev, saving: false, error: null }));
+    await refreshProfile();
+  }
+
+  // Contact Number: same digits-only, 15-char cap as profile.tsx's own
+  // updateContactNumber, so the field behaves identically in both places
+  // it appears in the app.
+  function updateContactNumberValue(raw: string) {
+    setContactNumber((prev) => ({ ...prev, value: raw.replace(/\D/g, "").slice(0, 15) }));
+  }
+
   if (loading) return null;
 
   if (!session) {
@@ -205,53 +320,197 @@ export default function SettingsPage() {
         Settings
       </h1>
 
-      {/* 3.1: no Switch primitive exists in src/components/ui (confirmed
-          before writing this), same gap admin-event-detail.tsx's own
-          end-date toggle hit. Same fallback that file already
-          established for this exact situation: a native checkbox styled
-          with accent-primary, not a new dependency and not a from-
-          scratch Switch component for one control, per constraints.md's
-          Inventory Before Suggesting rule. See decision-log.md entry #8. */}
-      <div className="flex flex-col gap-2">
-        <label htmlFor="dark_mode" className="flex w-fit items-center gap-2 text-base text-foreground">
-          <input
-            id="dark_mode"
-            type="checkbox"
-            checked={darkMode}
-            onChange={(e) => handleDarkModeChange(e.target.checked)}
-            disabled={themeSaving}
-            className="h-4 w-4 rounded border-input accent-primary"
-          />
-          <span>Dark mode</span>
-        </label>
-        {themeError && <p className="text-base text-destructive">{themeError}</p>}
+      {/* 8.10: wrapped in the same `rounded-lg border border-border
+          bg-card p-4` utility-class pattern as the Account Settings card
+          below, so the page reads as one consistent settings surface
+          instead of one bare section and one boxed section. No content
+          or behavior change from Steps 3/4 below, card chrome only. */}
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="text-base font-semibold text-foreground">Personalization</h2>
+
+        {/* 3.1: no Switch primitive exists in src/components/ui (confirmed
+            before writing this), same gap admin-event-detail.tsx's own
+            end-date toggle hit. Same fallback that file already
+            established for this exact situation: a native checkbox styled
+            with accent-primary, not a new dependency and not a from-
+            scratch Switch component for one control, per constraints.md's
+            Inventory Before Suggesting rule. See decision-log.md entry #8. */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="dark_mode" className="flex w-fit items-center gap-2 text-base text-foreground">
+            <input
+              id="dark_mode"
+              type="checkbox"
+              checked={darkMode}
+              onChange={(e) => handleDarkModeChange(e.target.checked)}
+              disabled={themeSaving}
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            <span>Dark mode</span>
+          </label>
+          {themeError && <p className="text-base text-destructive">{themeError}</p>}
+        </div>
+
+        {/* 4.1: Select, not a three-button group -- see the import comment
+            above for why. Single-select of three fixed options, same
+            optimistic write shape as the dark mode row above. */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="font_size" className="text-base text-foreground">
+            Font size
+          </label>
+          <Select
+            value={fontSize}
+            onValueChange={(v) => handleFontSizeChange(v as Exclude<FontSizePreference, null>)}
+            disabled={fontSizeSaving}
+          >
+            <SelectTrigger id="font_size">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FONT_SIZES.map((size) => (
+                <SelectItem key={size} value={size}>
+                  {FONT_SIZE_LABELS[size]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fontSizeError && <p className="text-base text-destructive">{fontSizeError}</p>}
+        </div>
       </div>
 
-      {/* 4.1: Select, not a three-button group -- see the import comment
-          above for why. Single-select of three fixed options, same
-          optimistic write shape as the dark mode row above. */}
-      <div className="flex flex-col gap-2">
-        <label htmlFor="font_size" className="text-base text-foreground">
-          Font size
-        </label>
-        <Select
-          value={fontSize}
-          onValueChange={(v) => handleFontSizeChange(v as Exclude<FontSizePreference, null>)}
-          disabled={fontSizeSaving}
-        >
-          <SelectTrigger id="font_size">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FONT_SIZES.map((size) => (
-              <SelectItem key={size} value={size}>
-                {FONT_SIZE_LABELS[size]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {fontSizeError && <p className="text-base text-destructive">{fontSizeError}</p>}
+      {/* 8.3: Account Settings, one card -- username, first name, last
+          name, and contact number are one logical account-identity
+          concept per the Card Fragmentation rule, not four separate
+          cards. Same card shape as Personalization above (8.10), same
+          heading pattern. */}
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="text-base font-semibold text-foreground">Account Settings</h2>
+
+        <AccountField
+          id="username"
+          label="Username"
+          state={username}
+          onValueChange={(v) => setUsername((prev) => ({ ...prev, value: v }))}
+          onSave={(v) => saveAccountField("username", setUsername, v)}
+          originalValue={profile?.username ?? ""}
+          maxLength={30}
+        />
+
+        <AccountField
+          id="first_name"
+          label="First Name"
+          state={firstName}
+          onValueChange={(v) => setFirstName((prev) => ({ ...prev, value: v }))}
+          onSave={(v) => saveAccountField("first_name", setFirstName, v)}
+          originalValue={profile?.first_name ?? ""}
+          maxLength={75}
+        />
+
+        <AccountField
+          id="last_name"
+          label="Last Name"
+          state={lastName}
+          onValueChange={(v) => setLastName((prev) => ({ ...prev, value: v }))}
+          onSave={(v) => saveAccountField("last_name", setLastName, v)}
+          originalValue={profile?.last_name ?? ""}
+          maxLength={75}
+        />
+
+        {/* 8.5: same digits-only/15-char-cap treatment as profile.tsx's
+            own Contact Number field, via updateContactNumberValue above,
+            not the generic onValueChange the other three fields use. */}
+        <AccountField
+          id="contact_number"
+          label="Contact Number"
+          state={contactNumber}
+          onValueChange={updateContactNumberValue}
+          onSave={(v) => saveAccountField("contact_number", setContactNumber, v)}
+          originalValue={profile?.contact_number ?? ""}
+          maxLength={15}
+          type="tel"
+          inputMode="numeric"
+        />
       </div>
+    </div>
+  );
+}
+
+// 8.3/8.4/8.5/8.7/8.8: one field row shared by all four Account Settings
+// fields rather than four near-identical blocks copy-pasted -- same
+// per-field Save/disabled-gated/error shape for each, per constraints.md's
+// Inventory Before Suggesting rule applied within this file. 8.7: Save is
+// disabled with a visible reason (title attr, same native-title approach
+// admin-event-detail.tsx's own gated Publish button gives no separate
+// visible line for -- here a specific reason line is shown instead,
+// matching 8.8's "specific message per field" requirement) whenever the
+// value is empty or unchanged from what is already saved, or while a save
+// is in flight. 8.8: default/editing/saving/error states, each field's
+// own message, not a shared status line for the whole section.
+interface AccountFieldProps {
+  id: string;
+  label: string;
+  state: AccountFieldState;
+  originalValue: string;
+  onValueChange: (value: string) => void;
+  onSave: (value: string) => void;
+  maxLength: number;
+  type?: string;
+  inputMode?: "numeric" | "text";
+}
+
+function AccountField({
+  id,
+  label,
+  state,
+  originalValue,
+  onValueChange,
+  onSave,
+  maxLength,
+  type = "text",
+  inputMode,
+}: Readonly<AccountFieldProps>) {
+  const trimmed = state.value.trim();
+  const unchanged = trimmed === originalValue.trim();
+  const isEmpty = trimmed.length === 0;
+
+  // 8.7: a visible reason only when there is one worth showing -- an
+  // empty field the user has actually typed into and cleared gets a
+  // specific message, same as admin-event-detail.tsx's own
+  // missingRequiredFields line. A field that has simply never been set
+  // (originalValue already blank, untouched) shows no reason on first
+  // render -- same "don't greet the page with an error" posture
+  // signup.tsx's own password-mismatch line only shows once there's a
+  // value to react to. "unchanged" alone disables Save with no error
+  // line either, since nothing being different from what's already saved
+  // isn't a mistake.
+  const blockedReason = isEmpty && !unchanged ? `Enter a ${label.toLowerCase()}.` : null;
+  const canSave = !state.saving && !unchanged && !isEmpty;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          id={id}
+          type={type}
+          inputMode={inputMode}
+          value={state.value}
+          onChange={(e) => onValueChange(e.target.value)}
+          maxLength={maxLength}
+          disabled={state.saving}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={!canSave}
+          title={blockedReason ?? undefined}
+          onClick={() => onSave(state.value)}
+        >
+          {state.saving ? "Saving..." : "Save"}
+        </Button>
+      </div>
+      {blockedReason && <p className="text-base text-destructive">{blockedReason}</p>}
+      {state.error && <p className="text-base text-destructive">{state.error}</p>}
     </div>
   );
 }
