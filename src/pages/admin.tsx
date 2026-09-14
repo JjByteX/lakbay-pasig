@@ -2,6 +2,8 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { AdminSearchBar } from "@/components/admin/admin-search-bar";
+import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
 import { cn } from "@/lib/utils";
 
 // Exact-match list routes only — each one's own AdminDataTable measures
@@ -54,6 +56,27 @@ export default function AdminPage() {
       <SidebarInset className="h-svh overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
           <SidebarTrigger />
+          {/* Phase 3.4/4.3: search and notifications land here together,
+              both new to this header, which previously held only the
+              trigger (confirmed directly before adding anything, per
+              constraints.md's File Traversal rule). Search sits top
+              right at a bounded width (its own max-w-sm) rather than
+              stretching the full remaining row, per ux-ui-guidelines.md's
+              Component Sizing Rules ("size components proportionally to
+              the amount of content they hold") -- a full-width bar here
+              would be oversized against a single-line input, the same
+              reasoning that rule already applies elsewhere in this
+              codebase. ml-auto pushes the search+bell group to the right
+              edge as one unit, notification bell immediately after
+              search per 4.3's own placement instruction. No profile icon
+              exists in this header to sit left of (admin-sidebar.tsx's
+              footer already owns account/sign-out, see admin-
+              notification-bell.tsx's own header comment) -- not added
+              here, outside this phase's scope. */}
+          <div className="ml-auto flex items-center gap-2">
+            <AdminSearchBar />
+            <AdminNotificationBell />
+          </div>
         </header>
         <div
           className={cn(

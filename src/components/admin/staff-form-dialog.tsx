@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { AvatarUpload } from "@/components/avatar-upload";
 import {
   Dialog,
   DialogContent,
@@ -56,6 +57,11 @@ interface StaffFormState {
   staff_role: StaffRoleValue;
   active_status: ActiveStatusValue;
   system_permission: SystemPermission[];
+  // Phase 6.4: read-only-through-this-interface, written directly to
+  // profiles by AvatarUpload's own onChange (same immediate-write
+  // pattern as profile.tsx's handleAvatarChange), not part of the
+  // handleSubmit payload below.
+  profile_picture: string | null;
 }
 
 // admin-form-fields-plan.md #2: every maxLength needs a visible counter
@@ -78,6 +84,7 @@ const EMPTY_FORM: StaffFormState = {
   staff_role: "staff",
   active_status: "active",
   system_permission: [],
+  profile_picture: null,
 };
 
 interface StaffFormDialogProps {
@@ -125,7 +132,9 @@ export default function StaffFormDialog({
     setLoading(true);
     supabase
       .from("profiles")
-      .select("id, display_name, contact_number, position, staff_role, active_status, system_permission")
+      .select(
+        "id, display_name, contact_number, position, staff_role, active_status, system_permission, profile_picture"
+      )
       .eq("id", staffId)
       .single()
       .then(({ data, error: fetchError }) => {
@@ -143,6 +152,7 @@ export default function StaffFormDialog({
           staff_role: data.staff_role as StaffRoleValue,
           active_status: data.active_status,
           system_permission: (data.system_permission ?? []) as SystemPermission[],
+          profile_picture: data.profile_picture ?? null,
         });
         setLoading(false);
       });
@@ -197,6 +207,24 @@ export default function StaffFormDialog({
     return wouldDeactivate
       ? "You're the only active Admin. Deactivating your own account would lock everyone out, so this is blocked."
       : "You're the only active Admin. Demoting your own account would lock everyone out, so this is blocked.";
+  }
+
+  // Phase 6.4: same immediate-write pattern as profile.tsx's own
+  // handleAvatarChange -- AvatarUpload already performed the storage
+  // write (avatar-storage.ts) before calling this, so this only needs to
+  // persist the resulting URL (or null) to the row and refresh local
+  // form state. Edit mode only (staffId is non-null whenever this
+  // renders, see the JSX gate below), so no isNew branch is needed here.
+  async function handleAvatarChange(url: string | null) {
+    if (!staffId) return;
+    setForm((prev) => ({ ...prev, profile_picture: url }));
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ profile_picture: url })
+      .eq("id", staffId);
+    if (updateError) {
+      setError(updateError.message);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -314,6 +342,22 @@ export default function StaffFormDialog({
 
         {!loading && !notFound && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            {/* Phase 6.4: edit mode only -- a brand new staff row has no
+                staffId yet to key the storage path on (create-staff-
+                account only returns an id after the Edge Function call
+                below succeeds), matching data-model.md's Profile Picture
+                being optional, not part of account creation. Saves
+                immediately (handleAvatarChange), independent of this
+                form's own Save Changes button, same reasoning as
+                profile.tsx's own AvatarUpload placement. */}
+            {!isNew && staffId && (
+              <AvatarUpload
+                ownerId={staffId}
+                displayName={form.full_name}
+                currentUrl={form.profile_picture}
+                onChange={handleAvatarChange}
+              />
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="full_name">Full Name</Label>

@@ -84,7 +84,9 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
 
   const { data: places, error: placesError } = await supabase
     .from("places")
-    .select("id, name, description, latitude, longitude, verification_status, place_categories(name)")
+    .select(
+      "id, name, description, latitude, longitude, verification_status, place_categories(name), facility_ids"
+    )
     .in("id", placeIds);
 
   if (placesError) throw placesError;
@@ -93,6 +95,16 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
   // joined place_categories.name (migration 0022), flattened here so
   // DiscoverPlace's own category field stays string, matching discover-
   // query.ts's fetchPlaces fix for the same schema change.
+  //
+  // Phase 2 (feature-request-phases.md, Discover Facility Filters):
+  // DiscoverPlace gained a required facility_ids field so Discover's new
+  // filter has something to match against. A saved place is still a
+  // DiscoverPlace (this function's own doc comment above), so this select
+  // widened the same way discover-query.ts's fetchPlaces did, keeping both
+  // constructors of a DiscoverPlace in sync rather than leaving this one
+  // to silently miss the field, caught by grepping every DiscoverPlace
+  // object-literal construction site before considering Phase 2 done, per
+  // constraints.md's File Traversal rule.
   return (places ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
@@ -102,5 +114,6 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
     latitude: row.latitude,
     longitude: row.longitude,
     verification_status: row.verification_status as "verified",
+    facility_ids: row.facility_ids ?? [],
   }));
 }

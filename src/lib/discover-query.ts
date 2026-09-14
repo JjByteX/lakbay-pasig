@@ -18,7 +18,9 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
   // string, unchanged for every existing caller.
   const { data, error } = await supabase
     .from("places")
-    .select("id, name, description, latitude, longitude, verification_status, place_categories(name)");
+    .select(
+      "id, name, description, latitude, longitude, verification_status, place_categories(name), facility_ids"
+    );
 
   if (error) throw error;
 
@@ -34,6 +36,13 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
     // itself is typed text at the DB layer, so this is a narrowing cast
     // consistent with what RLS guarantees, not an unchecked assumption.
     verification_status: row.verification_status as "verified",
+    // Phase 2.2 (feature-request-phases.md): facility_ids is a plain
+    // uuid[] column already, no embed needed for this filter's own
+    // purposes (matching by id, not displaying a name) -- same reasoning
+    // admin-place-detail.tsx's own facility_ids read never embeds either.
+    // Nullable at the type layer only defensively; the column itself
+    // defaults to '{}' (migration 0028), never actually null.
+    facility_ids: row.facility_ids ?? [],
   }));
 }
 
@@ -149,14 +158,16 @@ export function sortDiscoverResults(
  * set by name search (in place, no separate search page per step-5-plan.md
  * section 1), by category (place_categories, via Discover's own
  * fetchActiveCategories call -- Category Directory Phase 5.3, replacing
- * the removed DISCOVER_CATEGORIES constant), and by
- * price range (businesses only). All three apply to the same set that
+ * the removed DISCOVER_CATEGORIES constant), by
+ * price range (businesses only), and by facility (Phase 2, feature-
+ * request-phases.md, places only). All four apply to the same set that
  * feeds the map markers and the list together, per step-5-plan.md's Shape
  * section. Search matches on name only, case-insensitive substring, per
  * step-5-plan.md's "filters both map markers and the list by name." Empty
- * query, empty category array, and null priceRange are all no-ops so the
- * base list still shows everything, matching vendor-mode-spec.md's Filter
- * Behavior line that a filter narrows, it never hides by default.
+ * query, empty category array, empty facilities array, and null priceRange
+ * are all no-ops so the base list still shows everything, matching vendor-
+ * mode-spec.md's Filter Behavior line that a filter narrows, it never
+ * hides by default.
  *
  * Category (multi-select): `categories` is a list, not a single value --
  * a result matches if its own category is anywhere in the list (OR, not
@@ -175,12 +186,24 @@ export function sortDiscoverResults(
  * vendor-mode-spec.md's Filter Behavior line, a business with some priced
  * and some unpriced items still appears as long as one priced item is in
  * range.
+ *
+ * Facilities (Phase 2.1/2.4, feature-request-phases.md): places only,
+ * confirmed against data-model.md before scoping -- facilities exist on
+ * Local Historical Place records, not on businesses, so a business is
+ * excluded whenever the facility filter is active, mirroring exactly how
+ * priceRange excludes places above. AND, not OR, per 2.4's own wording
+ * ("matches only if its facility_ids includes every facility currently
+ * selected") -- unlike category, a place genuinely can hold several
+ * facilities at once (facility_ids is a uuid[]), so this is a real
+ * multi-value intersection, not category's single-value OR-across-a-list
+ * case dressed up the same way.
  */
 export function filterDiscoverResults(
   results: DiscoverResult[],
   query: string,
   categories: string[],
-  priceRange: { min: number | null; max: number | null } | null = null
+  priceRange: { min: number | null; max: number | null } | null = null,
+  facilities: string[] = []
 ): DiscoverResult[] {
   const q = query.trim().toLowerCase();
 
@@ -197,6 +220,12 @@ export function filterDiscoverResults(
         (price) => price != null && price >= min && price <= max
       );
       if (!hasMatchingItem) return false;
+    }
+
+    if (facilities.length > 0) {
+      if (result.kind !== "place") return false;
+      const hasEveryFacility = facilities.every((f) => result.facility_ids.includes(f));
+      if (!hasEveryFacility) return false;
     }
 
     return true;

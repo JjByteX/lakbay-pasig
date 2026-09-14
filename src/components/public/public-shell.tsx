@@ -19,7 +19,8 @@ import {
 import { BottomNav } from "./bottom-nav";
 import { GlobalSearchBar } from "./global-search-bar";
 import { useAuth } from "@/lib/auth-context";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -290,7 +291,7 @@ function AccountMenu() {
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full p-0 leading-none shadow-sm"
           aria-label="Account menu"
         >
-          <Avatar className="h-9 w-9">
+          <Avatar className={AVATAR_SIZE.md}>
             <AvatarFallback className="leading-none">
               <UserIcon className="h-4 w-4" />
             </AvatarFallback>
@@ -312,7 +313,15 @@ function AccountMenu() {
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full p-0 leading-none shadow-sm"
           aria-label="Account menu"
         >
-          <Avatar className="h-9 w-9">
+          {/* Phase 6.5/6.6/6.8: AvatarImage renders profile.profile_picture
+              when set; the initial/UserIcon AvatarFallback below is
+              unchanged for a signed-in profile with no uploaded picture
+              -- Radix's Avatar already falls back automatically on a
+              missing/broken src. Size now reads from avatar-storage.ts's
+              shared AVATAR_SIZE.md instead of a locally hardcoded h-9
+              w-9, matching this same file's guest branch above. */}
+          <Avatar className={AVATAR_SIZE.md}>
+            {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
             <AvatarFallback className="leading-none">
               {initial ?? <UserIcon className="h-4 w-4" />}
             </AvatarFallback>

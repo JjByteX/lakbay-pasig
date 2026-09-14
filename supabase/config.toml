@@ -4,14 +4,14 @@
 project_id = "lakbay-pasig"
 
 [api]
-port = 54321
+port = 15432
 
 [db]
-port = 54322
+port = 15433
 
 [studio]
 enabled = true
-port = 54323
+port = 15434
 
 [inbucket]
 enabled = true
@@ -22,6 +22,15 @@ enabled = true
 
 [auth]
 enabled = true
+
+[analytics]
+enabled = true
+port = 15435
+vector_port = 15436
+
+[db.pooler]
+enabled = true
+port = 15437
 
 # Phase 3.2 (step-4-phases.md): server side staff account creation,
 # service role only. verify_jwt = false since the function does its own

@@ -16,6 +16,14 @@ export interface DiscoverPlace {
   latitude: number | null;
   longitude: number | null;
   verification_status: "verified";
+  // Phase 2.1 (feature-request-phases.md): facilities exist only on
+  // Local Historical Place records today, confirmed against
+  // data-model.md and places.facility_ids (migration 0026/0028) before
+  // scoping this field to DiscoverPlace only -- DiscoverBusiness has no
+  // equivalent, same reasoning itemPrices below is place-absent for the
+  // opposite case. A place always has an array here (possibly empty),
+  // never null, matching facility_ids' own not-null default ('{}').
+  facility_ids: string[];
 }
 
 export interface DiscoverBusiness {

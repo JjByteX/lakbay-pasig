@@ -1,6 +1,14 @@
+import { useState, type ReactNode } from "react";
+import { Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { BusinessCategory } from "@/lib/business-categories";
 import {
   Select,
@@ -95,6 +103,113 @@ export function CharCount({ value, max }: Readonly<{ value: string; max: number 
   );
 }
 
+/**
+ * Phase 7.2: one short reason per field, same direct tone as the rest of
+ * the app's labels, not a paragraph. Phase 7.5's price-field special case
+ * lives in vendor-items.tsx instead, since business-fields.tsx has no
+ * price field -- see this file's own git history / architecture-notes.md's
+ * Phase 7 entry for why the phase's own filename doesn't cover both spots.
+ */
+const FIELD_HELP: Record<
+  | "name"
+  | "business_type"
+  | "category"
+  | "description"
+  | "address"
+  | "contact"
+  | "opening_hours"
+  | "business_story"
+  | "unique_specialty"
+  | "accessibility_info"
+  | "social_media_links"
+  | "language"
+  | "registered_or_informal",
+  string
+> = {
+  name: "Shown as the listing's title everywhere it appears.",
+  business_type: "Lets visitors filter by product, service, or both.",
+  category: "Groups the listing under Discover's category filters.",
+  description: "One line, shown on the listing card before someone taps in.",
+  address: "Source of truth for the map pin, generated from this.",
+  contact: "How a visitor reaches the business directly.",
+  opening_hours: "Shown so visitors know when to expect the business open.",
+  business_story: "The longer background, shown on the full listing page.",
+  unique_specialty: "What makes this business worth a special trip.",
+  accessibility_info: "Helps visitors with access needs plan ahead.",
+  social_media_links: "Shown as links on the listing for visitors to follow.",
+  language: "Matches the listing to a visitor's language preference.",
+  registered_or_informal: "Doesn't affect approval, shown for CATO's records only.",
+};
+
+/**
+ * Phase 7.1/7.3/7.4: reuses tooltip.tsx directly rather than a new
+ * component. Neither business-fields.tsx nor vendor-items.tsx sits
+ * beneath sidebar.tsx's app-scoped TooltipProvider (that one only wraps
+ * SidebarProvider's children), so this wraps its own trigger+content pair
+ * locally instead of assuming a provider higher up the tree. Exported so
+ * vendor-items.tsx's ItemFormFields (Phase 7.5, the Item price field) can
+ * reuse the same label+icon+tooltip shape rather than a second copy of
+ * this same logic, per constraints.md's Inventory Before Suggesting rule.
+ *
+ * 7.4: Radix's Tooltip.Root already opens on hover and on keyboard focus
+ * uncontrolled -- desktop and a11y are covered for free. Radix has no
+ * built-in tap-to-open on touch (no hover event fires on tap), so `open`
+ * is also controlled here and toggled by the icon's own onClick. A click
+ * has no other meaning on this icon, so the toggle is harmless on a
+ * hover-capable desktop and is what makes tap work on a touch device --
+ * no device/viewport detection needed (use-mobile.tsx's useIsMobile is a
+ * viewport-width check, not a touch-capability one, and would misfire on
+ * a narrow desktop window or a wide touch tablet).
+ *
+ * 7.6: no avoidCollisions override, so Radix's own default collision
+ * avoidance keeps the content from clipping at a narrow viewport. The
+ * icon sits beside the Label, never on the Input/Textarea/Select itself,
+ * so a tap on the icon never triggers the field's own tap-to-focus and a
+ * tap on the field never opens the tooltip.
+ *
+ * 7.7: TooltipContent already uses text-xs, rounded-md, and the popover
+ * tokens (tooltip.tsx) -- no new token introduced. gap-2 (8px) matches
+ * the icon+label pairing already established for facility chips
+ * (architecture-notes.md's Category Directory Expansion Phase 5 fix).
+ */
+export function FieldLabel({
+  htmlFor,
+  children,
+  help,
+  requiredMarker = false,
+}: Readonly<{
+  htmlFor: string;
+  children: ReactNode;
+  help: string;
+  requiredMarker?: boolean;
+}>) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Label htmlFor={htmlFor}>
+        {children}
+        {requiredMarker ? " *" : ""}
+      </Label>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip open={open} onOpenChange={setOpen}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setOpen((prev) => !prev)}
+              className="shrink-0 text-muted-foreground"
+              aria-label={`Why we ask for ${typeof children === "string" ? children : "this field"}`}
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{help}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
 interface BusinessFieldsProps {
   form: BusinessFormState;
   onChange: <K extends keyof BusinessFormState>(key: K, value: BusinessFormState[K]) => void;
@@ -139,7 +254,9 @@ export function BusinessFields({
 }: Readonly<BusinessFieldsProps>) {
   const nameField = (
     <div className="flex flex-col gap-2">
-      <Label htmlFor="name">Business Name{requiredMarkers ? " *" : ""}</Label>
+      <FieldLabel htmlFor="name" help={FIELD_HELP.name} requiredMarker={requiredMarkers}>
+        Business Name
+      </FieldLabel>
       <Input
         id="name"
         value={form.name}
@@ -153,7 +270,13 @@ export function BusinessFields({
 
   const typeField = (
     <div className="flex flex-col gap-2">
-      <Label htmlFor="business_type">Business Type{requiredMarkers ? " *" : ""}</Label>
+      <FieldLabel
+        htmlFor="business_type"
+        help={FIELD_HELP.business_type}
+        requiredMarker={requiredMarkers}
+      >
+        Business Type
+      </FieldLabel>
       <Select value={form.business_type} onValueChange={(v) => onChange("business_type", v)}>
         <SelectTrigger id="business_type">
           <SelectValue placeholder="Select a type" />
@@ -184,7 +307,9 @@ export function BusinessFields({
       )}
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="category">Category</Label>
+        <FieldLabel htmlFor="category" help={FIELD_HELP.category}>
+          Category
+        </FieldLabel>
         <Select value={form.category_id} onValueChange={(v) => onChange("category_id", v)}>
           <SelectTrigger id="category">
             <SelectValue placeholder="Select a category" />
@@ -201,7 +326,9 @@ export function BusinessFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="description">Description</Label>
+        <FieldLabel htmlFor="description" help={FIELD_HELP.description}>
+          Description
+        </FieldLabel>
         <Textarea
           id="description"
           placeholder="One line, what the business sells or offers"
@@ -213,7 +340,9 @@ export function BusinessFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="address">Address{requiredMarkers ? " *" : ""}</Label>
+        <FieldLabel htmlFor="address" help={FIELD_HELP.address} requiredMarker={requiredMarkers}>
+          Address
+        </FieldLabel>
         <Input
           id="address"
           placeholder={addressPlaceholder}
@@ -226,7 +355,9 @@ export function BusinessFields({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="contact">Contact</Label>
+          <FieldLabel htmlFor="contact" help={FIELD_HELP.contact}>
+            Contact
+          </FieldLabel>
           <Input
             id="contact"
             value={form.contact}
@@ -235,7 +366,9 @@ export function BusinessFields({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="opening_hours">Opening Hours</Label>
+          <FieldLabel htmlFor="opening_hours" help={FIELD_HELP.opening_hours}>
+            Opening Hours
+          </FieldLabel>
           <Input
             id="opening_hours"
             value={form.opening_hours}
@@ -246,7 +379,9 @@ export function BusinessFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="business_story">Business Story</Label>
+        <FieldLabel htmlFor="business_story" help={FIELD_HELP.business_story}>
+          Business Story
+        </FieldLabel>
         <Textarea
           id="business_story"
           placeholder="The longer background, why it exists, how it started"
@@ -259,7 +394,9 @@ export function BusinessFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="unique_specialty">Unique Specialty</Label>
+        <FieldLabel htmlFor="unique_specialty" help={FIELD_HELP.unique_specialty}>
+          Unique Specialty
+        </FieldLabel>
         <Textarea
           id="unique_specialty"
           value={form.unique_specialty}
@@ -270,7 +407,9 @@ export function BusinessFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="accessibility_info">Accessibility Info</Label>
+        <FieldLabel htmlFor="accessibility_info" help={FIELD_HELP.accessibility_info}>
+          Accessibility Info
+        </FieldLabel>
         <Textarea
           id="accessibility_info"
           placeholder="Parking, wheelchair access, nearby transport"
@@ -283,7 +422,9 @@ export function BusinessFields({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="social_media_links">Social Media Links</Label>
+          <FieldLabel htmlFor="social_media_links" help={FIELD_HELP.social_media_links}>
+            Social Media Links
+          </FieldLabel>
           <Input
             id="social_media_links"
             placeholder="Comma separated"
@@ -293,7 +434,9 @@ export function BusinessFields({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="language">Language</Label>
+          <FieldLabel htmlFor="language" help={FIELD_HELP.language}>
+            Language
+          </FieldLabel>
           <Select value={form.language} onValueChange={(v) => onChange("language", v)}>
             <SelectTrigger id="language">
               <SelectValue placeholder="Select a language" />
@@ -311,7 +454,9 @@ export function BusinessFields({
 
       {showRegisteredOrInformal && (
         <div className="flex flex-col gap-2">
-          <Label htmlFor="registered_or_informal">Registered or Informal</Label>
+          <FieldLabel htmlFor="registered_or_informal" help={FIELD_HELP.registered_or_informal}>
+            Registered or Informal
+          </FieldLabel>
           <Select
             value={form.registered_or_informal ?? ""}
             onValueChange={(v) => onChange("registered_or_informal", v)}

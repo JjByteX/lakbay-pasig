@@ -6,7 +6,7 @@ import { fetchItems, createItem, updateItem, deleteItem } from "@/lib/vendor-ite
 import type { VendorItem } from "@/lib/vendor-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FieldLabel } from "@/components/business/business-fields";
 import {
   Dialog,
   DialogContent,
@@ -66,6 +66,13 @@ function formatPrice(price: number | null): string {
 // 5.2: one row's add/edit form fields, shared between the "add item" form
 // and a row's own inline edit state, so the two don't drift into two
 // slightly different field sets for the same concept.
+//
+// Phase 7.5: the Price field's tooltip (FieldLabel below) reuses
+// NO_PRICE_WARNING verbatim rather than a generic "why we ask" line, per
+// the spec's own price-field special case -- same copy already shown
+// inline under this field and per-row in the list below, now also in the
+// tooltip, all three reading identically per ux-ui-guidelines.md's Label
+// Rules (one label per concept, same wording everywhere it appears).
 function ItemFormFields({
   name,
   price,
@@ -80,7 +87,13 @@ function ItemFormFields({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2">
-        <Label htmlFor="item-name">Name *</Label>
+        <FieldLabel
+          htmlFor="item-name"
+          help="Shown as this item's title on your listing."
+          requiredMarker
+        >
+          Name
+        </FieldLabel>
         <Input
           id="item-name"
           value={name}
@@ -90,7 +103,9 @@ function ItemFormFields({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="item-price">Price (₱)</Label>
+        <FieldLabel htmlFor="item-price" help={NO_PRICE_WARNING}>
+          Price (₱)
+        </FieldLabel>
         <Input
           id="item-price"
           type="number"

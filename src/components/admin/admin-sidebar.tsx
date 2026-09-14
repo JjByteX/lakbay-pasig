@@ -2,6 +2,7 @@ import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Users, Setti
 import { NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import {
   Sidebar,
@@ -14,7 +15,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import { Button } from "@/components/ui/button";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 
@@ -163,7 +165,16 @@ export function AdminSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center">
-          <Avatar className="h-8 w-8 shrink-0">
+          {/* Phase 6.5/6.6/6.8: AvatarImage renders profile.profile_picture
+              when set, same AvatarFallback initial as before when it's
+              null (a signed-in staff member with no uploaded picture) --
+              Radix's Avatar already falls back automatically on a missing/
+              broken src, no extra loading branch needed here. Size now
+              reads from avatar-storage.ts's shared AVATAR_SIZE.sm instead
+              of a locally hardcoded h-8 w-8, per 6.8's one-shared-scale
+              requirement. */}
+          <Avatar className={cn(AVATAR_SIZE.sm, "shrink-0")}>
+            {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
             <AvatarFallback>{initial}</AvatarFallback>
           </Avatar>
           <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
