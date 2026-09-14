@@ -26,6 +26,7 @@ import {
   type PickedLocation,
 } from "@/components/admin/place-business-picker";
 import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
+import { CharCount } from "@/components/business/business-fields";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.2 (step-4-phases.md): stepper layout, not sidebar-style, per
@@ -225,15 +226,10 @@ function discoveryEntrySaveLabel(discoverySaving: boolean, editingEntryId: strin
 }
 
 // admin-form-fields-plan.md #2: every maxLength needs a visible counter
-// nearby so the cap isn't a silent wall. Page-local copy, same as the
-// other admin detail pages' own CharCount.
-function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
-  return (
-    <span className="self-end text-xs text-muted-foreground">
-      {value.length}/{max}
-    </span>
-  );
-}
+// nearby so the cap isn't a silent wall. Step 8 cleanup: this was a
+// page-local CharCount, byte-identical to business-fields.tsx's own and
+// four other admin detail pages' own copies -- now imported from
+// business-fields.tsx, the one place it's kept.
 
 // Extracted from AdminTrailBuilderPage's render (previously an inline IIFE
 // inside the Dialog's DialogContent). Same two-mode body: a list view

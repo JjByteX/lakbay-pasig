@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CharCount } from "@/components/business/business-fields";
 import { usePageTitle } from "@/lib/page-title";
 
 // Storage bucket for place photos. Not yet created by any migration in this
@@ -128,15 +129,10 @@ const STATUS_VARIANT = {
 } as const;
 
 // admin-form-fields-plan.md #2: every maxLength needs a visible counter
-// nearby so the cap isn't a silent wall. One small shared helper instead
-// of repeating this markup at every capped field.
-function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
-  return (
-    <span className="self-end text-xs text-muted-foreground">
-      {value.length}/{max}
-    </span>
-  );
-}
+// nearby so the cap isn't a silent wall. Step 8 cleanup: this was a
+// page-local CharCount, byte-identical to business-fields.tsx's own and
+// four other admin detail pages' own copies -- now imported from
+// business-fields.tsx, the one place it's kept.
 
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();

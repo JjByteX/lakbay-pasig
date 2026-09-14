@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { AvatarUpload } from "@/components/avatar-upload";
+import { CharCount } from "@/components/business/business-fields";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
@@ -43,16 +44,12 @@ function errorMessageFrom(err: unknown, fallback: string): string {
 }
 
 // admin-form-fields-plan.md #2: every maxLength needs a visible counter
-// nearby so the cap isn't a silent wall. Page-local copy, same as the
-// admin detail pages' own CharCount, and same reasoning as this file's
-// own errorMessageFrom comment above for why it stays page-local.
-function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
-  return (
-    <span className="self-end text-xs text-muted-foreground">
-      {value.length}/{max}
-    </span>
-  );
-}
+// nearby so the cap isn't a silent wall. Step 8 cleanup: this was a
+// page-local CharCount, byte-identical to business-fields.tsx's own and
+// four admin detail pages' own copies -- now imported from business-
+// fields.tsx, the one place it's kept. Unlike errorMessageFrom above,
+// CharCount has zero page-specific variation across any of its six
+// former copies, so it doesn't share that helper's stay-local reasoning.
 
 /**
  * Step 8, Phase 4: Profile page, loaded state. Guest-locked branch (Phase

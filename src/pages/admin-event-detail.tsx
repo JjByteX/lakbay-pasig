@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { usePageTitle } from "@/lib/page-title";
 import { isoToDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/datetime";
+import { CharCount } from "@/components/business/business-fields";
 
 // Phase 2.2-2.4: create/edit form, publish and lifecycle_status actions,
 // and form/save states, per step-4-phases.md. No photos, no review dialog,
@@ -44,15 +45,10 @@ const LIFECYCLE_VARIANT = {
 } as const;
 
 // admin-form-fields-plan.md #2: every maxLength needs a visible counter
-// nearby so the cap isn't a silent wall. Page-local copy, same as
-// admin-place-detail.tsx and admin-business-detail.tsx's own CharCount.
-function CharCount({ value, max }: Readonly<{ value: string; max: number }>) {
-  return (
-    <span className="self-end text-xs text-muted-foreground">
-      {value.length}/{max}
-    </span>
-  );
-}
+// nearby so the cap isn't a silent wall. Step 8 cleanup: this was a
+// page-local CharCount, byte-identical to business-fields.tsx's own and
+// four other admin detail pages' own copies -- now imported from
+// business-fields.tsx, the one place it's kept.
 
 interface EventFormState {
   title: string;
