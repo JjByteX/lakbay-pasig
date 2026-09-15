@@ -21,7 +21,10 @@ interface DiscoverListProps {
   // exclusive in discover.tsx), so a Directions tap here hands the
   // geometry up to discover.tsx, which both stores it and switches view to
   // "map" so the drawn line is actually visible.
-  onRouteFound: (geometry: RouteGeometry) => void;
+  // directions-panel-phases.md Phase 4.2: result is now included alongside
+  // geometry (result-card.tsx's own widened signature), passed straight
+  // through unchanged -- this file has no reason to read it itself.
+  onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
 }
 
 /**

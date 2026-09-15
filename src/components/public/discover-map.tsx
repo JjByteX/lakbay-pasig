@@ -12,8 +12,9 @@ import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { RouteGeometry } from "@/lib/directions";
+import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
+import { DirectionsPanel } from "./directions-panel";
 
 // Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
 // raster tiles with a `mix-blend-mode: color` div. Positron's raster tiles
@@ -386,7 +387,30 @@ interface DiscoverMapProps {
   // Replaces the old internal-only onRouteFound wiring to this file's own
   // ResultCard -- now hands the geometry up to discover.tsx's setRoute so
   // both DiscoverMap and DiscoverList read and write the same one value.
-  onRouteFound: (geometry: RouteGeometry) => void;
+  // directions-panel-phases.md Phase 4.2: result is now included alongside
+  // geometry (result-card.tsx's own widened signature), passed straight
+  // through to discover.tsx unchanged -- this file has no reason to read
+  // it itself, its own drawRoute call still only ever reads `route`.
+  onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
+  // desktop-directions-panel-phases.md Phase 2.3: the desktop directions
+  // panel renders inside this component (not as a discover.tsx-level
+  // sibling like mobile's fixed panel) since it needs to be `absolute`
+  // within this file's own relatively-positioned container -- the same
+  // coordinate space ZoomControl/MapCornerControls already use, floating
+  // over the map rather than the viewport. All six props mirror
+  // directions-panel.tsx's own DirectionsPanelProps one-for-one (minus
+  // `variant`, fixed to "desktop" below); discover.tsx owns every value,
+  // this file only threads them into the same DirectionsPanel component
+  // mobile's own render branch already uses. directionsPanelResult null
+  // means nothing to show -- the same "panel closed" signal
+  // discover.tsx's own mobile branch already reads.
+  directionsPanelResult: DiscoverResult | null;
+  selectedMode: TravelMode;
+  onSelectMode: (mode: TravelMode) => void;
+  onCancelDirections: () => void;
+  routeDuration: number | null;
+  modeLoading: boolean;
+  modeErrorReason: DirectionsErrorReason | null;
 }
 
 // Feature-request-phases.md Phase 1.1/1.4: legend content (categories +
@@ -793,6 +817,13 @@ export function DiscoverMap({
   onLocationFound,
   route,
   onRouteFound,
+  directionsPanelResult,
+  selectedMode,
+  onSelectMode,
+  onCancelDirections,
+  routeDuration,
+  modeLoading,
+  modeErrorReason,
 }: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -1041,6 +1072,19 @@ export function DiscoverMap({
     map.fitBounds(bounds, { padding: 48 });
   };
 
+  // directions-panel-phases.md Phase 2.2: the counterpart to drawRoute
+  // above. Clears the line's own data back to empty rather than removing
+  // the source/layer outright -- cheaper to re-populate on the next
+  // drawRoute call (setData vs. addSource/addLayer again), and matches
+  // drawRoute's own not-ready guards so a Cancel tap before the style has
+  // finished loading is a safe no-op, not a throw.
+  const clearRoute = () => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    source?.setData({ type: "FeatureCollection", features: [] });
+  };
+
   // Draws whenever there's a route to draw AND the map is actually ready
   // to accept a source/layer -- covers every case in one effect instead of
   // the two that used to exist here:
@@ -1060,21 +1104,22 @@ export function DiscoverMap({
   // currently accept the draw, and styleReady alone can't tell whether
   // there's anything to draw.
   useEffect(() => {
-    if (route && styleReady) drawRoute(route);
+    if (!styleReady) return;
+    if (route) {
+      drawRoute(route);
+    } else {
+      clearRoute();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, styleReady]);
 
-  // Phase 3.7: a drawn route is not cleared just because the popup closes
-  // -- the popup closes specifically so the line stays visible (Part 2's
-  // own "close the popup so the line is visible"), so dismissal is not
-  // "without a fitting replacement," it's the intended end state. A repeat
-  // tap on Directions, or a different result's Directions, replaces the
-  // existing route via drawRoute's own setData call above, which is the
-  // "before drawing a new one" half of 3.7 -- no separate clear path is
-  // wired to any control in this phase, so no clearRoute function is kept
-  // around unused (would fail this project's noUnusedLocals build setting
-  // anyway). Add one if a future phase adds an explicit "clear route"
-  // affordance.
+  // directions-panel-phases.md Phase 2.2: route can now go from a value
+  // back to null (discover.tsx's setRoute(null), wired to Phase 4's panel
+  // Cancel button), not just from one value to a different one. The
+  // [route, styleReady] effect above handles both directions -- drawRoute
+  // on a value, clearRoute on null -- so dismissing the result popup still
+  // leaves the line visible (Phase 3.7's original behavior, unchanged),
+  // and only an explicit Cancel removes it.
 
   // No container-resize handling: this component always renders into the
   // shell's fixed <main> region (public-shell.tsx) at a constant height.
@@ -1226,6 +1271,26 @@ export function DiscoverMap({
           this is a separate small component fed the live map instance via
           mapInstance state rather than reading mapRef directly. */}
       <ZoomControl map={mapInstance} />
+
+      {/* desktop-directions-panel-phases.md Phase 2.3: desktop-only
+          (mobile renders its own fixed panel from discover.tsx directly,
+          !isMobile here avoids mounting both at once on a resize
+          boundary), bottom-centered floating card in this container's own
+          coordinate space -- see directions-panel.tsx's variant="desktop"
+          branch for the positioning/sizing reasoning (same row as
+          ZoomControl, content-sized rather than a full-height strip). */}
+      {!isMobile && directionsPanelResult && (
+        <DirectionsPanel
+          variant="desktop"
+          result={directionsPanelResult}
+          selectedMode={selectedMode}
+          onSelectMode={onSelectMode}
+          durationSeconds={routeDuration}
+          isLoading={modeLoading}
+          errorReason={modeErrorReason}
+          onCancel={onCancelDirections}
+        />
+      )}
 
       {previewResult && (
         <HoverPreview result={previewResult.result} x={previewResult.x} y={previewResult.y} />

@@ -37,7 +37,7 @@ Reasoning: the data model is relational (Places, Trails, Businesses, and Staff p
 **Module / Feature Map:**
 - Home: recently verified content, CATO announcements, program updates
 - Global Search: shell-owned search bar, see decision-log.md entry #9
-- Discover: map lookup for places and businesses, category/price/facility filters, verification label on every result. Map/List toggle and filters render inside the shell header (public-shell.tsx's `useDiscoverFilters`). discover-map.tsx owns a collapsed legend (Status/Place Categories/Business Categories) and a desktop-only marker hover preview
+- Discover: map lookup for places and businesses, category/price/facility filters, verification label on every result. Map/List toggle and filters render inside the shell header (public-shell.tsx's `useDiscoverFilters`). discover-map.tsx owns a collapsed legend (Status/Place Categories/Business Categories) and a desktop-only marker hover preview. Directions (mobile and desktop) opens directions-panel.tsx with Car/Bike/Walk mode switching and estimated time, backed by directions.ts's fetchRoute -- mobile's is a fixed sheet above the bottom nav (discover.tsx-owned sibling of the Map/List branch), desktop's is a bottom-centered floating card rendered inside discover-map.tsx's own relatively-positioned container, same coordinate space as ZoomControl/MapCornerControls. See decision-log.md entries #13, #14
 - Trails: catalog, trail detail with sequenced stops, Discovery content unlock, completion, credentials
 - Saved: saved places, saved trails, completed trails, earned credentials
 - Profile: account info, preferences, vendor mode toggle entry point

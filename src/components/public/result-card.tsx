@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
-import { DirectionsError, fetchWalkingRoute, type RouteGeometry } from "@/lib/directions";
+import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/directions";
 
 // Phase 6.1 (step-5-phases.md), pulled forward because Phase 4.4 requires
 // it to exist: "the same result card component Phase 6 defines." Scoped
@@ -47,12 +47,16 @@ interface ResultCardProps {
   // discover.tsx, passed straight through -- no second geolocation call,
   // per the plan's own "confirm userLocation stays single-sourced" check.
   userLocation: Coordinates | null;
-  // Called with the route geometry on a successful fetch. discover-map.tsx
-  // owns the actual map instance and the GeoJSON source/line-layer draw,
-  // so this card only fetches and hands the result up, per constraints.md's
-  // "map in one place" ownership -- this component has no map reference of
-  // its own to draw onto.
-  onRouteFound: (geometry: RouteGeometry) => void;
+  // Called with the route geometry and the result it was fetched for, on a
+  // successful fetch. discover-map.tsx owns the actual map instance and the
+  // GeoJSON source/line-layer draw, so this card only fetches and hands
+  // both values up, per constraints.md's "map in one place" ownership --
+  // this component has no map reference of its own to draw onto.
+  // directions-panel-phases.md Phase 4.1/4.2: the result is now included
+  // (previously geometry only) so discover.tsx can open the mobile
+  // directions panel for the right result, without this card knowing
+  // anything about panel state or isMobile itself.
+  onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
 }
 
 /**
@@ -99,10 +103,15 @@ export function ResultCard({ result, onOpenChange, userLocation, onRouteFound }:
     setDirectionsError(null);
     let geometry: RouteGeometry;
     try {
-      geometry = await fetchWalkingRoute(userLocation, {
-        latitude: result.latitude,
-        longitude: result.longitude,
-      });
+      // directions-panel-phases.md Phase 1.4: fetchRoute now takes an
+      // explicit mode. Hardcoded to "foot" here so this call site's
+      // behavior is unchanged until Phase 5 wires the panel's mode
+      // selection through to this fetch.
+      geometry = await fetchRoute(
+        userLocation,
+        { latitude: result.latitude, longitude: result.longitude },
+        "foot",
+      );
     } catch (err) {
       setDirectionsStatus("error");
       setDirectionsError(
@@ -117,7 +126,7 @@ export function ResultCard({ result, onOpenChange, userLocation, onRouteFound }:
     // not-ready case internally and re-draws on the next style.load.
     setDirectionsStatus("idle");
     onOpenChange(false);
-    onRouteFound(geometry);
+    onRouteFound(geometry, result);
   };
 
   return (

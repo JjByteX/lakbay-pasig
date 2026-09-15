@@ -76,7 +76,23 @@
 
 ---
 
-### Entry Format, copy this block for each new decision
+**#:** 13
+**Milestone:** Directions panel (mobile bottom sheet)
+
+**Decision:** Mobile Directions now opens a fixed panel above the bottom nav (`directions-panel.tsx`) instead of just drawing a route and closing, per `directions-panel-plan.md`. Shape: `fixed inset-x-0 bottom-16 z-50`, `bottom-16` sitting directly above `bottom-nav.tsx`'s own `h-16`, `z-50` above the nav's `z-40`, `rounded-2xl` (16px, the "larger prominent panel" radius), `max-w-md` centered to match every other mobile Discover surface. Plain fixed-position div, matching `global-search-bar.tsx`'s existing dropdown pattern -- no Popover/Sheet primitive added (decision-log.md's own no-Popover state, architecture-notes.md's Current State Notes). All panel state (`route`, `directionsPanelResult`, `selectedMode`, `routeDuration`, `modeLoading`, `modeErrorReason`) is lifted to `discover.tsx` and the panel renders as a sibling to the Map/List branch, not inside either one, so it survives the Map/List toggle and a Directions tap from either surface opens the same panel. `directions.ts`'s `fetchWalkingRoute` was widened to `fetchRoute(origin, destination, mode: TravelMode)`, `mode` passed straight into OSRM's URL profile segment, `RouteGeometry` gained a `duration` field (seconds, read straight from OSRM's own response) to back the panel's estimated-time row.
+
+**Standing rule:** Any future mobile bottom-sheet-style panel (fixed above the bottom nav, sibling to page content, surviving a same-page view toggle) follows this same shape: `bottom-16`/`z-50`/`rounded-2xl`/`max-w-md`, state lifted to the page rather than owned by either branch it needs to survive, plain fixed-position div rather than a new Sheet/Popover dependency. Any future OSRM-backed feature reuses `fetchRoute`'s mode argument and `RouteGeometry.duration` rather than a second fetch function or a second duration field.
+
+---
+
+**#:** 14
+**Milestone:** Directions panel, desktop variant
+
+**Decision:** Desktop Directions now opens directions-panel.tsx too (previously: draw the route, close the result popup, nothing else), per `desktop-directions-panel-phases.md`. Rejected shape: a right-docked, full-height strip mirroring public-shell.tsx's own search panel (`fixed inset-y-0 right-0 w-80`) -- a full-height strip for the panel's actual content (~200px: mode row, two text rows, one status row) would leave 70%+ of the panel empty, directly against ux-ui-guidelines.md's "more than 30% empty is too large" sizing rule. Shipped shape instead: `directions-panel.tsx` gained a `variant?: "mobile" | "desktop"` prop (default `"mobile"`, so every existing call site is unaffected); the desktop branch is `absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-80`, content-sized (no fixed height), `rounded-2xl border-input bg-card shadow` matching ZoomControl/MapCornerControls' own floating-map-chrome convention exactly rather than mobile's `border-border`/`shadow-md` pairing. It renders inside discover-map.tsx itself (not as a discover.tsx-level sibling like mobile's `fixed` panel), since it needs to be `absolute` within that file's own relatively-positioned container -- the same coordinate space ZoomControl and MapCornerControls already use. Bottom-centered, same row as ZoomControl (`bottom-6`): centered placement means it never overlaps ZoomControl (bottom-right) or MapCornerControls (top-right), so neither existing control needs to shift when the panel opens -- no reflow logic anywhere. It also never competes with the search panel's own left-edge slot (public-shell.tsx), so the two coexist freely rather than needing to be mutually exclusive. The mode row/From-To rows/time-loading-error row are identical between both variants -- factored into a shared `DirectionsPanelContent` component so only the outer wrapper (positioning + card chrome) differs, not a second copy of the whole card body. `discover.tsx`'s `handleRouteFound` was widened from `if (isMobile) { ...open the panel... }` to always run (the panel *state* is desktop-agnostic; the render call site is what decides mobile-panel vs. desktop-panel vs. neither), and its Cancel closure was extracted into `handleCancelDirections` so both render sites call the identical close logic instead of two copies that could drift.
+
+**Standing rule:** Any future floating map-chrome control (a panel, not a viewport-edge-docked shell surface) follows this same shape: content-sized, not viewport-height; positioned `absolute` inside DiscoverMap's own container, not `fixed` to the viewport; matches ZoomControl/MapCornerControls' `rounded-2xl border-input bg-card shadow` convention. Before docking any new floating map panel to an edge, check what's already anchored there (ZoomControl and MapCornerControls both sit on the right) and prefer a position with no existing occupant over one that would need reflow logic to avoid a collision.
+
+---
 
 **#:**
 **Milestone:**
