@@ -187,24 +187,6 @@ export default function DiscoverPage() {
     [results, query, categories, priceRange, facilities],
   );
 
-  // "All categories" reads as selected both when nothing is picked (the
-  // empty-array no-op state) and when every individual category has been
-  // picked by hand, since both leave nothing actually excluded. See the
-  // All-chip's own onClick below for what toggling it does with this.
-  const allSelected =
-    categories.length === 0 || categories.length === categoryOptions.length;
-
-  // Same "reads as active either way" logic as allSelected above, applied
-  // to Facilities -- 2.7's combination requirement is satisfied by each
-  // filter (category, price, facilities) staying independent state that
-  // all three feed into the one shared filterDiscoverResults call, not by
-  // a new combined Reset control: no such control exists in this file
-  // today (grepped before writing this phase), so adding one would be new
-  // UI scope beyond what Phase 2 asks for. "All facilities" gives the same
-  // one-tap clear the category filter already has.
-  const allFacilitiesSelected =
-    facilities.length === 0 || facilities.length === facilityOptions.length;
-
   useDiscoverFilters(
     // gap-4 (16px) between the two filter rows, py-4 (16px) top and bottom
     // of the whole panel -- both on the 8px grid per ux-ui-guidelines.md's
@@ -264,50 +246,44 @@ export default function DiscoverPage() {
                 falls back the same way it always has -- only the source list
                 these chips are built from moved from a fixed constant to
                 fetchActiveCategories's live rows.
-                allSelected: true both when nothing is picked (categories is
-                empty, filterDiscoverResults' own no-op/show-everything case)
-                and when every individual category has been picked by hand --
-                both states mean "no category is actually excluding anything,"
-                so "All categories" reads as active either way, matching the
-                request that selecting everything individually should look the
-                same as the All chip itself being selected. Clicking All while
-                it reads active resets to the empty no-op array (same visual
-                result, cheaper state); clicking it while inactive selects
-                every category explicitly. Clicking an individual chip toggles
-                only that one category in or out of the array, never touching
-                the others. */}
-      <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant={allSelected ? "default" : "outline"}
-          className="h-11 justify-start rounded-full px-4 font-normal"
-          onClick={() =>
-            setCategories(allSelected ? [] : categoryOptions.map((c) => c.name))
-          }
-        >
+                Nothing picked (categories is empty, filterDiscoverResults'
+                own no-op/show-everything case) already means "no category is
+                actually excluding anything," i.e. all categories match.
+                The "All categories" chip was previously a toggle button that
+                selected/cleared every category in one tap; since the empty
+                array is already the default "all" state, that button is now a
+                plain, non-interactive label instead (no onClick, no button
+                semantics) rather than a control that reselects a state
+                already active by default. Clicking an individual chip still
+                toggles only that one category in or out of the array, never
+                touching the others. */}
+      <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+        <Label className="px-1 text-sm font-normal text-muted-foreground">
           All categories
-        </Button>
-        {categoryOptions.map((c) => {
-          const Icon = getCategoryIcon(c.icon);
-          return (
-            <Button
-              key={c.id}
-              type="button"
-              variant={categories.includes(c.name) ? "default" : "outline"}
-              className="h-11 justify-start gap-2 rounded-full px-4 font-normal"
-              onClick={() =>
-                setCategories((prev) =>
-                  prev.includes(c.name)
-                    ? prev.filter((existing) => existing !== c.name)
-                    : [...prev, c.name],
-                )
-              }
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {c.name}
-            </Button>
-          );
-        })}
+        </Label>
+        <div className="grid grid-cols-2 gap-2">
+          {categoryOptions.map((c) => {
+            const Icon = getCategoryIcon(c.icon);
+            return (
+              <Button
+                key={c.id}
+                type="button"
+                variant={categories.includes(c.name) ? "default" : "outline"}
+                className="h-11 justify-start gap-2 rounded-full px-4 font-normal"
+                onClick={() =>
+                  setCategories((prev) =>
+                    prev.includes(c.name)
+                      ? prev.filter((existing) => existing !== c.name)
+                      : [...prev, c.name],
+                  )
+                }
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {c.name}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Phase 2.3/2.5 (feature-request-phases.md): Facilities filter,
@@ -326,39 +302,40 @@ export default function DiscoverPage() {
                 never carries a facility, so this row only ever narrows
                 results that have somewhere to narrow. Matching itself
                 (2.4) is AND, not category's OR -- see filterDiscoverResults'
-                own doc comment (discover-query.ts) for why. */}
-      <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant={allFacilitiesSelected ? "default" : "outline"}
-          className="h-11 justify-start rounded-full px-4 font-normal"
-          onClick={() =>
-            setFacilities(allFacilitiesSelected ? [] : facilityOptions.map((f) => f.id))
-          }
-        >
+                own doc comment (discover-query.ts) for why.
+                Same "default already means all" logic as Category above.
+                The "All facilities" chip was previously a toggle button that
+                selected/cleared every facility in one tap;
+                since the empty array is already the default "all" state,
+                that button is now a plain, non-interactive label instead (no
+                onClick, no button semantics). */}
+      <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+        <Label className="px-1 text-sm font-normal text-muted-foreground">
           All facilities
-        </Button>
-        {facilityOptions.map((f) => {
-          const Icon = getFacilityIcon(f.icon);
-          return (
-            <Button
-              key={f.id}
-              type="button"
-              variant={facilities.includes(f.id) ? "default" : "outline"}
-              className="h-11 justify-start gap-2 rounded-full px-4 font-normal"
-              onClick={() =>
-                setFacilities((prev) =>
-                  prev.includes(f.id)
-                    ? prev.filter((existing) => existing !== f.id)
-                    : [...prev, f.id],
-                )
-              }
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {f.name}
-            </Button>
-          );
-        })}
+        </Label>
+        <div className="grid grid-cols-2 gap-2">
+          {facilityOptions.map((f) => {
+            const Icon = getFacilityIcon(f.icon);
+            return (
+              <Button
+                key={f.id}
+                type="button"
+                variant={facilities.includes(f.id) ? "default" : "outline"}
+                className="h-11 justify-start gap-2 rounded-full px-4 font-normal"
+                onClick={() =>
+                  setFacilities((prev) =>
+                    prev.includes(f.id)
+                      ? prev.filter((existing) => existing !== f.id)
+                      : [...prev, f.id],
+                  )
+                }
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {f.name}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Phase 7.1: price range filter, businesses only per step-5-plan.md

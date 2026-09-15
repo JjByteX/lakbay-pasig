@@ -32,20 +32,15 @@ export function BottomNav() {
               }`
             }
           >
-            {({ isActive }) => (
+            {() => (
               <>
-                {/* Filled on the active tab, outline otherwise, per direct
-                    request -- lucide icons take a plain `fill` SVG prop
-                    with no extra setup, so this is a one-line conditional
-                    on top of the existing color change, not a new icon
-                    variant or dependency. currentColor keeps the fill in
-                    sync with the text-primary/text-muted-foreground class
-                    already driving the icon's stroke color above, so both
-                    read as the same single color, not a two-tone icon. */}
-                <tab.icon
-                  className="h-5 w-5 shrink-0"
-                  fill={isActive ? "currentColor" : "none"}
-                />
+                {/* Outline icon always, active vs. inactive communicated
+                    solely by the text-primary/text-muted-foreground color
+                    change above -- the earlier active-tab fill (lucide's
+                    `fill` SVG prop set to currentColor) has been removed
+                    per direct request, so no tab icon ever renders filled
+                    when switching between them. */}
+                <tab.icon className="h-5 w-5 shrink-0" />
                 <span>{tab.label}</span>
               </>
             )}
