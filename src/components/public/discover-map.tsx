@@ -920,8 +920,14 @@ export function DiscoverMap({
         // locate-me-and-directions-phases.md Phase 3.8: OSRM/OSM ODbL credit
         // added as one more clause in this same string, not a second
         // attribution control, per the plan's explicit instruction.
+        //
+        // Bugfix (Car/Bike/Walk all returned the same route): directions.ts
+        // now routes through FOSSGIS's servers, whose usage policy requires
+        // both a credit and a "fix the map" link. Both added as further
+        // clauses in this same string, same reason as above -- one control,
+        // not a second one stacked in the corner.
         customAttribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors, <a href="https://openfreemap.org">OpenFreeMap</a>, <a href="https://project-osrm.org">OSRM</a>',
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors, <a href="https://openfreemap.org">OpenFreeMap</a>, <a href="https://project-osrm.org">OSRM</a>, routing by <a href="https://www.fossgis.de/">FOSSGIS</a>, <a href="https://www.openstreetmap.org/fixthemap">fix the map</a>',
       },
     });
     mapRef.current = map;

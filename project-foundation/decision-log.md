@@ -94,6 +94,15 @@
 
 ---
 
+**#:** 15
+**Milestone:** Routing provider swap, Car/Bike/Walk returning identical routes
+
+**Decision:** `directions.ts`'s `OSRM_BASE_URL` moved from `router.project-osrm.org` to `routing.openstreetmap.de`, and the URL shape changed from `/route/v1/{mode}/` to `/routed-{mode}/route/v1/driving/`. Reason: entry #13 logged "`mode` passed straight into OSRM's URL profile segment" on the assumption that segment selects a routing profile. It does not. A stock `osrm-routed` process serves the single graph it was prepared with and ignores the profile segment, without validating it -- so `/foot/` and `/bike/` were accepted and answered with car data. The panel's three mode buttons were wired correctly end to end (`handleSelectMode` refetches, `fetchRoute` passes the mode through); the server was the only thing not honouring them. FOSSGIS runs three separate instances, one graph each (car, bike, foot worldwide), selected by a `routed-*` path prefix instead. `TravelMode`'s existing values (`"foot" | "bike" | "car"`) are those three suffixes verbatim, so `routed-${mode}` is the entire mapping -- no lookup table, no type change, and neither caller (`result-card.tsx`'s first Directions tap, `discover.tsx`'s `handleSelectMode`) needed editing. The hand-set `User-Agent` header was deleted at the same time: `User-Agent` is a forbidden header name in the Fetch spec, so the browser stripped it and sent its own; the constant was dead code claiming a guarantee it never provided. FOSSGIS's usage policy requires a credit plus a "fix the map" link, both added as further clauses in `discover-map.tsx`'s existing `customAttribution` string rather than a second attribution control, matching Phase 3.8's own precedent.
+
+**Standing rule:** This supersedes entry #13's "`mode` passed straight into OSRM's URL profile segment" clause only. Everything else in #13 and all of #14 stands. Any future OSRM-backed feature selects its graph by base-URL-plus-prefix, never by the profile segment, and reuses `fetchRoute` rather than adding a second fetch function. Before trusting any routing response's `duration`, check it actually differs across modes -- a wrong-profile server fails silently with a plausible number, not an error. Both FOSSGIS and the old demo server carry the same ceiling (1 req/sec, no SLA, non-commercial only); if uptime or volume outgrows it, point `OSRM_BASE_URL` at self-hosted instances using the same prefix shape, one per mode, or a paid provider.
+
+---
+
 **#:**
 **Milestone:**
 
