@@ -94,17 +94,16 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
   // Phase 1.4 (place-category-directory-phases.md): category is now a
   // joined place_categories.name (migration 0022), embedded and flattened
   // the same way discover-query.ts's fetchPlaces was fixed.
-  // home-photo-showcase-phases.md Phase 2.3: the old .limit(10) here was
-  // sized for fetchRecentlyVerified's own top-10 feed (below), the only
-  // caller this function had before this phase. fetchHomeShowcase (below)
-  // now shares this same function but needs every verified, photo-having
-  // item to build complete category rows -- home-photo-showcase-plan.md's
-  // own Row Content and Order section is explicit that a row has "No cap
-  // on row length," capping here would silently drop real verified
-  // content from a row with no sign anything's missing. The cap moves
-  // into fetchRecentlyVerified itself instead, applied after this
-  // function returns, so that caller keeps its original top-10 behavior
-  // unchanged while fetchHomeShowcase gets the uncapped set it needs.
+  //
+  // home-photo-showcase-phases.md Phase 2.3/7.1: no row limit here --
+  // fetchHomeShowcase (below) needs every verified, photo-having item to
+  // build complete category rows, per home-photo-showcase-plan.md's Row
+  // Content and Order section ("No cap on row length"). This function
+  // used to carry a .limit(10) sized for a top-10 "recently verified"
+  // feed (fetchRecentlyVerified, this file's only other caller of this
+  // function before the photo showcase existed); that feed and its cap
+  // were removed in Phase 7.1 once nothing called it anymore, so this
+  // function has stayed uncapped since.
   const { data, error } = await supabase
     .from("places")
     .select(
@@ -162,10 +161,10 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
   // category back) -- caught here since the old flat "category" select
   // would otherwise error against the dropped column, per constraints.md's
   // File Traversal rule.
-  // home-photo-showcase-phases.md Phase 2.3: same reasoning as
-  // fetchRecentlyVerifiedPlaces above -- .limit(10) removed here too, the
-  // cap moves into fetchRecentlyVerified so fetchHomeShowcase's category
-  // rows aren't silently truncated.
+  // home-photo-showcase-phases.md Phase 2.3/7.1: same reasoning as
+  // fetchRecentlyVerifiedPlaces above -- no row limit, this function's
+  // only caller now is fetchHomeShowcase, which needs the full verified
+  // set to build complete category rows.
   const { data, error } = await supabase
     .from("businesses")
     .select(
@@ -206,36 +205,6 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
       coverPhotoUrl: coverPhotos.get(rest.id) ?? null,
     };
   });
-}
-
-/**
- * Phase 2.3: both kinds fetched in full, then merged, re-sorted by
- * verified_at, and capped at 10 here so the combined top 10 is correct
- * regardless of which table contributed more recent rows. A
- * fetch-then-merge approach (rather than one combined query) is required
- * here, unlike Discover's fetchDiscoverResults, since places and
- * businesses are different tables with no single query that spans both.
- * Rows verified before migration 0017's backfill or before this feature
- * existed still carry a verified_at value (the backfill set it from
- * updated_at at migration time), so nothing verified pre-launch is
- * silently excluded from this list.
- *
- * home-photo-showcase-phases.md Phase 2.3: the per-table .limit(10) that
- * used to live inside fetchRecentlyVerifiedPlaces/Businesses moved out to
- * this single .slice(10) below, since fetchHomeShowcase now shares those
- * same two functions and needs their uncapped output to build complete
- * category rows. This function's own behavior is unchanged: still the top
- * 10 most-recently-verified items across both tables.
- */
-export async function fetchRecentlyVerified(): Promise<RecentlyVerifiedItem[]> {
-  const [places, businesses] = await Promise.all([
-    fetchRecentlyVerifiedPlaces(),
-    fetchRecentlyVerifiedBusinesses(),
-  ]);
-
-  return [...places, ...businesses]
-    .sort((a, b) => new Date(b.verified_at).getTime() - new Date(a.verified_at).getTime())
-    .slice(0, 10);
 }
 
 /**
