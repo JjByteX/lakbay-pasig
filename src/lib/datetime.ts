@@ -29,3 +29,15 @@ export function parseDateTimeLocalValue(value: string | null): Date | null {
 export function isoToDateTimeLocalValue(isoString: string | null): string {
   return toDateTimeLocalValue(parseDateTimeLocalValue(isoString));
 }
+
+// Date-only "YYYY-MM-DD" -- the exact value shape a native
+// `<input type="date">` reads/writes, used by datetime-field.tsx's typable
+// date input (Amkor-parity fix: typing a date directly, not only picking
+// one from the popup calendar). Kept separate from toDateTimeLocalValue
+// above since that one always carries a time component too.
+export function toDateOnlyValue(date: Date | null): string {
+  if (!date) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
