@@ -63,9 +63,10 @@ const NAV_ITEMS = [
 // Collapsed: one button fills the same slot the logo alone used to, and
 // is now the expand control too, since there's no room for a second
 // target on an icon-only rail -- hovering it swaps the brand mark for a
-// plain PanelLeftOpen via pure CSS (index.css's .sidebar-logo-toggle
-// rules, copied from Amkor's own app.css), no component state for the
-// hover itself, only the click still calls toggleSidebar().
+// plain PanelLeftOpen via Tailwind's group-hover: variant (bug fix: was
+// a separate plain-CSS block keyed on hand-written class names, see this
+// button's own comment below), no component state for the hover itself,
+// only the click still calls toggleSidebar().
 function HeaderLogoRow() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
@@ -76,12 +77,29 @@ function HeaderLogoRow() {
         type="button"
         onClick={toggleSidebar}
         aria-label="Expand sidebar"
-        className="sidebar-logo-toggle flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        // Bug fix: hover-swap previously depended entirely on a separate
+        // plain-CSS block (index.css's .sidebar-logo-toggle rules) toggling
+        // display on two sibling spans by class name alone, with no
+        // Tailwind group state class on this button to anchor to and no
+        // explicit base `display` on .sidebar-logo-expand in the JSX
+        // itself -- fragile by construction, and the symptom reported
+        // (hovering the collapsed brand icon shows nothing) matches that:
+        // any mismatch between this file's class names and index.css's
+        // selectors, or between the two build pipelines, silently drops
+        // the swap with no visible error. Rebuilt with Tailwind's own
+        // `group`/`group-hover:` state variants instead -- the same
+        // mechanism this codebase's own sidebar.tsx already relies on for
+        // every other collapsed/expanded swap (group-data-[collapsible=
+        // icon]:hidden, etc per constraints.md's Inventory Before
+        // Suggesting rule) -- so the hover state lives in one place (this
+        // button's own class list) with an explicit `flex`/`hidden` pair
+        // on each span, not a class-name contract with a second file.
+        className="group/logo-toggle flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <span className="sidebar-logo-brand flex h-8 w-8 items-center justify-center">
+        <span className="flex h-8 w-8 items-center justify-center group-hover/logo-toggle:hidden">
           <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
         </span>
-        <span className="sidebar-logo-expand items-center justify-center">
+        <span className="hidden h-8 w-8 items-center justify-center group-hover/logo-toggle:flex">
           <PanelLeftOpen className="h-4 w-4" />
         </span>
       </button>
@@ -141,10 +159,11 @@ export function PublicSidebar({
             -- that whole bar is now gone; this row is the only collapse
             control on desktop.
             Collapsed hover swap (logo -> expand icon in the same slot) is
-            pure CSS (index.css's .sidebar-logo-toggle rules), copied from
-            Amkor's own app.css rather than reimplemented with component
-            state, since it's a decoration on a single already-interactive
-            button, not new application state. */}
+            Tailwind's own group-hover: variant (bug fix: see HeaderLogoRow's
+            own button for why this replaced a separate plain-CSS block),
+            not reimplemented with component state, since it's a decoration
+            on a single already-interactive button, not new application
+            state. */}
         <HeaderLogoRow />
       </SidebarHeader>
       <SidebarContent>
@@ -243,7 +262,23 @@ export function PublicSidebar({
                 <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" sideOffset={8}>
+            {/* Bug fix: side="right" opened this menu out past the rail's
+                own right edge, floating away from the trigger toward the
+                middle of the page (especially noticeable collapsed, where
+                the rail is only --sidebar-width-icon wide) instead of
+                hugging the account icon it belongs to. This is the
+                sidebar's footer row, not a mid-page trigger with room to
+                spare on its right -- side="top" anchors the menu directly
+                above the trigger instead, the natural direction for a
+                bottom-of-rail control, matching Amkor's own bottom-left
+                profile menu placement this row was modeled on in the
+                first place. align="start" (not "end"): with side="top" the
+                align axis is horizontal, and "start" keeps the menu's own
+                left edge flush with the trigger's left edge (both expanded
+                and collapsed widths), rather than "end" pulling it flush
+                to the trigger's right edge, which would overhang further
+                past the rail on the narrow collapsed width. */}
+            <DropdownMenuContent side="top" align="start" sideOffset={8}>
               <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <UserIcon className="mr-2 h-4 w-4" />
                 Profile

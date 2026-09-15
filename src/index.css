@@ -85,19 +85,16 @@
    SIDEBAR LOGO -> EXPAND ICON ON HOVER (desktop, collapsed rail)
    Mirrors Amkor's own sidebar collapse control: while collapsed, the
    header shows only the brand mark; hovering that same button swaps it
-   for an expand icon in the identical spot, pure CSS, no re-render.
-   The wrapper gets .sidebar-logo-toggle; inside it, .sidebar-logo-brand
-   (the logo) and .sidebar-logo-expand (the icon) occupy the same slot.
+   for an expand icon in the identical spot.
+   Bug fix: this used to be a plain-CSS descendant-hover swap keyed on
+   .sidebar-logo-toggle/.sidebar-logo-brand/.sidebar-logo-expand class
+   names living only here, disconnected from the button's own Tailwind
+   classes in public-sidebar.tsx -- any drift between the two files
+   silently broke the swap with nothing to catch it. Rewritten in
+   public-sidebar.tsx itself using Tailwind's own group/group-hover:
+   variants (group/logo-toggle on the button, group-hover/logo-toggle:
+   hidden|flex on each span), the same state-variant mechanism sidebar.tsx
+   already uses everywhere else in this file for collapsed/expanded
+   swaps -- no separate CSS file to keep in sync with the component.
    ============================================================ */
-.sidebar-logo-toggle .sidebar-logo-expand {
-  display: none;
-}
-
-.sidebar-logo-toggle:hover .sidebar-logo-brand {
-  display: none;
-}
-
-.sidebar-logo-toggle:hover .sidebar-logo-expand {
-  display: flex;
-}
 

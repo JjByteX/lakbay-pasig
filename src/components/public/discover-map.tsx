@@ -714,6 +714,23 @@ export function DiscoverMap({
   const [tilesLoading, setTilesLoading] = useState(true);
   const isEmpty = !resultsError && !resultsLoading && !tilesLoading && results.length === 0;
 
+  // Bugfix (directions route not appearing): drawRoute below bails out
+  // silently when map.isStyleLoaded() is false, which it reliably is for
+  // a brief window right after `new maplibregl.Map(...)` -- the vector
+  // style is an async fetch (tiles.openfreemap.org), not ready synchronously.
+  // The only retry path used to be a "style.load" listener attached in a
+  // *separate* effect, which only fires again on a later setStyle() (dark/
+  // light toggle) -- it does not reliably cover the initial load on a
+  // fresh mount, which is exactly the case that matters here: switching
+  // from list view to map view after a Directions tap unmounts and
+  // remounts this whole component with `route` already set, so the very
+  // first draw attempt is also the only one that was going to happen.
+  // styleReady tracks actual readiness in state instead of leaning on a
+  // side-channel event listener that can race the map's own construction,
+  // so the route-draw effect below can depend on it directly and re-run
+  // deterministically once the map is truly able to accept a source/layer.
+  const [styleReady, setStyleReady] = useState(false);
+
   // Phase 1.1: same fetchActiveCategories/getCategoryIcon calls discover.tsx's
   // own filter chips already make, independent effects (mirroring
   // discover.tsx's own two separate category/facility effects) so one
@@ -795,7 +812,27 @@ export function DiscoverMap({
     map.on("dataloading", handleDataLoading);
     map.on("idle", handleLoad);
 
+    // Bugfix (directions route not appearing): styleReady is this map
+    // instance's own readiness flag, reset false up front (a fresh mount,
+    // e.g. after switching from list view, starts not-ready even though
+    // the previous instance may have finished loading) and flipped true
+    // on "style.load", which fires both for this initial load and for
+    // every later setStyle() call the dark/light MutationObserver below
+    // triggers -- one listener covers both cases, so the route-draw
+    // effect never has to guess which case it's in.
+    setStyleReady(false);
+    const handleStyleLoad = () => setStyleReady(true);
+    map.on("style.load", handleStyleLoad);
+
     const observer = new MutationObserver(() => {
+      // Reset before setStyle, not after: setStyle tears down every
+      // imperative source/layer (including the route) synchronously, so
+      // styleReady must already read false the moment that happens, not
+      // linger true until the next "style.load" fires. Otherwise a
+      // route-state change landing in that gap would see styleReady
+      // still true and call drawRoute against a map that just discarded
+      // its route source, throwing instead of quietly waiting.
+      setStyleReady(false);
       map.setStyle(buildStyle(isDark() ? MOCHA : LATTE));
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
@@ -805,6 +842,7 @@ export function DiscoverMap({
       map.off("load", handleLoad);
       map.off("dataloading", handleDataLoading);
       map.off("idle", handleLoad);
+      map.off("style.load", handleStyleLoad);
       map.remove();
       mapRef.current = null;
     };
@@ -870,9 +908,12 @@ export function DiscoverMap({
     if (!map) return;
     // Guards against addSource/addLayer throwing when called before the
     // style has finished loading (first paint, or mid dark/light setStyle
-    // swap) -- style.load re-runs this same draw once ready, so it's safe
-    // to skip here rather than throw and get mis-reported upstream as a
-    // routing-fetch failure in result-card.tsx's catch block.
+    // swap) -- the [route, styleReady] effect below re-runs this same draw
+    // once styleReady flips true, so it's safe to skip here rather than
+    // throw and get mis-reported upstream as a routing-fetch failure in
+    // result-card.tsx's catch block. Belt-and-suspenders alongside the
+    // styleReady check that now gates the calling effects: cheap to keep,
+    // still correct if drawRoute is ever called from a new site directly.
     if (!map.isStyleLoaded()) return;
     const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
     const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
@@ -898,13 +939,28 @@ export function DiscoverMap({
     map.fitBounds(bounds, { padding: 48 });
   };
 
-  // Draws on mount and whenever discover.tsx's route state changes --
-  // covers both a fresh Directions tap on this component's own ResultCard
-  // and a route that already existed before switching back from list view.
+  // Draws whenever there's a route to draw AND the map is actually ready
+  // to accept a source/layer -- covers every case in one effect instead of
+  // the two that used to exist here:
+  //   - a fresh Directions tap while this component is already mounted
+  //     (route changes, styleReady is already true from an earlier load)
+  //   - a route that already existed before switching back from list view,
+  //     or before this component's very first mount (route starts non-null,
+  //     styleReady starts false and flips true once the map's initial
+  //     style finishes loading -- this is the exact case that used to be
+  //     silently dropped, see styleReady's own declaration comment above)
+  //   - buildStyle's dark/light setStyle call tearing down every
+  //     imperative layer (styleReady is reset to false right before that
+  //     setStyle call fires, per the MutationObserver above, then flips
+  //     back true once the new style's own "style.load" fires, re-running
+  //     this effect and redrawing the route onto the new style)
+  // Both dependencies matter: route alone can't tell whether the map can
+  // currently accept the draw, and styleReady alone can't tell whether
+  // there's anything to draw.
   useEffect(() => {
-    if (route) drawRoute(route);
+    if (route && styleReady) drawRoute(route);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route]);
+  }, [route, styleReady]);
 
   // Phase 3.7: a drawn route is not cleared just because the popup closes
   // -- the popup closes specifically so the line stays visible (Part 2's
@@ -917,24 +973,6 @@ export function DiscoverMap({
   // around unused (would fail this project's noUnusedLocals build setting
   // anyway). Add one if a future phase adds an explicit "clear route"
   // affordance.
-
-  // Re-adds the route after buildStyle's dark/light setStyle call above
-  // tears down every imperative layer, so a route drawn before a theme
-  // toggle doesn't silently disappear. Reads the same `route` prop rather
-  // than a separate ref, so this and the mount effect above never disagree
-  // about which geometry is current.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const handleStyleLoad = () => {
-      if (route) drawRoute(route);
-    };
-    map.on("style.load", handleStyleLoad);
-    return () => {
-      map.off("style.load", handleStyleLoad);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route]);
 
   // No container-resize handling: this component always renders into the
   // shell's fixed <main> region (public-shell.tsx) at a constant height.

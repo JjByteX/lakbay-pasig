@@ -543,7 +543,37 @@ function DesktopShell({
         <GlobalSearchBar query={query} onQueryChange={setQuery} />
         {discoverFilters}
       </div>
-      <SidebarInset className="h-svh overflow-hidden">
+      <SidebarInset
+        className={cn(
+          // Bug fix: SidebarInset is normally a flex-1 flow sibling of
+          // Sidebar's own internal spacer div (sidebar.tsx's Sidebar
+          // component renders a `relative` spacer that animates its
+          // width, offcanvas/icon/expanded, specifically so a flex-1
+          // sibling like this one gets pushed over by that width change
+          // -- the same push-via-flex-sibling mechanism the comment
+          // above this file already diagnosed and removed for the search
+          // panel). That push resizes DiscoverMap's container on every
+          // sidebar collapse/expand, and (same reasoning as the search
+          // panel fix) DiscoverMap has no resize() call or ResizeObserver
+          // to recover from it, so the map visibly shifts/tears.
+          // admin.tsx uses this same shared SidebarInset and does want
+          // the push (no map there to break), so the fix is scoped to
+          // this file's own usage rather than changed in sidebar.tsx
+          // itself, which would flip behavior for the admin panel too.
+          // Fixed positioning removes SidebarInset from the flex row
+          // entirely -- it no longer has a flex-computed width the
+          // spacer's animation can change -- and `left` instead reads
+          // the exact same --sidebar-width / --sidebar-width-icon custom
+          // properties and peer-data-[state=collapsed] selector the
+          // search panel above already keys off of, so this container's
+          // box is exactly as wide as "viewport minus the rail's real,
+          // current width" at every instant, transitioning smoothly in
+          // lockstep with the rail's own width animation instead of
+          // reacting a frame after a layout push.
+          "fixed inset-y-0 right-0 z-0 flex h-svh min-h-0 w-auto flex-none flex-col overflow-hidden transition-[left] duration-200 ease-linear",
+          "left-[--sidebar-width] peer-data-[state=collapsed]:left-[--sidebar-width-icon]",
+        )}
+      >
         {/* Bug fix / direct instruction: the collapse control now lives in
             PublicSidebar's own header row (Amkor's pattern -- collapse
             button beside the logo when expanded, the logo itself becomes
