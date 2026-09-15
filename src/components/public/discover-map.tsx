@@ -10,6 +10,7 @@ import { fetchActiveCategories as fetchActiveBusinessCategories, type BusinessCa
 import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
+import type { RouteGeometry } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 
 // Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
@@ -42,6 +43,11 @@ import { ResultCard, VerificationBadge } from "./result-card";
 
 const PASIG_CENTER: Coordinates = { latitude: 14.5764, longitude: 121.0851 };
 const DEFAULT_ZOOM = 14;
+// locate-me-and-directions-phases.md Phase 3.5: one GeoJSON source/line
+// layer pair, added and removed imperatively, the same shape buildStyle
+// already uses for the waterway layer -- no new rendering library.
+const ROUTE_SOURCE_ID = "directions-route";
+const ROUTE_LAYER_ID = "directions-route-line";
 
 // Catppuccin Latte (light) / Mocha (dark) hex values, one per OpenMapTiles
 // feature type. Latte is the default; MOCHA overrides apply when `.dark` is
@@ -582,6 +588,13 @@ function HoverPreview({
  * through, so the existing userLocation recenter effect below already
  * handles the camera move, whether the coordinate came from page load or
  * this button.
+ *
+ * locate-me-and-directions-phases.md Phase 3: ResultCard now also receives
+ * userLocation and onRouteFound (drawRoute below). This file still owns
+ * the one map instance and the one GeoJSON source/line-layer pattern
+ * (matching buildStyle's own waterway layer), so a route fetched inside
+ * the popup is drawn here, not inside result-card.tsx, which has no map
+ * reference of its own.
  */
 export function DiscoverMap({ results, userLocation, resultsLoading, resultsError, onLocationFound }: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -649,8 +662,11 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
       center: [PASIG_CENTER.longitude, PASIG_CENTER.latitude],
       zoom: DEFAULT_ZOOM,
       attributionControl: {
+        // locate-me-and-directions-phases.md Phase 3.8: OSRM/OSM ODbL credit
+        // added as one more clause in this same string, not a second
+        // attribution control, per the plan's explicit instruction.
         customAttribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://openfreemap.org">OpenFreeMap</a>',
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://openfreemap.org">OpenFreeMap</a>, routing by <a href="https://project-osrm.org">OSRM</a>',
       },
     });
     mapRef.current = map;
@@ -685,15 +701,117 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Phase 1 follow-up: a locate tap recenters the camera but drew nothing
+  // at the user's own position, unlike every mapping app's own convention
+  // (a pinned dot at "you are here"). Fixed with a dedicated DOM marker,
+  // the same maplibregl.Marker pattern markersRef already uses for places,
+  // not a style layer, so it always renders above the map canvas and never
+  // competes with the route line's z-order. Created once and moved via
+  // setLngLat on every userLocation change, rather than removed/recreated,
+  // since the coordinate is the only thing that ever changes about it.
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+
   // Phase 4.2: recenter once a user location resolves. MapLibre's own
   // constructor `center` option, like react-leaflet's, only applies on
   // first mount, so a later location needs an imperative call.
   useEffect(() => {
-    if (userLocation && mapRef.current) {
-      mapRef.current.setCenter([userLocation.longitude, userLocation.latitude]);
-      mapRef.current.setZoom(DEFAULT_ZOOM);
+    const map = mapRef.current;
+    if (!userLocation || !map) return;
+    map.setCenter([userLocation.longitude, userLocation.latitude]);
+    map.setZoom(DEFAULT_ZOOM);
+
+    if (!userMarkerRef.current) {
+      const dot = document.createElement("div");
+      dot.className = "h-4 w-4 rounded-full border-2 border-white bg-primary shadow-md";
+      dot.setAttribute("aria-label", "Your location");
+      userMarkerRef.current = new maplibregl.Marker({ element: dot })
+        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .addTo(map);
+    } else {
+      userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
     }
   }, [userLocation]);
+
+  useEffect(() => {
+    return () => {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+    };
+  }, []);
+
+  // locate-me-and-directions-phases.md Phase 3.5-3.7: route line, drawn
+  // imperatively on demand rather than kept in buildStyle (buildStyle
+  // rebuilds the whole style on every dark/light toggle via the
+  // MutationObserver above, which would otherwise wipe an in-progress
+  // route -- an imperative source/layer survives a setStyle only if
+  // re-added after, so this is re-added on the same "style.load" event
+  // buildStyle's own dark-mode switch fires, not left to silently vanish).
+  // palette.peach reused from the existing road-major layer, not a new
+  // color, per ux-ui-guidelines.md's tokens-only rule -- distinct from
+  // palette.blue's water/waterway use so a route never reads as a river.
+  const routeGeometryRef = useRef<RouteGeometry | null>(null);
+
+  const drawRoute = (geometry: RouteGeometry) => {
+    const map = mapRef.current;
+    if (!map) return;
+    routeGeometryRef.current = geometry;
+    // Guards against addSource/addLayer throwing when called before the
+    // style has finished loading (first paint, or mid dark/light setStyle
+    // swap) -- style.load re-runs this same draw once ready, so it's safe
+    // to skip here rather than throw and get mis-reported upstream as a
+    // routing-fetch failure in result-card.tsx's catch block.
+    if (!map.isStyleLoaded()) return;
+    const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
+    const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData({ type: "Feature", properties: {}, geometry });
+    } else {
+      map.addSource(ROUTE_SOURCE_ID, {
+        type: "geojson",
+        data: { type: "Feature", properties: {}, geometry },
+      });
+      map.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: "line",
+        source: ROUTE_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": palette.peach, "line-width": 4 },
+      });
+    }
+    const bounds = geometry.coordinates.reduce(
+      (b, coord) => b.extend(coord as [number, number]),
+      new maplibregl.LngLatBounds(geometry.coordinates[0], geometry.coordinates[0]),
+    );
+    map.fitBounds(bounds, { padding: 48 });
+  };
+
+  // Phase 3.7: a drawn route is not cleared just because the popup closes
+  // -- the popup closes specifically so the line stays visible (Part 2's
+  // own "close the popup so the line is visible"), so dismissal is not
+  // "without a fitting replacement," it's the intended end state. A repeat
+  // tap on Directions, or a different result's Directions, replaces the
+  // existing route via drawRoute's own setData call above, which is the
+  // "before drawing a new one" half of 3.7 -- no separate clear path is
+  // wired to any control in this phase, so no clearRoute function is kept
+  // around unused (would fail this project's noUnusedLocals build setting
+  // anyway). Add one if a future phase adds an explicit "clear route"
+  // affordance.
+
+  // Re-adds the route after buildStyle's dark/light setStyle call above
+  // tears down every imperative layer, so a route drawn before a theme
+  // toggle doesn't silently disappear.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const handleStyleLoad = () => {
+      if (routeGeometryRef.current) drawRoute(routeGeometryRef.current);
+    };
+    map.on("style.load", handleStyleLoad);
+    return () => {
+      map.off("style.load", handleStyleLoad);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // No container-resize handling: this component always renders into the
   // shell's fixed <main> region (public-shell.tsx) at a constant height.
@@ -805,7 +923,14 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
         <HoverPreview result={previewResult.result} x={previewResult.x} y={previewResult.y} />
       )}
 
-      <ResultCard result={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <ResultCard
+        result={selected}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+        userLocation={userLocation}
+        onRouteFound={drawRoute}
+      />
     </div>
   );
 }
