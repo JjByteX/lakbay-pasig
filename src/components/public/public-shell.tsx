@@ -472,12 +472,15 @@ function MobileShell({
 // Search-in-the-rail-opens-a-panel-beside-it pattern. This shell owns
 // `searchPanelOpen` (passed down to PublicSidebar so its Search row's
 // pressed/active state and this panel's visibility stay in sync from one
-// piece of state, not two) and renders the panel as a plain flex sibling
-// of SidebarInset -- not a second Sidebar/Sheet instance, since the
-// existing Sidebar primitive only models one collapsible rail, not a
-// nav-rail-plus-content-panel pair (confirmed by reading components/ui/
-// sidebar.tsx before building this rather than fighting that primitive
-// into a shape it doesn't support).
+// piece of state, not two) and renders the panel as a `fixed` overlay,
+// not a flex sibling of SidebarInset -- a flex sibling's own width change
+// (open vs. closed) pushes every later sibling including SidebarInset,
+// which resizes DiscoverMap's container and visibly breaks the map (see
+// the panel's own comment below). A second Sidebar/Sheet instance was
+// also ruled out: the existing Sidebar primitive only models one
+// collapsible rail, not a nav-rail-plus-content-panel pair (confirmed by
+// reading components/ui/sidebar.tsx before building this rather than
+// fighting that primitive into a shape it doesn't support).
 //
 // Per ux-ui-guidelines.md's side-panel rule ("use a side panel only when
 // the content needs comparison with the underlying page... user needs to
@@ -487,11 +490,6 @@ function MobileShell({
 // renders when Discover has actually registered it -- every other tab's
 // panel is search-only, not padded out with empty filter UI that would
 // violate the guidelines' "more than 30% empty is too large" sizing rule.
-// Search panel width, named so both the fixed panel and its layout-flow
-// spacer below agree on one number instead of two hardcoded "w-80"s
-// drifting apart later.
-const SEARCH_PANEL_WIDTH = "20rem"; // w-80
-
 function DesktopShell({
   query,
   setQuery,
@@ -518,13 +516,16 @@ function DesktopShell({
           DiscoverMap's container, which (discover-map.tsx's own comment,
           "No container-resize handling") never calls MapLibre's resize()
           and has no ResizeObserver, so the map visibly shifted/tore on
-          every open/close. Fixed the same way Sidebar itself (components/
-          ui/sidebar.tsx) solves this exact problem for the nav rail: a
-          zero-height-impact spacer that reserves the layout width, plus a
-          separately `fixed` panel positioned on top of the page rather
-          than inside the flex row. SidebarInset's own box never changes
-          size either way, so the map underneath never resizes -- only
-          this panel slides over it.
+          every open/close. An earlier fix kept a flex-flow spacer here to
+          "reserve" the panel's width, matching Sidebar's own two-piece
+          pattern -- but that spacer is itself a flex sibling of
+          SidebarInset, so its own width animation still pushed
+          SidebarInset (and the map inside it) exactly the same way.
+          Removed outright: this panel is purely a `fixed`, z-20 overlay
+          that floats on top of the page and never occupies layout space
+          at all, so SidebarInset's box is 100% constant regardless of
+          open/closed state -- nothing beside the sidebar itself can ever
+          resize the map again.
           Positioned flush against the sidebar's own right edge via the
           same peer-data-[state] selectors SidebarInset already keys off
           of (peer is set on Sidebar's own root, sidebar.tsx line ~159),
@@ -532,11 +533,6 @@ function DesktopShell({
           collapsed via --sidebar-width-icon) without re-measuring it in
           JS -- it just reads the same CSS custom properties/data-state
           the rail itself renders with. */}
-      <div
-        aria-hidden
-        className="relative hidden h-svh shrink-0 transition-[width] duration-200 ease-linear md:block"
-        style={{ width: panelOpen ? SEARCH_PANEL_WIDTH : 0 }}
-      />
       <div
         className={cn(
           "fixed inset-y-0 z-20 hidden h-svh flex-col gap-4 overflow-y-auto border-r border-border bg-card p-4 transition-[left,width] duration-200 ease-linear md:flex",
