@@ -116,6 +116,21 @@ Separately, `userLocation`'s source changed from a single `getCurrentPosition` c
 
 ---
 
+**#:** 17
+**Milestone:** Content population (build-order.md step 11) — seed.sql real content replacement
+
+**Decision:** `supabase/seed.sql` rewritten in one pass per content-replacement-plan.md and resume-plan.md: all sample "Demo ..." rows removed from Places (10), Businesses (8), Routes/Trails (3), and Events (6), replaced with real CATO-submitted content from NEW_DATA.md plus storage-manifest.md's photo paths. Places: 5 rows (4 CATO-submitted heritage sites plus Youth Development Center per open-questions.md #7), all `verified`, `category_id`/`facility_ids` resolved via the same subquery pattern the original seed used. Businesses: 3 rows (Panaderia Dimas-Alang, Three Sisters' Restaurant of Pasig with the corrected West Capitol Drive address per open-questions.md #4, Ado's Panciteria), all `verified`; `business_categories` trimmed from the original 7-row demo list to the 2 real categories used (Food Stall, Restaurant). Events: 3 rows, real CATO announcements, `category_id` resolved against migration 0032's 3 new rows (Cultural & Heritage, Youth & Education, Arts & Culture); all 3 land as `lifecycle_status = 'past'` since their real submitted dates (Feb/May/June 2026) are already behind this seed's "now".
+
+Per open-questions.md #8's resolution: Routes/Trails (routes, route_stops, discovery_content, trail_credentials) and the personal-record tables that referenced sample route/place ids (completed_routes, user_credentials, saved_routes, saved_places) are dropped entirely, left empty, not seeded with placeholder trails over the new real content. Documented inline in seed.sql with a comment block explaining what's missing and how to resume once real Trail data exists, rather than silently vanishing from the file.
+
+Two gaps flagged and resolved with the human present rather than guessed at silently: (1) business_items needed individual item name/price rows but NEW_DATA.md only gave a per-person price range per business — resolved by web-researching real, sourced menu items and prices for each business (Wanderlog for Panaderia Dimas-Alang, imenuph.com for Three Sisters', a public menu listing for Ado's Panciteria), flagged in seed.sql's own comment as prototype-quality research pending CATO's official itemized list; (2) no lat/long was supplied for any Place or Business — resolved the same way, web-searching Wikipedia/Wikidata coordinates for the 3 heritage sites and nearby-landmark coordinates for Plaza Rizal, Youth Development Center, and the 3 businesses, flagged as street/barangay-level accuracy, not surveyed.
+
+Photo URLs use a `:SUPABASE_URL` placeholder substituted per environment, pointing at the `content-photos` bucket paths storage-manifest.md specifies; the 30 real photo files still need to be uploaded to that bucket before these URLs resolve to anything (unchanged from resume-plan.md's own note — this pass did not touch the upload step, only the seed.sql references to those paths).
+
+**Standing rule:** Any future content-population pass that finds a table it cannot seed with real, sourced data (as opposed to a table it chooses to leave empty on a confirmed decision) should research and cite real sources the way this entry's business_items/coordinates gap was handled, not fabricate plausible-looking values silently — and should flag the research as prototype-quality pending official confirmation, the same way this entry does. Any future pass that drops an entire seeded section (as Routes/Trails was dropped here) documents why inline in seed.sql itself, not only in a planning doc, so the file stays self-explanatory to whoever opens it next.
+
+---
+
 **#:**
 **Milestone:**
 

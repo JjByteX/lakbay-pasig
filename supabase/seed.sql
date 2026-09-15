@@ -24,24 +24,28 @@
 --     Registered User account")
 --   - Guest requires no seed row, it is the no-session state.
 --
--- Content spans every verification_status, featured_status, published/draft,
--- and lifecycle_status value so every admin list/filter/badge has something
--- to render, plus deliberately varied business_flags / business_photos /
--- account ages so src/lib/business-queue-priority.ts has real signals to
--- sort on instead of an empty table.
+-- Profiles (auth accounts, staff, residents, vendors) are still demo data —
+-- account ages and permission mixes span every state so every admin list/
+-- filter/badge and src/lib/business-queue-priority.ts signal has something
+-- to render against, same reasoning as before.
 --
--- Photos use https://picsum.photos/seed/<slug>/<w>/<h>, a public placeholder
--- image service, not real Pasig photography — this is data seeding, not an
--- asset pipeline, and the real photos are a CATO content task per
--- docs/feature-scope-changes.md's "Resolved After Meeting With CATO" section.
+-- Places, Businesses, and Events are REAL CATO-submitted content as of the
+-- content population pass (build-order.md step 11), not demo data — see
+-- project-foundation/open-questions.md and decision-log.md entry #17 for
+-- the full replacement history. All content rows are verification_status
+-- 'verified' / published true, reflecting that this is CATO's own reviewed
+-- content, not a queue exercising every review state the way the original
+-- sample data did. Photos point at the real `content-photos` Supabase
+-- Storage bucket (migration 0031), not picsum.photos placeholders — see
+-- storage-manifest.md for upload paths; the 30 real photo files must be
+-- uploaded there before these URLs resolve to anything.
 --
--- Extended beyond the original Places/Profiles pass to cover every table in
--- migrations 0001-0010: Businesses (with items, photos, flags, and review
--- log), Place review log, Routes/Trails with stops and Discovery content,
--- Events, Trail credentials, and the personal-record tables (saved places,
--- saved routes, completed routes, earned credentials), so every admin list,
--- filter, badge, and RLS-gated read in the current src/ tree has real rows
--- to render against, not an empty state everywhere except Places.
+-- Routes/Trails (routes, route_stops, discovery_content, trail_credentials)
+-- and the personal-record tables that depended on sample route/place ids
+-- (completed_routes, user_credentials, saved_routes, saved_places) are
+-- INTENTIONALLY EMPTY per open-questions.md #8 — no real Trail data has
+-- been submitted yet. See the comment block at that section below for how
+-- to resume once it is.
 -- =============================================================================
 
 begin;
@@ -279,20 +283,24 @@ commit;
 begin;
 
 -- -----------------------------------------------------------------------------
--- 3. Places (10) — spans pending / verified / rejected, all 5 categories
+-- 3. Places (5) — real CATO-submitted heritage content, replacing the
+--    original 10 sample "Demo ..." rows per content-replacement-plan.md.
+--    All 5 verified: this is CATO's own submitted content, reviewed and
+--    confirmed via web search cross-reference (see open-questions.md #4),
+--    not a pending queue item. Column list matches the current places
+--    schema after migrations 0022 (category text -> category_id,
+--    references place_categories) and 0026 (facilities text[] ->
+--    facility_ids uuid[], references place_facilities), resolved here via
+--    subqueries against those tables' name columns, same pattern the
+--    original seed used.
+--
+--    Coordinates: none were supplied with the source content, so these
+--    were looked up (Wikipedia/Wikidata for the 3 heritage sites, nearby
+--    public landmarks for Plaza Rizal and Youth Development Center) —
+--    street/barangay-level accuracy, sufficient for prototype map display,
+--    not surveyed. Flag for CATO to confirm exact coordinates before
+--    production use.
 -- -----------------------------------------------------------------------------
--- Column list matches the current places schema after migrations 0022
--- (category text -> category_id, references place_categories, seeded by
--- that migration itself) and 0026 (facilities text[] -> facility_ids
--- uuid[], references place_facilities, also self-seeded). reviewed_by is
--- only set where verification_status is verified or rejected, mirroring
--- how the real review flow in admin-place-detail.tsx only sets it on a
--- review action (see place_reviews in section 8, which logs the same
--- action). category_id and facility_ids are resolved here via subqueries
--- against place_categories.name / place_facilities.name rather than
--- hardcoded ids, since migrations 0022/0026 generate those ids at apply
--- time (gen_random_uuid()), not fixed values this file could know ahead
--- of time.
 
 insert into public.places (
   id, name, category_id, description, historical_background, historical_significance,
@@ -300,141 +308,120 @@ insert into public.places (
   entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places,
   language, verification_status, reviewed_by, updated_at
 ) values
-  ('6bce5398-b23e-4611-87e8-3747ea370bc4', 'Demo Heritage House',
-   (select id from public.place_categories where name = 'Heritage Site'),
-   'A restored ancestral house open for guided walk-throughs.',
-   'Built in the early twentieth century by a local trading family, later used as a wartime billet before being restored as a heritage exhibit.',
-   'One of the few remaining examples of pre-war residential architecture in the area, illustrating domestic life of the period.',
-   'Early 1900s', 'CATO heritage archive, oral history interviews (2019)',
-   '123 Demo Heritage Street, Pasig City', 14.5764, 121.0851,
-   '9:00 AM - 5:00 PM, Tuesday to Sunday', 0, '45 minutes',
-   'Ground floor wheelchair accessible, second floor stairs only',
-   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk')),
-   'Near Demo Plaza and Demo Riverside Walk',
-   'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '12 days'),
-
-  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'Demo Riverside Walk',
-   (select id from public.place_categories where name = 'Cultural Site'),
-   'A landscaped riverside promenade used for community events and evening walks.',
-   'Developed as part of a river rehabilitation program, incorporating public art installations from local artists.',
-   'Represents the city''s ongoing river cleanup and public space revival efforts.',
-   '2015', 'City Planning Office records',
-   '45 Demo Riverside Avenue, Pasig City', 14.5731, 121.0899,
-   'Open 24 hours', 0, '30 minutes',
-   'Fully paved, wheelchair accessible',
-   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
-   'Near Demo Heritage House', 'English', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '20 days'),
-
-  ('84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'Demo Parish Church',
-   (select id from public.place_categories where name = 'Church'),
-   'A working parish church known for its preserved retablo and bell tower.',
-   'Construction began under Spanish colonial administration and continued through several rectors, with the bell tower added later.',
-   'Listed as a point of interest for its retablo craftsmanship and continuous use since construction.',
-   '1780s', 'Archdiocesan parish records',
-   '8 Demo Church Square, Pasig City', 14.5700, 121.0825,
-   '6:00 AM - 7:00 PM daily', 0, '20 minutes',
-   'Main entrance ramp available',
-   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking')),
-   'Near Demo Public Market', 'Filipino', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '35 days'),
-
-  ('290fe466-9327-4660-9766-a2c64cdf078d', 'Demo City Museum',
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', 'Pasig City Museum (Concepcion Mansion)',
    (select id from public.place_categories where name = 'Museum'),
-   'A small municipal museum covering local trade history and everyday artifacts.',
-   'Founded from a donated private collection, later expanded with pieces recovered during infrastructure excavation projects.',
-   'Serves as the city''s primary repository of everyday material culture, not just ceremonial artifacts.',
-   '1998', 'CATO museum accession log',
-   '77 Demo Museum Road, Pasig City', 14.5690, 121.0790,
-   '9:00 AM - 4:00 PM, Wednesday to Sunday', 50, '1 hour',
-   'Elevator available, wheelchair accessible',
+   'A restored Spanish-Baroque mansion housing artifacts, historical documents, and art exhibits depicting the socio-cultural evolution of Pasig.',
+   'Built in 1937 by former Municipal President Don Fortunato Concepcion. During World War II, it was commandeered by Japanese forces as an observation post, and the American flag was raised atop its tower during liberation in 1945. It was acquired by the city government in 2000 and converted into a public museum.',
+   'Served as a strategic military outpost during WWII and stands today as a central repository for the city''s local history and identity.',
+   '1937 / Pre-War American Period (Spanish-Baroque architectural style)',
+   'Pasig City Cultural Affairs and Tourism Office (CATO); National Historical Commission of the Philippines (NHCP)',
+   'Plaza Rizal, 2 F. Concepcion St., Brgy. San Jose, Pasig City, 1600 Metro Manila', 14.5609, 121.0762,
+   'Tuesday to Sunday, 9:00 AM – 4:00 PM (Closed Mondays)', 0, '45 to 60 minutes',
+   'Ground floor exhibits accessible via ramp; upper floors accessible primarily via stairs.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk', 'Parking')),
-   'Near Demo City Hall', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '8 days'),
+   'Immaculate Conception Cathedral, Plaza Rizal & Bitukang Manok Area',
+   'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
 
-  ('3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'Demo War Memorial',
-   (select id from public.place_categories where name = 'Monument'),
-   'A monument commemorating local residents lost during wartime occupation.',
-   'Erected by a civic association two decades after the war, funded through community donations.',
-   'One of the few monuments in the city naming individual residents rather than a generic dedication.',
-   '1965', 'Civic association commemorative plaque',
-   '30 Demo Memorial Park, Pasig City', 14.5745, 121.0860,
-   'Open 24 hours', 0, '15 minutes',
-   'Fully accessible, paved plaza',
-   (select array_agg(id) from public.place_facilities where name in ('Parking')),
-   'Near Demo Riverside Walk', 'English', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '50 days'),
-
-  ('5f1a1879-789b-4b24-84c8-72cceaf11dd3', 'Demo Old Bridge Marker',
-   (select id from public.place_categories where name = 'Monument'),
-   'A marker at the site of the city''s first permanent river crossing.',
-   'Placed where the original bridge structure stood before being replaced by the current span.',
-   'Documents an early piece of civic infrastructure central to the growth of trade in the area.',
-   '1932', 'Public works historical registry',
-   '2 Demo Old Bridge Street, Pasig City', 14.5712, 121.0871,
-   'Open 24 hours', 0, '10 minutes',
-   'Sidewalk level, accessible', '{}'::uuid[],
-   'Near Demo Riverside Walk', 'Filipino', 'pending', null, now() - interval '2 days'),
-
-  ('f552df7f-30a7-42ab-b470-06968810f437', 'Demo Weaving Center',
-   (select id from public.place_categories where name = 'Cultural Site'),
-   'A community center preserving a local textile weaving tradition through workshops.',
-   'Established by a cooperative of weaving families to keep the craft from disappearing as demand shifted to factory textiles.',
-   'Active site of intangible cultural heritage, not a static exhibit.',
-   '2010', 'Cooperative founding charter',
-   '19 Demo Weavers Lane, Pasig City', 14.5678, 121.0803,
-   '10:00 AM - 3:00 PM, Monday to Friday', null, '40 minutes',
-   'Ground floor accessible',
-   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk')),
-   'Near Demo City Museum', 'Both', 'pending', null, now() - interval '1 days'),
-
-  ('e551915e-15e5-41ed-9ca1-a71364da7028', 'Demo Chapel Ruins',
+  ('a1e10002-0002-4c1a-9c1a-0000000000002', 'Immaculate Conception Cathedral',
    (select id from public.place_categories where name = 'Church'),
-   'The partial remains of an earlier chapel structure, preserved as a viewing site.',
-   'Damaged beyond repair during a historic flood, the surviving foundation and wall fragments were later fenced and preserved rather than demolished.',
-   'Illustrative of the area''s flood history and how earlier structures responded to it.',
-   '1850s', 'Parish historical notes, CATO field survey (2021)',
-   '5 Demo Chapel Path, Pasig City', 14.5721, 121.0838,
-   '8:00 AM - 5:00 PM daily', 0, '15 minutes',
-   'Uneven ground, limited accessibility', '{}'::uuid[],
-   'Near Demo Parish Church', 'English', 'rejected', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '15 days'),
+   'The seat of the Roman Catholic Diocese of Pasig, featuring high stone walls, ornate interior artwork, and historical bell tower structures.',
+   'Established in 1572 by Augustinian missionaries, making it one of the oldest parishes in the Philippines. The church was relocated to its current site in 1573, and the present stone foundation was constructed through the late 18th to 19th centuries. It was elevated to cathedral status in 2003.',
+   'Functioned as a major evangelization center under Spanish rule and was used as a military stronghold by British soldiers during the British invasion of Manila (1762–1764).',
+   'Founded 1572; Current stone structure built 1785–1880 (Spanish Colonial Period)',
+   'Roman Catholic Diocese of Pasig Archives; National Historical Commission of the Philippines (NHCP)',
+   'Plaza Rizal, Brgy. Malinao, Pasig City, 1600 Metro Manila', 14.5604, 121.0774,
+   'Open daily, 6:00 AM – 7:00 PM (Mass schedules vary)', 0, '30 to 45 minutes',
+   'Ramp access available at side entry doors; main floor area is level and paved.',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Waiting Area')),
+   'Pasig City Museum, Plaza Rizal & Bitukang Manok Area',
+   'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
 
-  ('56302e94-c04a-4e3e-8a2c-068d92e19298', 'Demo Artisan Plaza',
-   (select id from public.place_categories where name = 'Cultural Site'),
-   'A public plaza hosting rotating craft and food markets on weekends.',
-   'Converted from a former parking lot into a pedestrian plaza as part of a downtown revitalization plan.',
-   'Functions as the informal town square for cultural programming.',
-   '2019', 'City Planning Office records',
-   '60 Demo Plaza Center, Pasig City', 14.5705, 121.0845,
-   'Open 24 hours, markets Saturday and Sunday', 0, '30 minutes',
-   'Fully paved, wheelchair accessible',
-   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
-   'Near Demo Heritage House', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '6 days'),
+  ('a1e10003-0003-4c1a-9c1a-0000000000003', 'Bahay na Tisa (Don Cecilio Tech House)',
+   (select id from public.place_categories where name = 'Heritage Site'),
+   'The oldest surviving bahay na bato (house of brick and tile) in Pasig City, featuring adobe ground floors, wooden upper levels, and original capiz windows.',
+   'Built in the early 1850s by Don Cecilio Tech y Cabrera. It has remained continuously inhabited across seven generations of the Tech family. During Martial Law, it earned the nickname "Freedom House" for hosting multi-faction political discussions and local community art exhibits.',
+   'Rare intact example of mid-19th-century domestic Spanish-colonial architecture in Metro Manila, hosting long-standing religious traditions such as the annual Viatico Publico.',
+   'Circa 1850–1854 / Mid-19th Century Spanish Colonial Period',
+   'Pasig City Cultural Affairs and Tourism Office (CATO); Tech Family Historical Records',
+   'P. Gomez St., Brgy. San Jose, Pasig City, 1600 Metro Manila', 14.5607, 121.0742,
+   'Exterior viewing daily; interior access available by request/arrangement with the family or local tourism office.',
+   0, '15 to 30 minutes',
+   'Street-level exterior viewing fully accessible; interior contains steep wooden stairways with limited access for visitors with reduced mobility.',
+   '{}'::uuid[],
+   'Pasig City Museum, Immaculate Conception Cathedral',
+   'Both', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
 
-  ('ffa2feac-e3cf-437d-b285-20a9dd55d11b', 'Demo Watchtower Site',
+  ('a1e10004-0004-4c1a-9c1a-0000000000004', 'Plaza Rizal & Bitukang Manok Area (Parian Creek)',
    (select id from public.place_categories where name = 'Monument'),
-   'The foundation remnants of a colonial-era watchtower overlooking the river bend.',
-   'Built to monitor river traffic, decommissioned once the function became obsolete, left as a ruin rather than restored.',
-   'A rare surviving example of colonial-period river surveillance infrastructure in the city.',
-   '1790s', 'CATO field survey (2022)',
-   '11 Demo Watchtower Rise, Pasig City', 14.5688, 121.0912,
-   'Open 24 hours', 0, '20 minutes',
-   'Steep unpaved path, not wheelchair accessible', '{}'::uuid[],
-   'Near Demo Riverside Walk', 'English', 'pending', null, now() - interval '4 days');
+   'The historic town square of Pasig, bordered by the Pasig Cathedral, Pasig City Museum, and the historic Bitukang Manok (Parian Creek) tributary.',
+   'Formed the core urban grid of Pasig under Spanish administration. On August 29, 1896, the area witnessed Nagsabado sa Pasig, when Katipuneros led by Andres Bonifacio and Valentin Cruz assembled and captured the local Spanish headquarters (Tribunal).',
+   'Site of one of the earliest major military victories of the Katipunan during the 1896 Philippine Revolution against Spanish rule.',
+   'Established late 16th Century; redesigned in the 20th Century (Spanish Colonial to American Period)',
+   'Pasig City Government Archives; National Historical Commission of the Philippines (NHCP) Marker',
+   'Caruncho Ave. cor. P. Burgos St. & A. Luna St., Brgy. Malinao, Pasig City, 1600 Metro Manila', 14.5606, 121.0768,
+   'Open 24 Hours / 7 Days a week (Public Park)', 0, '20 to 30 minutes',
+   'Open-air flat surface, fully wheelchair accessible with concrete paved walkways.',
+   (select array_agg(id) from public.place_facilities where name in ('Waiting Area')),
+   'Pasig City Museum, Immaculate Conception Cathedral, Ado''s Panciteria',
+   'Both', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
+
+  -- Added per open-questions.md #7: not among the 4 originally submitted
+  -- Places, but required as discovery_content's related_place_id target
+  -- for the "Pasig Creative Arts Academy: Summer Youth Workshops" event.
+  -- A modern civic facility under CATO's 2026 executive-order oversight,
+  -- not a heritage structure, so historical fields stay minimal/not
+  -- applicable rather than invented.
+  ('a1e10005-0005-4c1a-9c1a-0000000000005', 'Youth Development Center',
+   (select id from public.place_categories where name = 'Cultural Site'),
+   'A city-run youth and community facility hosting CATO-supervised programs, workshops, and events for young Pasigueños.',
+   'Placed under CATO''s supervision by executive order in 2026, expanding the office''s oversight beyond heritage sites into active youth programming, including the Pasig Creative Arts Academy.',
+   'Not applicable — a modern civic facility, not a heritage structure.',
+   'Not applicable', 'Pasig City Cultural Affairs and Tourism Office (CATO)',
+   'F. Legaspi St., Rainforest Park, Barangay Maybunga, Pasig City', 14.5738, 121.0977,
+   'Monday to Friday, 9:00 AM – 6:00 PM (Closed weekends, except during scheduled programs)',
+   0, '30 to 45 minutes, program-dependent',
+   'Ground floor accessible; specific accessibility features not yet documented.',
+   (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
+   'Pasig Rainforest Park', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '2 days');
 
 -- -----------------------------------------------------------------------------
--- 4. Place photos — historical + current, at least one place with none
+-- 4. Place photos — real Pasig photography per storage-manifest.md.
+--    All 30 files must be uploaded to the `content-photos` bucket (created
+--    by migration 0031) at the paths below before these URLs resolve;
+--    see storage-manifest.md and resume-plan.md item 3. photo_type is set
+--    to 'current' throughout: storage-manifest.md's manifest does not
+--    distinguish historical vs. current per file, and none of the source
+--    material called out a specific photo as archival, so nothing here
+--    should be read as an archival/historical photo without confirming
+--    against the actual files once uploaded.
+--    :SUPABASE_URL is a placeholder for the project's own Supabase URL,
+--    substituted in per environment same as storage-manifest.md notes.
 -- -----------------------------------------------------------------------------
 insert into public.place_photos (place_id, photo_url, photo_type, sort_order) values
-  ('6bce5398-b23e-4611-87e8-3747ea370bc4', 'https://picsum.photos/seed/demo-heritage-house-hist/800/600', 'historical', 0),
-  ('6bce5398-b23e-4611-87e8-3747ea370bc4', 'https://picsum.photos/seed/demo-heritage-house-cur/800/600', 'current', 0),
-  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'https://picsum.photos/seed/demo-riverside-cur1/800/600', 'current', 0),
-  ('f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'https://picsum.photos/seed/demo-riverside-cur2/800/600', 'current', 1),
-  ('84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'https://picsum.photos/seed/demo-parish-hist/800/600', 'historical', 0),
-  ('84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'https://picsum.photos/seed/demo-parish-cur/800/600', 'current', 0),
-  ('290fe466-9327-4660-9766-a2c64cdf078d', 'https://picsum.photos/seed/demo-museum-cur/800/600', 'current', 0),
-  ('3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'https://picsum.photos/seed/demo-warmemorial-cur/800/600', 'current', 0),
-  ('f552df7f-30a7-42ab-b470-06968810f437', 'https://picsum.photos/seed/demo-weaving-cur/800/600', 'current', 0),
-  ('e551915e-15e5-41ed-9ca1-a71364da7028', 'https://picsum.photos/seed/demo-chapelruins-hist/800/600', 'historical', 0),
-  ('56302e94-c04a-4e3e-8a2c-068d92e19298', 'https://picsum.photos/seed/demo-artisanplaza-cur/800/600', 'current', 0);
-  -- Demo Old Bridge Marker and Demo Watchtower Site intentionally have no
-  -- photos, both pending — a realistic incomplete submission state.
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/01.jpg', 'current', 0),
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/02.jpg', 'current', 1),
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/03.jpg', 'current', 2),
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/04.jpg', 'current', 3),
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/05.jpg', 'current', 4),
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/06.jpg', 'current', 5),
+  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/07.jpg', 'current', 6),
+
+  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/01.jpg', 'current', 0),
+  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/02.jpg', 'current', 1),
+  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/03.jpg', 'current', 2),
+  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/04.png', 'current', 3),
+
+  ('a1e10003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/01.jpg', 'current', 0),
+  ('a1e10003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/02.jpg', 'current', 1),
+  ('a1e10003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/03.png', 'current', 2),
+
+  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/01.jpg', 'current', 0),
+  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/02.jpg', 'current', 1),
+  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/03.jpg', 'current', 2),
+  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/04.jpg', 'current', 3);
+  -- Youth Development Center intentionally has no photos: storage-manifest.md
+  -- notes none were supplied for it, matching its places/youth-development-center/
+  -- path being left empty.
 
 -- -----------------------------------------------------------------------------
 -- 5. Place reviews — audit log per admin-panel-spec.md's "Review Action Log"
@@ -448,14 +435,11 @@ insert into public.place_photos (place_id, photo_url, photo_type, sort_order) va
 -- so reviewed_type is 'place' throughout, reviewed_id carries the old
 -- place_id value, same backfill 0014 itself did for pre-existing rows.
 insert into public.place_reviews (reviewed_type, reviewed_id, staff_id, action, notes, created_at) values
-  ('place', '6bce5398-b23e-4611-87e8-3747ea370bc4', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '12 days'),
-  ('place', 'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'reject', 'Address did not match Assessor''s Office records, please recheck before resubmitting.', now() - interval '25 days'),
-  ('place', 'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'Address corrected, coordinates now match.', now() - interval '20 days'),
-  ('place', '84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', null, now() - interval '35 days'),
-  ('place', '290fe466-9327-4660-9766-a2c64cdf078d', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '8 days'),
-  ('place', '3610bb1f-bbbe-48db-a77a-17c2632eabb0', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', null, now() - interval '50 days'),
-  ('place', 'e551915e-15e5-41ed-9ca1-a71364da7028', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'reject', 'Source reference is a single parish note with no second source. Needs corroboration before this goes live.', now() - interval '15 days'),
-  ('place', '56302e94-c04a-4e3e-8a2c-068d92e19298', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', null, now() - interval '6 days');
+  ('place', 'a1e10001-0001-4c1a-9c1a-0000000000001', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'CATO-submitted heritage content, cross-checked against NHCP and Wikipedia references.', now() - interval '5 days'),
+  ('place', 'a1e10002-0002-4c1a-9c1a-0000000000002', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'CATO-submitted heritage content, cross-checked against Diocese of Pasig and NHCP references.', now() - interval '5 days'),
+  ('place', 'a1e10003-0003-4c1a-9c1a-0000000000003', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', 'CATO-submitted heritage content, cross-checked against Tech family and NHCP records.', now() - interval '5 days'),
+  ('place', 'a1e10004-0004-4c1a-9c1a-0000000000004', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', 'CATO-submitted heritage content, cross-checked against NHCP marker text.', now() - interval '5 days'),
+  ('place', 'a1e10005-0005-4c1a-9c1a-0000000000005', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'Added per open-questions.md #7 as the related Place for the Creative Arts Academy workshop event.', now() - interval '2 days');
 
 commit;
 
@@ -465,40 +449,32 @@ begin;
 -- 5.5 Business categories — migration 0027 left this table empty on purpose
 --     (businesses.category was never a fixed list to backfill from), so
 --     unlike place_categories/trail_categories/event_categories this list
---     exists only if seeded here. Names match the free-text category values
---     the businesses below already use (Restaurant, Food Stall, Handicraft,
---     Souvenirs, Printing, Tailoring, Repair), so every seeded business can
---     resolve a real category_id below, exercising the admin Categories ->
---     Business Category tab (admin-categories.tsx) with real rows instead
---     of an empty state. Icons per business-category-icons.ts's shortlist,
---     nearest semantic match for each name (Restaurant/Food Stall ->
---     utensils, matching that file's own "Food and Beverage" label).
+--     exists only if seeded here. Trimmed to the 2 categories the 3 real
+--     businesses below actually use (Food Stall for the bakery, Restaurant
+--     for the two panciterias/restaurants), rather than carrying over the
+--     original 7-category demo list. Icons per business-category-icons.ts's
+--     shortlist.
 -- -----------------------------------------------------------------------------
 insert into public.business_categories (name, icon, sort_order) values
   ('Restaurant', 'utensils', 1),
-  ('Food Stall', 'utensils', 2),
-  ('Handicraft', 'gift', 3),
-  ('Souvenirs', 'gift', 4),
-  ('Printing', 'briefcase', 5),
-  ('Tailoring', 'scissors', 6),
-  ('Repair', 'wrench', 7);
+  ('Food Stall', 'utensils', 2);
 
 -- -----------------------------------------------------------------------------
--- 6. Businesses (8) — spans pending/verified/unverified, listed/featured,
---    Product/Service/Both, registered/informal, and every
---    business-queue-priority.ts signal (new account, no photos, thin
---    description, copy-pasted description, multiple submissions).
+-- 6. Businesses (3) — real CATO-submitted heritage businesses, replacing
+--    the original 8 sample "Demo ..." rows per content-replacement-plan.md.
+--    All 3 verified, same reasoning as Places above. submitted_by points
+--    at a vendor's profiles.id from section 1/2 (demo accounts standing in
+--    for these real vendors until real vendor accounts exist — no vendor
+--    signup information was submitted alongside the business content
+--    itself). registered_or_informal defaults to 'registered': all 3 are
+--    long-established, named commercial establishments with public
+--    storefronts, not informal stalls.
 -- -----------------------------------------------------------------------------
 -- Column list matches the current businesses schema after migration 0027
 -- (category renamed to category_text_legacy, kept as the original free
 -- text so nothing entered before that migration is lost, plus a new
 -- nullable category_id resolved here against the business_categories rows
--- seeded directly above -- see that migration's own comment for why this
--- table starts empty and needs seeding here, unlike Places/Trails/
--- Announcements). submitted_by always points at a vendor's profiles.id from
--- section 1/2 above, never a staff account — per vendor-mode-spec.md,
--- "Vendor is not a separate account type," any Registered User becomes one
--- the moment they submit a business.
+-- seeded directly above).
 
 insert into public.businesses (
   id, name, business_type, category_text_legacy, category_id, description, address, latitude, longitude,
@@ -507,360 +483,208 @@ insert into public.businesses (
   featured_status, submitted_by, registered_or_informal, views_count, saves_count,
   updated_at
 ) values
-  -- Established, verified, featured — vendor1 (400 days old)
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'Demo Riverside Eatery', 'Product', 'Restaurant',
-   (select id from public.business_categories where name = 'Restaurant'),
-   'A family-run carinderia serving Pasig home-style dishes near the riverside promenade.',
-   '14 Demo Market Street, Pasig City', 14.5733, 121.0891,
-   '+639201234567', '10:00 AM - 8:00 PM daily',
-   'Started as a single food stall in the old public market, moved to its current storefront after outgrowing the stall in its third year.',
-   'Known for a decades-old sinigang recipe passed down within the family.',
-   'Street level, no steps, informal parking along the street',
-   array['https://facebook.com/demo-riverside-eatery'], 'Both', 'verified',
-   'fed52550-3ee1-48da-b033-211f6245fbb6', null, 'featured',
-   'a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'registered', 812, 156, now() - interval '18 days'),
-
-  -- Verified, listed, informal — vendor2 (320 days old)
-  ('6d28a284-ec7a-4da6-89f0-592dc04088e7', 'Demo Kakanin Corner', 'Product', 'Food Stall',
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Panaderia Dimas-Alang', 'Product', 'Food Stall',
    (select id from public.business_categories where name = 'Food Stall'),
-   'A small stall selling traditional rice cakes made fresh every morning.',
-   '5 Demo Public Market, Pasig City', 14.5741, 121.0868,
-   '+639201234568', '6:00 AM - 1:00 PM daily',
-   'Run by a single vendor who learned the recipes from her mother, selling at the same market spot for over a decade.',
-   'Uses a wood-fired steaming method most nearby stalls have switched away from.',
-   'Market aisle stall, narrow but level', array[]::text[],
-   'Filipino', 'verified', 'fed52550-3ee1-48da-b033-211f6245fbb6', null,
-   'listed', 'fd00f3e8-88bf-4536-96af-86a764856066', 'informal', 340, 61, now() - interval '40 days'),
+   'The oldest operating bakery in Pasig City, offering traditional wood-fired-style breads and century-old Filipino pastry recipes.',
+   '52 A. Mabini St., Brgy. Kapasigan, Pasig City, 1600 Metro Manila', 14.5747, 121.0723,
+   '+63 2 8641 0408', '9:00 AM – 6:00 PM, Monday to Sunday',
+   'Established in 1919 by Teresa Raymundo and Ambrosio Lozada, the bakeshop took its name from Dimas-Alang, the revolutionary nom de plume of Dr. José Rizal. Managing operations through World War II and urban modernization, the Lozada family has preserved early 20th-century Filipino artisanal baking methods across four generations.',
+   'Heirloom heritage pastries including Pan de San Nicolas, Aglipay, Biscocho de Caña, and Hindi Ko Akalain.',
+   'Ground-floor street entry, flat sidewalk access, street parking available nearby.',
+   array['https://www.facebook.com/PanaderiaDimasalang1919'], 'Both', 'verified',
+   'fed52550-3ee1-48da-b033-211f6245fbb6', 'CATO-submitted, address and contact confirmed against the business''s own Facebook page.',
+   'featured', 'a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'registered', 0, 0, now() - interval '5 days'),
 
-  -- Pending, thin description, one photo — vendor3 (250 days old)
-  ('5ae1c60e-ddbb-4e03-a782-0b72023dc381', 'Demo Grill House', 'Product', 'Restaurant',
+  -- Address corrected per open-questions.md #4: submitted address (10 East
+  -- Capitol Dr.) was the pre-2020 location; current, web-search-verified
+  -- address is 136 West Capitol Drive. Phone carried over unchanged.
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Three Sisters'' Restaurant of Pasig', 'Service', 'Restaurant',
    (select id from public.business_categories where name = 'Restaurant'),
-   'Grilled food.',
-   '21 Demo Food Row, Pasig City', 14.5719, 121.0902,
-   '+639201234569', '4:00 PM - 11:00 PM daily', null, null,
-   'Ground floor, open-air seating', array[]::text[],
-   'English', 'pending', null, null, 'listed',
-   '1f73e1d0-9eaa-498e-a19d-d6b07b02e9d0', 'registered', 47, 5, now() - interval '3 days'),
+   'A landmark dining establishment serving classic Filipino comfort food and heritage recipes continuously since 1941.',
+   '136 West Capitol Drive, Brgy. Kapitolyo, Pasig City, 1603 Metro Manila', 14.5715, 121.0573,
+   '(02) 631-9247 / +63 917 636 2134', '10:00 AM – 9:00 PM, Monday to Sunday',
+   'Founded in 1941 by Rosa "Lola Rosa" Pike as Three Sisters'' Refreshment Parlor, the eatery originally gained popularity for its halo-halo and noodle dishes. Rebuilding after World War II, it expanded into a full-service Filipino restaurant renowned for preserving mid-century home-style recipes across generations.',
+   'Signature sweet-savory Pork Barbecue, Pancit Bihon, and traditional Halo-Halo.',
+   'Ground-floor dining access, wheelchair-accessible seating options, customer parking space.',
+   array['https://www.facebook.com/profile.php?id=100080226190377', 'https://www.instagram.com/threesisterspasig/'],
+   'Both', 'verified', 'fed52550-3ee1-48da-b033-211f6245fbb6',
+   'CATO-submitted; address corrected from the outdated East Capitol Drive location to the current West Capitol Drive address per web search verification (Instagram, most recent).',
+   'featured', 'fd00f3e8-88bf-4536-96af-86a764856066', 'registered', 0, 0, now() - interval '5 days'),
 
-  -- Verified, featured, service-type — vendor1's second listing (multipleSubmissions signal)
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'Demo Weaving Supplies', 'Both', 'Handicraft',
-   (select id from public.business_categories where name = 'Handicraft'),
-   'Sells woven textile pieces and offers short hands-on weaving demonstrations for visitors.',
-   '19 Demo Weavers Lane, Pasig City', 14.5679, 121.0805,
-   '+639201234570', '10:00 AM - 3:00 PM, Monday to Friday',
-   'Opened by a former Demo Weaving Center apprentice to sell finished pieces directly to visitors after workshops.',
-   'Only stall in the area selling handwoven pieces made on site, not sourced elsewhere.',
-   'Ground floor, shares accessibility with Demo Weaving Center next door',
-   array['https://facebook.com/demo-weaving-supplies', 'https://instagram.com/demo.weaving'],
-   'Both', 'verified', 'fed52550-3ee1-48da-b033-211f6245fbb6', null, 'featured',
-   'a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'informal', 265, 88, now() - interval '10 days'),
-
-  -- Unverified (rejected-equivalent per 0004's check constraint) with review notes — vendor4 (45 days old)
-  ('8925a576-e13a-4cc8-84d9-98f2477a5b39', 'Demo Souvenir Hub', 'Product', 'Souvenirs',
-   (select id from public.business_categories where name = 'Souvenirs'),
-   'Souvenir shop selling keychains, shirts, and fridge magnets themed around the city.',
-   '3 Demo Plaza Center, Pasig City', 14.5703, 121.0844,
-   '+639201234571', '9:00 AM - 7:00 PM daily', null, null,
-   'Street level entrance', array[]::text[], 'English', 'unverified',
-   'fed52550-3ee1-48da-b033-211f6245fbb6',
-   'Listing photos appear to be stock images, not the actual storefront. Please resubmit with real photos before this can be verified.',
-   'listed', '813367e0-97dc-442c-9511-0e6c506c0883', 'registered', 22, 2, now() - interval '5 days'),
-
-  -- Pending, new account, no photos, thin + copy-pasted description — vendor5 (3 days old)
-  ('97548250-1019-48d5-9ae3-db9eef0555e1', 'Demo Print Services', 'Service', 'Printing',
-   (select id from public.business_categories where name = 'Printing'),
-   'Quality service for everyone.',
-   '8 Demo Commerce Ave, Pasig City', 14.5695, 121.0857,
-   '+639201234572', '8:00 AM - 6:00 PM, Monday to Saturday', null, null,
-   null, array[]::text[], 'English', 'pending', null, null, 'listed',
-   '66c28540-f93a-48e2-aaa3-792f34b84491', 'informal', 3, 0, now() - interval '3 days'),
-
-  -- Pending, new account, no photos, thin + copy-pasted description (same
-  -- text as above on purpose) — vendor6 (1 day old), plus a second listing
-  -- below from the same account to trigger the multipleSubmissions signal.
-  ('1a470f8e-da17-445b-9a06-05fef0dddca3', 'Demo Tailoring Services', 'Service', 'Tailoring',
-   (select id from public.business_categories where name = 'Tailoring'),
-   'Quality service for everyone.',
-   '9 Demo Commerce Ave, Pasig City', 14.5696, 121.0858,
-   '+639201234573', '9:00 AM - 6:00 PM, Monday to Saturday', null, null,
-   null, array[]::text[], 'English', 'pending', null, null, 'listed',
-   '3541db59-0c27-4324-b685-eb66de017874', 'informal', 1, 0, now() - interval '1 days'),
-
-  ('13c73f2b-6101-4e89-a6ba-2639c048fcf8', 'Demo Repair Shop', 'Service', 'Repair',
-   (select id from public.business_categories where name = 'Repair'),
-   'Second listing from the same brand-new account, exercises the one-listing-flag-not-block rule from vendor-mode-spec.md.',
-   '9 Demo Commerce Ave, Pasig City', 14.5696, 121.0859,
-   '+639201234574', '9:00 AM - 6:00 PM, Monday to Saturday', null, null,
-   null, array[]::text[], 'English', 'pending', null, null, 'listed',
-   '3541db59-0c27-4324-b685-eb66de017874', 'informal', 0, 0, now() - interval '1 days');
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Ado''s Panciteria', 'Service', 'Restaurant',
+   (select id from public.business_categories where name = 'Restaurant'),
+   'A historic neighborhood noodle house delivering authentic Pasig-style pancit dishes and local comfort meals since 1952.',
+   '126 A. Luna St. cor. R. Jabson St., Brgy. Malinao, Pasig City, 1600 Metro Manila', 14.5586, 121.0765,
+   '+63 966 882 1759', '6:30 AM – 10:00 PM, Monday to Sunday',
+   'Founded in 1952 by local barber-turned-cook Ado, the panciteria originated near the historic town square of Pasig. Built on affordable, flavorful noodle dishes, it grew from a simple neighborhood counter into a beloved culinary institution frequented by generations of Pasigueños.',
+   'Pasig-style Pancit Bihon and Pancit Canton topped with toasted garlic and savory pork bits.',
+   'Street-level entry, accessible ground-floor dining tables, limited street parking along A. Luna Street.',
+   array['https://www.facebook.com/theoriginaladospanciteria'], 'Both', 'verified',
+   'fed52550-3ee1-48da-b033-211f6245fbb6', 'CATO-submitted, address and contact confirmed against public business listings.',
+   'listed', '1f73e1d0-9eaa-498e-a19d-d6b07b02e9d0', 'registered', 0, 0, now() - interval '5 days');
 
 -- -----------------------------------------------------------------------------
--- 7. Business items — price optional per vendor-mode-spec.md, at least one
---    item per business with a blank price to exercise the "missing price"
---    warning and dashboard count.
+-- 7. Business items — real menu items and prices, researched via web
+--    search (business review sites, menu-price aggregators, the
+--    businesses' own social pages) since NEW_DATA.md gave only a per-
+--    person price range per business, not an itemized menu. This is
+--    prototype-quality content to demo for CATO, not CATO-confirmed data —
+--    flagged for the official itemized menu/price list to replace this
+--    on the next real content pass. Sources: Wanderlog (Panaderia
+--    Dimas-Alang), imenuph.com (Three Sisters'), Booky/blogspot menu
+--    listing (Ado's Panciteria).
 -- -----------------------------------------------------------------------------
 insert into public.business_items (business_id, name, price) values
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'Sinigang na Baboy (bowl)', 120.00),
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'Grilled Bangus (whole)', 180.00),
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'Rice (cup)', 15.00),
-  ('6d28a284-ec7a-4da6-89f0-592dc04088e7', 'Kutsinta (piece)', 10.00),
-  ('6d28a284-ec7a-4da6-89f0-592dc04088e7', 'Puto (pack of 6)', null),
-  ('5ae1c60e-ddbb-4e03-a782-0b72023dc381', 'Pork BBQ (stick)', 20.00),
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'Hand-woven table runner', 450.00),
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'Weaving demo (per person)', null),
-  ('8925a576-e13a-4cc8-84d9-98f2477a5b39', 'City keychain', 60.00),
-  ('97548250-1019-48d5-9ae3-db9eef0555e1', 'Document printing (per page)', 5.00),
-  ('1a470f8e-da17-445b-9a06-05fef0dddca3', 'Basic alteration', null);
+  -- Panaderia Dimas-Alang
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Bonete (piece)', 3.00),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Spanish Bread (piece)', 10.00),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Hindi Ko Akalain (piece)', 15.00),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Brazo de Mercedes (half roll)', 225.00),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Ensaymada', null),
+
+  -- Three Sisters' Restaurant of Pasig
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Regular Pork BBQ', 35.00),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Special Pork BBQ', 55.00),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Pancit Bihon (solo)', 110.00),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Crispy Pata (good for 4)', 495.00),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Halo-Halo Special', 110.00),
+
+  -- Ado's Panciteria
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Bihon Guisado', 75.00),
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Canton Guisado', 92.00),
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Lomi Special', 105.00),
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Lumpiang Shanghai', null);
 
 -- -----------------------------------------------------------------------------
--- 8. Business photos — mirrors place_photos, at least one business with
---    none so the "no photos" queue signal has a real row to catch.
+-- 8. Business photos — real Pasig photography per storage-manifest.md,
+--    same content-photos bucket and upload caveat as section 4 above.
 -- -----------------------------------------------------------------------------
 insert into public.business_photos (business_id, photo_url, sort_order) values
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'https://picsum.photos/seed/demo-riverside-eatery1/800/600', 0),
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'https://picsum.photos/seed/demo-riverside-eatery2/800/600', 1),
-  ('6d28a284-ec7a-4da6-89f0-592dc04088e7', 'https://picsum.photos/seed/demo-kakanin-corner/800/600', 0),
-  ('5ae1c60e-ddbb-4e03-a782-0b72023dc381', 'https://picsum.photos/seed/demo-grill-house/800/600', 0),
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'https://picsum.photos/seed/demo-weaving-supplies1/800/600', 0),
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'https://picsum.photos/seed/demo-weaving-supplies2/800/600', 1),
-  ('8925a576-e13a-4cc8-84d9-98f2477a5b39', 'https://picsum.photos/seed/demo-souvenir-hub/800/600', 0);
-  -- Demo Print Services, Demo Tailoring Services, and Demo Repair Shop
-  -- intentionally have zero photos — new, low-effort submissions is exactly
-  -- the queue-priority case business-queue-priority.ts needs to sort high.
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/01.jpg', 0),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/02.jpg', 1),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/03.jpg', 2),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/04.png', 3),
+
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/01.jpg', 0),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/02.jpg', 1),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/03.jpg', 2),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/04.jpg', 3),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/05.jpg', 4),
+
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/01.jpg', 0),
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/02.jpg', 1),
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/03.jpg', 2);
 
 -- -----------------------------------------------------------------------------
--- 9. Business reviews — audit log, mirrors place_reviews, includes a
+-- 9. Business reviews — audit log, mirrors place_reviews. Two of the three
+--    real businesses are featured (see section 6), so those carry a
 --    'feature' action per admin-panel-spec.md's Featured status toggle.
 -- -----------------------------------------------------------------------------
 insert into public.business_reviews (business_id, staff_id, action, notes, created_at) values
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', null, now() - interval '30 days'),
-  ('0af13835-fa0b-47e5-8ee7-8c87de9313d4', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Consistently included in food crawl planning, strong fit for the official crawl.', now() - interval '18 days'),
-  ('6d28a284-ec7a-4da6-89f0-592dc04088e7', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', null, now() - interval '40 days'),
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', null, now() - interval '14 days'),
-  ('0649beb4-36ed-4942-96ce-6b1107a51e2c', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'feature', 'Ties directly into the Demo Weaving Center trail stop, good storytelling fit.', now() - interval '10 days'),
-  ('8925a576-e13a-4cc8-84d9-98f2477a5b39', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'reject', 'Listing photos appear to be stock images, not the actual storefront. Please resubmit with real photos before this can be verified.', now() - interval '5 days');
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted, address and contact confirmed.', now() - interval '5 days'),
+  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Oldest operating bakery in Pasig, strong heritage-walk anchor point.', now() - interval '5 days'),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted; address corrected to current West Capitol Drive location per web search.', now() - interval '5 days'),
+  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Landmark Kapitolyo dining spot, continuous operation since 1941.', now() - interval '5 days'),
+  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted, address and contact confirmed.', now() - interval '5 days');
 
 -- -----------------------------------------------------------------------------
--- 10. Business flags — covers both defenses from vendor-mode-spec.md: a
---     system-generated flag (flagged_by null) for the second-listing case,
---     and a user-submitted report (flagged_by set) for the crowdsourced
---     report action. One resolved, one still open.
+-- 10. Business flags — no rows. The original sample flags (a system-
+--     generated second-listing flag, a user-submitted photo report) were
+--     demo scenarios against the removed sample businesses, and no real
+--     flag scenario was submitted for the 3 real businesses above. Left
+--     empty rather than inventing a flag scenario against real, verified
+--     CATO businesses; revisit once a real flag/report case exists to
+--     seed, or once vendor-mode-spec.md's flag flows need exercising
+--     again for a demo.
 -- -----------------------------------------------------------------------------
-insert into public.business_flags (business_id, flag_reason, flagged_by, created_at, resolved) values
-  ('13c73f2b-6101-4e89-a6ba-2639c048fcf8', 'Second listing attempt from an account that already has an active listing (Demo Tailoring Services).', null, now() - interval '1 days', false),
-  ('8925a576-e13a-4cc8-84d9-98f2477a5b39', 'Photos look copied from a stock photo site, not the actual store.', 'ed8d4b57-6a77-418b-9db3-11c18e18fbca', now() - interval '6 days', true);
 
 commit;
 
 begin;
 
 -- -----------------------------------------------------------------------------
--- 11. Routes (Trails) (3) — one per trail_categories row seeded by
---     migration 0023 (heritage walk, food crawl, cultural tour), one draft
---     to exercise the build-then-publish flow from admin-panel-spec.md.
---     Column list matches the current routes schema after migration 0023
---     (theme text -> category_id, references trail_categories, self-
---     seeded by that migration), resolved here the same subquery way
---     Places' category_id is resolved above.
+-- 11-15. Routes/Trails and dependent personal records — INTENTIONALLY EMPTY.
+--
+--     Resolved per open-questions.md #8 (resume-plan.md's blocking
+--     question): no real Routes/Trails data has been submitted alongside
+--     the real Places/Businesses/Events content above. The original
+--     sample Routes (3), route_stops, discovery_content, and
+--     trail_credentials all referenced sample Place/Business rows that
+--     are now removed, and the sample personal-record rows
+--     (completed_routes, user_credentials, saved_routes, saved_places)
+--     referenced those same sample route/place IDs. All of it was fake
+--     demo data with no real counterpart to replace it with, so per the
+--     confirmed decision it is dropped entirely rather than either (a)
+--     inventing placeholder trails over now-real Place/Business content,
+--     or (b) leaving rows that reference deleted sample IDs.
+--
+--     Tables left empty by this: routes, route_stops, discovery_content,
+--     trail_credentials, completed_routes, user_credentials, saved_routes,
+--     saved_places. All still exist per their migrations (0005, 0007) and
+--     still enforce their RLS policies; they simply have no seed rows
+--     until real Trail/Route data is submitted. The Trails feature area
+--     of the app will show its genuine empty state against this seed,
+--     which is accurate: there is no real Trail content yet, not a
+--     seeding gap to paper over.
+--
+--     To resume: once real Routes/Trails data arrives (stops in sequence,
+--     theme, estimated duration/budget, run type, any Discovery content,
+--     credential name/requirement per data-model.md's field list), add an
+--     insert for public.routes here, following the same category_id
+--     subquery pattern places/businesses/events use above, then
+--     route_stops referencing the real place/business ids from sections 3
+--     and 6, then discovery_content and trail_credentials as needed.
+--     Personal-record rows (completed_routes, user_credentials,
+--     saved_routes) only make sense once real routes exist to reference;
+--     saved_places can be seeded independently against the real place ids
+--     in section 3 whenever real save data exists to seed.
 -- -----------------------------------------------------------------------------
-insert into public.routes (
-  id, name, category_id, estimated_duration, estimated_budget, recommended_time,
-  run_type, status, created_by, updated_at
-) values
-  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'Demo Heritage Walk: Old Pasig',
-   (select id from public.trail_categories where name = 'heritage walk'),
-   '2 hours', null, 'Morning, before 10:00 AM', 'self guided',
-   'published', '6456adca-58a3-48c3-b0e6-6a086d03734f', now() - interval '20 days'),
-
-  ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'Demo Pasig Food Crawl',
-   (select id from public.trail_categories where name = 'food crawl'),
-   '3 hours', null, 'Late afternoon into evening', 'self guided',
-   'published', '6456adca-58a3-48c3-b0e6-6a086d03734f', now() - interval '9 days'),
-
-  ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'Demo Cultural Tour: Craft and Community',
-   (select id from public.trail_categories where name = 'cultural tour'),
-   '2.5 hours', null, 'Weekday afternoons, workshop hours', 'CATO guided',
-   'draft', 'e283c6fb-4dcd-455f-a60c-e35add77a330', now() - interval '2 days');
-   -- Draft trail, still exercises the build-then-publish flow: staff with
-   -- build_trails can see and edit it, routes_select_public correctly hides
-   -- it from Guests and Registered Users until published.
-
--- -----------------------------------------------------------------------------
--- 12. Route stops — sequenced places/businesses per route, type-plus-id
---     pattern per migration 0005, no foreign key enforces stop_id, values
---     below point at real rows in places/businesses seeded above.
--- -----------------------------------------------------------------------------
-insert into public.route_stops (route_id, stop_type, stop_id, sequence_order) values
-  -- Demo Heritage Walk: Old Pasig
-  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'place', '6bce5398-b23e-4611-87e8-3747ea370bc4', 1), -- Demo Heritage House
-  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'place', '84125a2b-7501-4251-8b5d-c0d6c5edaa5c', 2), -- Demo Parish Church
-  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'place', '290fe466-9327-4660-9766-a2c64cdf078d', 3), -- Demo City Museum
-  ('c594515a-227e-4483-a2ea-88beb8d344e8', 'place', '3610bb1f-bbbe-48db-a77a-17c2632eabb0', 4), -- Demo War Memorial
-
-  -- Demo Pasig Food Crawl
-  ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'business', '0af13835-fa0b-47e5-8ee7-8c87de9313d4', 1), -- Demo Riverside Eatery
-  ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'business', '6d28a284-ec7a-4da6-89f0-592dc04088e7', 2), -- Demo Kakanin Corner
-  ('6885343e-bd45-4f0e-b0ca-4491564ee096', 'place', 'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', 3), -- Demo Riverside Walk (rest stop)
-
-  -- Demo Cultural Tour: Craft and Community (draft)
-  ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'place', 'f552df7f-30a7-42ab-b470-06968810f437', 1), -- Demo Weaving Center
-  ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'business', '0649beb4-36ed-4942-96ce-6b1107a51e2c', 2), -- Demo Weaving Supplies
-  ('f69c54a2-e278-425e-abc5-c004bc0ef587', 'place', '56302e94-c04a-4e3e-8a2c-068d92e19298', 3); -- Demo Artisan Plaza
-
--- -----------------------------------------------------------------------------
--- 13. Discovery content — proximity-triggered secrets only, per
---     data-model.md's rule that general background stays on the Place or
---     Business page. Sequenced so each stop references the last per
---     build-priorities.md's "sequenced stories, not trivia pop ups."
---     related_route_stop_id links back to the matching row in section 12.
--- -----------------------------------------------------------------------------
-insert into public.discovery_content (
-  route_id, title, content, related_location_type, related_location_id,
-  related_route_stop_id, sequence_order, unlock_radius, needs_place_review, status
-) values
-  ('c594515a-227e-4483-a2ea-88beb8d344e8',
-   'The Family That Stayed',
-   'Before you go in, look at the side gate facing the alley. During the occupation, this was the door the family actually used, the front door stayed locked for years. What you are about to walk through was never meant to be a museum piece, it was someone hiding in plain sight.',
-   'place', '6bce5398-b23e-4611-87e8-3747ea370bc4',
-   (select id from public.route_stops where route_id = 'c594515a-227e-4483-a2ea-88beb8d344e8' and sequence_order = 1),
-   1, 50, false, 'active'),
-
-  ('c594515a-227e-4483-a2ea-88beb8d344e8',
-   'A Bell Recast Twice',
-   'The house you just left kept its secrets quiet. This church did the opposite, its bell has been recast twice, and both times the town paid for it out of pocket rather than let the parish go without one. Listen for it before you leave the plaza.',
-   'place', '84125a2b-7501-4251-8b5d-c0d6c5edaa5c',
-   (select id from public.route_stops where route_id = 'c594515a-227e-4483-a2ea-88beb8d344e8' and sequence_order = 2),
-   2, 40, false, 'active'),
-
-  ('c594515a-227e-4483-a2ea-88beb8d344e8',
-   'What the Excavation Found',
-   'Some of what you will see inside was not donated, it was dug up. A stretch of pipework nearby turned up trade pottery nobody expected, and it ended up here instead of a warehouse. Ask the desk which case holds it, it is not labeled the way you would expect.',
-   'place', '290fe466-9327-4660-9766-a2c64cdf078d',
-   (select id from public.route_stops where route_id = 'c594515a-227e-4483-a2ea-88beb8d344e8' and sequence_order = 3),
-   3, 40, false, 'active'),
-
-  -- New historical claim not yet tied to a verified Place on its own page,
-  -- exercises admin-panel-spec.md's Trail Publishing exception: this row
-  -- must route through the Places review queue before the trail goes live,
-  -- flagged here even though the parent route is already published, so the
-  -- app layer has a real row to test that check against.
-  ('6885343e-bd45-4f0e-b0ca-4491564ee096',
-   'The Recipe Nobody Wrote Down',
-   'Ask before you order. The sinigang here follows a souring method that was never written into any of the published Pasig cookbooks CATO has on file, it was verbally passed down and nearly lost when the original cook stopped working the stall.',
-   'business', '0af13835-fa0b-47e5-8ee7-8c87de9313d4',
-   (select id from public.route_stops where route_id = '6885343e-bd45-4f0e-b0ca-4491564ee096' and sequence_order = 1),
-   1, 30, true, 'active');
-
--- -----------------------------------------------------------------------------
--- 14. Trail credentials — one per published route, per data-model.md and
---     build-priorities.md's "credential for completing a specific route,"
---     not a generic points system.
--- -----------------------------------------------------------------------------
-insert into public.trail_credentials (id, credential_name, linked_route_id, requirement_to_earn) values
-  ('4bb0668a-20d1-4e22-88eb-2f8e608c9b2b', 'Old Pasig Walker', 'c594515a-227e-4483-a2ea-88beb8d344e8', 'Visit all 4 stops in sequence and finish at Demo War Memorial'),
-  ('e47e6cbf-6f6a-47fc-917e-0d3fca9480ce', 'Pasig Food Crawl Finisher', '6885343e-bd45-4f0e-b0ca-4491564ee096', 'Visit all 3 stops in sequence within the same day');
-  -- No credential yet for the draft Cultural Tour route, matches its
-  -- unpublished status, a credential tied to an unpublished trail would be
-  -- premature.
-
--- -----------------------------------------------------------------------------
--- 15. Personal records — completed_routes, user_credentials, saved_places,
---     saved_routes. Owned by residents and vendors from section 1/2, never
---     staff, these are End User records per data-model.md. Deliberately
---     varied per person so cohort-stat messaging like "one of 200 people who
---     finished this route this month" (competitive-positioning.md) has real
---     counts to sum instead of a single row.
--- -----------------------------------------------------------------------------
-insert into public.completed_routes (user_id, route_id, completed_at) values
-  ('ed8d4b57-6a77-418b-9db3-11c18e18fbca', 'c594515a-227e-4483-a2ea-88beb8d344e8', now() - interval '18 days'),
-  ('75486d5a-d222-4853-8046-8a55199c6208', 'c594515a-227e-4483-a2ea-88beb8d344e8', now() - interval '10 days'),
-  ('e927ff41-bff8-43f0-9c1f-98fcaa54793d', 'c594515a-227e-4483-a2ea-88beb8d344e8', now() - interval '4 days'),
-  ('db860542-f964-4290-a8f4-72c58c0dfff3', '6885343e-bd45-4f0e-b0ca-4491564ee096', now() - interval '7 days'),
-  ('c5a73b63-20bd-4310-9515-3f22fa9dd40c', '6885343e-bd45-4f0e-b0ca-4491564ee096', now() - interval '2 days'),
-  ('a77bf9f3-1107-4e9e-9677-ebbcaa662cba', '6885343e-bd45-4f0e-b0ca-4491564ee096', now() - interval '1 days');
-
-insert into public.user_credentials (user_id, credential_id, earned_at) values
-  ('ed8d4b57-6a77-418b-9db3-11c18e18fbca', '4bb0668a-20d1-4e22-88eb-2f8e608c9b2b', now() - interval '18 days'),
-  ('75486d5a-d222-4853-8046-8a55199c6208', '4bb0668a-20d1-4e22-88eb-2f8e608c9b2b', now() - interval '10 days'),
-  ('e927ff41-bff8-43f0-9c1f-98fcaa54793d', '4bb0668a-20d1-4e22-88eb-2f8e608c9b2b', now() - interval '4 days'),
-  ('db860542-f964-4290-a8f4-72c58c0dfff3', 'e47e6cbf-6f6a-47fc-917e-0d3fca9480ce', now() - interval '7 days'),
-  ('c5a73b63-20bd-4310-9515-3f22fa9dd40c', 'e47e6cbf-6f6a-47fc-917e-0d3fca9480ce', now() - interval '2 days'),
-  ('a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'e47e6cbf-6f6a-47fc-917e-0d3fca9480ce', now() - interval '1 days');
-
-insert into public.saved_places (user_id, place_id, saved_at) values
-  ('ed8d4b57-6a77-418b-9db3-11c18e18fbca', '6bce5398-b23e-4611-87e8-3747ea370bc4', now() - interval '19 days'),
-  ('ed8d4b57-6a77-418b-9db3-11c18e18fbca', '290fe466-9327-4660-9766-a2c64cdf078d', now() - interval '9 days'),
-  ('75486d5a-d222-4853-8046-8a55199c6208', '84125a2b-7501-4251-8b5d-c0d6c5edaa5c', now() - interval '11 days'),
-  ('e927ff41-bff8-43f0-9c1f-98fcaa54793d', '56302e94-c04a-4e3e-8a2c-068d92e19298', now() - interval '3 days'),
-  ('db860542-f964-4290-a8f4-72c58c0dfff3', 'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', now() - interval '8 days'),
-  ('62acb632-8642-4b55-86ac-dfdee7f1d953', '3610bb1f-bbbe-48db-a77a-17c2632eabb0', now() - interval '1 days');
-
-insert into public.saved_routes (user_id, route_id, saved_at) values
-  ('ed8d4b57-6a77-418b-9db3-11c18e18fbca', 'c594515a-227e-4483-a2ea-88beb8d344e8', now() - interval '19 days'),
-  ('75486d5a-d222-4853-8046-8a55199c6208', 'c594515a-227e-4483-a2ea-88beb8d344e8', now() - interval '11 days'),
-  ('c5a73b63-20bd-4310-9515-3f22fa9dd40c', '6885343e-bd45-4f0e-b0ca-4491564ee096', now() - interval '5 days'),
-  ('e927ff41-bff8-43f0-9c1f-98fcaa54793d', 'f69c54a2-e278-425e-abc5-c004bc0ef587', now() - interval '2 days');
-  -- Last row: a resident saved the still-draft Cultural Tour route. This is
-  -- only reachable in practice via a staff preview link today, kept here so
-  -- saved_routes has a row pointing at an unpublished route once that path
-  -- exists, rather than only ever being tested against published routes.
 
 commit;
 
 begin;
 
 -- -----------------------------------------------------------------------------
--- 16. Events & Announcements (6) — spans every event_categories row seeded
---     by migration 0024, published/draft, and upcoming/ongoing/past. The
---     Pasig Creative Arts Academy and Youth Development Center references
---     mirror real CATO programs named in docs/feature-scope-changes.md,
---     reworded as demo content, not copied from any real announcement text.
---     Column list matches the current events schema after migration 0024
---     (category text -> category_id, references event_categories, self-
---     seeded by that migration), resolved here the same subquery way
---     Places' and Routes' category_id are resolved above.
+-- 16. Events & Announcements (3) — real CATO announcements, replacing the
+--     original 6 sample "Demo ..." rows per content-replacement-plan.md.
+--     All 3 dated in 2026 and already past relative to this seed file's
+--     "today" (see date_time/end_date_time below), so lifecycle_status is
+--     'past' throughout — an accurate reflection of the real submitted
+--     dates, not a demo variety requirement. category_id resolves against
+--     the 3 new event_categories rows migration 0032 added (Cultural &
+--     Heritage, Youth & Education, Arts & Culture), matching each
+--     announcement's real category from NEW_DATA.md. Column list matches
+--     the current events schema after migration 0024 (category text ->
+--     category_id, references event_categories) plus migration 0020's
+--     end_date_time.
 -- -----------------------------------------------------------------------------
 insert into public.events (
-  id, title, description, category_id, related_program, date_time, location,
-  related_place_id, enrollment_info, posted_by, lifecycle_status, published,
+  id, title, description, category_id, related_program, date_time, end_date_time,
+  location, related_place_id, enrollment_info, posted_by, lifecycle_status, published,
   language, updated_at
 ) values
-  ('f2676343-4da4-4ecf-b685-4c6f744ad5a3', 'Demo Creative Arts Academy: New Batch Enrollment',
-   'Free short courses for young Pasigueños covering visual arts, music, and crafts, run out of the Demo Youth Development Center.',
-   (select id from public.event_categories where name = 'program enrollment'), 'Demo Creative Arts Academy',
-   now() + interval '14 days', 'Demo Youth Development Center, Barangay Demo',
-   null, '40 slots available, walk-in registration on enrollment day, ID and birth certificate required.',
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'upcoming', true, 'Both', now() - interval '3 days'),
+  ('c3e30001-0001-4c1a-9c1a-0000000000001', 'Pasig Heritage & Gastronomic Walking Tour 2026',
+   'Inaanyayahan ng Pamahalaang Lungsod ng Pasig, sa pamamagitan ng Cultural Affairs and Tourism Office (CATO), ang lahat ng Pasigueño na lumahok sa ating 2026 Heritage & Gastronomic Walking Tour. Tuklasin ang mayamang pamana, arkitektura, at natatanging kulinarya ng Poblacion! Kabilang sa tour ang pagbisita sa Pasig City Museum, Bahay na Tisa, at Immaculate Conception Cathedral.',
+   (select id from public.event_categories where name = 'Cultural & Heritage'), 'National Heritage Month Celebration',
+   '2026-05-24 07:00:00+08', '2026-05-24 11:30:00+08', 'Plaza Rizal, Brgy. San Jose, Pasig City',
+   'a1e10004-0004-4c1a-9c1a-0000000000004',
+   '50 slots available. Free entry on a first-come, first-served basis for Pasig residents aged 15 and above. Register at bit.ly/PasigTour2026.',
+   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days'),
 
-  ('f7928bc3-b106-4729-a232-eafb9103c67c', 'Demo Guided Photo Walk: Old Pasig',
-   'A CATO-led photo walk following the Demo Heritage Walk route, camera phones welcome, no professional gear required.',
-   (select id from public.event_categories where name = 'heritage walk'), null, now() + interval '5 days', 'Meet at Demo Heritage House',
-   '6bce5398-b23e-4611-87e8-3747ea370bc4', 'Free, limited to 25 participants, register via the CATO office.',
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'upcoming', true, 'English', now() - interval '2 days'),
+  ('c3e30002-0002-4c1a-9c1a-0000000000002', 'Pasig Creative Arts Academy: Summer Youth Workshops',
+   'Free summer creative workshops for Pasigueño youth offering modules in Visual Arts & Painting, Performing Arts & Theater, and Traditional Crafts. Organized under CATO pursuant to Executive Order No. PCG-20, Series of 2026. Materials will be provided free of charge for all accepted participants.',
+   (select id from public.event_categories where name = 'Youth & Education'), 'Pasig Creative Arts Academy',
+   '2026-06-15 09:00:00+08', '2026-07-20 16:00:00+08', 'Youth Development Center Hall, Pasig City Hall Complex',
+   'a1e10005-0005-4c1a-9c1a-0000000000005',
+   'Open to Pasig residents aged 10–24. Requires valid Pasig Resident ID and parental consent form. Registration deadline: June 5, 2026.',
+   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days'),
 
-  ('a53a2b79-b988-40d8-8f11-a26e59ea13f5', 'Demo Riverside Festival',
-   'Annual community festival along the riverside promenade with local food stalls, craft vendors, and evening performances.',
-   (select id from public.event_categories where name = 'festival'), null, now(), 'Demo Riverside Walk',
-   'f1b5f1df-d6a2-44b3-8997-8aa4920ae693', null,
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'ongoing', true, 'Both', now()),
-
-  ('0d742e7d-2477-486d-8cff-d753c4b71ec6', 'Demo Office Hours Update',
-   'The Tourism Office front desk will observe adjusted hours during the upcoming holiday period.',
-   (select id from public.event_categories where name = 'general announcement'), null, now() - interval '2 days', 'Demo CATO Office',
-   null, null, 'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'English', now() - interval '2 days'),
-
-  ('884dc1c7-0286-43f4-bef1-28ee6fd5bafb', 'Demo Weaving Workshop Series (Draft)',
-   'Planned weekend workshop series at the Demo Weaving Center, details still being finalized with the cooperative.',
-   (select id from public.event_categories where name = 'workshop'), null, now() + interval '30 days', 'Demo Weaving Center',
-   'f552df7f-30a7-42ab-b470-06968810f437', null,
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'upcoming', false, 'Filipino', now() - interval '1 days'),
-   -- Draft, published = false: exercises the create/edit/publish distinction
-   -- from admin-panel-spec.md, should not appear on the public Home tab.
-
-  ('433471cd-43ed-4ca2-a6d6-5e9c2becca0d', 'Demo Heritage Month Kickoff (2025)',
-   'Past event marking the start of last year''s heritage month programming across CATO-managed sites.',
-   (select id from public.event_categories where name = 'festival'), null, now() - interval '200 days', 'Demo Plaza Center',
-   '56302e94-c04a-4e3e-8a2c-068d92e19298', null,
-   'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'past', true, 'Both', now() - interval '200 days');
+  ('c3e30003-0003-4c1a-9c1a-0000000000003', 'LikhaFest: Pasig City Arts & Crafts Fair 2026',
+   'A two-day arts fair held in celebration of National Arts Month. Showcasing local Pasigueño artisans, micro-entrepreneurs, live painting performances, and musical acts to celebrate homegrown talent and community creativity.',
+   (select id from public.event_categories where name = 'Arts & Culture'), 'National Arts Month Celebration',
+   '2026-02-26 10:00:00+08', '2026-02-27 20:00:00+08', 'Plaza Rizal Grounds, Brgy. San Jose, Pasig City',
+   'a1e10004-0004-4c1a-9c1a-0000000000004',
+   'Walk-ins welcome; no pre-registration required for attendees. Exhibitor slots full.',
+   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days');
 
 commit;
