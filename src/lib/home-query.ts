@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { readEmbeddedName } from "./place-categories";
+import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
 import type { Announcement, RecentlyVerifiedBusiness, RecentlyVerifiedItem, RecentlyVerifiedPlace } from "./home-types";
 
 // Phase 2.2 (step-6-phases.md): "Feed of published announcements," per
@@ -51,7 +51,7 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
   const { data, error } = await supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name), facility_ids"
+      "id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name, icon), facility_ids"
     )
     .not("verified_at", "is", null)
     .order("verified_at", { ascending: false })
@@ -65,11 +65,17 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
   // discover-query.ts's fetchPlaces and saved-places.ts's fetchSavedPlaces
   // both were, keeping every DiscoverPlace constructor in sync rather than
   // leaving this one to silently miss the field.
+  //
+  // Map-marker-icons phase: same discipline, same fix, for the new
+  // required categoryIcon field -- place_categories(name, icon) now widens
+  // this select too, kept in sync with discover-query.ts's fetchPlaces and
+  // saved-places.ts's fetchSavedPlaces.
   return (data ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
     name: row.name,
     category: readEmbeddedName(row.place_categories) ?? "",
+    categoryIcon: readEmbeddedIcon(row.place_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -92,7 +98,7 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, business_categories(name), description, latitude, longitude, verification_status, verified_at, business_items(price)"
+      "id, name, business_categories(name, icon), description, latitude, longitude, verification_status, verified_at, business_items(price)"
     )
     .eq("verification_status", "verified")
     .not("verified_at", "is", null)
@@ -103,13 +109,16 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
 
   return (data ?? []).map((row) => {
     const { business_categories, ...rest } = row as typeof row & {
-      business_categories: { name: string } | { name: string }[] | null;
+      business_categories: { name: string; icon: string } | { name: string; icon: string }[] | null;
     };
     return {
       kind: "business" as const,
       id: rest.id,
       name: rest.name,
       category: readEmbeddedName(business_categories),
+      // Map-marker-icons phase: same embed, second field read off it, same
+      // fix as discover-query.ts's fetchBusinesses and saved-places.ts.
+      categoryIcon: readEmbeddedIcon(business_categories),
       description: rest.description,
       latitude: rest.latitude,
       longitude: rest.longitude,
