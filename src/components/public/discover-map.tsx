@@ -45,6 +45,24 @@ import { ResultCard, VerificationBadge } from "./result-card";
 
 const PASIG_CENTER: Coordinates = { latitude: 14.5764, longitude: 121.0851 };
 const DEFAULT_ZOOM = 14;
+// Marker name labels (markerElement below) are priority-gated by zoom
+// rather than an all-or-nothing cutoff, since this city is dense enough
+// that labeling every result at once can overlap regardless of zoom.
+// True per-pixel collision detection (hide/show individual labels based
+// on their live on-screen bounding boxes against every other visible
+// label) is how map products like Google/Apple Maps actually solve this,
+// but this app's markers are plain DOM elements (maplibregl.Marker with a
+// custom HTMLElement, not a MapLibre symbol layer), which has no built-in
+// collision engine to lean on -- building that from scratch is real scope
+// (re-run on every pan/zoom, read every marker's live screen rect, resolve
+// overlaps), not a safe drop-in for this pass.
+// Priority instead: verified results (the ones a user is meant to trust
+// and actually visit) get labeled first, pending ones only once zoomed in
+// enough that they're naturally spread apart. Both tiers still respect an
+// overall minimum zoom -- zoomed all the way out over the whole metro,
+// even verified-only labels would be too dense to read.
+const MARKER_LABEL_MIN_ZOOM_VERIFIED = 14;
+const MARKER_LABEL_MIN_ZOOM_PENDING = 16;
 // locate-me-and-directions-phases.md Phase 3.5: one GeoJSON source/line
 // layer pair, added and removed imperatively, the same shape buildStyle
 // already uses for the waterway layer -- no new rendering library.
@@ -288,18 +306,46 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
 // primary-token ring for verified, a dashed muted-foreground ring for
 // pending, the same two tokens (bg-primary / bg-muted-foreground) the old
 // dot used, now as border-color rather than fill.
+//
+// Name label: the icon ring alone only identified a result's category, not
+// which specific place/business it was, without a tap or hover -- a
+// direct request asked for the name to sit right next to the icon,
+// always visible on the map like a standard map-pin label, not only on
+// hover (the existing HoverPreview is desktop-only and already covers the
+// richer on-hover case; this label is the always-on name, both surfaces
+// can coexist). Returns a wrapper span (icon ring + text) instead of just
+// the ring so the whole row is one marker element/click+hover target, per
+// maplibregl.Marker's one-DOM-element-per-marker API -- nothing below this
+// function needs to change since callers only ever read the returned
+// element, never its internal shape.
 function markerElement(result: DiscoverResult): HTMLElement {
   const Icon =
     result.kind === "place"
       ? getCategoryIcon(result.categoryIcon ?? "")
       : getBusinessCategoryIcon(result.categoryIcon ?? "");
-  const el = document.createElement("span");
-  el.className =
+  const wrapper = document.createElement("span");
+  wrapper.className = "flex cursor-pointer items-center gap-1.5";
+
+  const ring = document.createElement("span");
+  ring.className =
     result.verification_status === "pending"
-      ? "flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground bg-card shadow cursor-pointer"
-      : "flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary bg-card shadow cursor-pointer";
-  el.innerHTML = renderToStaticMarkup(<Icon className="h-4 w-4 text-foreground" aria-hidden="true" />);
-  return el;
+      ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground bg-card shadow"
+      : "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-card shadow";
+  ring.innerHTML = renderToStaticMarkup(<Icon className="h-4 w-4 text-foreground" aria-hidden="true" />);
+  wrapper.appendChild(ring);
+
+  const label = document.createElement("span");
+  label.className =
+    "marker-name-label whitespace-nowrap rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-foreground shadow";
+  // Read by the zoom-gated visibility effect below to apply the right
+  // per-tier minimum zoom (verified vs. pending) to this specific label,
+  // without needing a second lookup back into `results` at visibility-
+  // check time.
+  label.dataset.verificationStatus = result.verification_status;
+  label.textContent = result.name;
+  wrapper.appendChild(label);
+
+  return wrapper;
 }
 
 interface DiscoverMapProps {
@@ -468,12 +514,13 @@ function LegendPanel({
 // accepted elsewhere in this shell (its own comment: "the header simply
 // grows over top of this fixed layer").
 //
-// top-14 rather than top-3: this container also renders the status/
+// top-14 rather than top-6: this container also renders the status/
 // loading/error pills (resultsError/resultsLoading/tilesLoading/isEmpty,
-// below), horizontally centered at top-3 with max-w-full text that can run
-// wide enough to reach this corner on narrower viewports -- top-14 clears
-// that row entirely so the corner pill and a centered status message never
-// visually collide.
+// below), horizontally centered at top-6 (nudged down from top-3 so they
+// clear the header's search bar instead of sitting right behind it) with
+// max-w-full text that can run wide enough to reach this corner on
+// narrower viewports -- top-14 clears that row entirely so the corner
+// pill and a centered status message never visually collide.
 function MapCornerControls({
   placeCategories,
   businessCategories,
@@ -729,7 +776,7 @@ export function DiscoverMap({
         // added as one more clause in this same string, not a second
         // attribution control, per the plan's explicit instruction.
         customAttribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, tiles by <a href="https://openfreemap.org">OpenFreeMap</a>, routing by <a href="https://project-osrm.org">OSRM</a>',
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors, <a href="https://openfreemap.org">OpenFreeMap</a>, <a href="https://project-osrm.org">OSRM</a>',
       },
     });
     mapRef.current = map;
@@ -945,6 +992,44 @@ export function DiscoverMap({
     };
   }, [results, isMobile]);
 
+  // Priority-gated label visibility (see MARKER_LABEL_MIN_ZOOM_VERIFIED/
+  // _PENDING above): a separate effect from the marker-build one above
+  // because this needs to re-run on every zoom change, not only when
+  // results/isMobile change, and rebuilding every marker element on every
+  // zoom tick would be far more work than just toggling a CSS property
+  // already sitting in the DOM. Reads live off markersRef (populated by
+  // the effect above) rather than holding its own copy of the marker
+  // list, so it always applies to whatever markers currently exist --
+  // runs once immediately on mount/results-change for the initial zoom,
+  // then again on every "zoom" event for live updates while the user
+  // pinches/scrolls. Each label's own data-verification-status (set in
+  // markerElement above) picks which threshold applies to it, so verified
+  // and pending results can turn their labels on at different zooms in
+  // the same pass, no second data lookup needed here.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const applyLabelVisibility = () => {
+      const zoom = map.getZoom();
+      markersRef.current.forEach((marker) => {
+        const label = marker.getElement().querySelector<HTMLElement>(".marker-name-label");
+        if (!label) return;
+        const minZoom =
+          label.dataset.verificationStatus === "pending"
+            ? MARKER_LABEL_MIN_ZOOM_PENDING
+            : MARKER_LABEL_MIN_ZOOM_VERIFIED;
+        label.style.display = zoom >= minZoom ? "" : "none";
+      });
+    };
+
+    applyLabelVisibility();
+    map.on("zoom", applyLabelVisibility);
+    return () => {
+      map.off("zoom", applyLabelVisibility);
+    };
+  }, [results, isMobile]);
+
   // Phase 1.7: a tap/click still opens the full ResultCard via the
   // unchanged click listener above -- opening it also clears any lingering
   // hover preview, since a modal is now covering the map and a preview
@@ -957,7 +1042,7 @@ export function DiscoverMap({
       <div ref={containerRef} className="h-full w-full" />
 
       {resultsError ? (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center px-6">
+        <div className="pointer-events-none absolute inset-x-0 top-6 z-[1000] flex justify-center px-6">
           <span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-center text-xs text-destructive shadow">
             {resultsError}
           </span>
@@ -965,7 +1050,7 @@ export function DiscoverMap({
       ) : (
         <>
           {(resultsLoading || tilesLoading) && (
-            <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center px-6">
+            <div className="pointer-events-none absolute inset-x-0 top-6 z-[1000] flex justify-center px-6">
               <span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-center text-xs text-muted-foreground shadow">
                 {resultsLoading ? "Loading places and businesses…" : "Loading map…"}
               </span>
@@ -973,7 +1058,7 @@ export function DiscoverMap({
           )}
 
           {isEmpty && (
-            <div className="pointer-events-none absolute inset-x-0 top-3 z-[1000] flex justify-center px-6">
+            <div className="pointer-events-none absolute inset-x-0 top-6 z-[1000] flex justify-center px-6">
               <span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-center text-xs text-muted-foreground shadow">
                 No results match your search and filters.
               </span>

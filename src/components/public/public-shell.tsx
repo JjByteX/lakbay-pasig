@@ -17,8 +17,11 @@ import {
   LogOut,
 } from "lucide-react";
 import { BottomNav } from "./bottom-nav";
+import { PublicSidebar } from "./public-sidebar";
 import { GlobalSearchBar } from "./global-search-bar";
 import { useAuth } from "@/lib/auth-context";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import {
@@ -348,99 +351,174 @@ function AccountMenu() {
   );
 }
 
+// Mobile shell: fixed top header (logo/search/account) + drag-reveal
+// filter area + fixed bottom nav, unchanged from before the desktop
+// sidebar existed. Split out from PublicShell verbatim so the branch
+// below (PublicShell) can pick this or DesktopShell without duplicating
+// either JSX tree inline -- content, structure, and every class name here
+// are byte-identical to what PublicShell itself used to render
+// unconditionally.
+function MobileShell({
+  query,
+  setQuery,
+  discoverFilters,
+}: Readonly<{
+  query: string;
+  setQuery: (query: string) => void;
+  discoverFilters: ReactNode | null;
+}>) {
+  const location = useLocation();
+
+  return (
+    <div className="flex min-h-svh flex-col bg-background">
+      {/* Fixed header, top-0, unconditionally. Logo/search/account row
+          and the Discover-only filter area (HeaderFilterArea) are flow
+          siblings inside this one element: dragging the filter handle
+          grows the header's own height, the search row never moves or
+          resizes, and the filter content is revealed in the space that
+          opens up beneath it, same panel, no seam. h-auto since the
+          header's total height is not constant on Discover -- every
+          other route never registers filter content, so
+          HeaderFilterArea renders nothing and the header's height
+          there is exactly the search row's own height. */}
+      <header className="fixed inset-x-0 top-0 z-40 flex flex-col bg-background px-4">
+        <div className="mx-auto flex h-14 w-full max-w-md shrink-0 items-center gap-2">
+          {/* Logo: always visible top-left, beside search, on every tab
+              including Profile (unlike the search bar itself, which is
+              gated per SEARCH_VISIBLE_PATHS) -- this is shell chrome, not
+              a search-adjacent control, per ux-ui-guidelines.md's Layout
+              Shell Rules (persistent elements have fixed position on
+              every page). Circle backdrop (bg-card + border-input) is
+              the exact same two tokens the search Input itself uses
+              (components/ui/input.tsx's own "border border-input
+              bg-card"), so the logo's circle and the search bar read as
+              one consistent surface color in the header, not a
+              mismatched pairing, plus shadow-sm (the same token
+              Input's own shadow-sm) so the circle lifts slightly off
+              the header the same way the search bar already does.
+              Image is scaled up past the circle's own bounds (h-12 w-12
+              inside an h-9 w-9 parent) and the parent's overflow-hidden
+              crops it back to a circle -- the source asset
+              (lakbay-pasig-logo.svg) is a squircle clipped onto a
+              512x512 canvas with visible corner padding baked into the
+              image itself, so sizing the image to match the circle
+              exactly left that padding visible as backdrop around a
+              small mark; scaling past the frame and cropping is how
+              "zoom in" on a pre-clipped source image works without a
+              new, differently-cropped asset. Links home (/, the shell's
+              own index route per App.tsx), matching bottom-nav.tsx's
+              own Home tab destination -- same convention as any app's
+              top-left logo-to-home pattern, per ux-ui-guidelines.md's
+              Familiarity principle. shrink-0 keeps it a fixed size
+              regardless of how wide the search bar grows next to it. */}
+          <Link
+            to="/"
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-input bg-card shadow-sm"
+            aria-label="Go to home"
+          >
+            <img
+              src={logo}
+              alt="Lakbay Pasig"
+              className="h-11 w-11 max-w-none rounded-full object-cover"
+            />
+          </Link>
+          {/* min-w-0 so the search bar (an absolutely-positioned-dropdown
+              but a normal-flow Input) can actually shrink between the
+              two fixed-size circles on either side, instead of forcing
+              the row wider than the header at narrow viewports -- same
+              flex-child overflow fix ux-ui-guidelines.md's Responsive
+              Rules and this file's own existing name/text truncation
+              guards elsewhere in the app already rely on. */}
+          <div className="min-w-0 flex-1">
+            {isSearchVisible(location.pathname) && (
+              <GlobalSearchBar query={query} onQueryChange={setQuery} />
+            )}
+          </div>
+          {/* Account menu: top-right, beside search, per direct
+              instruction -- always visible (not gated on
+              isSearchVisible), same "shell chrome, every page" reasoning
+              as the logo on the left. */}
+          <AccountMenu />
+        </div>
+        <HeaderFilterArea content={discoverFilters} />
+      </header>
+      {/* Fixed top-14, the header's own resting (closed) height. The
+          map/list underneath never moves or resizes as the header's
+          filter area opens -- the header simply grows over top of
+          this fixed layer (z-40 vs. this element's own stacking
+          context). */}
+      <main className="fixed inset-x-0 top-14 bottom-16 overflow-y-auto">
+        <Outlet />
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
+
+// Desktop shell: reuses the admin panel's own Sidebar/SidebarProvider/
+// SidebarInset/SidebarTrigger primitives (components/ui/sidebar.tsx) and
+// PublicSidebar's admin-sidebar.tsx-styled nav, per direct instruction to
+// reuse that same pattern rather than keep the mobile fixed-header/
+// bottom-nav chrome at desktop widths. Search and (on Discover) the
+// filter controls move into a top bar inside SidebarInset, same row shape
+// admin.tsx's own header already uses (SidebarTrigger, then the rest of
+// the row). No drag-reveal here: HeaderFilterArea's whole reason to exist
+// is the mobile one-handed drag gesture over a fixed-height header; at
+// desktop width there's no such height constraint, so discoverFilters
+// (the exact same ReactNode Discover registers via useDiscoverFilters)
+// renders directly, always visible when present, same as any other
+// in-flow header content -- no separate opt-in needed on discover.tsx's
+// side, it already hands this shell the content either layout needs.
+function DesktopShell({
+  query,
+  setQuery,
+  discoverFilters,
+}: Readonly<{
+  query: string;
+  setQuery: (query: string) => void;
+  discoverFilters: ReactNode | null;
+}>) {
+  const location = useLocation();
+
+  return (
+    <SidebarProvider>
+      <PublicSidebar />
+      <SidebarInset className="h-svh overflow-hidden">
+        <header className="flex flex-col gap-3 border-b border-border px-4 py-3">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger />
+            <div className="mx-auto min-w-0 max-w-md flex-1">
+              {isSearchVisible(location.pathname) && (
+                <GlobalSearchBar query={query} onQueryChange={setQuery} />
+              )}
+            </div>
+          </div>
+          {discoverFilters}
+        </header>
+        <div className="flex-1 overflow-y-auto">
+          <Outlet />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
 export function PublicShell() {
   const [query, setQuery] = useState("");
   const [discoverFilters, setDiscoverFilters] = useState<ReactNode | null>(
     null,
   );
-  const location = useLocation();
   const contextValue = useMemo(() => ({ query, setQuery }), [query]);
+  const isMobile = useIsMobile();
 
   return (
     <GlobalSearchContext.Provider value={contextValue}>
       <DiscoverFiltersContext.Provider value={setDiscoverFilters}>
-        <div className="flex min-h-svh flex-col bg-background">
-          {/* Fixed header, top-0, unconditionally. Logo/search/account row
-              and the Discover-only filter area (HeaderFilterArea) are flow
-              siblings inside this one element: dragging the filter handle
-              grows the header's own height, the search row never moves or
-              resizes, and the filter content is revealed in the space that
-              opens up beneath it, same panel, no seam. h-auto since the
-              header's total height is not constant on Discover -- every
-              other route never registers filter content, so
-              HeaderFilterArea renders nothing and the header's height
-              there is exactly the search row's own height. */}
-          <header className="fixed inset-x-0 top-0 z-40 flex flex-col bg-background px-4">
-            <div className="mx-auto flex h-14 w-full max-w-md shrink-0 items-center gap-2">
-              {/* Logo: always visible top-left, beside search, on every tab
-                  including Profile (unlike the search bar itself, which is
-                  gated per SEARCH_VISIBLE_PATHS) -- this is shell chrome, not
-                  a search-adjacent control, per ux-ui-guidelines.md's Layout
-                  Shell Rules (persistent elements have fixed position on
-                  every page). Circle backdrop (bg-card + border-input) is
-                  the exact same two tokens the search Input itself uses
-                  (components/ui/input.tsx's own "border border-input
-                  bg-card"), so the logo's circle and the search bar read as
-                  one consistent surface color in the header, not a
-                  mismatched pairing, plus shadow-sm (the same token
-                  Input's own shadow-sm) so the circle lifts slightly off
-                  the header the same way the search bar already does.
-                  Image is scaled up past the circle's own bounds (h-12 w-12
-                  inside an h-9 w-9 parent) and the parent's overflow-hidden
-                  crops it back to a circle -- the source asset
-                  (lakbay-pasig-logo.svg) is a squircle clipped onto a
-                  512x512 canvas with visible corner padding baked into the
-                  image itself, so sizing the image to match the circle
-                  exactly left that padding visible as backdrop around a
-                  small mark; scaling past the frame and cropping is how
-                  "zoom in" on a pre-clipped source image works without a
-                  new, differently-cropped asset. Links home (/, the shell's
-                  own index route per App.tsx), matching bottom-nav.tsx's
-                  own Home tab destination -- same convention as any app's
-                  top-left logo-to-home pattern, per ux-ui-guidelines.md's
-                  Familiarity principle. shrink-0 keeps it a fixed size
-                  regardless of how wide the search bar grows next to it. */}
-              <Link
-                to="/"
-                className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-input bg-card shadow-sm"
-                aria-label="Go to home"
-              >
-                <img
-                  src={logo}
-                  alt="Lakbay Pasig"
-                  className="h-11 w-11 max-w-none rounded-full object-cover"
-                />
-              </Link>
-              {/* min-w-0 so the search bar (an absolutely-positioned-dropdown
-                  but a normal-flow Input) can actually shrink between the
-                  two fixed-size circles on either side, instead of forcing
-                  the row wider than the header at narrow viewports -- same
-                  flex-child overflow fix ux-ui-guidelines.md's Responsive
-                  Rules and this file's own existing name/text truncation
-                  guards elsewhere in the app already rely on. */}
-              <div className="min-w-0 flex-1">
-                {isSearchVisible(location.pathname) && (
-                  <GlobalSearchBar query={query} onQueryChange={setQuery} />
-                )}
-              </div>
-              {/* Account menu: top-right, beside search, per direct
-                  instruction -- always visible (not gated on
-                  isSearchVisible), same "shell chrome, every page" reasoning
-                  as the logo on the left. */}
-              <AccountMenu />
-            </div>
-            <HeaderFilterArea content={discoverFilters} />
-          </header>
-          {/* Fixed top-14, the header's own resting (closed) height. The
-              map/list underneath never moves or resizes as the header's
-              filter area opens -- the header simply grows over top of
-              this fixed layer (z-40 vs. this element's own stacking
-              context). */}
-          <main className="fixed inset-x-0 top-14 bottom-16 overflow-y-auto">
-            <Outlet />
-          </main>
-          <BottomNav />
-        </div>
+        {isMobile ? (
+          <MobileShell query={query} setQuery={setQuery} discoverFilters={discoverFilters} />
+        ) : (
+          <DesktopShell query={query} setQuery={setQuery} discoverFilters={discoverFilters} />
+        )}
       </DiscoverFiltersContext.Provider>
     </GlobalSearchContext.Provider>
   );
