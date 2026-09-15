@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import { LocateFixed, MapPin, X } from "lucide-react";
@@ -269,16 +270,34 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
   };
 }
 
-// Phase 4.3's two marker treatments (verified vs pending), same tokens as
-// before (bg-primary / bg-muted-foreground) now drawn as a MapLibre Marker
-// element instead of a Leaflet L.divIcon, since MapLibre has no divIcon
-// concept, it takes a plain DOM node.
+// Map-marker-icons phase: replaces the old plain verified/pending dot with
+// the place or business's own category icon, same getCategoryIcon/
+// getBusinessCategoryIcon lookups MapLegend already uses for the exact
+// same category value below, so a marker's glyph always matches its own
+// legend row. LucideIcon is a React component, and maplibregl.Marker takes
+// a raw DOM element, not JSX -- renderToStaticMarkup (react-dom/server,
+// safe to call client-side, no server round trip) turns the icon into an
+// SVG string once per marker build, then that markup is set directly on a
+// plain div, keeping this function's own signature (HTMLElement in,
+// nothing React-render-tree-aware needed by the caller) unchanged.
+//
+// Verification status still needs to read at a glance without a tap, per
+// the original two-dot marker's whole purpose, so it moves to the ring
+// around the icon instead of being the marker's only signal: a solid
+// primary-token ring for verified, a dashed muted-foreground ring for
+// pending, the same two tokens (bg-primary / bg-muted-foreground) the old
+// dot used, now as border-color rather than fill.
 function markerElement(result: DiscoverResult): HTMLElement {
+  const Icon =
+    result.kind === "place"
+      ? getCategoryIcon(result.categoryIcon ?? "")
+      : getBusinessCategoryIcon(result.categoryIcon ?? "");
   const el = document.createElement("span");
   el.className =
     result.verification_status === "pending"
-      ? "block h-4 w-4 rounded-full border-2 border-card bg-muted-foreground shadow cursor-pointer"
-      : "block h-4 w-4 rounded-full border-2 border-card bg-primary shadow cursor-pointer";
+      ? "flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground bg-card shadow cursor-pointer"
+      : "flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary bg-card shadow cursor-pointer";
+  el.innerHTML = renderToStaticMarkup(<Icon className="h-4 w-4 text-foreground" aria-hidden="true" />);
   return el;
 }
 
@@ -295,22 +314,34 @@ interface DiscoverMapProps {
   // component still type-checks for any other future caller that has no
   // locate button to wire up.
   onLocationFound?: (coords: Coordinates) => void;
+  // Map-marker-icons-phase follow-up: route now lives in discover.tsx, not
+  // only in this component's own internal ref, since DiscoverList's own
+  // ResultCard can also produce a route while this component isn't even
+  // mounted. Passed in so a fresh mount (switching back from list view)
+  // draws whatever discover.tsx is already holding, via the effect below.
+  route: RouteGeometry | null;
+  // Replaces the old internal-only onRouteFound wiring to this file's own
+  // ResultCard -- now hands the geometry up to discover.tsx's setRoute so
+  // both DiscoverMap and DiscoverList read and write the same one value.
+  onRouteFound: (geometry: RouteGeometry) => void;
 }
 
-// Feature-request-phases.md Phase 1.1/1.4: the map draws exactly two marker
-// *styles* today (verified: bg-primary dot, pending: bg-muted-foreground
-// dot -- markerElement above, unchanged by this phase). Every marker style
-// gets its own legend row here, same swatch shape and color token as the
-// real marker (h-4 w-4 rounded-full, bg-primary/bg-muted-foreground), so a
-// user can look up what a dot on the map means, per 1.4's "no marker style
-// should exist without an entry a user can look up." Category is a
-// separate, color-independent concept the map doesn't encode visually
-// today (no per-category marker color or icon exists, and adding one is a
-// larger visual change than this phase's own "isolated to Discover's map,
-// no schema change" scope) -- categories are listed underneath as a
-// reference list (same icon+label pairing Discover's own filter chips
-// already use, per 1.1's reuse instruction), not because a marker's shape
-// varies by category.
+// Feature-request-phases.md Phase 1.1/1.4: legend rows for both marker
+// concepts the map actually draws.
+//
+// Map-marker-icons phase: markers no longer draw a plain verified/pending
+// dot -- markerElement above now draws the place or business's own
+// category icon inside a ring, solid-primary for verified, dashed-muted-
+// foreground for pending. The Status swatches below were updated to match
+// (a small ring, not a filled dot), so 1.4's own rule still holds: no
+// marker style should exist without an entry a user can look up, and that
+// entry should look like what's actually on the map. Category rows
+// underneath were already icon+label pairs before this phase (1.1's reuse
+// instruction, same getCategoryIcon/getBusinessCategoryIcon lookups the
+// marker itself now also calls) -- what changed is that the marker finally
+// draws that same icon too, closing the gap the original comment here
+// flagged ("no per-category marker color or icon exists" is no longer
+// true).
 //
 // 1.1: icons for place categories/business categories are looked up via
 // the exact same getCategoryIcon/getBusinessCategoryIcon lookups
@@ -380,11 +411,11 @@ function MapLegend({
                 Status
               </p>
               <div className="flex items-center gap-2">
-                <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-card bg-primary shadow" />
+                <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-primary bg-card shadow" />
                 <span className="text-sm text-foreground">Verified</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-card bg-muted-foreground shadow" />
+                <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-dashed border-muted-foreground bg-card shadow" />
                 <span className="text-sm text-foreground">Pending Verification</span>
               </div>
             </div>
@@ -590,13 +621,29 @@ function HoverPreview({
  * this button.
  *
  * locate-me-and-directions-phases.md Phase 3: ResultCard now also receives
- * userLocation and onRouteFound (drawRoute below). This file still owns
- * the one map instance and the one GeoJSON source/line-layer pattern
- * (matching buildStyle's own waterway layer), so a route fetched inside
- * the popup is drawn here, not inside result-card.tsx, which has no map
- * reference of its own.
+ * userLocation and onRouteFound. This file still owns the one map instance
+ * and the one GeoJSON source/line-layer pattern (matching buildStyle's own
+ * waterway layer), so a route fetched inside this component's own popup is
+ * drawn here, not inside result-card.tsx, which has no map reference of
+ * its own.
+ *
+ * Map-marker-icons-phase follow-up: route and onRouteFound are now props
+ * from discover.tsx rather than state local to this component, since
+ * discover-list.tsx's own ResultCard can also produce a route while this
+ * component isn't mounted at all (view toggle in discover.tsx renders one
+ * or the other, never both). drawRoute below reads the `route` prop on
+ * mount and on every change, so switching back to map view after a
+ * Directions tap from the list still shows the line.
  */
-export function DiscoverMap({ results, userLocation, resultsLoading, resultsError, onLocationFound }: Readonly<DiscoverMapProps>) {
+export function DiscoverMap({
+  results,
+  userLocation,
+  resultsLoading,
+  resultsError,
+  onLocationFound,
+  route,
+  onRouteFound,
+}: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -749,12 +796,15 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
   // palette.peach reused from the existing road-major layer, not a new
   // color, per ux-ui-guidelines.md's tokens-only rule -- distinct from
   // palette.blue's water/waterway use so a route never reads as a river.
-  const routeGeometryRef = useRef<RouteGeometry | null>(null);
-
+  //
+  // Map-marker-icons-phase follow-up: geometry now comes from the `route`
+  // prop (discover.tsx's own state), not an internal-only ref, so a fresh
+  // mount of this component (switching back from list view after a
+  // Directions tap there) draws whatever discover.tsx is already holding,
+  // via the [route] effect below, instead of starting blank.
   const drawRoute = (geometry: RouteGeometry) => {
     const map = mapRef.current;
     if (!map) return;
-    routeGeometryRef.current = geometry;
     // Guards against addSource/addLayer throwing when called before the
     // style has finished loading (first paint, or mid dark/light setStyle
     // swap) -- style.load re-runs this same draw once ready, so it's safe
@@ -785,6 +835,14 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
     map.fitBounds(bounds, { padding: 48 });
   };
 
+  // Draws on mount and whenever discover.tsx's route state changes --
+  // covers both a fresh Directions tap on this component's own ResultCard
+  // and a route that already existed before switching back from list view.
+  useEffect(() => {
+    if (route) drawRoute(route);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route]);
+
   // Phase 3.7: a drawn route is not cleared just because the popup closes
   // -- the popup closes specifically so the line stays visible (Part 2's
   // own "close the popup so the line is visible"), so dismissal is not
@@ -799,19 +857,21 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
 
   // Re-adds the route after buildStyle's dark/light setStyle call above
   // tears down every imperative layer, so a route drawn before a theme
-  // toggle doesn't silently disappear.
+  // toggle doesn't silently disappear. Reads the same `route` prop rather
+  // than a separate ref, so this and the mount effect above never disagree
+  // about which geometry is current.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const handleStyleLoad = () => {
-      if (routeGeometryRef.current) drawRoute(routeGeometryRef.current);
+      if (route) drawRoute(route);
     };
     map.on("style.load", handleStyleLoad);
     return () => {
       map.off("style.load", handleStyleLoad);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [route]);
 
   // No container-resize handling: this component always renders into the
   // shell's fixed <main> region (public-shell.tsx) at a constant height.
@@ -929,7 +989,7 @@ export function DiscoverMap({ results, userLocation, resultsLoading, resultsErro
           if (!open) setSelected(null);
         }}
         userLocation={userLocation}
-        onRouteFound={drawRoute}
+        onRouteFound={onRouteFound}
       />
     </div>
   );

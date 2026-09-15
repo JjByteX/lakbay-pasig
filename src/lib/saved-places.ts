@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { readEmbeddedName } from "./place-categories";
+import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
 import type { DiscoverPlace } from "./discover-types";
 
 /**
@@ -85,7 +85,7 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
   const { data: places, error: placesError } = await supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, verification_status, place_categories(name), facility_ids"
+      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon), facility_ids"
     )
     .in("id", placeIds);
 
@@ -105,11 +105,16 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
   // to silently miss the field, caught by grepping every DiscoverPlace
   // object-literal construction site before considering Phase 2 done, per
   // constraints.md's File Traversal rule.
+  //
+  // Map-marker-icons phase: same discipline, same grep, for the new
+  // required categoryIcon field -- place_categories(name, icon) now widens
+  // this select too, kept in sync with discover-query.ts's fetchPlaces.
   return (places ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
     name: row.name,
     category: readEmbeddedName(row.place_categories) ?? "",
+    categoryIcon: readEmbeddedIcon(row.place_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,

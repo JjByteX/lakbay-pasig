@@ -12,6 +12,15 @@ export interface DiscoverPlace {
   id: string;
   name: string;
   category: string;
+  // Map-marker-icons phase: place_categories.icon, joined alongside the
+  // already-joined category name (discover-query.ts's fetchPlaces), not a
+  // second query -- lets the map marker draw the same category icon
+  // MapLegend and the admin category picker already draw for this value,
+  // via place-category-icons.ts's own getCategoryIcon lookup. Falls back
+  // to that lookup's own MapPin default if a category was deleted after
+  // this place was tagged with it (same null-safety readEmbeddedIcon
+  // already gives category itself).
+  categoryIcon: string | null;
   description: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -31,6 +40,10 @@ export interface DiscoverBusiness {
   id: string;
   name: string;
   category: string | null;
+  // Map-marker-icons phase: business_categories.icon, same reasoning as
+  // DiscoverPlace.categoryIcon above, via business-category-icons.ts's
+  // getBusinessCategoryIcon.
+  categoryIcon: string | null;
   description: string | null;
   latitude: number | null;
   longitude: number | null;

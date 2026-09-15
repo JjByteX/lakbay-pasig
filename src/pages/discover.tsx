@@ -16,6 +16,7 @@ import {
   filterDiscoverResults,
 } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
+import type { RouteGeometry } from "@/lib/directions";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
@@ -65,6 +66,17 @@ export default function DiscoverPage() {
   const [resultsError, setResultsError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
+  // Map-marker-icons-phase follow-up: DiscoverMap and DiscoverList are
+  // mutually exclusive (view === "map" ? <DiscoverMap> : <DiscoverList>
+  // below), so a route requested from the list view's own ResultCard has
+  // no mounted map to draw onto if the route only lived inside
+  // discover-map.tsx. Lifting the route here, the one place both branches
+  // already share state through (userLocation is the existing precedent),
+  // fixes that: DiscoverMap draws whatever's here on mount via its own
+  // [route] effect, and a Directions tap from the list also flips view to
+  // "map" so the drawn line is actually visible, not left on an unmounted
+  // component's own state.
+  const [route, setRoute] = useState<RouteGeometry | null>(null);
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
   // case), not "match nothing" -- widened from the original single
@@ -407,6 +419,8 @@ export default function DiscoverPage() {
           resultsLoading={resultsLoading}
           resultsError={resultsError}
           onLocationFound={setUserLocation}
+          route={route}
+          onRouteFound={setRoute}
         />
       ) : (
         <DiscoverList
@@ -414,6 +428,10 @@ export default function DiscoverPage() {
           userLocation={userLocation}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
+          onRouteFound={(geometry) => {
+            setRoute(geometry);
+            setView("map");
+          }}
         />
       )}
     </div>

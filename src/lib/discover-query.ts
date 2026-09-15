@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { readEmbeddedName } from "./place-categories";
+import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
 import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover-types";
 
 // Phase 3.1: places (places_select_public, migration 0003, verified only,
@@ -19,7 +19,7 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
   const { data, error } = await supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, verification_status, place_categories(name), facility_ids"
+      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon), facility_ids"
     );
 
   if (error) throw error;
@@ -29,6 +29,9 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
     id: row.id,
     name: row.name,
     category: readEmbeddedName(row.place_categories) ?? "",
+    // Map-marker-icons phase: same embed, second field read off it, no
+    // extra round trip.
+    categoryIcon: readEmbeddedIcon(row.place_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -63,7 +66,7 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, business_categories(name), description, latitude, longitude, verification_status, business_items(price)"
+      "id, name, business_categories(name, icon), description, latitude, longitude, verification_status, business_items(price)"
     );
 
   if (error) throw error;
@@ -73,6 +76,7 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
     id: row.id,
     name: row.name,
     category: readEmbeddedName(row.business_categories),
+    categoryIcon: readEmbeddedIcon(row.business_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,

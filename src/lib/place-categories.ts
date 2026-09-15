@@ -28,6 +28,23 @@ export function readEmbeddedName(
   return embed.name;
 }
 
+/**
+ * Map-marker-icons phase: sibling to readEmbeddedName above, same
+ * Postgrest to-one embed-shape uncertainty, reading `icon` instead of
+ * `name` off place_categories/business_categories. Kept separate rather
+ * than widening readEmbeddedName's own return shape, since every other
+ * call site of readEmbeddedName (trail_categories, event_categories, the
+ * place/business category joins that only ever want the label) has no use
+ * for icon and would need an unused field threaded through otherwise.
+ */
+export function readEmbeddedIcon(
+  embed: { icon: string } | { icon: string }[] | null | undefined
+): string | null {
+  if (embed === null || embed === undefined) return null;
+  if (Array.isArray(embed)) return embed[0]?.icon ?? null;
+  return embed.icon;
+}
+
 export interface PlaceCategory {
   id: string;
   name: string;

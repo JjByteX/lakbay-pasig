@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Coordinates } from "@/lib/discover-query";
 import { sortDiscoverResults } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
+import type { RouteGeometry } from "@/lib/directions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResultCard, VerificationBadge } from "./result-card";
 
@@ -15,6 +16,12 @@ interface DiscoverListProps {
   // distinct from a fetch that succeeded with zero rows (Phase 8.2's empty
   // state). Null when there is no error.
   resultsError: string | null;
+  // Map-marker-icons-phase follow-up: this list has no map instance of its
+  // own to draw a route onto (DiscoverMap and DiscoverList are mutually
+  // exclusive in discover.tsx), so a Directions tap here hands the
+  // geometry up to discover.tsx, which both stores it and switches view to
+  // "map" so the drawn line is actually visible.
+  onRouteFound: (geometry: RouteGeometry) => void;
 }
 
 /**
@@ -33,8 +40,15 @@ interface DiscoverListProps {
  * guidelines.md's card nesting rule forbids a card inside another card and
  * the row itself opens into the shared card component, it should not also
  * be a card.
+ *
+ * Map-marker-icons-phase follow-up: ResultCard's Directions button works
+ * from here too, same as from the map's own popup, but this component has
+ * no map to draw a route onto -- onRouteFound hands the geometry up to
+ * discover.tsx, which owns the one shared route value both this list and
+ * DiscoverMap read from, and switches the page to map view so the line is
+ * visible.
  */
-export function DiscoverList({ results, userLocation, resultsLoading, resultsError }: Readonly<DiscoverListProps>) {
+export function DiscoverList({ results, userLocation, resultsLoading, resultsError, onRouteFound }: Readonly<DiscoverListProps>) {
   const [selected, setSelected] = useState<DiscoverResult | null>(null);
   const sorted = sortDiscoverResults(results, userLocation);
 
@@ -103,7 +117,14 @@ export function DiscoverList({ results, userLocation, resultsLoading, resultsErr
           </li>
         ))}
       </ul>
-      <ResultCard result={selected} onOpenChange={(open) => !open && setSelected(null)} />
+      <ResultCard
+        result={selected}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+        userLocation={userLocation}
+        onRouteFound={onRouteFound}
+      />
     </>
   );
 }
