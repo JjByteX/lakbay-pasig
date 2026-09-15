@@ -308,7 +308,7 @@ insert into public.places (
   entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places,
   language, verification_status, reviewed_by, updated_at
 ) values
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', 'Pasig City Museum (Concepcion Mansion)',
+  ('a1e10001-0001-4c1a-9c1a-000000000001', 'Pasig City Museum (Concepcion Mansion)',
    (select id from public.place_categories where name = 'Museum'),
    'A restored Spanish-Baroque mansion housing artifacts, historical documents, and art exhibits depicting the socio-cultural evolution of Pasig.',
    'Built in 1937 by former Municipal President Don Fortunato Concepcion. During World War II, it was commandeered by Japanese forces as an observation post, and the American flag was raised atop its tower during liberation in 1945. It was acquired by the city government in 2000 and converted into a public museum.',
@@ -322,7 +322,7 @@ insert into public.places (
    'Immaculate Conception Cathedral, Plaza Rizal & Bitukang Manok Area',
    'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
 
-  ('a1e10002-0002-4c1a-9c1a-0000000000002', 'Immaculate Conception Cathedral',
+  ('a1e10002-0002-4c1a-9c1a-000000000002', 'Immaculate Conception Cathedral',
    (select id from public.place_categories where name = 'Church'),
    'The seat of the Roman Catholic Diocese of Pasig, featuring high stone walls, ornate interior artwork, and historical bell tower structures.',
    'Established in 1572 by Augustinian missionaries, making it one of the oldest parishes in the Philippines. The church was relocated to its current site in 1573, and the present stone foundation was constructed through the late 18th to 19th centuries. It was elevated to cathedral status in 2003.',
@@ -336,7 +336,7 @@ insert into public.places (
    'Pasig City Museum, Plaza Rizal & Bitukang Manok Area',
    'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
 
-  ('a1e10003-0003-4c1a-9c1a-0000000000003', 'Bahay na Tisa (Don Cecilio Tech House)',
+  ('a1e10003-0003-4c1a-9c1a-000000000003', 'Bahay na Tisa (Don Cecilio Tech House)',
    (select id from public.place_categories where name = 'Heritage Site'),
    'The oldest surviving bahay na bato (house of brick and tile) in Pasig City, featuring adobe ground floors, wooden upper levels, and original capiz windows.',
    'Built in the early 1850s by Don Cecilio Tech y Cabrera. It has remained continuously inhabited across seven generations of the Tech family. During Martial Law, it earned the nickname "Freedom House" for hosting multi-faction political discussions and local community art exhibits.',
@@ -351,7 +351,7 @@ insert into public.places (
    'Pasig City Museum, Immaculate Conception Cathedral',
    'Both', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
 
-  ('a1e10004-0004-4c1a-9c1a-0000000000004', 'Plaza Rizal & Bitukang Manok Area (Parian Creek)',
+  ('a1e10004-0004-4c1a-9c1a-000000000004', 'Plaza Rizal & Bitukang Manok Area (Parian Creek)',
    (select id from public.place_categories where name = 'Monument'),
    'The historic town square of Pasig, bordered by the Pasig Cathedral, Pasig City Museum, and the historic Bitukang Manok (Parian Creek) tributary.',
    'Formed the core urban grid of Pasig under Spanish administration. On August 29, 1896, the area witnessed Nagsabado sa Pasig, when Katipuneros led by Andres Bonifacio and Valentin Cruz assembled and captured the local Spanish headquarters (Tribunal).',
@@ -371,7 +371,7 @@ insert into public.places (
   -- A modern civic facility under CATO's 2026 executive-order oversight,
   -- not a heritage structure, so historical fields stay minimal/not
   -- applicable rather than invented.
-  ('a1e10005-0005-4c1a-9c1a-0000000000005', 'Youth Development Center',
+  ('a1e10005-0005-4c1a-9c1a-000000000005', 'Youth Development Center',
    (select id from public.place_categories where name = 'Cultural Site'),
    'A city-run youth and community facility hosting CATO-supervised programs, workshops, and events for young Pasigueños.',
    'Placed under CATO''s supervision by executive order in 2026, expanding the office''s oversight beyond heritage sites into active youth programming, including the Pasig Creative Arts Academy.',
@@ -398,27 +398,27 @@ insert into public.places (
 --    substituted in per environment same as storage-manifest.md notes.
 -- -----------------------------------------------------------------------------
 insert into public.place_photos (place_id, photo_url, photo_type, sort_order) values
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/01.jpg', 'current', 0),
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/02.jpg', 'current', 1),
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/03.jpg', 'current', 2),
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/04.jpg', 'current', 3),
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/05.jpg', 'current', 4),
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/06.jpg', 'current', 5),
-  ('a1e10001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/07.jpg', 'current', 6),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/01.jpg', 'current', 0),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/02.jpg', 'current', 1),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/03.jpg', 'current', 2),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/04.jpg', 'current', 3),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/05.jpg', 'current', 4),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/06.jpg', 'current', 5),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/07.jpg', 'current', 6),
 
-  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/01.jpg', 'current', 0),
-  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/02.jpg', 'current', 1),
-  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/03.jpg', 'current', 2),
-  ('a1e10002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/04.png', 'current', 3),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/01.jpg', 'current', 0),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/02.jpg', 'current', 1),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/03.jpg', 'current', 2),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/04.png', 'current', 3),
 
-  ('a1e10003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/01.jpg', 'current', 0),
-  ('a1e10003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/02.jpg', 'current', 1),
-  ('a1e10003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/03.png', 'current', 2),
+  ('a1e10003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/01.jpg', 'current', 0),
+  ('a1e10003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/02.jpg', 'current', 1),
+  ('a1e10003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/03.png', 'current', 2),
 
-  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/01.jpg', 'current', 0),
-  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/02.jpg', 'current', 1),
-  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/03.jpg', 'current', 2),
-  ('a1e10004-0004-4c1a-9c1a-0000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/04.jpg', 'current', 3);
+  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/01.jpg', 'current', 0),
+  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/02.jpg', 'current', 1),
+  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/03.jpg', 'current', 2),
+  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/04.jpg', 'current', 3);
   -- Youth Development Center intentionally has no photos: storage-manifest.md
   -- notes none were supplied for it, matching its places/youth-development-center/
   -- path being left empty.
@@ -435,11 +435,11 @@ insert into public.place_photos (place_id, photo_url, photo_type, sort_order) va
 -- so reviewed_type is 'place' throughout, reviewed_id carries the old
 -- place_id value, same backfill 0014 itself did for pre-existing rows.
 insert into public.place_reviews (reviewed_type, reviewed_id, staff_id, action, notes, created_at) values
-  ('place', 'a1e10001-0001-4c1a-9c1a-0000000000001', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'CATO-submitted heritage content, cross-checked against NHCP and Wikipedia references.', now() - interval '5 days'),
-  ('place', 'a1e10002-0002-4c1a-9c1a-0000000000002', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'CATO-submitted heritage content, cross-checked against Diocese of Pasig and NHCP references.', now() - interval '5 days'),
-  ('place', 'a1e10003-0003-4c1a-9c1a-0000000000003', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', 'CATO-submitted heritage content, cross-checked against Tech family and NHCP records.', now() - interval '5 days'),
-  ('place', 'a1e10004-0004-4c1a-9c1a-0000000000004', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', 'CATO-submitted heritage content, cross-checked against NHCP marker text.', now() - interval '5 days'),
-  ('place', 'a1e10005-0005-4c1a-9c1a-0000000000005', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'Added per open-questions.md #7 as the related Place for the Creative Arts Academy workshop event.', now() - interval '2 days');
+  ('place', 'a1e10001-0001-4c1a-9c1a-000000000001', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'CATO-submitted heritage content, cross-checked against NHCP and Wikipedia references.', now() - interval '5 days'),
+  ('place', 'a1e10002-0002-4c1a-9c1a-000000000002', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'CATO-submitted heritage content, cross-checked against Diocese of Pasig and NHCP references.', now() - interval '5 days'),
+  ('place', 'a1e10003-0003-4c1a-9c1a-000000000003', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', 'CATO-submitted heritage content, cross-checked against Tech family and NHCP records.', now() - interval '5 days'),
+  ('place', 'a1e10004-0004-4c1a-9c1a-000000000004', 'ab395d2b-a446-4892-b43f-2170af876c8a', 'verify', 'CATO-submitted heritage content, cross-checked against NHCP marker text.', now() - interval '5 days'),
+  ('place', 'a1e10005-0005-4c1a-9c1a-000000000005', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify', 'Added per open-questions.md #7 as the related Place for the Creative Arts Academy workshop event.', now() - interval '2 days');
 
 commit;
 
@@ -483,7 +483,7 @@ insert into public.businesses (
   featured_status, submitted_by, registered_or_informal, views_count, saves_count,
   updated_at
 ) values
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Panaderia Dimas-Alang', 'Product', 'Food Stall',
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'Panaderia Dimas-Alang', 'Product', 'Food Stall',
    (select id from public.business_categories where name = 'Food Stall'),
    'The oldest operating bakery in Pasig City, offering traditional wood-fired-style breads and century-old Filipino pastry recipes.',
    '52 A. Mabini St., Brgy. Kapasigan, Pasig City, 1600 Metro Manila', 14.5747, 121.0723,
@@ -498,7 +498,7 @@ insert into public.businesses (
   -- Address corrected per open-questions.md #4: submitted address (10 East
   -- Capitol Dr.) was the pre-2020 location; current, web-search-verified
   -- address is 136 West Capitol Drive. Phone carried over unchanged.
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Three Sisters'' Restaurant of Pasig', 'Service', 'Restaurant',
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'Three Sisters'' Restaurant of Pasig', 'Service', 'Restaurant',
    (select id from public.business_categories where name = 'Restaurant'),
    'A landmark dining establishment serving classic Filipino comfort food and heritage recipes continuously since 1941.',
    '136 West Capitol Drive, Brgy. Kapitolyo, Pasig City, 1603 Metro Manila', 14.5715, 121.0573,
@@ -511,7 +511,7 @@ insert into public.businesses (
    'CATO-submitted; address corrected from the outdated East Capitol Drive location to the current West Capitol Drive address per web search verification (Instagram, most recent).',
    'featured', 'fd00f3e8-88bf-4536-96af-86a764856066', 'registered', 0, 0, now() - interval '5 days'),
 
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Ado''s Panciteria', 'Service', 'Restaurant',
+  ('b2e20003-0003-4c1a-9c1a-000000000003', 'Ado''s Panciteria', 'Service', 'Restaurant',
    (select id from public.business_categories where name = 'Restaurant'),
    'A historic neighborhood noodle house delivering authentic Pasig-style pancit dishes and local comfort meals since 1952.',
    '126 A. Luna St. cor. R. Jabson St., Brgy. Malinao, Pasig City, 1600 Metro Manila', 14.5586, 121.0765,
@@ -536,44 +536,44 @@ insert into public.businesses (
 -- -----------------------------------------------------------------------------
 insert into public.business_items (business_id, name, price) values
   -- Panaderia Dimas-Alang
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Bonete (piece)', 3.00),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Spanish Bread (piece)', 10.00),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Hindi Ko Akalain (piece)', 15.00),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Brazo de Mercedes (half roll)', 225.00),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'Ensaymada', null),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'Bonete (piece)', 3.00),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'Spanish Bread (piece)', 10.00),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'Hindi Ko Akalain (piece)', 15.00),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'Brazo de Mercedes (half roll)', 225.00),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'Ensaymada', null),
 
   -- Three Sisters' Restaurant of Pasig
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Regular Pork BBQ', 35.00),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Special Pork BBQ', 55.00),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Pancit Bihon (solo)', 110.00),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Crispy Pata (good for 4)', 495.00),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'Halo-Halo Special', 110.00),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'Regular Pork BBQ', 35.00),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'Special Pork BBQ', 55.00),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'Pancit Bihon (solo)', 110.00),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'Crispy Pata (good for 4)', 495.00),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'Halo-Halo Special', 110.00),
 
   -- Ado's Panciteria
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Bihon Guisado', 75.00),
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Canton Guisado', 92.00),
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Lomi Special', 105.00),
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'Lumpiang Shanghai', null);
+  ('b2e20003-0003-4c1a-9c1a-000000000003', 'Bihon Guisado', 75.00),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', 'Canton Guisado', 92.00),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', 'Lomi Special', 105.00),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', 'Lumpiang Shanghai', null);
 
 -- -----------------------------------------------------------------------------
 -- 8. Business photos — real Pasig photography per storage-manifest.md,
 --    same content-photos bucket and upload caveat as section 4 above.
 -- -----------------------------------------------------------------------------
 insert into public.business_photos (business_id, photo_url, sort_order) values
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/01.jpg', 0),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/02.jpg', 1),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/03.jpg', 2),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/04.png', 3),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/01.jpg', 0),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/02.jpg', 1),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/03.jpg', 2),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/04.png', 3),
 
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/01.jpg', 0),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/02.jpg', 1),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/03.jpg', 2),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/04.jpg', 3),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/05.jpg', 4),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/01.jpg', 0),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/02.jpg', 1),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/03.jpg', 2),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/04.jpg', 3),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/05.jpg', 4),
 
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/01.jpg', 0),
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/02.jpg', 1),
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/03.jpg', 2);
+  ('b2e20003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/01.jpg', 0),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/02.jpg', 1),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/03.jpg', 2);
 
 -- -----------------------------------------------------------------------------
 -- 9. Business reviews — audit log, mirrors place_reviews. Two of the three
@@ -581,11 +581,11 @@ insert into public.business_photos (business_id, photo_url, sort_order) values
 --    'feature' action per admin-panel-spec.md's Featured status toggle.
 -- -----------------------------------------------------------------------------
 insert into public.business_reviews (business_id, staff_id, action, notes, created_at) values
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted, address and contact confirmed.', now() - interval '5 days'),
-  ('b2e20001-0001-4c1a-9c1a-0000000000001', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Oldest operating bakery in Pasig, strong heritage-walk anchor point.', now() - interval '5 days'),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted; address corrected to current West Capitol Drive location per web search.', now() - interval '5 days'),
-  ('b2e20002-0002-4c1a-9c1a-0000000000002', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Landmark Kapitolyo dining spot, continuous operation since 1941.', now() - interval '5 days'),
-  ('b2e20003-0003-4c1a-9c1a-0000000000003', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted, address and contact confirmed.', now() - interval '5 days');
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted, address and contact confirmed.', now() - interval '5 days'),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Oldest operating bakery in Pasig, strong heritage-walk anchor point.', now() - interval '5 days'),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted; address corrected to current West Capitol Drive location per web search.', now() - interval '5 days'),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'feature', 'Landmark Kapitolyo dining spot, continuous operation since 1941.', now() - interval '5 days'),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'verify', 'CATO-submitted, address and contact confirmed.', now() - interval '5 days');
 
 -- -----------------------------------------------------------------------------
 -- 10. Business flags — no rows. The original sample flags (a system-
@@ -663,27 +663,27 @@ insert into public.events (
   location, related_place_id, enrollment_info, posted_by, lifecycle_status, published,
   language, updated_at
 ) values
-  ('c3e30001-0001-4c1a-9c1a-0000000000001', 'Pasig Heritage & Gastronomic Walking Tour 2026',
+  ('c3e30001-0001-4c1a-9c1a-000000000001', 'Pasig Heritage & Gastronomic Walking Tour 2026',
    'Inaanyayahan ng Pamahalaang Lungsod ng Pasig, sa pamamagitan ng Cultural Affairs and Tourism Office (CATO), ang lahat ng Pasigueño na lumahok sa ating 2026 Heritage & Gastronomic Walking Tour. Tuklasin ang mayamang pamana, arkitektura, at natatanging kulinarya ng Poblacion! Kabilang sa tour ang pagbisita sa Pasig City Museum, Bahay na Tisa, at Immaculate Conception Cathedral.',
    (select id from public.event_categories where name = 'Cultural & Heritage'), 'National Heritage Month Celebration',
    '2026-05-24 07:00:00+08', '2026-05-24 11:30:00+08', 'Plaza Rizal, Brgy. San Jose, Pasig City',
-   'a1e10004-0004-4c1a-9c1a-0000000000004',
+   'a1e10004-0004-4c1a-9c1a-000000000004',
    '50 slots available. Free entry on a first-come, first-served basis for Pasig residents aged 15 and above. Register at bit.ly/PasigTour2026.',
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days'),
 
-  ('c3e30002-0002-4c1a-9c1a-0000000000002', 'Pasig Creative Arts Academy: Summer Youth Workshops',
+  ('c3e30002-0002-4c1a-9c1a-000000000002', 'Pasig Creative Arts Academy: Summer Youth Workshops',
    'Free summer creative workshops for Pasigueño youth offering modules in Visual Arts & Painting, Performing Arts & Theater, and Traditional Crafts. Organized under CATO pursuant to Executive Order No. PCG-20, Series of 2026. Materials will be provided free of charge for all accepted participants.',
    (select id from public.event_categories where name = 'Youth & Education'), 'Pasig Creative Arts Academy',
    '2026-06-15 09:00:00+08', '2026-07-20 16:00:00+08', 'Youth Development Center Hall, Pasig City Hall Complex',
-   'a1e10005-0005-4c1a-9c1a-0000000000005',
+   'a1e10005-0005-4c1a-9c1a-000000000005',
    'Open to Pasig residents aged 10–24. Requires valid Pasig Resident ID and parental consent form. Registration deadline: June 5, 2026.',
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days'),
 
-  ('c3e30003-0003-4c1a-9c1a-0000000000003', 'LikhaFest: Pasig City Arts & Crafts Fair 2026',
+  ('c3e30003-0003-4c1a-9c1a-000000000003', 'LikhaFest: Pasig City Arts & Crafts Fair 2026',
    'A two-day arts fair held in celebration of National Arts Month. Showcasing local Pasigueño artisans, micro-entrepreneurs, live painting performances, and musical acts to celebrate homegrown talent and community creativity.',
    (select id from public.event_categories where name = 'Arts & Culture'), 'National Arts Month Celebration',
    '2026-02-26 10:00:00+08', '2026-02-27 20:00:00+08', 'Plaza Rizal Grounds, Brgy. San Jose, Pasig City',
-   'a1e10004-0004-4c1a-9c1a-0000000000004',
+   'a1e10004-0004-4c1a-9c1a-000000000004',
    'Walk-ins welcome; no pre-registration required for attendees. Exhibitor slots full.',
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days');
 
