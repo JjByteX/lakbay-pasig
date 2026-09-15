@@ -2,7 +2,7 @@ import { supabase } from "./supabase";
 
 // Phase 6.3/6.4: storage bucket for profile pictures. Not yet created by
 // any migration in this repo, same "flagged, not silently invented" status
-// as admin-place-detail.tsx's own PHOTO_BUCKET ("place-photos") -- bucket
+// as admin-place-detail.tsx's own PHOTO_BUCKET ("content-photos") -- bucket
 // creation is a Supabase dashboard/migration step outside this phase's
 // file scope, per architecture-notes.md's "what must never be touched
 // without approval" (schema changes) and decision-log.md entry #12's own

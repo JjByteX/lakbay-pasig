@@ -36,7 +36,7 @@ import { usePageTitle } from "@/lib/page-title";
 // migration step outside this phase's file scope. Flagging here rather than
 // silently inventing infra: create a public bucket named "place-photos"
 // before this upload flow can succeed end to end.
-const PHOTO_BUCKET = "place-photos";
+const PHOTO_BUCKET = "content-photos";
 
 // Supabase public URLs look like
 // ".../storage/v1/object/public/<bucket>/<path>". place_photos only stores
