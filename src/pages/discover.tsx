@@ -286,9 +286,14 @@ export default function DiscoverPage() {
                 already active by default. Clicking an individual chip still
                 toggles only that one category in or out of the array, never
                 touching the others. */}
-      <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+      <div
+        className={cn(
+          "flex flex-col gap-2",
+          isMobile ? "mx-auto w-full max-w-md" : "w-full",
+        )}
+      >
         <Label className="px-1 text-sm font-normal text-muted-foreground">
-          All categories
+          Categories
         </Label>
         <div className="grid grid-cols-2 gap-2">
           {categoryOptions.map((c) => {
@@ -338,9 +343,14 @@ export default function DiscoverPage() {
                 since the empty array is already the default "all" state,
                 that button is now a plain, non-interactive label instead (no
                 onClick, no button semantics). */}
-      <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+      <div
+        className={cn(
+          "flex flex-col gap-2",
+          isMobile ? "mx-auto w-full max-w-md" : "w-full",
+        )}
+      >
         <Label className="px-1 text-sm font-normal text-muted-foreground">
-          All facilities
+          Facilities
         </Label>
         <div className="grid grid-cols-2 gap-2">
           {facilityOptions.map((f) => {
@@ -379,7 +389,14 @@ export default function DiscoverPage() {
                 express an open-ended range, per ponytail's native-feature-first
                 rung. Label text states the unit, since ₱ alone in a placeholder
                 disappears once the person starts typing. */}
-      <div className="mx-auto flex w-full max-w-md items-end justify-center gap-3">
+      <div
+        className={cn(
+          "flex items-end gap-3",
+          isMobile
+            ? "mx-auto w-full max-w-md justify-center"
+            : "w-full justify-start",
+        )}
+      >
         <div className="flex flex-col gap-1">
           <Label htmlFor="discover-price-min">Min price (₱)</Label>
           <Input

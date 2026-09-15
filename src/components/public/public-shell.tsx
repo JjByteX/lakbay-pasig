@@ -21,7 +21,8 @@ import { PublicSidebar } from "./public-sidebar";
 import { GlobalSearchBar } from "./global-search-bar";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import {
@@ -456,10 +457,13 @@ function MobileShell({
 }
 
 // Desktop shell: reuses the admin panel's own Sidebar/SidebarProvider/
-// SidebarInset/SidebarTrigger primitives (components/ui/sidebar.tsx) and
-// PublicSidebar's admin-sidebar.tsx-styled nav, per direct instruction to
-// reuse that same pattern rather than keep the mobile fixed-header/
-// bottom-nav chrome at desktop widths.
+// SidebarInset primitives (components/ui/sidebar.tsx) and PublicSidebar's
+// admin-sidebar.tsx-styled nav, per direct instruction to reuse that same
+// pattern rather than keep the mobile fixed-header/bottom-nav chrome at
+// desktop widths. The collapse control is no longer SidebarTrigger in a
+// bar here -- it now lives in PublicSidebar's own header row, Amkor-style
+// (see public-sidebar.tsx's HeaderLogoRow), so SidebarInset renders no
+// header of its own at all.
 //
 // Search/filters panel: per direct instruction, search never sits in a
 // top bar on desktop -- it lives in the sidebar itself (PublicSidebar's
@@ -483,6 +487,11 @@ function MobileShell({
 // renders when Discover has actually registered it -- every other tab's
 // panel is search-only, not padded out with empty filter UI that would
 // violate the guidelines' "more than 30% empty is too large" sizing rule.
+// Search panel width, named so both the fixed panel and its layout-flow
+// spacer below agree on one number instead of two hardcoded "w-80"s
+// drifting apart later.
+const SEARCH_PANEL_WIDTH = "20rem"; // w-80
+
 function DesktopShell({
   query,
   setQuery,
@@ -495,6 +504,7 @@ function DesktopShell({
   const location = useLocation();
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const searchVisible = isSearchVisible(location.pathname);
+  const panelOpen = searchVisible && searchPanelOpen;
 
   return (
     <SidebarProvider>
@@ -502,24 +512,50 @@ function DesktopShell({
         searchOpen={searchPanelOpen}
         onToggleSearch={() => setSearchPanelOpen((open) => !open)}
       />
-      {/* Same bg-card + border-border surface admin-sidebar.tsx's own
-          Sidebar already renders with, so this panel reads as one
-          continuous nav-adjacent surface with the rail beside it, not a
-          mismatched third color. w-80 is a fixed panel width (unlike the
-          collapsible nav rail) -- Apple Maps' own reference panel is a
-          similar fixed width, not something that shrinks/grows with
-          window size. */}
-      {searchVisible && searchPanelOpen && (
-        <div className="flex h-svh w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-card p-4">
-          <GlobalSearchBar query={query} onQueryChange={setQuery} />
-          {discoverFilters}
-        </div>
-      )}
+      {/* Bug fix: this panel previously sat in the same flex row as
+          SidebarInset (a plain flow sibling that only rendered when open),
+          so opening/closing it resized SidebarInset itself -- and with it
+          DiscoverMap's container, which (discover-map.tsx's own comment,
+          "No container-resize handling") never calls MapLibre's resize()
+          and has no ResizeObserver, so the map visibly shifted/tore on
+          every open/close. Fixed the same way Sidebar itself (components/
+          ui/sidebar.tsx) solves this exact problem for the nav rail: a
+          zero-height-impact spacer that reserves the layout width, plus a
+          separately `fixed` panel positioned on top of the page rather
+          than inside the flex row. SidebarInset's own box never changes
+          size either way, so the map underneath never resizes -- only
+          this panel slides over it.
+          Positioned flush against the sidebar's own right edge via the
+          same peer-data-[state] selectors SidebarInset already keys off
+          of (peer is set on Sidebar's own root, sidebar.tsx line ~159),
+          so the panel tracks the rail's real width (13rem expanded, 3rem
+          collapsed via --sidebar-width-icon) without re-measuring it in
+          JS -- it just reads the same CSS custom properties/data-state
+          the rail itself renders with. */}
+      <div
+        aria-hidden
+        className="relative hidden h-svh shrink-0 transition-[width] duration-200 ease-linear md:block"
+        style={{ width: panelOpen ? SEARCH_PANEL_WIDTH : 0 }}
+      />
+      <div
+        className={cn(
+          "fixed inset-y-0 z-20 hidden h-svh flex-col gap-4 overflow-y-auto border-r border-border bg-card p-4 transition-[left,width] duration-200 ease-linear md:flex",
+          "left-[--sidebar-width] peer-data-[state=collapsed]:left-[--sidebar-width-icon]",
+          panelOpen ? "w-80" : "w-0 !border-r-0 !p-0 overflow-hidden",
+        )}
+      >
+        <GlobalSearchBar query={query} onQueryChange={setQuery} />
+        {discoverFilters}
+      </div>
       <SidebarInset className="h-svh overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-          <SidebarTrigger />
-        </header>
-        <div className="flex-1 overflow-y-auto">
+        {/* Bug fix / direct instruction: the collapse control now lives in
+            PublicSidebar's own header row (Amkor's pattern -- collapse
+            button beside the logo when expanded, the logo itself becomes
+            the expand control when collapsed), so this bar -- previously
+            here solely to hold SidebarTrigger -- is removed outright.
+            Main content starts flush at the top of SidebarInset; nothing
+            else was rendered in this bar to preserve. */}
+        <div className="h-full overflow-y-auto">
           <Outlet />
         </div>
       </SidebarInset>

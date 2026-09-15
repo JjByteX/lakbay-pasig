@@ -1,4 +1,4 @@
-import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as SettingsIcon, LogOut } from "lucide-react";
+import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as SettingsIcon, LogOut, ChevronsUpDown, PanelLeftOpen } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -14,7 +14,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import { SignOutDialog } from "@/components/sign-out-dialog";
@@ -43,6 +51,63 @@ const NAV_ITEMS = [
   { to: "/saved", label: "Saved", icon: Bookmark, end: false },
 ] as const;
 
+// Amkor-style header row (Sidebar.jsx): the collapse control lives here,
+// not in a separate top bar over the main content (public-shell.tsx's
+// DesktopShell used to render one solely to hold SidebarTrigger -- removed
+// entirely now that this row is the one place to expand/collapse).
+//
+// Expanded: logo + wordmark stay a Home link exactly as before, plus a
+// dedicated collapse button on the right (PanelLeftOpen, mirrored via
+// scaleX(-1) so it visually points "in" -- same icon/flip Amkor uses for
+// its own collapse button, not a new glyph).
+// Collapsed: one button fills the same slot the logo alone used to, and
+// is now the expand control too, since there's no room for a second
+// target on an icon-only rail -- hovering it swaps the brand mark for a
+// plain PanelLeftOpen via pure CSS (index.css's .sidebar-logo-toggle
+// rules, copied from Amkor's own app.css), no component state for the
+// hover itself, only the click still calls toggleSidebar().
+function HeaderLogoRow() {
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed";
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Expand sidebar"
+        className="sidebar-logo-toggle flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <span className="sidebar-logo-brand flex h-8 w-8 items-center justify-center">
+          <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
+        </span>
+        <span className="sidebar-logo-expand items-center justify-center">
+          <PanelLeftOpen className="h-4 w-4" />
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex w-full items-center gap-2">
+      <NavLink to="/" className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1">
+        <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
+        <span className="truncate text-base font-semibold text-foreground">
+          Lakbay Pasig
+        </span>
+      </NavLink>
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Collapse sidebar"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <PanelLeftOpen className="h-5 w-5 -scale-x-100" />
+      </button>
+    </div>
+  );
+}
+
 export function PublicSidebar({
   searchOpen,
   onToggleSearch,
@@ -65,21 +130,22 @@ export function PublicSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        {/* Logo, same collapse-aware sizing/padding admin-sidebar.tsx's own
-            header already establishes (see that file's header comment for
-            the full reasoning) -- reused verbatim rather than re-deriving
-            it, since it's the identical logo asset and the identical
-            collapsed-rail constraint. Links home, matching the mobile
-            header's own logo-to-home behavior (public-shell.tsx). */}
-        <NavLink
-          to="/"
-          className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0"
-        >
-          <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
-          <span className="text-base font-semibold text-foreground group-data-[collapsible=icon]:hidden">
-            Lakbay Pasig
-          </span>
-        </NavLink>
+        {/* Amkor-style header: expanded shows the logo (still a Home link,
+            unchanged from before) plus a dedicated collapse button on the
+            right; collapsed shows a single button that is both the brand
+            mark and the expand control, matching Amkor's own Sidebar.jsx
+            header exactly (PanelLeftOpen, mirrored via scaleX(-1) when
+            expanded, plain when collapsed) rather than reusing this
+            project's generic SidebarTrigger, which the shell previously
+            placed in a separate top bar in SidebarInset (public-shell.tsx)
+            -- that whole bar is now gone; this row is the only collapse
+            control on desktop.
+            Collapsed hover swap (logo -> expand icon in the same slot) is
+            pure CSS (index.css's .sidebar-logo-toggle rules), copied from
+            Amkor's own app.css rather than reimplemented with component
+            state, since it's a decoration on a single already-interactive
+            button, not new application state. */}
+        <HeaderLogoRow />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -140,56 +206,59 @@ export function PublicSidebar({
             </SidebarMenuItem>
           </SidebarMenu>
         ) : (
-          <>
-            <div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center">
-              {/* Same AVATAR_SIZE.sm + AvatarImage/AvatarFallback pattern
-                  admin-sidebar.tsx's own footer uses, reused rather than a
-                  new size or fallback rule for this third avatar spot. */}
-              <Avatar className={cn(AVATAR_SIZE.sm, "shrink-0")}>
-                {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
-                <AvatarFallback className="leading-none">
-                  {initial ?? <UserIcon className="h-4 w-4" />}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-sm font-semibold text-foreground">
-                  {profile?.display_name ?? "Account"}
-                </span>
-              </div>
-            </div>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={currentPath === "/profile"}
-                  tooltip="Profile"
-                >
-                  <NavLink to="/profile">
-                    <UserIcon className="h-4 w-4 shrink-0" />
-                    <span>Profile</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={currentPath === "/profile/settings"}
-                  tooltip="Settings"
-                >
-                  <NavLink to="/profile/settings">
-                    <SettingsIcon className="h-4 w-4 shrink-0" />
-                    <span>Settings</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setSignOutOpen(true)} tooltip="Sign out">
-                  <LogOut className="h-4 w-4 shrink-0" />
-                  <span>Sign out</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </>
+          // Amkor-style profile menu: the account row itself is the
+          // trigger (not three permanently-stacked rows below it) --
+          // clicking it opens a floating menu with Profile/Settings/Sign
+          // out, same three destinations Amkor's own ProfileMenu popup
+          // lists (Sidebar.jsx), just without Amkor's dark-mode toggle
+          // row and branch switcher, which don't apply here. Radix's
+          // DropdownMenu is this project's own existing equivalent of
+          // Amkor's hand-rolled createPortal popup -- both render outside
+          // the sidebar's clipped scroll container so the menu is never
+          // cut off, and public-shell.tsx's mobile AccountMenu already
+          // uses this exact primitive for this exact Profile/Settings/
+          // Sign out trio, reused here rather than re-implementing
+          // Amkor's own portal/positioning plumbing (usePortalPosition,
+          // createPortal) a second time in a codebase that already has a
+          // menu primitive that does the same job.
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuButton
+                size="lg"
+                tooltip={profile?.display_name ?? "Account"}
+                className="h-auto py-1"
+                aria-label="Account menu"
+              >
+                <Avatar className={cn(AVATAR_SIZE.sm, "shrink-0")}>
+                  {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
+                  <AvatarFallback className="leading-none">
+                    {initial ?? <UserIcon className="h-4 w-4" />}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {profile?.display_name ?? "Account"}
+                  </span>
+                </div>
+                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+              </SidebarMenuButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="end" sideOffset={8}>
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
+                <UserIcon className="mr-2 h-4 w-4" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/profile/settings")}>
+                <SettingsIcon className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </SidebarFooter>
 

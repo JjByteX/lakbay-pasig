@@ -81,3 +81,23 @@
   }
 }
 
+/* ============================================================
+   SIDEBAR LOGO -> EXPAND ICON ON HOVER (desktop, collapsed rail)
+   Mirrors Amkor's own sidebar collapse control: while collapsed, the
+   header shows only the brand mark; hovering that same button swaps it
+   for an expand icon in the identical spot, pure CSS, no re-render.
+   The wrapper gets .sidebar-logo-toggle; inside it, .sidebar-logo-brand
+   (the logo) and .sidebar-logo-expand (the icon) occupy the same slot.
+   ============================================================ */
+.sidebar-logo-toggle .sidebar-logo-expand {
+  display: none;
+}
+
+.sidebar-logo-toggle:hover .sidebar-logo-brand {
+  display: none;
+}
+
+.sidebar-logo-toggle:hover .sidebar-logo-expand {
+  display: flex;
+}
+
