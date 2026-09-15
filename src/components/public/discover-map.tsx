@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
-import { LocateFixed, MapPin, X } from "lucide-react";
+import { LocateFixed, MapPin } from "lucide-react";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
@@ -11,6 +11,7 @@ import { fetchActiveCategories as fetchActiveBusinessCategories, type BusinessCa
 import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import type { RouteGeometry } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 
@@ -272,7 +273,7 @@ function buildStyle(palette: typeof LATTE): StyleSpecification {
 
 // Map-marker-icons phase: replaces the old plain verified/pending dot with
 // the place or business's own category icon, same getCategoryIcon/
-// getBusinessCategoryIcon lookups MapLegend already uses for the exact
+// getBusinessCategoryIcon lookups LegendPanel already uses for the exact
 // same category value below, so a marker's glyph always matches its own
 // legend row. LucideIcon is a React component, and maplibregl.Marker takes
 // a raw DOM element, not JSX -- renderToStaticMarkup (react-dom/server,
@@ -326,8 +327,12 @@ interface DiscoverMapProps {
   onRouteFound: (geometry: RouteGeometry) => void;
 }
 
-// Feature-request-phases.md Phase 1.1/1.4: legend rows for both marker
-// concepts the map actually draws.
+// Feature-request-phases.md Phase 1.1/1.4: legend content (categories +
+// status key) rendered as a dropdown panel, opened from the combined
+// corner pill below (MapCornerControls), not this component's own button
+// -- merged per direct instruction so the legend toggle and the locate
+// control live in one stacked pill instead of two separate floating
+// circles.
 //
 // Map-marker-icons phase: markers no longer draw a plain verified/pending
 // dot -- markerElement above now draws the place or business's own
@@ -356,7 +361,7 @@ interface DiscoverMapProps {
 // grep), so it has nothing this legend could pair an icon with. Flagged
 // here rather than silently guessed, per constraints.md's No Silent
 // Overrides rule.
-function MapLegend({
+function LegendPanel({
   placeCategories,
   businessCategories,
   loading,
@@ -365,8 +370,6 @@ function MapLegend({
   businessCategories: BusinessCategory[];
   loading: boolean;
 }>) {
-  const [open, setOpen] = useState(false);
-
   // 1.8: hidden cleanly rather than showing an empty panel once opened, if
   // there is nothing to show yet (a request still in flight and no rows
   // fetched, matching discover.tsx's own categoryOptions/facilityOptions
@@ -377,159 +380,135 @@ function MapLegend({
   if (isEmpty) return null;
 
   return (
-    <div className="absolute bottom-3 left-3 z-[1000] flex flex-col items-start gap-2">
-      {open && (
-        // Plain absolutely-positioned panel, not the Radix DropdownMenu
-        // primitive (components/ui/dropdown-menu.tsx) -- same reasoning
-        // global-search-bar.tsx's own header comment already gives for its
-        // own dropdown: no Popover/Command primitive exists in this
-        // codebase (grepped src/components/ui first, per constraints.md's
-        // Inventory Before Suggesting rule), and this needs no trigger-
-        // click focus trapping, just a plain panel toggled by the button
-        // beneath it. max-h + overflow so a long category list never grows
-        // the panel past the map's own viewport, matching the search bar's
-        // own max-h-[70vh] pattern for the same "don't outgrow the
-        // container" reason (1.9's 320px/overlap pass).
-        <div className="max-h-[60vh] w-56 overflow-y-auto rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-md">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-foreground">Legend</p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              aria-label="Close legend"
-              onClick={() => setOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+    // Plain absolutely-positioned panel, not the Radix DropdownMenu
+    // primitive (components/ui/dropdown-menu.tsx) -- same reasoning
+    // global-search-bar.tsx's own header comment already gives for its own
+    // dropdown: no Popover/Command primitive exists in this codebase
+    // (grepped src/components/ui first, per constraints.md's Inventory
+    // Before Suggesting rule), and this needs no trigger-click focus
+    // trapping, just a plain panel toggled by the pill beneath it. max-h +
+    // overflow so a long category list never grows the panel past the
+    // map's own viewport, matching the search bar's own max-h-[70vh]
+    // pattern for the same "don't outgrow the container" reason (1.9's
+    // 320px/overlap pass). Opens downward from the pill now that the pill
+    // itself sits top-right (mt-2 gap instead of the old bottom-left
+    // upward-opening layout).
+    <div className="absolute right-0 top-full mt-2 max-h-[60vh] w-56 overflow-y-auto rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-md">
+      <p className="mb-2 text-sm font-semibold text-foreground">Legend</p>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Status
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-primary bg-card shadow" />
+            <span className="text-sm text-foreground">Verified</span>
           </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Status
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-primary bg-card shadow" />
-                <span className="text-sm text-foreground">Verified</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-dashed border-muted-foreground bg-card shadow" />
-                <span className="text-sm text-foreground">Pending Verification</span>
-              </div>
-            </div>
-
-            {placeCategories.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Place Categories
-                </p>
-                {placeCategories.map((c) => {
-                  const Icon = getCategoryIcon(c.icon);
-                  return (
-                    <div key={c.id} className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 shrink-0 text-foreground" />
-                      <span className="text-sm text-foreground">{c.name}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {businessCategories.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Business Categories
-                </p>
-                {businessCategories.map((c) => {
-                  const Icon = getBusinessCategoryIcon(c.icon);
-                  return (
-                    <div key={c.id} className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 shrink-0 text-foreground" />
-                      <span className="text-sm text-foreground">{c.name}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          <div className="flex items-center gap-2">
+            <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-dashed border-muted-foreground bg-card shadow" />
+            <span className="text-sm text-foreground">Pending Verification</span>
           </div>
         </div>
-      )}
 
-      {/* 1.3: corner toggle, opened on tap/click, per ux-ui-guidelines.md's
-          Modal vs panel rule -- a small reference list is not a focused
-          task or a comparison-with-the-page need, so it earns a compact
-          corner control, not a side panel or modal. Bottom-left keeps it
-          clear of the map/list toggle and status pills, which all render
-          top-center/top-of-map (1.9's own overlap check) and clear of the
-          Map/List segmented control living in the header above this
-          component entirely (public-shell.tsx). h-9 w-9 matches this
-          codebase's existing icon-button circle convention (public-
-          shell.tsx's AccountMenu/logo circles), not a new size invented
-          for this one control. */}
-      {/* 1.8: disabled with a muted icon while categories are still
-          resolving, same "visibly disabled, not silently unresponsive"
-          shape ux-ui-guidelines.md's State Rules require for a loading
-          control -- the button itself is the loading indicator here, a
-          separate spinner would be a second element for one small toggle. */}
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="h-9 w-9 rounded-full bg-card shadow"
-        aria-label={open ? "Hide legend" : "Show legend"}
-        onClick={() => setOpen((v) => !v)}
-        disabled={loading}
-      >
-        <MapPin className={loading ? "h-4 w-4 text-muted-foreground" : "h-4 w-4"} />
-      </Button>
+        {placeCategories.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Place Categories
+            </p>
+            {placeCategories.map((c) => {
+              const Icon = getCategoryIcon(c.icon);
+              return (
+                <div key={c.id} className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 shrink-0 text-foreground" />
+                  <span className="text-sm text-foreground">{c.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {businessCategories.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Business Categories
+            </p>
+            {businessCategories.map((c) => {
+              const Icon = getBusinessCategoryIcon(c.icon);
+              return (
+                <div key={c.id} className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 shrink-0 text-foreground" />
+                  <span className="text-sm text-foreground">{c.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// locate-me-and-directions-phases.md Phase 1: floating locate-me control,
-// bottom-right (1.3's placement, clear of MapLegend's own bottom-left
-// corner and the top-center status/loading pills). Built as our own button
-// calling navigator.geolocation directly, not maplibre-gl's GeolocateControl
-// -- Phase 0.3 found GeolocateControl's default DOM/CSS (its own button
-// chrome, plus a pulsing accuracy-circle ring drawn on the map itself,
-// maplibregl-user-location-dot-pulse) doesn't match this file's existing
-// bg-card/h-9 w-9 icon-button convention and reads close to
-// ux-ui-guidelines.md's no-glow rule without an explicit showAccuracyCircle
-// override. A plain button reusing this component's own existing pattern
-// (MapLegend's toggle above) is the smaller diff and needs no restyle.
+// Combines the old separate MapLegend toggle and LocateMeControl into one
+// stacked pill, per direct instruction and reference image: a single
+// rounded rectangle, map/legend icon on top, locate arrow below, divided
+// by a thin line -- not two separate floating circles.
 //
-// States (ux-ui-guidelines.md's State Rules): idle icon, a muted/disabled
-// look while a request is in flight (same shape as MapLegend's own
-// disabled-while-loading treatment), and a specific inline error string on
-// denial or when geolocation isn't available -- never a silent failure.
-function LocateMeControl({
+// Placement: top-right, inside this component's own relative container
+// (same coordinate space the bottom corner controls already use), not
+// bottom-right/bottom-left like the two originals. public-shell.tsx's
+// header is a fixed h-14 (56px) row at rest, and <main> (where this map
+// renders) starts exactly at that same top-14 offset, so this control
+// sits clearly under the search bar, never behind it, in the header's
+// normal (non-dragged) state. The header's filter drawer can grow taller
+// than h-14 while being actively dragged open (public-shell.tsx's own
+// HeaderFilterArea, a temporary user-held gesture, not the map's resting
+// view), which this fixed offset does not chase -- no shared header-height
+// value exists to read here (grepped public-shell.tsx first), and the
+// drawer's own existing overlap-while-dragging behavior is already
+// accepted elsewhere in this shell (its own comment: "the header simply
+// grows over top of this fixed layer").
+//
+// top-14 rather than top-3: this container also renders the status/
+// loading/error pills (resultsError/resultsLoading/tilesLoading/isEmpty,
+// below), horizontally centered at top-3 with max-w-full text that can run
+// wide enough to reach this corner on narrower viewports -- top-14 clears
+// that row entirely so the corner pill and a centered status message never
+// visually collide.
+function MapCornerControls({
+  placeCategories,
+  businessCategories,
+  categoriesLoading,
   onLocationFound,
-}: Readonly<{ onLocationFound?: (coords: Coordinates) => void }>) {
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
+}: Readonly<{
+  placeCategories: PlaceCategory[];
+  businessCategories: BusinessCategory[];
+  categoriesLoading: boolean;
+  onLocationFound?: (coords: Coordinates) => void;
+}>) {
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [locateStatus, setLocateStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [locateError, setLocateError] = useState<string | null>(null);
 
-  const handleClick = () => {
+  const handleLocate = () => {
     if (!onLocationFound) return;
     if (!navigator.geolocation) {
-      setStatus("error");
-      setError("Location isn't supported on this device.");
+      setLocateStatus("error");
+      setLocateError("Location isn't supported on this device.");
       return;
     }
-    setStatus("loading");
-    setError(null);
+    setLocateStatus("loading");
+    setLocateError(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setStatus("idle");
+        setLocateStatus("idle");
         onLocationFound({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
       },
       (err) => {
-        setStatus("error");
-        setError(
+        setLocateStatus("error");
+        setLocateError(
           err.code === err.PERMISSION_DENIED
             ? "Location access was denied. Enable it in your browser settings to use this."
             : "Couldn't get your location. Try again.",
@@ -539,25 +518,53 @@ function LocateMeControl({
   };
 
   return (
-    <div className="absolute bottom-3 right-3 z-[1000] flex flex-col items-end gap-2">
-      {status === "error" && error && (
+    <div className="absolute right-3 top-14 z-[1000] flex flex-col items-end gap-2">
+      <div className="relative flex flex-col items-center rounded-2xl border border-input bg-card shadow">
+        {/* 1.8: disabled with a muted icon while categories are still
+            resolving, same "visibly disabled, not silently unresponsive"
+            shape ux-ui-guidelines.md's State Rules require for a loading
+            control -- the button itself is the loading indicator here, a
+            separate spinner would be a second element for one small toggle. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 rounded-t-2xl rounded-b-none hover:bg-muted"
+          aria-label={legendOpen ? "Hide legend" : "Show legend"}
+          onClick={() => setLegendOpen((v) => !v)}
+          disabled={categoriesLoading}
+        >
+          <MapPin className={categoriesLoading ? "h-4 w-4 text-muted-foreground" : "h-4 w-4"} />
+        </Button>
+        <Separator className="w-6" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 rounded-b-2xl rounded-t-none hover:bg-muted"
+          aria-label="Find my location"
+          onClick={handleLocate}
+          disabled={locateStatus === "loading"}
+        >
+          <LocateFixed
+            className={locateStatus === "loading" ? "h-4 w-4 animate-spin text-muted-foreground" : "h-4 w-4"}
+          />
+        </Button>
+
+        {legendOpen && (
+          <LegendPanel
+            placeCategories={placeCategories}
+            businessCategories={businessCategories}
+            loading={categoriesLoading}
+          />
+        )}
+      </div>
+
+      {locateStatus === "error" && locateError && (
         <span className="max-w-56 break-words rounded-md border border-border bg-card px-3 py-1.5 text-right text-xs text-destructive shadow">
-          {error}
+          {locateError}
         </span>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="h-9 w-9 rounded-full bg-card shadow"
-        aria-label="Find my location"
-        onClick={handleClick}
-        disabled={status === "loading"}
-      >
-        <LocateFixed
-          className={status === "loading" ? "h-4 w-4 animate-spin text-muted-foreground" : "h-4 w-4"}
-        />
-      </Button>
     </div>
   );
 }
@@ -634,6 +641,15 @@ function HoverPreview({
  * or the other, never both). drawRoute below reads the `route` prop on
  * mount and on every change, so switching back to map view after a
  * Directions tap from the list still shows the line.
+ *
+ * Combined-corner-controls follow-up: MapLegend and LocateMeControl merged
+ * into one MapCornerControls component (below), rendered as a single
+ * stacked pill (legend toggle on top, locate arrow beneath, divided by a
+ * Separator) per direct instruction and reference image, instead of two
+ * separate floating circles. Moved from bottom-left/bottom-right to
+ * top-right, positioned to clear the header's search bar rather than sit
+ * behind it -- see MapCornerControls' own comment for the exact offset
+ * reasoning against public-shell.tsx's fixed header height.
  */
 export function DiscoverMap({
   results,
@@ -966,18 +982,19 @@ export function DiscoverMap({
         </>
       )}
 
-      {/* 1.8: legend stays hidden (MapLegend's own isEmpty check) while
-          categories are still resolving and there's nothing yet to show;
-          it does not block on resultsLoading/resultsError since the
-          legend's content (category directories) is independent of
-          whether the marker query itself succeeded. */}
-      <MapLegend
+      {/* Combined top-right pill: legend toggle (its own LegendPanel stays
+          hidden while categories are still resolving/empty, same
+          isEmpty check the old MapLegend had) and locate-me, merged per
+          direct instruction and reference image. Does not block on
+          resultsLoading/resultsError since the legend's content (category
+          directories) is independent of whether the marker query itself
+          succeeded. */}
+      <MapCornerControls
         placeCategories={placeCategories}
         businessCategories={businessCategories}
-        loading={categoriesLoading}
+        categoriesLoading={categoriesLoading}
+        onLocationFound={onLocationFound}
       />
-
-      <LocateMeControl onLocationFound={onLocationFound} />
 
       {previewResult && (
         <HoverPreview result={previewResult.result} x={previewResult.x} y={previewResult.y} />
