@@ -156,6 +156,140 @@ function MetricLine({
   return <p className="text-base text-foreground">{children}</p>;
 }
 
+// SonarCloud L235: a second cognitive-complexity pass on the same
+// component, same approach as the L129 note below -- branching lifted out
+// of the render function rather than reshaped in place. This one computes
+// the page title. usePageTitle still runs unconditionally in the page
+// itself (ahead of its several early returns); only the branching moved.
+// Covers every render branch: signed-out/loading/error states all show
+// "Vendor" (matching their own h1), editing shows "Edit your listing", a
+// loaded business shows its own name, and the not-yet-listed create form
+// shows "List your business" -- same string each branch's own h1 already
+// renders.
+function vendorPageTitle(
+  business: VendorBusinessDetail | null,
+  editing: boolean,
+  checking: boolean,
+  checkError: string | null,
+  session: Session | null,
+): string {
+  if (business) {
+    if (editing) return "Edit your listing";
+    return business.name;
+  }
+  if (!checking && !checkError && session) return "List your business";
+  return "Vendor";
+}
+
+// SonarCloud L235: the loaded-business dashboard's own JSX, moved out of
+// VendorDashboardPage whole. It reads nothing from the page beyond what's
+// passed here and holds no state of its own, so this is a straight lift --
+// same markup, same order, same copy. The page keeps every piece of state
+// (including `editing`, which vendorPageTitle above still needs) so
+// nothing moved down and back up again.
+function BusinessDashboard({
+  business,
+  trails,
+  trailsLoading,
+  trailsError,
+  items,
+  itemsLoading,
+  itemsError,
+  onEdit,
+}: Readonly<{
+  business: VendorBusinessDetail;
+  trails: TrailInclusion[];
+  trailsLoading: boolean;
+  trailsError: string | null;
+  items: VendorItem[];
+  itemsLoading: boolean;
+  itemsError: string | null;
+  onEdit: () => void;
+}>) {
+  const showTrailList = !trailsLoading && !trailsError && trails.length > 0;
+
+  return (
+    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="min-w-0 max-w-full break-words text-xl font-semibold text-foreground">
+          {business.name}
+        </h1>
+        <Badge variant={STATUS_VARIANT[business.verification_status]}>
+          {business.verification_status}
+        </Badge>
+        {business.featured_status === "featured" && <Badge variant="accent">Featured</Badge>}
+      </div>
+
+      {/* 4.1: review notes shown plainly when present, matching the
+          rejection-reason display already on the admin side. */}
+      {business.review_notes && (
+        <p className="text-base text-muted-foreground">{business.review_notes}</p>
+      )}
+
+      {/* 4.2: metrics section, per vendor-mode-spec.md's Vendor Dashboard
+          examples. Trail inclusion count and list first, since that's
+          this app's actual differentiator, not a generic view/save
+          count (the doc's explicit instruction). */}
+      <div className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold text-foreground">Trail Inclusion</h2>
+        <MetricLine loading={trailsLoading} error={trailsError}>
+          {trailInclusionText(trails.length)}
+        </MetricLine>
+        {showTrailList && (
+          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+            {trails.map((trail) => (
+              <TrailInclusionRow key={trail.id} trail={trail} />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold text-foreground">Items</h2>
+        <MetricLine loading={itemsLoading} error={itemsError}>
+          {itemsMissingPriceText(items)}
+        </MetricLine>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold text-foreground">Registration</h2>
+        <p className="text-base text-foreground">{registrationLabel(business)}</p>
+      </div>
+
+      {/* 4.2: views/saves render as a smaller secondary line, not the
+          headline metric, per vendor-mode-spec.md's explicit "Not
+          generic view and save counts" instruction. */}
+      <p className="text-sm text-muted-foreground">
+        {business.views_count} views · {business.saves_count} saves
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <Button variant="outline" onClick={onEdit}>
+          Edit listing
+        </Button>
+        {/* 4.4: item management entry point. */}
+        <Button variant="outline" asChild>
+          <Link to="/vendor/items">Manage items</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TrailInclusionRow({ trail }: Readonly<{ trail: TrailInclusion }>) {
+  return (
+    <li className="flex items-center justify-between gap-4 p-4">
+      <span className="min-w-0 max-w-full break-words text-sm text-foreground">{trail.name}</span>
+      {trail.theme && <span className="shrink-0 text-sm text-muted-foreground">{trail.theme}</span>}
+    </li>
+  );
+}
+
+function registrationLabel(business: VendorBusinessDetail): string {
+  if (!business.registered_or_informal) return "Not set";
+  return REGISTERED_OR_INFORMAL_LABEL[business.registered_or_informal];
+}
+
 // SonarCloud L129: VendorDashboardPage's cognitive complexity (25, limit
 // 15) came from three independent data-fetch effects each carrying their
 // own branching living inside the one component function. Pulled into two
@@ -268,19 +402,10 @@ export default function VendorDashboardPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Covers every render branch below: signed-out/loading/error states all
-  // show "Vendor" (matching their own h1), editing shows "Edit your
-  // listing", a loaded business shows its own name, and the not-yet-listed
-  // create form shows "List your business" — same string each branch's own
-  // h1 already renders, computed once here since usePageTitle must run
-  // unconditionally ahead of this component's several early returns.
-  let pageTitle = "Vendor";
-  if (business) {
-    pageTitle = editing ? "Edit your listing" : business.name;
-  } else if (!checking && !checkError && session) {
-    pageTitle = "List your business";
-  }
-  usePageTitle(pageTitle);
+  // See vendorPageTitle above for which branch renders which string.
+  // Computed here rather than inside each branch because usePageTitle must
+  // run unconditionally, ahead of this component's several early returns.
+  usePageTitle(vendorPageTitle(business, editing, checking, checkError, session));
 
   if (loading) return null;
 
@@ -444,81 +569,16 @@ export default function VendorDashboardPage() {
     }
 
     return (
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="min-w-0 max-w-full break-words text-xl font-semibold text-foreground">
-            {business.name}
-          </h1>
-          <Badge variant={STATUS_VARIANT[business.verification_status]}>
-            {business.verification_status}
-          </Badge>
-          {business.featured_status === "featured" && <Badge variant="accent">Featured</Badge>}
-        </div>
-
-        {/* 4.1: review notes shown plainly when present, matching the
-            rejection-reason display already on the admin side. */}
-        {business.review_notes && (
-          <p className="text-base text-muted-foreground">{business.review_notes}</p>
-        )}
-
-        {/* 4.2: metrics section, per vendor-mode-spec.md's Vendor Dashboard
-            examples. Trail inclusion count and list first, since that's
-            this app's actual differentiator, not a generic view/save
-            count (the doc's explicit instruction). */}
-        <div className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-foreground">Trail Inclusion</h2>
-          <MetricLine loading={trailsLoading} error={trailsError}>
-            {trailInclusionText(trails.length)}
-          </MetricLine>
-          {!trailsLoading && !trailsError && trails.length > 0 && (
-            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-              {trails.map((trail) => (
-                <li key={trail.id} className="flex items-center justify-between gap-4 p-4">
-                  <span className="min-w-0 max-w-full break-words text-sm text-foreground">
-                    {trail.name}
-                  </span>
-                  {trail.theme && (
-                    <span className="shrink-0 text-sm text-muted-foreground">{trail.theme}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-foreground">Items</h2>
-          <MetricLine loading={itemsLoading} error={itemsError}>
-            {itemsMissingPriceText(items)}
-          </MetricLine>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold text-foreground">Registration</h2>
-          <p className="text-base text-foreground">
-            {business.registered_or_informal
-              ? REGISTERED_OR_INFORMAL_LABEL[business.registered_or_informal]
-              : "Not set"}
-          </p>
-        </div>
-
-        {/* 4.2: views/saves render as a smaller secondary line, not the
-            headline metric, per vendor-mode-spec.md's explicit "Not
-            generic view and save counts" instruction. */}
-        <p className="text-sm text-muted-foreground">
-          {business.views_count} views · {business.saves_count} saves
-        </p>
-
-        <div className="flex flex-col gap-2">
-          <Button variant="outline" onClick={openEdit}>
-            Edit listing
-          </Button>
-          {/* 4.4: item management entry point. */}
-          <Button variant="outline" asChild>
-            <Link to="/vendor/items">Manage items</Link>
-          </Button>
-        </div>
-      </div>
+      <BusinessDashboard
+        business={business}
+        trails={trails}
+        trailsLoading={trailsLoading}
+        trailsError={trailsError}
+        items={items}
+        itemsLoading={itemsLoading}
+        itemsError={itemsError}
+        onEdit={openEdit}
+      />
     );
   }
 

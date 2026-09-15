@@ -83,6 +83,31 @@ interface DirectionsPanelProps {
   variant?: "mobile" | "desktop";
 }
 
+// Sonar (nested ternary): the loading/error/duration row used to be an
+// isLoading ? … : errorReason ? … : … chain inline in the JSX below.
+// Same three mutually-exclusive outcomes, same order, now as early
+// returns -- the branches were already exclusive (discover.tsx's
+// handleSelectMode resolves each fetch to either a success that clears
+// errorReason or a caught error that clears isLoading first), so this is
+// a shape change only, not a behavior one.
+function DirectionsStatusRow({
+  isLoading,
+  errorReason,
+  durationSeconds,
+}: Readonly<Pick<DirectionsPanelProps, "isLoading" | "errorReason" | "durationSeconds">>) {
+  if (isLoading) {
+    return <p className="mt-4 text-sm text-muted-foreground">Getting directions…</p>;
+  }
+  if (errorReason) {
+    return <p className="mt-4 text-sm text-destructive">{ERROR_MESSAGES[errorReason]}</p>;
+  }
+  return (
+    <p className="mt-4 text-sm text-muted-foreground">
+      {durationSeconds === null ? "" : formatDuration(durationSeconds)}
+    </p>
+  );
+}
+
 // desktop-directions-panel-phases.md Phase 1.2: the mode row, From/To
 // rows, and time/loading/error row are identical between both variants
 // -- only the outer wrapper differs (see DirectionsPanel below). Split
@@ -186,15 +211,11 @@ function DirectionsPanelContent({
           own destructive-text treatment (text-destructive) so a routing
           failure reads the same way in both surfaces, not a panel-
           specific color introduced for this one row. */}
-      {isLoading ? (
-        <p className="mt-4 text-sm text-muted-foreground">Getting directions…</p>
-      ) : errorReason ? (
-        <p className="mt-4 text-sm text-destructive">{ERROR_MESSAGES[errorReason]}</p>
-      ) : (
-        <p className="mt-4 text-sm text-muted-foreground">
-          {durationSeconds !== null ? formatDuration(durationSeconds) : ""}
-        </p>
-      )}
+      <DirectionsStatusRow
+        isLoading={isLoading}
+        errorReason={errorReason}
+        durationSeconds={durationSeconds}
+      />
     </>
   );
 }

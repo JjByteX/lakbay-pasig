@@ -81,6 +81,32 @@ interface PlaceOption {
   name: string;
 }
 
+// 2.4: "Disabled publish button if required fields are missing," per
+// ux-ui-guidelines.md's Disabled/gated rule ("must be visibly disabled
+// with a clear reason when conditions aren't met... do not clearly
+// communicate what the user must do to enable it" is the failure mode
+// being avoided). title is already the DB's own not-null field (0006);
+// description, category, and date_time are the remaining fields that
+// make an announcement meaningful once public, per data-model.md and
+// the Home tab's "what CATO just published" (navigation-and-access-
+// control.md). related_program, location, related_place_id, enrollment_info,
+// and language stay optional here, same as data-model.md marks them
+// ("if applicable" / "if held at a listed heritage site or venue").
+//
+// Sonar (cognitive complexity): lifted out of AdminEventDetailPage as a
+// plain function of form state. It reads nothing else from the component
+// and returns a fresh array each call, so the component's own body loses
+// four branches without any behavior change. Labels are the field labels
+// rendered below, kept in this same file so the two can't drift.
+function missingRequiredFieldsFor(form: EventFormState): string[] {
+  const missing: string[] = [];
+  if (form.title.trim().length === 0) missing.push("Event Title");
+  if (form.description.trim().length === 0) missing.push("Description");
+  if (form.category_id.trim().length === 0) missing.push("Category");
+  if (form.date_time.trim().length === 0) missing.push("Date and Time");
+  return missing;
+}
+
 export default function AdminEventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -184,22 +210,9 @@ export default function AdminEventDetailPage() {
 
   const canSubmit = form.title.trim().length > 0 && !saving && !endBeforeStart;
 
-  // 2.4: "Disabled publish button if required fields are missing," per
-  // ux-ui-guidelines.md's Disabled/gated rule ("must be visibly disabled
-  // with a clear reason when conditions aren't met... do not clearly
-  // communicate what the user must do to enable it" is the failure mode
-  // being avoided). title is already the DB's own not-null field (0006);
-  // description, category, and date_time are the remaining fields that
-  // make an announcement meaningful once public, per data-model.md and
-  // the Home tab's "what CATO just published" (navigation-and-access-
-  // control.md). related_program, location, related_place_id, enrollment_info,
-  // and language stay optional here, same as data-model.md marks them
-  // ("if applicable" / "if held at a listed heritage site or venue").
-  const missingRequiredFields: string[] = [];
-  if (form.title.trim().length === 0) missingRequiredFields.push("Event Title");
-  if (form.description.trim().length === 0) missingRequiredFields.push("Description");
-  if (form.category_id.trim().length === 0) missingRequiredFields.push("Category");
-  if (form.date_time.trim().length === 0) missingRequiredFields.push("Date and Time");
+  // 2.4: see missingRequiredFieldsFor above for which fields are required
+  // and why the rest stay optional.
+  const missingRequiredFields = missingRequiredFieldsFor(form);
   const canPublish = missingRequiredFields.length === 0 && !endBeforeStart;
   // Note: this reads live form state, not the last-saved row. An edit made
   // after load but not yet saved can flip canPublish before Save Changes is

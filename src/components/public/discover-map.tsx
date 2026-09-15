@@ -1086,7 +1086,7 @@ export function DiscoverMap({
   // finished loading is a safe no-op, not a throw.
   const clearRoute = () => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map?.isStyleLoaded()) return;
     const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     source?.setData({ type: "FeatureCollection", features: [] });
   };
