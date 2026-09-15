@@ -1,6 +1,17 @@
 import { supabase } from "./supabase";
-import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
-import type { Announcement, RecentlyVerifiedBusiness, RecentlyVerifiedItem, RecentlyVerifiedPlace } from "./home-types";
+import {
+  readEmbeddedName,
+  readEmbeddedIcon,
+  fetchActiveCategories as fetchActivePlaceCategories,
+} from "./place-categories";
+import { fetchActiveCategories as fetchActiveBusinessCategories } from "./business-categories";
+import type {
+  Announcement,
+  CategoryRow,
+  RecentlyVerifiedBusiness,
+  RecentlyVerifiedItem,
+  RecentlyVerifiedPlace,
+} from "./home-types";
 
 // Phase 2.2 (step-6-phases.md): "Feed of published announcements," per
 // navigation-and-access-control.md's Home tab definition. The .eq() below
@@ -35,6 +46,41 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   });
 }
 
+// home-photo-showcase-phases.md Phase 2.1: one helper, table name passed
+// in, mirrors category-crud.ts's one-shape-two-tables approach rather than
+// two near-identical functions for place_photos vs business_photos -- both
+// tables share the exact same (parent_id, photo_url, sort_order) shape
+// this needs (place_photos additionally has photo_type, unused here).
+// Returns the lowest-sort_order photo url per parent id, as a Map for O(1)
+// lookup by the caller; ids with no photo row at all simply have no entry,
+// callers read that absence with `.get(id) ?? null`.
+async function fetchCoverPhotoUrls(
+  table: "place_photos" | "business_photos",
+  parentIdColumn: "place_id" | "business_id",
+  ids: string[]
+): Promise<Map<string, string>> {
+  const covers = new Map<string, string>();
+  if (ids.length === 0) return covers;
+
+  const { data, error } = await supabase
+    .from(table)
+    .select(`${parentIdColumn}, photo_url, sort_order`)
+    .in(parentIdColumn, ids)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+
+  // Ordered ascending by sort_order, so the first row seen per parent id
+  // is already its lowest-sort_order photo -- a plain "first write wins"
+  // pass over the ordered rows is enough, no per-id min() needed.
+  for (const row of (data ?? []) as { photo_url: string; sort_order: number; [key: string]: unknown }[]) {
+    const parentId = row[parentIdColumn] as string;
+    if (!covers.has(parentId)) covers.set(parentId, row.photo_url);
+  }
+
+  return covers;
+}
+
 // Phase 2.3: places (places_select_public, verified only) and businesses
 // (businesses_select_public, verified or pending) fetched separately, same
 // split discover-query.ts's fetchPlaces/fetchBusinesses already use, since
@@ -48,16 +94,36 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
   // Phase 1.4 (place-category-directory-phases.md): category is now a
   // joined place_categories.name (migration 0022), embedded and flattened
   // the same way discover-query.ts's fetchPlaces was fixed.
+  // home-photo-showcase-phases.md Phase 2.3: the old .limit(10) here was
+  // sized for fetchRecentlyVerified's own top-10 feed (below), the only
+  // caller this function had before this phase. fetchHomeShowcase (below)
+  // now shares this same function but needs every verified, photo-having
+  // item to build complete category rows -- home-photo-showcase-plan.md's
+  // own Row Content and Order section is explicit that a row has "No cap
+  // on row length," capping here would silently drop real verified
+  // content from a row with no sign anything's missing. The cap moves
+  // into fetchRecentlyVerified itself instead, applied after this
+  // function returns, so that caller keeps its original top-10 behavior
+  // unchanged while fetchHomeShowcase gets the uncapped set it needs.
   const { data, error } = await supabase
     .from("places")
     .select(
       "id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name, icon), facility_ids"
     )
     .not("verified_at", "is", null)
-    .order("verified_at", { ascending: false })
-    .limit(10);
+    .order("verified_at", { ascending: false });
 
   if (error) throw error;
+
+  // home-photo-showcase-phases.md Phase 2.2: cover photo fetched via
+  // 2.1's helper, one extra query keyed off the same ids this function
+  // already fetched, setting coverPhotoUrl (Phase 1.1's new field). The
+  // verified-only, verified_at-sorted query above is otherwise unchanged.
+  const coverPhotos = await fetchCoverPhotoUrls(
+    "place_photos",
+    "place_id",
+    (data ?? []).map((row) => row.id)
+  );
 
   // Phase 2 (feature-request-phases.md, Discover Facility Filters):
   // DiscoverPlace (which RecentlyVerifiedPlace extends) gained a required
@@ -82,6 +148,7 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
     verification_status: row.verification_status as "verified",
     verified_at: row.verified_at as string,
     facility_ids: row.facility_ids ?? [],
+    coverPhotoUrl: coverPhotos.get(row.id) ?? null,
   }));
 }
 
@@ -95,6 +162,10 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
   // category back) -- caught here since the old flat "category" select
   // would otherwise error against the dropped column, per constraints.md's
   // File Traversal rule.
+  // home-photo-showcase-phases.md Phase 2.3: same reasoning as
+  // fetchRecentlyVerifiedPlaces above -- .limit(10) removed here too, the
+  // cap moves into fetchRecentlyVerified so fetchHomeShowcase's category
+  // rows aren't silently truncated.
   const { data, error } = await supabase
     .from("businesses")
     .select(
@@ -102,10 +173,17 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
     )
     .eq("verification_status", "verified")
     .not("verified_at", "is", null)
-    .order("verified_at", { ascending: false })
-    .limit(10);
+    .order("verified_at", { ascending: false });
 
   if (error) throw error;
+
+  // home-photo-showcase-phases.md Phase 2.2: same cover-photo widening as
+  // fetchRecentlyVerifiedPlaces above, business_photos this time.
+  const coverPhotos = await fetchCoverPhotoUrls(
+    "business_photos",
+    "business_id",
+    (data ?? []).map((row) => row.id)
+  );
 
   return (data ?? []).map((row) => {
     const { business_categories, ...rest } = row as typeof row & {
@@ -125,21 +203,29 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
       verification_status: "verified" as const,
       itemPrices: (rest.business_items ?? []).map((item: { price: number | null }) => item.price),
       verified_at: rest.verified_at as string,
+      coverPhotoUrl: coverPhotos.get(rest.id) ?? null,
     };
   });
 }
 
 /**
- * Phase 2.3: both kinds fetched with a 10-row cap each, then merged and
- * re-sorted by verified_at so the combined top 10 is correct regardless of
- * which table contributed more recent rows, then capped again at 10. A
- * fetch-then-cap-per-table approach (rather than one combined query) is
- * required here, unlike Discover's fetchDiscoverResults, since places and
+ * Phase 2.3: both kinds fetched in full, then merged, re-sorted by
+ * verified_at, and capped at 10 here so the combined top 10 is correct
+ * regardless of which table contributed more recent rows. A
+ * fetch-then-merge approach (rather than one combined query) is required
+ * here, unlike Discover's fetchDiscoverResults, since places and
  * businesses are different tables with no single query that spans both.
  * Rows verified before migration 0017's backfill or before this feature
  * existed still carry a verified_at value (the backfill set it from
  * updated_at at migration time), so nothing verified pre-launch is
  * silently excluded from this list.
+ *
+ * home-photo-showcase-phases.md Phase 2.3: the per-table .limit(10) that
+ * used to live inside fetchRecentlyVerifiedPlaces/Businesses moved out to
+ * this single .slice(10) below, since fetchHomeShowcase now shares those
+ * same two functions and needs their uncapped output to build complete
+ * category rows. This function's own behavior is unchanged: still the top
+ * 10 most-recently-verified items across both tables.
  */
 export async function fetchRecentlyVerified(): Promise<RecentlyVerifiedItem[]> {
   const [places, businesses] = await Promise.all([
@@ -150,4 +236,105 @@ export async function fetchRecentlyVerified(): Promise<RecentlyVerifiedItem[]> {
   return [...places, ...businesses]
     .sort((a, b) => new Date(b.verified_at).getTime() - new Date(a.verified_at).getTime())
     .slice(0, 10);
+}
+
+/**
+ * home-photo-showcase-phases.md Phase 2.3: one function replacing the two
+ * originally planned, fetches once and splits after -- no second round
+ * trip for the same rows.
+ *
+ * Grouping key: the plan's own language says "by category_id," but
+ * RecentlyVerifiedPlace/RecentlyVerifiedBusiness (home-types.ts Phase 1,
+ * already locked, not this phase's file to change) carry `category` as a
+ * resolved name string, not a category_id -- readEmbeddedName already
+ * flattened the join in fetchRecentlyVerifiedPlaces/Businesses above, per
+ * those functions' own pre-existing comments, and every other consumer of
+ * these two types across the app (verified-item-card.tsx, Discover's own
+ * filterDiscoverResults) reads that same resolved name, never a raw id.
+ * Re-widening either type to also carry category_id now, just for this
+ * grouping step, would ripple a field into Discover's own result shape
+ * for a use Discover never has, the same reasoning home-types.ts's own
+ * header comment already gives for keeping verified_at/coverPhotoUrl
+ * scoped to Home alone. So grouping here joins on category name instead:
+ * each active category's own `name` (from fetchActiveCategories) matched
+ * against each item's own `category` field. Two categories never share a
+ * name (place_categories.name / business_categories.name have no unique
+ * constraint forcing that, but category-form-dialog.tsx's own admin form
+ * is the only write path and categories are managed per CATO's own
+ * naming), and within one kind (places or businesses) this is exactly the
+ * same identity a name-based join already relies on elsewhere in this
+ * file (readEmbeddedName itself resolves a category to its name, not its
+ * id, before any caller ever sees the row).
+ */
+export interface HomeShowcase {
+  placeCategoryRows: CategoryRow[];
+  businessCategoryRows: CategoryRow[];
+  fallbackItems: RecentlyVerifiedItem[];
+}
+
+function buildCategoryRows<T extends RecentlyVerifiedItem>(
+  categories: { id: string; name: string }[],
+  items: T[]
+): { rows: CategoryRow[]; photoless: T[] } {
+  const photoless: T[] = [];
+  const byCategoryName = new Map<string, T[]>();
+
+  for (const item of items) {
+    if (!item.coverPhotoUrl) {
+      photoless.push(item);
+      continue;
+    }
+    const key = item.category ?? "";
+    const bucket = byCategoryName.get(key);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      byCategoryName.set(key, [item]);
+    }
+  }
+
+  // Categories iterated in the order they were passed in (fetchActive
+  // Categories' own alphabetical-by-name order, confirmed Phase 0.1), so
+  // rows come out already in that order -- no re-sort needed here. A
+  // category with zero photo-having items simply has no entry in
+  // byCategoryName, so it's dropped from rows for free by this filter,
+  // never pushed as an empty row.
+  const rows: CategoryRow[] = [];
+  for (const category of categories) {
+    const bucket = byCategoryName.get(category.name);
+    if (!bucket || bucket.length === 0) continue;
+    rows.push({
+      categoryId: category.id,
+      categoryName: category.name,
+      items: [...bucket].sort(
+        (a, b) => new Date(b.verified_at).getTime() - new Date(a.verified_at).getTime()
+      ),
+    });
+  }
+
+  return { rows, photoless };
+}
+
+export async function fetchHomeShowcase(): Promise<HomeShowcase> {
+  const [placeCategories, businessCategories, places, businesses] = await Promise.all([
+    fetchActivePlaceCategories(),
+    fetchActiveBusinessCategories(),
+    fetchRecentlyVerifiedPlaces(),
+    fetchRecentlyVerifiedBusinesses(),
+  ]);
+
+  const { rows: placeCategoryRows, photoless: photolessPlaces } = buildCategoryRows(
+    placeCategories,
+    places
+  );
+  const { rows: businessCategoryRows, photoless: photolessBusinesses } = buildCategoryRows(
+    businessCategories,
+    businesses
+  );
+
+  const fallbackItems = [...photolessPlaces, ...photolessBusinesses].sort(
+    (a, b) => new Date(b.verified_at).getTime() - new Date(a.verified_at).getTime()
+  );
+
+  return { placeCategoryRows, businessCategoryRows, fallbackItems };
 }

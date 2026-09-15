@@ -1,9 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState, type ReactNode } from "react";
-import { fetchAnnouncements, fetchRecentlyVerified } from "@/lib/home-query";
-import type { Announcement, RecentlyVerifiedItem } from "@/lib/home-types";
+import { fetchAnnouncements, fetchHomeShowcase } from "@/lib/home-query";
+import type { Announcement, CategoryRow, RecentlyVerifiedItem } from "@/lib/home-types";
 import { AnnouncementCarousel } from "@/components/public/announcement-carousel";
 import { VerifiedItemCard } from "@/components/public/verified-item-card";
+import {
+  CategoryPhotoRow,
+  CategoryPhotoRowSkeleton,
+  type CategoryPhotoRowItem,
+} from "@/components/public/category-photo-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -28,10 +33,15 @@ function errorMessageFrom(err: unknown, fallback: string): string {
     : fallback;
 }
 
-// Phase 6.1: three row-shaped skeletons, same primitive and row-shape
-// pattern discover-list.tsx's own loading branch already uses (name/detail/
-// badge-sized bars), not a spinner. Shared by both sections below since
-// both rows share the same three-line shape (title, detail line, badge).
+// Phase 6.1 (step-6-phases.md): three row-shaped skeletons, same primitive
+// and row-shape pattern discover-list.tsx's own loading branch already
+// uses (name/detail/badge-sized bars), not a spinner. Used for the
+// Announcements section above and the fallback list below -- both keep
+// this same three-line row shape. The photo showcase's own category rows
+// use CategoryPhotoRowSkeleton (category-photo-row.tsx, home-photo-
+// showcase-phases.md Phase 3.5) instead, a different shape (a horizontal
+// strip of photo tiles, not stacked text rows), so this component wasn't
+// widened to cover both.
 function SectionSkeleton() {
   return (
     <ul className="-mx-6 flex flex-col divide-y divide-border">
@@ -54,9 +64,21 @@ export default function HomePage() {
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [announcementsError, setAnnouncementsError] = useState<string | null>(null);
 
-  const [recentlyVerified, setRecentlyVerified] = useState<RecentlyVerifiedItem[]>([]);
-  const [recentlyVerifiedLoading, setRecentlyVerifiedLoading] = useState(true);
-  const [recentlyVerifiedError, setRecentlyVerifiedError] = useState<string | null>(null);
+  // home-photo-showcase-phases.md Phase 5.1: fetchHomeShowcase (home-
+  // query.ts Phase 2.3) replaces fetchRecentlyVerified here -- one call
+  // returning three lists (place category rows, business category rows,
+  // fallback items), held as three pieces of state but covered by one
+  // loading flag and one error state, matching Phase 5.1's own corrected
+  // shape (not three separate loading/error signals for three outputs of
+  // the same single fetch). Still its own effect, independent from
+  // announcements above, same "a slow places/businesses query and a slow
+  // events query are unrelated causes" reasoning the original Phase 5.1
+  // comment already gave.
+  const [placeCategoryRows, setPlaceCategoryRows] = useState<CategoryRow[]>([]);
+  const [businessCategoryRows, setBusinessCategoryRows] = useState<CategoryRow[]>([]);
+  const [fallbackItems, setFallbackItems] = useState<RecentlyVerifiedItem[]>([]);
+  const [showcaseLoading, setShowcaseLoading] = useState(true);
+  const [showcaseError, setShowcaseError] = useState<string | null>(null);
 
   useEffect(() => {
     setAnnouncementsLoading(true);
@@ -70,21 +92,22 @@ export default function HomePage() {
       .finally(() => setAnnouncementsLoading(false));
   }, []);
 
-  // Phase 5.1: own effect, own loading boolean, independent from
-  // announcements above. A slow places/businesses query and a slow events
-  // query are unrelated causes, matching how discover.tsx already keeps
-  // query loading and tile loading as two separate signals rather than one
-  // shared flag that would mean two different things.
   useEffect(() => {
-    setRecentlyVerifiedLoading(true);
-    setRecentlyVerifiedError(null);
-    fetchRecentlyVerified()
-      .then((data) => setRecentlyVerified(data))
-      .catch((err: unknown) => {
-        setRecentlyVerifiedError(errorMessageFrom(err, "Could not load recently verified content."));
-        setRecentlyVerified([]);
+    setShowcaseLoading(true);
+    setShowcaseError(null);
+    fetchHomeShowcase()
+      .then((data) => {
+        setPlaceCategoryRows(data.placeCategoryRows);
+        setBusinessCategoryRows(data.businessCategoryRows);
+        setFallbackItems(data.fallbackItems);
       })
-      .finally(() => setRecentlyVerifiedLoading(false));
+      .catch((err: unknown) => {
+        setShowcaseError(errorMessageFrom(err, "Could not load recently verified content."));
+        setPlaceCategoryRows([]);
+        setBusinessCategoryRows([]);
+        setFallbackItems([]);
+      })
+      .finally(() => setShowcaseLoading(false));
   }, []);
 
   // Extracted from a nested ternary (announcementsError ? ... :
@@ -109,27 +132,99 @@ export default function HomePage() {
     );
   }
 
-  // Same reasoning as announcementsBody above, for the Recently verified
-  // section.
-  let recentlyVerifiedBody: ReactNode;
-  if (recentlyVerifiedError) {
-    recentlyVerifiedBody = <p className="text-sm text-destructive">{recentlyVerifiedError}</p>;
-  } else if (recentlyVerifiedLoading) {
-    recentlyVerifiedBody = <SectionSkeleton />;
-  } else if (recentlyVerified.length === 0) {
-    recentlyVerifiedBody = <p className="text-sm text-muted-foreground">No recently verified content yet.</p>;
+  // Same reasoning as announcementsBody above: error checked first, ahead
+  // of loading and empty.
+  //
+  // home-photo-showcase-phases.md Phase 5.3: a single onSelect used by
+  // both CategoryPhotoRow (photo cards) and VerifiedItemCard (fallback
+  // list rows) below, navigating to the same /discover/:kind/:id route
+  // home.tsx already used for this section before this feature -- no
+  // route change needed, no pre-filtered Discover handoff, matching
+  // home-photo-showcase-plan.md's own Tap Behavior section.
+  const openItem = (item: CategoryPhotoRowItem | RecentlyVerifiedItem) =>
+    navigate(`/discover/${item.kind}/${item.id}`);
+
+  // Phase 5.4: one combined empty check across every category row list
+  // and the fallback list, so an all-empty showcase shows one message
+  // instead of three near-identical ones (Places empty, Businesses empty,
+  // fallback empty) -- matches ux-ui-guidelines.md's rule against
+  // repeating the same message twice in an empty state, extended here to
+  // not stacking three of them.
+  const showcaseIsEmpty =
+    placeCategoryRows.length === 0 &&
+    businessCategoryRows.length === 0 &&
+    fallbackItems.length === 0;
+
+  let showcaseBody: ReactNode;
+  if (showcaseError) {
+    // Phase 5.5: one error boundary for the whole section, covered by
+    // fetchHomeShowcase's own single-fetch, split-after shape -- one
+    // promise to catch, one error state to show here.
+    showcaseBody = <p className="text-sm text-destructive">{showcaseError}</p>;
+  } else if (showcaseLoading) {
+    showcaseBody = (
+      <div className="flex flex-col gap-6">
+        <CategoryPhotoRowSkeleton />
+        <CategoryPhotoRowSkeleton />
+      </div>
+    );
+  } else if (showcaseIsEmpty) {
+    showcaseBody = <p className="text-sm text-muted-foreground">No recently verified content yet.</p>;
   } else {
-    recentlyVerifiedBody = (
-      <ul className="-mx-6 flex flex-col divide-y divide-border">
-        {recentlyVerified.map((item) => (
-          <li key={`${item.kind}-${item.id}`}>
-            <VerifiedItemCard
-              item={item}
-              onClick={() => navigate(`/discover/${item.kind}/${item.id}`)}
-            />
-          </li>
-        ))}
-      </ul>
+    showcaseBody = (
+      <div className="flex flex-col gap-6">
+        {/* Phase 5.2: Places heading, one CategoryPhotoRow per place
+            category row, in order. Section itself is omitted (not shown
+            with an empty sub-heading) when there are no place category
+            rows to show, same reasoning the Businesses and fallback
+            sections below apply to their own empty case -- the combined
+            showcaseIsEmpty check above already covers the "nothing at
+            all" case, this is the "something, just not this kind" case. */}
+        {placeCategoryRows.length > 0 && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-base font-semibold text-foreground">Places</h2>
+            {placeCategoryRows.map((row) => (
+              <CategoryPhotoRow
+                key={row.categoryId}
+                categoryName={row.categoryName}
+                items={row.items}
+                onSelect={openItem}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Phase 5.2: Businesses heading, same shape as Places above. */}
+        {businessCategoryRows.length > 0 && (
+          <div className="flex flex-col gap-4">
+            <h2 className="text-base font-semibold text-foreground">Businesses</h2>
+            {businessCategoryRows.map((row) => (
+              <CategoryPhotoRow
+                key={row.categoryId}
+                categoryName={row.categoryName}
+                items={row.items}
+                onSelect={openItem}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Phase 5.2: fallback list heading, reusing verified-item-
+            card.tsx exactly as it renders today (Phase 4.1 confirmed no
+            changes needed there). */}
+        {fallbackItems.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold text-foreground">More verified listings</h2>
+            <ul className="-mx-6 flex flex-col divide-y divide-border">
+              {fallbackItems.map((item) => (
+                <li key={`${item.kind}-${item.id}`}>
+                  <VerifiedItemCard item={item} onClick={() => openItem(item)} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -140,10 +235,7 @@ export default function HomePage() {
         {announcementsBody}
       </div>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-foreground">Recently verified</h2>
-        {recentlyVerifiedBody}
-      </div>
+      {showcaseBody}
     </div>
   );
 }
