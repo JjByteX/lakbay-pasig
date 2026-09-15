@@ -545,33 +545,30 @@ function DesktopShell({
       </div>
       <SidebarInset
         className={cn(
-          // Bug fix: SidebarInset is normally a flex-1 flow sibling of
-          // Sidebar's own internal spacer div (sidebar.tsx's Sidebar
-          // component renders a `relative` spacer that animates its
-          // width, offcanvas/icon/expanded, specifically so a flex-1
-          // sibling like this one gets pushed over by that width change
-          // -- the same push-via-flex-sibling mechanism the comment
-          // above this file already diagnosed and removed for the search
-          // panel). That push resizes DiscoverMap's container on every
-          // sidebar collapse/expand, and (same reasoning as the search
-          // panel fix) DiscoverMap has no resize() call or ResizeObserver
-          // to recover from it, so the map visibly shifts/tears.
-          // admin.tsx uses this same shared SidebarInset and does want
-          // the push (no map there to break), so the fix is scoped to
-          // this file's own usage rather than changed in sidebar.tsx
-          // itself, which would flip behavior for the admin panel too.
-          // Fixed positioning removes SidebarInset from the flex row
-          // entirely -- it no longer has a flex-computed width the
-          // spacer's animation can change -- and `left` instead reads
-          // the exact same --sidebar-width / --sidebar-width-icon custom
-          // properties and peer-data-[state=collapsed] selector the
-          // search panel above already keys off of, so this container's
-          // box is exactly as wide as "viewport minus the rail's real,
-          // current width" at every instant, transitioning smoothly in
-          // lockstep with the rail's own width animation instead of
-          // reacting a frame after a layout push.
-          "fixed inset-y-0 right-0 z-0 flex h-svh min-h-0 w-auto flex-none flex-col overflow-hidden transition-[left] duration-200 ease-linear",
-          "left-[--sidebar-width] peer-data-[state=collapsed]:left-[--sidebar-width-icon]",
+          // Bug fix (round 2): the previous fix still let SidebarInset's
+          // own `left` track the sidebar's live width via peer-data-
+          // [state=collapsed], so the box genuinely changed size every
+          // time the rail expanded/collapsed -- same resize, just
+          // smoothed out instead of removed, which is why the map still
+          // visibly moved. "Copy the search panel logic" literally: the
+          // search panel div above never changes SidebarInset at all,
+          // expanded or collapsed, open or closed -- it's a `fixed`
+          // overlay that floats on top of a completely static layout.
+          // Applying that same idea here means SidebarInset's `left` must
+          // stop reading peer-data-[state] entirely and instead stay
+          // pinned to one constant value: --sidebar-width-icon, the
+          // collapsed rail's own width, which is the one footprint that
+          // exists in both sidebar states (a collapsed rail is exactly
+          // that wide; an expanded rail still starts with that same
+          // icon-width strip before its extra labels/text run out past
+          // it). The sidebar's own rail div is already `fixed` (sidebar.
+          // tsx) at z-10, one below the search panel's z-20, so an
+          // expanded rail's extra width now simply overlaps this
+          // permanently-static SidebarInset the exact same way the search
+          // panel already overlaps it when opened -- nothing here ever
+          // recomputes a box size again, on any sidebar or panel state.
+          "fixed inset-y-0 right-0 z-0 flex h-svh min-h-0 w-auto flex-none flex-col overflow-hidden",
+          "left-[--sidebar-width-icon]",
         )}
       >
         {/* Bug fix / direct instruction: the collapse control now lives in

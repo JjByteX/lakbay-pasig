@@ -171,7 +171,16 @@ const TAB_CONFIG: Record<
   // Business content, matching business_categories.ts's (Phase 1.5) own
   // file comment and migration 0027's RLS.
   business_categories: {
-    label: "Business Category",
+    // Bug fix / direct instruction: tab label shortened from "Business
+    // Category" to "Business", matching every other tab's plain-noun
+    // convention (Places, Facilities, Trails, Announcements) -- this was
+    // the one tab whose label still carried "Category" in it. dialogLabel
+    // is unchanged ("Business Category" still titles the add/edit dialog,
+    // matching Trails' own "Trail Category" and Announcements' own
+    // "Announcement Category" dialog-title pattern), and emptyNoun is
+    // unchanged too (already "business", not "business category" -- see
+    // this type's own field comment above for why).
+    label: "Business",
     dialogLabel: "Business Category",
     emptyNoun: "business",
     permission: "review_businesses",

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
-import { LocateFixed, MapPin } from "lucide-react";
+import { LocateFixed, MapPin, Plus, Minus } from "lucide-react";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
@@ -324,7 +324,12 @@ function markerElement(result: DiscoverResult): HTMLElement {
       ? getCategoryIcon(result.categoryIcon ?? "")
       : getBusinessCategoryIcon(result.categoryIcon ?? "");
   const wrapper = document.createElement("span");
-  wrapper.className = "flex cursor-pointer items-center gap-1.5";
+  // Bug fix / direct instruction: gap-1.5 (6px) read as "too far" between
+  // the icon ring and its name label -- tightened to gap-1 (4px), the
+  // smallest step on this codebase's 8px-grid-derived spacing scale still
+  // available as a plain gap utility, so the label reads as attached to
+  // its own icon rather than floating near it.
+  wrapper.className = "flex cursor-pointer items-center gap-1";
 
   const ring = document.createElement("span");
   ring.className =
@@ -335,8 +340,19 @@ function markerElement(result: DiscoverResult): HTMLElement {
   wrapper.appendChild(ring);
 
   const label = document.createElement("span");
-  label.className =
-    "marker-name-label whitespace-nowrap rounded-full border border-border bg-card px-2 py-0.5 text-xs font-medium text-foreground shadow";
+  // Bug fix / direct instruction: dropped the pill container entirely
+  // (previously rounded-full border border-border bg-card ... shadow, the
+  // same pill/badge treatment as a status chip) -- plain text now, no
+  // background, no border, no shadow, per direct instruction to remove
+  // the container completely. text-shadow (inline style, no Tailwind
+  // utility for it) keeps the name legible over the map's own varied
+  // tile colors now that there's no opaque backing behind it, the same
+  // reason every other floating label in this file (HoverPreview,
+  // MapCornerControls' status pills) keeps an opaque surface behind its
+  // own text -- this is the one label that gives that up per this
+  // instruction, so it needs its own legibility fallback instead.
+  label.className = "marker-name-label whitespace-nowrap text-xs font-medium text-foreground";
+  label.style.textShadow = "0 1px 2px rgba(0, 0, 0, 0.55), 0 0 4px rgba(0, 0, 0, 0.35)";
   // Read by the zoom-gated visibility effect below to apply the right
   // per-tier minimum zoom (verified vs. pending) to this specific label,
   // without needing a second lookup back into `results` at visibility-
@@ -616,6 +632,77 @@ function MapCornerControls({
   );
 }
 
+// Desktop zoom control, bottom-right per direct instruction/reference
+// screenshot: a stacked +/- pill, same two-button-in-a-rounded-container
+// convention MapCornerControls above already establishes (Separator
+// between two ghost icon Buttons, rounded-t-2xl on the first, rounded-
+// b-2xl on the last) rather than inventing a second pill shape -- only
+// the icons (Plus/Minus, not MapPin/LocateFixed), position (bottom-right,
+// not top-right), and action (zoomIn/zoomOut on the live map instance,
+// not a geolocation call) differ. Desktop-only: mobile MapLibre already
+// exposes pinch-to-zoom as its native gesture, and a floating thumb-zone
+// control in the bottom-right corner of a touch viewport would sit
+// under/near the same area other touch chrome (browser nav, home
+// indicator) already occupies -- matching this file's own MapCornerControls,
+// LocateMeControl reasoning for other controls staying off mobile.
+// Reads getZoom()/zoomIn()/zoomOut() straight off the same mapRef the
+// rest of this component already owns, since this is the one component
+// with direct access to the live map instance -- no separate map
+// reference is created for this control.
+function ZoomControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
+  const [zoom, setZoom] = useState<number | null>(null);
+
+  // Mirrors MapCornerControls' own MutationObserver-free, event-driven
+  // pattern: reads the map's live zoom on "zoom" so the buttons can
+  // disable at MapLibre's own min/max bounds (buildStyle sets neither
+  // explicitly, so this falls back to maplibre-gl's own default 0-22
+  // range) instead of silently no-opping past either end, same "visibly
+  // disabled, not silently unresponsive" rule MapCornerControls' own
+  // legend toggle already follows for its own loading state.
+  useEffect(() => {
+    if (!map) return;
+    const updateZoom = () => setZoom(map.getZoom());
+    updateZoom();
+    map.on("zoom", updateZoom);
+    return () => {
+      map.off("zoom", updateZoom);
+    };
+  }, [map]);
+
+  const maxZoom = map?.getMaxZoom() ?? 22;
+  const minZoom = map?.getMinZoom() ?? 0;
+  const atMax = zoom != null && zoom >= maxZoom;
+  const atMin = zoom != null && zoom <= minZoom;
+
+  return (
+    <div className="absolute bottom-6 right-3 z-[1000] hidden flex-col items-center rounded-2xl border border-input bg-card shadow md:flex">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 rounded-t-2xl rounded-b-none hover:bg-muted"
+        aria-label="Zoom in"
+        onClick={() => map?.zoomIn()}
+        disabled={!map || atMax}
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+      <Separator className="w-6" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 rounded-b-2xl rounded-t-none hover:bg-muted"
+        aria-label="Zoom out"
+        onClick={() => map?.zoomOut()}
+        disabled={!map || atMin}
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 // Phase 1.5-1.7: hover preview, desktop only (1.6's "hover has no mobile
 // equivalent"), reusing result-card.tsx's own summary fields (name,
 // category, verification label, one-line description) rather than a new
@@ -714,6 +801,16 @@ export function DiscoverMap({
   const [tilesLoading, setTilesLoading] = useState(true);
   const isEmpty = !resultsError && !resultsLoading && !tilesLoading && results.length === 0;
 
+  // Zoom control: mapRef alone can't drive ZoomControl's `map` prop below
+  // -- refs don't trigger a re-render when written, so a value set inside
+  // the mount effect (mapRef.current = map) would never actually reach a
+  // prop until something else happened to re-render this component for
+  // an unrelated reason. mapInstance is state purely to carry that one
+  // assignment across the render boundary once, set alongside mapRef in
+  // the same mount effect below, read only by the ZoomControl prop at
+  // the bottom of this file's return.
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+
   // Bugfix (directions route not appearing): drawRoute below bails out
   // silently when map.isStyleLoaded() is false, which it reliably is for
   // a brief window right after `new maplibregl.Map(...)` -- the vector
@@ -797,6 +894,10 @@ export function DiscoverMap({
       },
     });
     mapRef.current = map;
+    // Zoom control: see mapInstance's own declaration comment above --
+    // this is the one write that carries the map instance across a
+    // render boundary so ZoomControl's prop actually receives it.
+    setMapInstance(map);
 
     // Phase 8.1 parity: tiles are their own loading concern, separate from
     // the results query. MapLibre's "load" fires once the initial style +
@@ -845,6 +946,7 @@ export function DiscoverMap({
       map.off("style.load", handleStyleLoad);
       map.remove();
       mapRef.current = null;
+      setMapInstance(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1118,6 +1220,12 @@ export function DiscoverMap({
         categoriesLoading={categoriesLoading}
         onLocationFound={onLocationFound}
       />
+
+      {/* Bottom-right +/- zoom pill, desktop only, per direct instruction
+          and reference screenshot -- see ZoomControl's own comment for why
+          this is a separate small component fed the live map instance via
+          mapInstance state rather than reading mapRef directly. */}
+      <ZoomControl map={mapInstance} />
 
       {previewResult && (
         <HoverPreview result={previewResult.result} x={previewResult.x} y={previewResult.y} />

@@ -66,16 +66,20 @@ export default function AdminPage() {
               the amount of content they hold") -- a full-width bar here
               would be oversized against a single-line input, the same
               reasoning that rule already applies elsewhere in this
-              codebase. ml-auto pushes the search+bell group to the right
-              edge as one unit, notification bell immediately after
-              search per 4.3's own placement instruction. No profile icon
-              exists in this header to sit left of (admin-sidebar.tsx's
-              footer already owns account/sign-out, see admin-
-              notification-bell.tsx's own header comment) -- not added
-              here, outside this phase's scope. */}
+              codebase. ml-auto pushes the bell+search group to the right
+              edge as one unit. No profile icon exists in this header to
+              sit left of (admin-sidebar.tsx's footer already owns
+              account/sign-out, see admin-notification-bell.tsx's own
+              header comment) -- not added here, outside this phase's
+              scope.
+              Bug fix / direct instruction: notification bell moved before
+              search (previously search, then bell) -- plain JSX order
+              swap, this row has no separate CSS order property either
+              child relies on, so DOM order alone decides the visual
+              left-to-right order in this flex row. */}
           <div className="ml-auto flex items-center gap-2">
-            <AdminSearchBar />
             <AdminNotificationBell />
+            <AdminSearchBar />
           </div>
         </header>
         <div
