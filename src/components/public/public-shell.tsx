@@ -459,16 +459,30 @@ function MobileShell({
 // SidebarInset/SidebarTrigger primitives (components/ui/sidebar.tsx) and
 // PublicSidebar's admin-sidebar.tsx-styled nav, per direct instruction to
 // reuse that same pattern rather than keep the mobile fixed-header/
-// bottom-nav chrome at desktop widths. Search and (on Discover) the
-// filter controls move into a top bar inside SidebarInset, same row shape
-// admin.tsx's own header already uses (SidebarTrigger, then the rest of
-// the row). No drag-reveal here: HeaderFilterArea's whole reason to exist
-// is the mobile one-handed drag gesture over a fixed-height header; at
-// desktop width there's no such height constraint, so discoverFilters
-// (the exact same ReactNode Discover registers via useDiscoverFilters)
-// renders directly, always visible when present, same as any other
-// in-flow header content -- no separate opt-in needed on discover.tsx's
-// side, it already hands this shell the content either layout needs.
+// bottom-nav chrome at desktop widths.
+//
+// Search/filters panel: per direct instruction, search never sits in a
+// top bar on desktop -- it lives in the sidebar itself (PublicSidebar's
+// new Search row) and clicking it expands a second panel between the nav
+// rail and the main content, similar in spirit to Apple Maps' own
+// Search-in-the-rail-opens-a-panel-beside-it pattern. This shell owns
+// `searchPanelOpen` (passed down to PublicSidebar so its Search row's
+// pressed/active state and this panel's visibility stay in sync from one
+// piece of state, not two) and renders the panel as a plain flex sibling
+// of SidebarInset -- not a second Sidebar/Sheet instance, since the
+// existing Sidebar primitive only models one collapsible rail, not a
+// nav-rail-plus-content-panel pair (confirmed by reading components/ui/
+// sidebar.tsx before building this rather than fighting that primitive
+// into a shape it doesn't support).
+//
+// Per ux-ui-guidelines.md's side-panel rule ("use a side panel only when
+// the content needs comparison with the underlying page... user needs to
+// keep context visible while interacting"): the panel always contains
+// GlobalSearchBar (every tab has a legitimate reason to search), but
+// discoverFilters (Discover's own useDiscoverFilters content) only
+// renders when Discover has actually registered it -- every other tab's
+// panel is search-only, not padded out with empty filter UI that would
+// violate the guidelines' "more than 30% empty is too large" sizing rule.
 function DesktopShell({
   query,
   setQuery,
@@ -479,21 +493,31 @@ function DesktopShell({
   discoverFilters: ReactNode | null;
 }>) {
   const location = useLocation();
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false);
+  const searchVisible = isSearchVisible(location.pathname);
 
   return (
     <SidebarProvider>
-      <PublicSidebar />
-      <SidebarInset className="h-svh overflow-hidden">
-        <header className="flex flex-col gap-3 border-b border-border px-4 py-3">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger />
-            <div className="mx-auto min-w-0 max-w-md flex-1">
-              {isSearchVisible(location.pathname) && (
-                <GlobalSearchBar query={query} onQueryChange={setQuery} />
-              )}
-            </div>
-          </div>
+      <PublicSidebar
+        searchOpen={searchPanelOpen}
+        onToggleSearch={() => setSearchPanelOpen((open) => !open)}
+      />
+      {/* Same bg-card + border-border surface admin-sidebar.tsx's own
+          Sidebar already renders with, so this panel reads as one
+          continuous nav-adjacent surface with the rail beside it, not a
+          mismatched third color. w-80 is a fixed panel width (unlike the
+          collapsible nav rail) -- Apple Maps' own reference panel is a
+          similar fixed width, not something that shrinks/grows with
+          window size. */}
+      {searchVisible && searchPanelOpen && (
+        <div className="flex h-svh w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-card p-4">
+          <GlobalSearchBar query={query} onQueryChange={setQuery} />
           {discoverFilters}
+        </div>
+      )}
+      <SidebarInset className="h-svh overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+          <SidebarTrigger />
         </header>
         <div className="flex-1 overflow-y-auto">
           <Outlet />

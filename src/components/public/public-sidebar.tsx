@@ -1,4 +1,4 @@
-import { Home, Map, Compass, Bookmark, User as UserIcon, Settings as SettingsIcon, LogOut } from "lucide-react";
+import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as SettingsIcon, LogOut } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -28,6 +28,14 @@ import { SignOutDialog } from "@/components/sign-out-dialog";
 // this in place of the fixed header + BottomNav on desktop viewports
 // (useIsMobile), and keeps rendering the existing mobile chrome unchanged
 // below the breakpoint -- this file has no effect on the mobile layout.
+//
+// Search item: toggles a second, expandable panel the shell renders next
+// to this sidebar (public-shell.tsx's DesktopShell), similar in spirit to
+// Apple Maps' own Search entry in its left rail opening a details panel
+// beside it -- but kept as an ordinary row in this same nav list rather
+// than a separate section above it, per direct correction. `searchOpen`/
+// `onToggleSearch` are controlled by the shell (not local state here)
+// since the shell also needs to know whether to render that panel.
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/trails", label: "Trails", icon: Map, end: false },
@@ -35,7 +43,13 @@ const NAV_ITEMS = [
   { to: "/saved", label: "Saved", icon: Bookmark, end: false },
 ] as const;
 
-export function PublicSidebar() {
+export function PublicSidebar({
+  searchOpen,
+  onToggleSearch,
+}: Readonly<{
+  searchOpen: boolean;
+  onToggleSearch: () => void;
+}>) {
   const { session, profile } = useAuth();
   const { pathname: currentPath } = useLocation();
   const navigate = useNavigate();
@@ -71,6 +85,26 @@ export function PublicSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* Search: same list, same row styling as Home/Trails/Discover/
+                  Saved below -- not a separate group above the nav (per
+                  direct correction: keep it inline in the sidebar, not
+                  pulled out on its own). Toggles the shell's expandable
+                  search/filters panel (public-shell.tsx's DesktopShell)
+                  rather than navigating; isActive reflects the panel's own
+                  open state instead of a route match, same isActive prop
+                  every other row already uses just driven by different
+                  state. */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={searchOpen}
+                  tooltip="Search"
+                  onClick={onToggleSearch}
+                  aria-expanded={searchOpen}
+                >
+                  <Search className="h-4 w-4 shrink-0" />
+                  <span>Search</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               {NAV_ITEMS.map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton
