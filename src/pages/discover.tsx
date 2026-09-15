@@ -5,7 +5,9 @@ import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
 import {
   useDiscoverFilters,
+  useDirections,
   useGlobalSearchQuery,
+  useUserLocation,
 } from "@/components/public/public-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,19 +15,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { Coordinates } from "@/lib/discover-query";
 import {
   fetchDiscoverResults,
   filterDiscoverResults,
 } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
-import {
-  DirectionsError,
-  fetchRoute,
-  type DirectionsErrorReason,
-  type RouteGeometry,
-  type TravelMode,
-} from "@/lib/directions";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
@@ -59,12 +53,27 @@ import { usePageTitle } from "@/lib/page-title";
  * ordinary full-bleed content directly in this page, the same fixed
  * `<main>` region every other tab renders into (public-shell.tsx).
  *
- * locate-me-and-directions-phases.md Phase 1: userLocation can now also be
+ * locate-me-and-directions-phases.md Phase 1: userLocation can also be
  * set by a tap on DiscoverMap's own locate-me control, via the
  * onLocationFound prop below -- setUserLocation is passed straight through,
- * not wrapped, so this stays the single source of truth the one-shot
- * geolocation effect above already established. discover-list.tsx's
- * distance sort reads the same state either way.
+ * not wrapped.
+ *
+ * Bugfix (directions lost on navigating away, location frozen after first
+ * load): userLocation and the whole Directions session (route,
+ * selectedMode, routeDuration, modeLoading, modeErrorReason,
+ * directionsPanelResult, plus handleRouteFound/handleSelectMode/
+ * handleCancelDirections) used to be useState/handlers declared directly
+ * in this component. Both are now owned by public-shell.tsx
+ * (useUserLocation/useDirections) instead: PublicShell wraps every public
+ * route and never unmounts on a tab switch the way this page does, so a
+ * route a tourist is mid-way through following, and their live position,
+ * both survive leaving Discover and coming back. userLocation is also no
+ * longer a single getCurrentPosition read -- the shell now runs a
+ * continuous watchPosition subscription, so it updates as the person
+ * actually walks instead of staying pinned to wherever they were when
+ * this page first mounted. This page still reads and mutates both through
+ * the two hooks below; the underlying data and logic are unchanged,
+ * verbatim, only the storage location moved.
  */
 export default function DiscoverPage() {
   usePageTitle("Discover");
@@ -83,52 +92,23 @@ export default function DiscoverPage() {
   // instruction, desktop only.
   const isMobile = useIsMobile();
 
+  const { userLocation, setUserLocation } = useUserLocation();
+  const {
+    route,
+    directionsPanelResult,
+    selectedMode,
+    routeDuration,
+    modeLoading,
+    modeErrorReason,
+    handleRouteFound,
+    handleSelectMode,
+    handleCancelDirections,
+  } = useDirections();
+
   const [results, setResults] = useState<DiscoverResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(true);
   const [resultsError, setResultsError] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
-  // Map-marker-icons-phase follow-up: DiscoverMap and DiscoverList are
-  // mutually exclusive (view === "map" ? <DiscoverMap> : <DiscoverList>
-  // below), so a route requested from the list view's own ResultCard has
-  // no mounted map to draw onto if the route only lived inside
-  // discover-map.tsx. Lifting the route here, the one place both branches
-  // already share state through (userLocation is the existing precedent),
-  // fixes that: DiscoverMap draws whatever's here on mount via its own
-  // [route] effect, and a Directions tap from the list also flips view to
-  // "map" so the drawn line is actually visible, not left on an unmounted
-  // component's own state.
-  const [route, setRoute] = useState<RouteGeometry | null>(null);
-  // directions-panel-phases.md Phase 4.2: the result the mobile panel is
-  // currently showing. Null means the panel is closed. Separate from
-  // `route` itself since the panel needs the result's name for the To row
-  // (directions-panel.tsx) and `route`/`RouteGeometry` carries no name,
-  // only coordinates.
-  const [directionsPanelResult, setDirectionsPanelResult] = useState<DiscoverResult | null>(null);
-  // directions-panel-phases.md Phase 5.1: state ownership decided here
-  // rather than inside directions-panel.tsx itself, matching route and
-  // directionsPanelResult directly above -- discover.tsx is already the
-  // one place this whole feature's state lives, so a third piece here is
-  // consistent, not a new pattern. selectedMode always starts "foot",
-  // matching result-card.tsx's own Phase 1.4 fetch, reset inline inside
-  // handleRouteFound below each time a fresh Directions tap opens the
-  // panel, so a new result never inherits a previous session's mode.
-  const [selectedMode, setSelectedMode] = useState<TravelMode>("foot");
-  const [routeDuration, setRouteDuration] = useState<number | null>(null);
-  // Phase 5.3: guards against two mode taps racing -- a second tap while
-  // one fetch is already in flight is ignored outright rather than
-  // cancelled, since fetchRoute has no AbortController wiring and adding
-  // one for a single-flight guard this small would be reaching past what
-  // the ladder calls for. A stale response can never land after a newer
-  // one this way: the second tap simply never starts a second request.
-  const [modeLoading, setModeLoading] = useState(false);
-  // Phase 6.2: reason for the most recent mode-switch failure, shown
-  // inline in the panel's time row in place of a duration. Null means no
-  // error -- cleared on every fresh fetch attempt (start of
-  // handleSelectMode) and on a fresh Directions tap (handleRouteFound),
-  // so a stale error from a previous mode never lingers once a new
-  // attempt or a new panel session starts.
-  const [modeErrorReason, setModeErrorReason] = useState<DirectionsErrorReason | null>(null);
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
   // case), not "match nothing" -- widened from the original single
@@ -169,22 +149,9 @@ export default function DiscoverPage() {
       .catch(() => setFacilityOptions([]));
   }, []);
 
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-      },
-      () => {
-        // Denied or unavailable: no-op, Pasig default stays in place,
-        // per step-5-phases.md 4.2, geolocation here is a fallback, not a
-        // required permission, so no error state blocks either surface.
-      },
-    );
-  }, []);
+  // Live location is owned by public-shell.tsx (useUserLocation) -- see
+  // this file's own top-level doc comment for why. No effect here
+  // anymore; userLocation above already tracks it continuously.
 
   useEffect(() => {
     // Phase 8.1: the map and list both need to tell "still fetching" apart
@@ -464,103 +431,11 @@ export default function DiscoverPage() {
     </div>,
   );
 
-  // directions-panel-phases.md Phase 4.1/4.2: single hand-off point for
-  // both DiscoverMap's and DiscoverList's own ResultCard, so the mobile-
-  // panel decision lives in exactly one place rather than duplicated
-  // across both branches below.
-  //
-  // Phase 5.1: also resets selectedMode/routeDuration to match the fresh
-  // fetch that just came in -- result-card.tsx's own fetch is always
-  // "foot" (Phase 1.4, unchanged), so a new Directions tap always starts
-  // the panel back on Walk with that geometry's own duration, never
-  // carrying over whatever mode a previous panel session was left on.
-  //
-  // desktop-directions-panel-phases.md Phase 2.2: previously gated behind
-  // `if (isMobile)` -- desktop's ResultCard (rendered inside
-  // DiscoverMap.tsx) calls this same handler with no isMobile branch of
-  // its own (result-card.tsx never had one), so gating the panel state
-  // itself to mobile only meant a desktop Directions tap drew the route
-  // but never set directionsPanelResult, leaving no way to open a desktop
-  // panel later without duplicating this whole handler. Widened to always
-  // run: the panel *state* is desktop-agnostic (matches directions-
-  // panel.tsx's own variant prop being purely a rendering concern), and
-  // it's the render call site below (isMobile ? DirectionsPanel
-  // variant="mobile" inside this file : DirectionsPanel variant="desktop"
-  // inside DiscoverMap) that actually decides whether anything shows.
-  const handleRouteFound = (geometry: RouteGeometry, foundResult: DiscoverResult) => {
-    setRoute(geometry);
-    setDirectionsPanelResult(foundResult);
-    setSelectedMode("foot");
-    setRouteDuration(geometry.duration);
-    // Phase 6.2: a fresh Directions tap always starts clean, even if a
-    // previous panel session (for a different result, or this same one
-    // reopened) was left showing a mode-switch error.
-    setModeErrorReason(null);
-  };
-
-  // Phase 5.2/5.3: refetches for the tapped mode and redraws. Ignored
-  // outright while a fetch is already in flight (modeLoading), and ignored
-  // if userLocation or the panel's result somehow isn't set -- both are
-  // guaranteed true whenever this panel is even rendered (userLocation is
-  // required to reach Directions at all, per result-card.tsx's own
-  // disabled-without-it button), so this is a type-narrowing guard, not a
-  // reachable error path.
-  //
-  // Phase 6.2: on failure, sets modeErrorReason from the caught
-  // DirectionsError's own `.reason` (directions.ts) -- the same
-  // three-reason set result-card.tsx's Phase 3.2 branch already reads,
-  // just narrowed to `.reason` instead of `.message` here since the panel
-  // (directions-panel.tsx) declares its own per-reason copy rather than
-  // trusting an Error's message string verbatim. A non-DirectionsError
-  // throw (unexpected) falls back to "network", the same default
-  // result-card.tsx's own catch block uses.
-  const handleSelectMode = async (mode: TravelMode) => {
-    if (modeLoading || !userLocation || !directionsPanelResult) return;
-    if (mode === selectedMode) return;
-    const destination = directionsPanelResult;
-    if (destination.latitude == null || destination.longitude == null) return;
-    setModeLoading(true);
-    setModeErrorReason(null);
-    try {
-      const geometry = await fetchRoute(
-        userLocation,
-        { latitude: destination.latitude, longitude: destination.longitude },
-        mode,
-      );
-      setSelectedMode(mode);
-      setRoute(geometry);
-      setRouteDuration(geometry.duration);
-    } catch (err) {
-      // Phase 5.3: the mode stays on whatever it was before the tap --
-      // a failed switch is not a broken panel, it's an unchanged one,
-      // matching the plan's "Mode switch: only one request in flight at
-      // a time."
-      setModeErrorReason(err instanceof DirectionsError ? err.reason : "network");
-    } finally {
-      setModeLoading(false);
-    }
-  };
-
-  // desktop-directions-panel-phases.md Phase 2.3: extracted so both the
-  // mobile panel below and the desktop panel (rendered inside
-  // DiscoverMap, passed down as a prop) call the identical close logic --
-  // previously this was only ever inlined once, now that a second render
-  // site exists it needs to be one function, not two copies that could
-  // drift.
-  const handleCancelDirections = () => {
-    // Phase 4.4: Cancel clears the drawn line (discover-map.tsx's
-    // clearRoute, reached via route going back to null) and closes
-    // the panel, in that order -- matches the plan's own Cancel
-    // Behavior section. Phase 5: also resets mode/duration so a
-    // future panel session never opens mid-flight or on a stale
-    // mode from this one. Phase 6.2: also clears any lingering
-    // mode-switch error, same reasoning.
-    setRoute(null);
-    setDirectionsPanelResult(null);
-    setSelectedMode("foot");
-    setRouteDuration(null);
-    setModeErrorReason(null);
-  };
+  // handleRouteFound, handleSelectMode, and handleCancelDirections all now
+  // come from useDirections() (public-shell.tsx) instead of being defined
+  // here -- see this file's own top-level doc comment. Logic, ordering,
+  // and every doc comment describing *why* each does what it does moved
+  // there unchanged; nothing here duplicates it.
 
   return (
     <div className="relative h-full w-full">

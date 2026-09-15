@@ -22,6 +22,15 @@ import { GlobalSearchBar } from "./global-search-bar";
 import { useAuth } from "@/lib/auth-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import type { Coordinates } from "@/lib/discover-query";
+import type { DiscoverResult } from "@/lib/discover-types";
+import {
+  DirectionsError,
+  fetchRoute,
+  type DirectionsErrorReason,
+  type RouteGeometry,
+  type TravelMode,
+} from "@/lib/directions";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
@@ -67,6 +76,159 @@ export function useGlobalSearchQuery() {
   if (!ctx)
     throw new Error("useGlobalSearchQuery must be used within PublicShell");
   return ctx;
+}
+
+// Live location: shell-owned for the same reason GlobalSearchContext is --
+// a page-local useState is destroyed on unmount, so navigating off
+// Discover and back used to mean losing the last known position and
+// starting over from a fresh one-shot read. Moved up so the position (and
+// the live watch producing it) survives every tab switch, matching how
+// Google Maps keeps tracking your position while you use other parts of
+// the app around an open route.
+//
+// This also changes *how* the position is produced, not just where it's
+// stored: navigator.geolocation.watchPosition instead of a single
+// getCurrentPosition call. getCurrentPosition resolves once and never
+// updates again, so a tourist who starts walking drifts away from their
+// own blue dot and a mid-route "From" point that no longer matches where
+// they actually are. watchPosition keeps a callback registered with the
+// device's location provider and re-fires it on every fix, so
+// userLocation tracks real movement the whole time the shell is mounted
+// (effectively the whole session, since PublicShell wraps every public
+// route) -- not just once at Discover's first mount.
+//
+// The subscription itself is owned entirely here, one instance for the
+// whole shell: PublicShell's own mount/unmount is the only lifecycle that
+// starts or stops it, so switching tabs (which merely swaps what's
+// rendered inside the shell, not the shell itself) never tears down and
+// re-subscribes the watch. clearWatch runs in this effect's own cleanup,
+// which only fires on the shell's unmount (session end / full page
+// leave), so there is exactly one active GPS subscription for as long as
+// the person is using the app, not a growing pile of forgotten ones.
+interface UserLocationContextValue {
+  userLocation: Coordinates | null;
+  setUserLocation: (coords: Coordinates) => void;
+}
+
+const UserLocationContext = createContext<UserLocationContextValue | undefined>(
+  undefined,
+);
+
+/** Reads the shell's continuously-tracked location, and lets a page (the
+ *  map's own locate-me control) push a fresher reading in directly. */
+export function useUserLocation() {
+  const ctx = useContext(UserLocationContext);
+  if (!ctx) throw new Error("useUserLocation must be used within PublicShell");
+  return ctx;
+}
+
+// Directions: shell-owned for the same reason as the two above. This used
+// to be six separate useState calls inside discover.tsx (route,
+// directionsPanelResult, selectedMode, routeDuration, modeLoading,
+// modeErrorReason) plus the two handlers that drive them
+// (handleSelectMode, handleCancelDirections) -- all destroyed the moment
+// DiscoverPage unmounted, so leaving Discover mid-route (to check Saved,
+// answer a notification, anything) silently cancelled the trip a tourist
+// was mid-way through following. Moved here verbatim: same six fields,
+// same two handlers, same fetchRoute call, same DirectionsError handling
+// -- only the *location* of the state changed, not its shape or logic.
+// discover.tsx now reads this context instead of declaring its own copy.
+interface DirectionsContextValue {
+  route: RouteGeometry | null;
+  directionsPanelResult: DiscoverResult | null;
+  selectedMode: TravelMode;
+  routeDuration: number | null;
+  modeLoading: boolean;
+  modeErrorReason: DirectionsErrorReason | null;
+  handleRouteFound: (geometry: RouteGeometry, foundResult: DiscoverResult) => void;
+  handleSelectMode: (mode: TravelMode) => Promise<void>;
+  handleCancelDirections: () => void;
+}
+
+const DirectionsContext = createContext<DirectionsContextValue | undefined>(
+  undefined,
+);
+
+/** Reads the shell's own in-progress Directions session (route, selected
+ *  mode, duration, loading/error state) and its mutating actions. Used by
+ *  discover.tsx and, through it, DirectionsPanel/DiscoverMap/DiscoverList/
+ *  ResultCard -- none of which own this state themselves anymore. */
+export function useDirections() {
+  const ctx = useContext(DirectionsContext);
+  if (!ctx) throw new Error("useDirections must be used within PublicShell");
+  return ctx;
+}
+
+/** Owns the Directions session's state and actions, exactly as discover.tsx
+ *  used to -- moved here as its own hook (not inlined into PublicShell)
+ *  purely to keep PublicShell itself readable, same reasoning the existing
+ *  MobileShell/DesktopShell split already follows for markup. */
+function useDirectionsState(userLocation: Coordinates | null): DirectionsContextValue {
+  const [route, setRoute] = useState<RouteGeometry | null>(null);
+  const [directionsPanelResult, setDirectionsPanelResult] =
+    useState<DiscoverResult | null>(null);
+  const [selectedMode, setSelectedMode] = useState<TravelMode>("foot");
+  const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [modeLoading, setModeLoading] = useState(false);
+  const [modeErrorReason, setModeErrorReason] =
+    useState<DirectionsErrorReason | null>(null);
+
+  const handleRouteFound = useCallback(
+    (geometry: RouteGeometry, foundResult: DiscoverResult) => {
+      setRoute(geometry);
+      setDirectionsPanelResult(foundResult);
+      setSelectedMode("foot");
+      setRouteDuration(geometry.duration);
+      setModeErrorReason(null);
+    },
+    [],
+  );
+
+  const handleSelectMode = useCallback(
+    async (mode: TravelMode) => {
+      if (modeLoading || !userLocation || !directionsPanelResult) return;
+      if (mode === selectedMode) return;
+      const destination = directionsPanelResult;
+      if (destination.latitude == null || destination.longitude == null) return;
+      setModeLoading(true);
+      setModeErrorReason(null);
+      try {
+        const geometry = await fetchRoute(
+          userLocation,
+          { latitude: destination.latitude, longitude: destination.longitude },
+          mode,
+        );
+        setSelectedMode(mode);
+        setRoute(geometry);
+        setRouteDuration(geometry.duration);
+      } catch (err) {
+        setModeErrorReason(err instanceof DirectionsError ? err.reason : "network");
+      } finally {
+        setModeLoading(false);
+      }
+    },
+    [modeLoading, userLocation, directionsPanelResult, selectedMode],
+  );
+
+  const handleCancelDirections = useCallback(() => {
+    setRoute(null);
+    setDirectionsPanelResult(null);
+    setSelectedMode("foot");
+    setRouteDuration(null);
+    setModeErrorReason(null);
+  }, []);
+
+  return {
+    route,
+    directionsPanelResult,
+    selectedMode,
+    routeDuration,
+    modeLoading,
+    modeErrorReason,
+    handleRouteFound,
+    handleSelectMode,
+    handleCancelDirections,
+  };
 }
 
 // Discover-only drag-reveal filters (Map/List, Category, Price), fused into
@@ -594,15 +756,61 @@ export function PublicShell() {
   const contextValue = useMemo(() => ({ query, setQuery }), [query]);
   const isMobile = useIsMobile();
 
+  // Live location: one watchPosition subscription for the whole shell's
+  // lifetime, replacing discover.tsx's old one-shot getCurrentPosition.
+  // See UserLocationContext's own comment above for why this lives here
+  // and why watchPosition rather than a single read.
+  const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      () => {
+        // Denied or unavailable: no-op, Pasig default stays in place,
+        // same fallback posture the old one-shot read already used --
+        // geolocation here is an enhancement, not a required permission,
+        // so no error state blocks either surface.
+      },
+      // enableHighAccuracy: GPS chip over coarse network/cell-tower
+      // positioning. A tourist following turn-by-turn-style directions on
+      // foot needs the accuracy a live watch is actually for; the default
+      // (low accuracy, allowed to answer from a cached/coarse fix) would
+      // undercut the entire point of switching off a one-shot read.
+      { enableHighAccuracy: true },
+    );
+    // ponytail: no debounce/throttle on how often watchPosition can fire.
+    // The device's own location provider paces updates (typically ~1/sec
+    // on GPS, coarser on network positioning), which already matches a
+    // walking pace -- add throttling only if a real device shows updates
+    // arriving faster than the map/panel can usefully redraw.
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+  const userLocationValue = useMemo(
+    () => ({ userLocation, setUserLocation }),
+    [userLocation],
+  );
+
+  const directionsValue = useDirectionsState(userLocation);
+
   return (
     <GlobalSearchContext.Provider value={contextValue}>
-      <DiscoverFiltersContext.Provider value={setDiscoverFilters}>
-        {isMobile ? (
-          <MobileShell query={query} setQuery={setQuery} discoverFilters={discoverFilters} />
-        ) : (
-          <DesktopShell query={query} setQuery={setQuery} discoverFilters={discoverFilters} />
-        )}
-      </DiscoverFiltersContext.Provider>
+      <UserLocationContext.Provider value={userLocationValue}>
+        <DirectionsContext.Provider value={directionsValue}>
+          <DiscoverFiltersContext.Provider value={setDiscoverFilters}>
+            {isMobile ? (
+              <MobileShell query={query} setQuery={setQuery} discoverFilters={discoverFilters} />
+            ) : (
+              <DesktopShell query={query} setQuery={setQuery} discoverFilters={discoverFilters} />
+            )}
+          </DiscoverFiltersContext.Provider>
+        </DirectionsContext.Provider>
+      </UserLocationContext.Provider>
     </GlobalSearchContext.Provider>
   );
 }

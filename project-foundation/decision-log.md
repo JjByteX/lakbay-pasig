@@ -103,6 +103,19 @@
 
 ---
 
+**#:** 16
+**Milestone:** Directions state and user location moved from discover.tsx to public-shell.tsx; one-shot geolocation replaced with a live watch
+
+**Decision:** Two related bugs, one fix, since both came from the same root cause. `userLocation` and the entire Directions session (`route`, `directionsPanelResult`, `selectedMode`, `routeDuration`, `modeLoading`, `modeErrorReason`, plus `handleRouteFound`/`handleSelectMode`/`handleCancelDirections`) were `useState`/handlers declared directly inside `DiscoverPage`. React destroys page-local state on unmount, and every tab switch unmounts `DiscoverPage`, so navigating off Discover and back silently cancelled an in-progress route and lost the last known position -- not a bug in the panel's wiring (entry #13/#14's own logic was already correct), a lifetime-scoping problem. `userLocation` was also a single `getCurrentPosition` read, so even without navigating away, it stayed pinned to wherever the phone was the instant Discover first mounted while the person kept walking.
+
+Fix: both moved to `public-shell.tsx`, following the exact precedent `GlobalSearchContext` already set for this same class of problem (see entry #9). Two new contexts, `UserLocationContext` and `DirectionsContext`, both provided from `PublicShell()` itself -- the one component that wraps every public route and does not unmount on a tab switch. `useDirectionsState(userLocation)` is a local hook inside `public-shell.tsx` holding the six fields and three handlers verbatim (same logic, same ordering, same `fetchRoute`/`DirectionsError` handling as before, only relocated); `useUserLocation`/`useDirections` are the two new page-facing hooks, matching `useGlobalSearchQuery`'s existing shape exactly. `discover.tsx` now calls both hooks instead of declaring the state itself; every downstream consumer (`DiscoverMap`, `DiscoverList`, `DirectionsPanel`, `ResultCard`) needed no change at all, since all of them only ever received this state as props, never owned it.
+
+Separately, `userLocation`'s source changed from a single `getCurrentPosition` call to a `watchPosition` subscription with `enableHighAccuracy: true`, owned by `PublicShell`'s own mount/unmount (one subscription for the session, `clearWatch` in the effect's cleanup). This makes the location track actual movement continuously, matching how Google Maps keeps a live position while a route is open, rather than freezing at the first fix.
+
+**Standing rule:** Any future state that needs to survive a tab switch (not just Directions/location) follows this same shape: a context provided from `PublicShell()`, a `use*` hook matching `useGlobalSearchQuery`'s naming and error-if-outside-provider pattern, state and logic lifted verbatim rather than reshaped in the move. Page components stay thin consumers of shell-level state for anything that must outlive their own mount. Any future one-shot geolocation read should default to `watchPosition` instead unless a single snapshot is specifically what's wanted (e.g. a one-time "center map here" action) -- `enableHighAccuracy: true` is the default for anything guiding a person's live movement, plain `getCurrentPosition` accuracy defaults are fine for a single low-stakes read.
+
+---
+
 **#:**
 **Milestone:**
 
