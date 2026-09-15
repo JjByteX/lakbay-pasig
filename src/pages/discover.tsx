@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import type { Coordinates } from "@/lib/discover-query";
 import {
   fetchDiscoverResults,
@@ -60,6 +62,19 @@ import { usePageTitle } from "@/lib/page-title";
 export default function DiscoverPage() {
   usePageTitle("Discover");
   const { query } = useGlobalSearchQuery();
+  // Same viewport breakpoint public-shell.tsx's own mobile/desktop shell
+  // branch already uses (useIsMobile). The filter markup below is one
+  // shared block registered via useDiscoverFilters for both shells (the
+  // mobile drag-reveal header and the desktop side panel), but the two
+  // surfaces call for different layout: mobile keeps its centered,
+  // card-toned rows (the panel it renders into has no surface of its
+  // own), desktop's panel already supplies its own bg-card container
+  // (public-shell.tsx's DesktopShell), so a second background block plus
+  // centered rows inside a fixed-width side panel would both be a
+  // container-in-a-container and centered content with nothing to center
+  // against -- left-aligned, full width, no extra fill, per direct
+  // instruction, desktop only.
+  const isMobile = useIsMobile();
 
   const [results, setResults] = useState<DiscoverResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(true);
@@ -194,8 +209,18 @@ export default function DiscoverPage() {
     // (pt-2 on the top row, pb-3 on the bottom row, no padding between
     // them), which left the two rows touching directly and the whole
     // panel flush against the search bar above and the drag handle below.
-    <div className="flex flex-col gap-4 bg-background px-6 py-4">
-      <div className="mx-auto flex w-full max-w-md items-center justify-center gap-3">
+    // Desktop (isMobile false): no bg-background fill and no horizontal
+    // padding here -- the desktop side panel (public-shell.tsx's
+    // DesktopShell) already supplies its own bg-card surface and p-4
+    // padding, so this would otherwise be a second background stacked
+    // inside the panel's own, a container-in-a-container.
+    <div className={cn("flex flex-col gap-4", isMobile ? "bg-background px-6 py-4" : "py-2")}>
+      <div
+        className={cn(
+          "flex items-center gap-3",
+          isMobile ? "mx-auto w-full max-w-md justify-center" : "w-full justify-start",
+        )}
+      >
         {/* Phase 5.1: map/list toggle, local component state only, no
                   second bottom-nav tab and no separate route, per step-5-plan.md
                   and step-5-phases.md 5.1. Reuses the existing Tabs primitive as
@@ -204,11 +229,15 @@ export default function DiscoverPage() {
                   Suggesting rule); TabsContent is intentionally not used, this
                   component controls which surface renders itself so the map
                   instance stays mounted across a toggle instead of remounting.
-                  Centered (justify-center): this row now holds only the toggle
-                  since the category filter moved to its own grid below it, so
-                  centering here keeps it visually aligned with the centered
-                  category grid and price row beneath it, rather than sitting
-                  left-aligned as the sole leftover of the old two-control row. */}
+                  Centered (justify-center) on mobile: this row now holds only
+                  the toggle since the category filter moved to its own grid
+                  below it, so centering here keeps it visually aligned with
+                  the centered category grid and price row beneath it, rather
+                  than sitting left-aligned as the sole leftover of the old
+                  two-control row. Left-aligned on desktop instead, per direct
+                  instruction -- the desktop panel is not a centered mobile
+                  header, it's a left-side panel with its own left edge to
+                  align to. */}
         <Tabs value={view} onValueChange={(v) => setView(v as "map" | "list")}>
           <TabsList>
             <TabsTrigger value="map" className="gap-1">
