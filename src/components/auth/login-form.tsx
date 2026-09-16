@@ -20,9 +20,19 @@ import { Label } from "@/components/ui/label";
  * path now closes the popup instead of only navigating -- staff still
  * lands on /admin, a resident just closes and stays put, which is the
  * point of the whole change (see landing-hero-plan.md's Auth Popup, After
- * success). "Create one" becomes a mode switch instead of a Link, and
- * "Continue as Guest" is dropped -- the landing page owns that action now,
- * not the form itself.
+ * success). "Create one" becomes a mode switch instead of a Link.
+ *
+ * "Continue as Guest" is back in this form (post-launch addition, not in
+ * the original landing-hero-plan.md): the popup opens from many places
+ * across the app (Discover, a trail, Saved...), not only the landing
+ * page, so a guest who opens Log in and changes their mind needs a way
+ * back to just browsing without it, from wherever they are. Uses
+ * closeAuth(), the same "opened over a page" branch landing-hero-plan.md's
+ * Auth Popup > Cross Links already specifies -- on /login specifically
+ * this still resolves correctly since AuthModalRoute renders the landing
+ * page underneath, so closing lands the person there. Login only, not
+ * signup: signup is a deliberate commit step, matching the common pattern
+ * of not offering a guest escape mid-signup.
  */
 export function LoginForm() {
   const navigate = useNavigate();
@@ -162,6 +172,10 @@ export function LoginForm() {
           Create one
         </button>
       </p>
+
+      <button type="button" onClick={() => closeAuth()} className="text-sm text-muted-foreground underline">
+        Continue as Guest
+      </button>
     </div>
   );
 }

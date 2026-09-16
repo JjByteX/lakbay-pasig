@@ -2,10 +2,10 @@ import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth-context";
 import { AuthModalProvider } from "@/lib/auth-modal";
 import { AuthModalRoute } from "@/lib/auth-modal-route";
+import { EntryGate } from "@/lib/entry-gate";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
-import HomePage from "@/pages/home";
 import TrailsPage from "@/pages/trails";
 import TrailDetailPage from "@/pages/trail-detail";
 import DiscoverPage from "@/pages/discover";
@@ -44,9 +44,13 @@ export default function App() {
               previously owned "/" directly; the shell takes over as root here
               per step-5-phases.md Phase 2.5, home.tsx now renders as the
               index child instead. Only Discover is a real screen this step,
-              the other three are stub routes per Phase 2.4. */}
+              the other three are stub routes per Phase 2.4.
+              EntryGate (not HomePage directly) owns the index route: a
+              signed-out visitor's first hit this session redirects to
+              /welcome, then "/" resolves to Home for the rest of the
+              session same as before. See entry-gate.tsx. */}
           <Route path="/" element={<PublicShell />}>
-            <Route index element={<HomePage />} />
+            <Route index element={<EntryGate />} />
             <Route path="trails" element={<TrailsPage />} />
             {/* Phase 2.1 (step-7-phases.md): detail route, no auth gate on
                 the route itself, per navigation-and-access-control.md's
