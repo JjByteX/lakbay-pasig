@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Users, Settings as SettingsIcon, LogOut } from "lucide-react";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Settings as SettingsIcon, LogOut } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -61,6 +61,13 @@ const NAV_ITEMS = [
     permissions: ["manage_places", "build_trails", "publish_events", "review_businesses"] as const,
     adminOnly: false,
   },
+  // Landing Page (landing-hero-phases.md Phase 3.1): the hero carousel
+  // shown to a signed-out visitor on /welcome, /login, and /signup. Own
+  // permission (manage_landing, migration 0033), not folded into
+  // manage_places or any existing value -- none of the four cover
+  // landing content, and reusing manage_places would hand every place
+  // editor control over the first screen a new visitor sees.
+  { to: "/admin/landing", label: "Landing Page", icon: Image, permission: "manage_landing" as const, permissions: null, adminOnly: false },
   { to: "/admin/staff", label: "Staff", icon: Users, permission: null, permissions: null, adminOnly: true },
   // Personal display preference, not a content section -- visible to
   // every staff member the same way Dashboard is (permission: null,

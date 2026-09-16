@@ -1,8 +1,8 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import { Link } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { supabase } from "@/lib/supabase";
 import {
   handleDarkModeChange,
@@ -188,6 +188,7 @@ const EMPTY_ACCOUNT_FIELD_STATE: AccountFieldState = { value: "", saving: false,
 export default function SettingsPage() {
   usePageTitle("Settings");
   const { session, profile, loading, refreshProfile } = useAuth();
+  const { openAuth } = useAuthModal();
 
   // 3.2: seeded from profile.theme_preference on load, same pattern
   // profile.tsx's own form fields seed from profile in its load effect.
@@ -314,9 +315,7 @@ export default function SettingsPage() {
         <p className="text-base text-muted-foreground">
           Sign in to change your theme and font size.
         </p>
-        <Button asChild>
-          <Link to="/login">Sign in</Link>
-        </Button>
+        <Button onClick={() => openAuth("login")}>Sign in</Button>
       </div>
     );
   }

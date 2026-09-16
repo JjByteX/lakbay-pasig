@@ -30,8 +30,9 @@ interface SaveRouteButtonProps {
  * beside saved-places.ts as a sibling file rather than a shared one.
  *
  * Same signed-out behavior as save-button.tsx: the heart is visible and
- * tappable for a guest, a signed-out tap navigates to /login instead of
- * writing, never a disabled control, per ux-ui-guidelines.md's
+ * tappable for a guest, a signed-out tap opens the auth popup via
+ * openAuth("login") instead of writing (landing-hero-phases.md 7.5,
+ * previously navigate("/login")), never a disabled control, per ux-ui-guidelines.md's
  * Disabled/gated rule and navigation-and-access-control.md's Guest
  * Trail Preview Decision (sign-in gates state changes, not viewing).
  * Also enforced independently at the database layer, saved_routes_own

@@ -25,6 +25,8 @@
 **#:** 2
 **Milestone:** Auth screens, image panel gradient exception
 
+**RETIRED** — see entry #18. auth-layout.tsx is deleted; no gradient exception is active anywhere in the app.
+
 **Decision:** ux-ui-guidelines.md bans gradients on structural surfaces. auth-layout.tsx's image panel is the one exception: a bottom-anchored navy-to-transparent scrim behind the tagline text only, added on direct instruction after a flat overlay and a text-shadow alone both failed to keep the tagline legible against the photo.
 
 **Standing rule:** This is the only gradient allowed anywhere in the app. Any new gradient request elsewhere must be flagged, not treated as precedent.
@@ -128,6 +130,25 @@ Two gaps flagged and resolved with the human present rather than guessed at sile
 Photo URLs use a `:SUPABASE_URL` placeholder substituted per environment, pointing at the `content-photos` bucket paths storage-manifest.md specifies; the 30 real photo files still need to be uploaded to that bucket before these URLs resolve to anything (unchanged from resume-plan.md's own note — this pass did not touch the upload step, only the seed.sql references to those paths).
 
 **Standing rule:** Any future content-population pass that finds a table it cannot seed with real, sourced data (as opposed to a table it chooses to leave empty on a confirmed decision) should research and cite real sources the way this entry's business_items/coordinates gap was handled, not fabricate plausible-looking values silently — and should flag the research as prototype-quality pending official confirmation, the same way this entry does. Any future pass that drops an entire seeded section (as Routes/Trails was dropped here) documents why inline in seed.sql itself, not only in a planning doc, so the file stays self-explanatory to whoever opens it next.
+
+---
+
+**#:** 18
+**Milestone:** Landing page with hero carousel; Login/Signup become a short popup (landing-hero-plan.md, landing-hero-phases.md)
+
+**Decision:** Two changes shipped together. First, a public landing page at `/welcome` — two column hero on desktop (copy/actions left, an image carousel right), one column stacked on mobile — replacing the previous "no landing page, `/` is the Home feed" state. `/` stays the Home feed for everyone, Guest included; the landing page is an entry surface for someone arriving cold (e.g. a heritage-site link), not a gate everyone passes through, per navigation-and-access-control.md's existing Guest access to Home/Discover/Trails. Second, Login and Signup become a short, centered popup (`auth-modal.tsx`) with two modes, no image panel, no carousel, no tagline — auth surfaces and landing marketing content are two different concerns and share no file.
+
+The fifth `system_permission` value, `manage_landing`, was added across all six sites that reference the permission set in one pass: the 0002 check constraint (dropped and re-added in 0033, 0002 itself never edited, per README's migration rule), `auth-types.ts`'s `SystemPermission` union, `staff-form-dialog.tsx`'s `SYSTEM_PERMISSIONS`, `admin-staff.tsx`'s `PERMISSION_LABEL`, `admin-sidebar.tsx`'s nav item, and `App.tsx`'s route guard. None of the four existing permissions were reused; folding this into `manage_places` would hand every place editor control over the first screen a new visitor sees.
+
+Storage: 0031's `content_photos_write_staff` only checks for `admin`, `manage_places`, or `review_businesses`, so a staff member holding only `manage_landing` would pass the new `landing_slides` table insert and then fail the file upload. Fixed with a new policy in 0033 (`landing_photos_write_staff`), not an edit to 0031, since storage policies are OR'd.
+
+Data: new table `landing_slides` (0033), not a caption column on `place_photos`/`business_photos` — open-questions.md #6 already resolved those two as no caption column, and this is a separate table for a separate purpose. `landing_slides_select_public` has no `to` clause and is gated only on `active`, since the landing page and the auth popup both render for a signed-out visitor; a staff-scoped read would show an empty hero to every real visitor. `landing_slides_write_staff` mirrors 0003's `places_write_staff` shape exactly. The existing `content-photos` bucket (0031) is reused with a `landing/` prefix, alongside `places/` and `businesses/`.
+
+Auth as a short popup: state (`open`, `mode`, `openAuth(mode?)`, `closeAuth()`) is provided from `App`, not from `PublicShell`, since the modal is needed by the Landing page and by `protected-route.tsx`, both outside `PublicShell`. This is the one deviation from entry #16's standing rule that state needing to survive navigation is provided from `PublicShell()` — a level up, so there is one provider and one mounted modal, but everything else about the shape (a context, a `use*` hook matching `useGlobalSearchQuery`'s naming and its error-if-outside-provider check) follows #16 exactly. `login.tsx`/`signup.tsx`'s form logic was lifted verbatim into `login-form.tsx`/`signup-form.tsx`, only the `AuthLayout` wrapper and `tagline` prop dropped. `/login` and `/signup` stay as routes — they no longer render pages, each opens the popup directly over whatever is behind it (defaulting to the landing page when nothing else is) — for three reasons: Supabase email confirmation links point at the app and need somewhere sane to land, `protected-route.tsx` needs a real redirect target, and existing bookmarks keep working. All fourteen guest-gate call sites across twelve files (public-shell.tsx, public-sidebar.tsx, use-saved-toggle.ts, save-button.tsx/save-route-button.tsx via the hook, trail-detail.tsx, saved.tsx, profile.tsx, settings.tsx, vendor-dashboard.tsx, vendor-items.tsx) now call `openAuth("login")` instead of navigating away, except `protected-route.tsx`, which keeps its redirect since a route-level guard has no "in place" to return to.
+
+Caption legibility for the hero carousel was decided fresh, not inherited from entry #2's retired scrim: a solid caption bar under the image, using the card surface token at full opacity, not a gradient over the photo. This satisfies ux-ui-guidelines.md's ban on structural gradients without asking for a new exception, and is simpler than the scrim it replaces.
+
+**Standing rule:** Any future pre-auth content (rendering before sign-in) follows this anon-read-plus-staff-write RLS shape. Any future carousel reuses `filmstrip.ts`, never a new carousel dependency. Any future `system_permission` value update touches all six sites listed above in one pass, not incrementally. Any state needed both inside and outside `PublicShell` is provided from `App`, following entry #16's shape but not its mount point. Auth surfaces (login, signup, any future step like password reset) stay plain forms with no imagery — landing page marketing content and account forms are two different concerns and do not share a file.
 
 ---
 

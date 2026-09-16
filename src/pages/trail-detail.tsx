@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Navigation, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { fetchTrailDetail } from "@/lib/trail-query";
 import { getRouteProgress, unlockStop, resetRouteProgress, type RouteProgress } from "@/lib/trail-progress";
 import { completeTrail, isRouteCompleted } from "@/lib/trail-completion";
@@ -190,6 +191,7 @@ export default function TrailDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { session } = useAuth();
+  const { openAuth } = useAuthModal();
   const [trail, setTrail] = useState<TrailDetail | null>(null);
   usePageTitle(trail?.name ?? "Trails");
   const [loading, setLoading] = useState(true);
@@ -395,7 +397,7 @@ export default function TrailDetailPage() {
   // reason Phase 0 exists."
   function handleStart() {
     if (!session) {
-      navigate("/login");
+      openAuth("login");
       return;
     }
 

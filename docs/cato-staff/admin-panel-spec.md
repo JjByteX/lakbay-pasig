@@ -28,6 +28,9 @@ Build routes. Set theme, place order, estimated duration and budget. Assign Disc
 ### Staff
 Manage other CATO Staff accounts: permissions, position, active status. Limited to Admin role only, Staff role has no access to this section.
 
+### Landing Page
+Manage the image carousel shown on the public landing page (`/welcome`). Upload, caption, reorder, and activate/deactivate slides. Gated on the `manage_landing` system permission (Admin or a Staff member holding it).
+
 ## Review Queues
 
 Separate queue per content type: Places, Businesses. Not one shared queue.

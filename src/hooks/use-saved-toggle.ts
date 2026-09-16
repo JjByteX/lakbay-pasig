@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 
 /**
  * useSavedToggle — the optimistic-toggle logic save-button.tsx and
@@ -11,12 +11,13 @@ import { useAuth } from "@/lib/auth-context";
  * success. Extracted once both components' lib layer (saved-places.ts /
  * saved-routes.ts) had nothing left to dedupe, per Step 8's ordering.
  *
- * A signed-out tap navigates to /login instead of writing, same
- * Disabled/gated reasoning (ux-ui-guidelines.md) both components'
- * own file comments already give: a guest sees the identical heart and
- * a tap prompts sign-in rather than a disabled control with no
- * explanation. This hook owns that redirect so neither component needs
- * its own copy of the check.
+ * A signed-out tap opens the auth popup (landing-hero-phases.md 7.3)
+ * instead of writing or navigating away, same Disabled/gated reasoning
+ * (ux-ui-guidelines.md) both components' own file comments already give:
+ * a guest sees the identical heart and a tap prompts sign-in rather than
+ * a disabled control with no explanation. This hook owns that popup call
+ * so neither component needs its own copy of the check. The map, filters,
+ * and open result card all survive since nothing navigates away.
  *
  * itemId is generic (place id or route id), not renamed per-domain,
  * since the hook itself has no opinion on what kind of thing is being
@@ -50,7 +51,7 @@ export function useSavedToggle({
   onToggle,
 }: Readonly<UseSavedToggleOptions>) {
   const { session } = useAuth();
-  const navigate = useNavigate();
+  const { openAuth } = useAuthModal();
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   // Without this, a failed toggle just silently reverts the heart with
@@ -74,7 +75,7 @@ export function useSavedToggle({
 
   function handleClick() {
     if (!session) {
-      navigate("/login");
+      openAuth("login");
       return;
     }
 

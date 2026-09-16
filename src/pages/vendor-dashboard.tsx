@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Store } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { fetchOwnBusiness, createBusiness, updateBusiness } from "@/lib/vendor-business";
 import { fetchTrailInclusions } from "@/lib/vendor-dashboard";
 import { fetchItems, missingPriceCount } from "@/lib/vendor-items";
@@ -368,6 +369,7 @@ function useVendorMetrics(businessId: string | undefined) {
 
 export default function VendorDashboardPage() {
   const { session, loading } = useAuth();
+  const { openAuth } = useAuthModal();
   const navigate = useNavigate();
 
   const { business, setBusiness, checking, setChecking, checkError } = useOwnBusiness(session);
@@ -416,9 +418,7 @@ export default function VendorDashboardPage() {
         <p className="text-base text-muted-foreground">
           Sign in to list or manage your business.
         </p>
-        <Button asChild>
-          <Link to="/login">Sign in</Link>
-        </Button>
+        <Button onClick={() => openAuth("login")}>Sign in</Button>
       </div>
     );
   }

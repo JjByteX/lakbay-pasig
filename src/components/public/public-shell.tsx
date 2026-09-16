@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SignOutDialog } from "@/components/sign-out-dialog";
+import { useAuthModal } from "@/lib/auth-modal";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 
 // Global search: shell-owned per the resolved spec ("shared query state
@@ -444,6 +445,7 @@ function isSearchVisible(pathname: string): boolean {
 function AccountMenu() {
   const { session, profile } = useAuth();
   const navigate = useNavigate();
+  const { openAuth } = useAuthModal();
   const initial = profile?.display_name?.[0]?.toUpperCase();
   // Log-out confirmation: "Sign out" no longer calls signOut directly,
   // it opens SignOutDialog (owns the actual signOut() call), same
@@ -464,7 +466,11 @@ function AccountMenu() {
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => navigate("/login")}>
+          {/* landing-hero-phases.md Phase 7.1: opens the shared auth
+              popup in place instead of navigating away to /login, so
+              whatever the guest was looking at (a Discover result, an
+              open filter panel) is still there once they're signed in. */}
+          <DropdownMenuItem onClick={() => openAuth("login")}>
             Sign in
           </DropdownMenuItem>
         </DropdownMenuContent>

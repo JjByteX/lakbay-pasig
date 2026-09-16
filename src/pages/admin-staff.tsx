@@ -62,6 +62,7 @@ const PERMISSION_LABEL: Record<string, string> = {
   review_businesses: "Businesses",
   publish_events: "Events",
   build_trails: "Trails",
+  manage_landing: "Landing Page",
 };
 
 const ROLE_OPTIONS = ["all", "staff", "admin"] as const;

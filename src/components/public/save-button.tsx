@@ -23,8 +23,9 @@ interface SaveButtonProps {
  * data-model.md's End User fields). Signed-in tap inserts or deletes the
  * saved_places row directly (6.5), no confirmation modal for a reversible
  * personal action. Guest sees the identical heart icon and tapping it
- * prompts sign-in via navigate("/login") instead of writing (6.6), rather
- * than a disabled button, since ux-ui-guidelines.md's Disabled/gated rule
+ * opens the auth popup via openAuth("login") instead of writing
+ * (landing-hero-phases.md 7.4, previously navigate("/login") in 6.6),
+ * rather than a disabled button, since ux-ui-guidelines.md's Disabled/gated rule
  * requires a disabled action to clearly communicate what unlocks it, and a
  * bare disabled heart with no explanation would fail that. Also enforced
  * at the database layer independent of this UI check, saved_places has no

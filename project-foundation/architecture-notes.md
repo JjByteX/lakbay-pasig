@@ -43,9 +43,11 @@ Reasoning: the data model is relational (Places, Trails, Businesses, and Staff p
 - Profile: account info, preferences, vendor mode toggle entry point
   - Settings (`/profile/settings`): theme and font size preference, synced to `profiles.theme_preference`/`font_size_preference`
 - Vendor Mode: business listing creation, listing tiers (Basic, Featured), item and price management, vendor dashboard metrics
-- CATO Admin Panel: sidebar sections for Places, Businesses, Events and Announcements, Trails, Staff, each gated by Staff or Admin role. admin.tsx's header holds AdminSearchBar and AdminNotificationBell
+- CATO Admin Panel: sidebar sections for Places, Businesses, Events and Announcements, Trails, Staff, Landing Page, each gated by Staff or Admin role. admin.tsx's header holds AdminSearchBar and AdminNotificationBell
   - Categories (`/admin/categories`): one tabbed page managing five admin-controlled category lists (Places, Facilities, Business Category, Trails, Announcements), each its own table/permission/icon shortlist, sharing one list view and one add/edit dialog (category-form-dialog.tsx). Facilities is the one list a record holds several of at once (`places.facility_ids`, uuid[]); every other tab is a single `category_id` foreign key
-- Auth: Supabase Auth, email verification, role assignment for Guest, Registered User, Vendor, CATO Staff
+  - Landing Page (`/admin/landing`): manages the `landing_slides` table backing the public hero carousel. Simple row list (thumbnail, caption, Active badge, up/down reorder, actions menu), not `AdminDataTable`, gated on the `manage_landing` system_permission. See landing-hero-plan.md
+- Landing: public entry page at `/welcome`, outside PublicShell (no bottom nav, shell header, or sidebar). Two column hero on desktop (copy/actions left, image carousel right), one column stacked on mobile. Carousel (hero-carousel.tsx) reuses filmstrip.ts's math, sourced from `landing_slides` (0033). See landing-hero-plan.md
+- Auth: Supabase Auth, email verification, role assignment for Guest, Registered User, Vendor, CATO Staff. Login and Signup are no longer their own pages/routes with dedicated layouts -- `/login` and `/signup` render the Landing page underneath with a short, centered auth popup (auth-modal.tsx, login-form.tsx, signup-form.tsx) open in the matching mode, opened from anywhere in the app via `useAuthModal()`'s `openAuth(mode)`. The popup carries no image panel and no carousel; landing marketing content and auth forms are two separate concerns living in separate files. See landing-hero-plan.md, decision-log.md entry #2 (retired) and the new entry covering this change
 
 **Key Dependencies Between Files:**
 - auth-context.tsx depends on auth-types.ts, migrations 0001/0002 (profiles columns)
@@ -60,6 +62,10 @@ Reasoning: the data model is relational (Places, Trails, Businesses, and Staff p
 - admin-global-search.ts depends on places_select_staff (0003), businesses_select_staff (0004), routes_select_staff (0005), events_select_staff (0006), profiles_select_admin (0001, via public.is_admin() since 0009). admin-search-bar.tsx depends on admin-global-search.ts. admin-notifications.ts runs its own copy of admin-dashboard.tsx's pending-count queries (kept as two independent copies, not shared). admin-notification-bell.tsx depends on admin-notifications.ts. admin.tsx depends on admin-search-bar.tsx, admin-notification-bell.tsx
 - route_stops.stop_id and discovery_content.related_location_id reference either places.id or businesses.id with no foreign key; the app layer must guarantee stop_type/related_location_type matches a real row
 - discover-types.ts's DiscoverPlace (including facility_ids) is constructed in discover-query.ts's fetchPlaces, saved-places.ts's fetchSavedPlaces, and home-query.ts's fetchRecentlyVerifiedPlaces. Any new constructor of a DiscoverPlace needs every field added at the same time
+- landing.tsx depends on landing-slides.ts (fetchActiveSlides) and hero-carousel.tsx
+- hero-carousel.tsx depends on filmstrip.ts (loopIndex, wrappedSlot, shortestStep, tileWidthPx, tileOffsetPx), reused as-is, not copied
+- auth-modal.tsx (components/auth) depends on login-form.tsx and signup-form.tsx, and on lib/auth-modal.tsx's AuthModalContext/useAuthModal for open/mode state
+- landing-slides.ts depends on landing_slides_select_public / landing_slides_write_staff (0033), and content-photos storage bucket (0031) with the landing_photos_write_staff policy (0033) covering the manage_landing permission
 
 **Database Schema:**
 
@@ -88,6 +94,7 @@ All tables have row level security enabled. No table grants unauthenticated writ
 | 0027 | business_categories (new table), businesses | Same shape as place_categories, RLS scoped to review_businesses/admin, no seed rows. businesses.category_id added nullable; old businesses.category renamed category_text_legacy (kept, not dropped, not read by app code) |
 | 0029 | (extension only) | Enables pgcrypto. Harmless safety net; the actual seed-step fix is schema-qualifying crypt()/gen_salt() calls to extensions.crypt()/extensions.gen_salt() in seed.sql, since search_path doesn't reliably include the extensions schema on `db reset --linked` |
 | 0030 | profiles | Adds profile_picture, username (unique partial index), first_name, last_name, all nullable. See decision-log.md entry #12 |
+| 0033 | profiles (constraint swap), landing_slides (new table), storage.objects (new policy) | Fifth system_permission value, `manage_landing` (constraint dropped and re-added, 0002 itself untouched). landing_slides: id, image_url, caption, sort_order, active, timestamps -- backs the `/welcome` hero carousel. `landing_slides_select_public` has no `to` clause (renders pre-auth); `landing_slides_write_staff` mirrors 0003's places_write_staff shape. `landing_photos_write_staff` closes a gap 0031 left for the manage_landing permission on the content-photos bucket, added here rather than editing 0031 |
 
 Fields in docs/data-model.md intentionally left out of the schema, since they're derivable from a join table: places/businesses' Trails Included In, routes' Places Included and Place Order (both live in route_stops), trail_credentials.Users Earned. Recomputing these from route_stops and user_credentials avoids duplicated data going stale.
 
@@ -105,11 +112,11 @@ Facts about the app as it stands today. Not a build log. Add a line here only if
 
 - No Switch primitive exists in src/components/ui. Every toggle uses a styled native checkbox. See decision-log.md entry #8.
 - No Popover/Command primitive exists. Search dropdowns and similar panels use a plain absolutely-positioned div, matching global-search-bar.tsx.
-- Admin lists that support manual reordering (e.g. Categories) use up/down icon buttons with optimistic local reorder plus persistence, not a drag library. No drag library is installed anywhere in the app.
+- Admin lists that support manual reordering (e.g. Landing Page) use up/down icon buttons with optimistic local reorder plus persistence, not a drag library. No drag library is installed anywhere in the app.
 - Staff create/edit is a controlled dialog (staff-form-dialog.tsx), not its own route. Places and Businesses keep their own detail pages since both carry a review-history Tabs view Staff has never had.
-- auth-layout.tsx's image panel carries the app's one approved gradient exception. See decision-log.md entry #2.
+- auth-layout.tsx and its bundled asset (src/assets/auth-bg.png) no longer exist. Both were deleted once Login and Signup became a short popup with no image panel (landing-hero-plan.md). The gradient exception that lived on that file is retired, see decision-log.md entry #2.
 - discover-map.tsx uses maplibre-gl exclusively; leaflet is fully removed. See decision-log.md entry #3. Its symbol layers explicitly set `"text-font": ["Noto Sans Regular"]`, since OpenFreeMap only hosts Noto Sans and the default maplibre-gl font stack 404s against it.
 - userLocation and the Directions session (route/selectedMode/routeDuration/modeLoading/modeErrorReason/directionsPanelResult, plus the three handlers) are owned by public-shell.tsx (`useUserLocation`/`useDirections`), not discover.tsx, so both survive a tab switch. userLocation comes from a continuous `watchPosition` subscription (one per app session, started/stopped with PublicShell's own mount/unmount), not a single `getCurrentPosition` read. See decision-log.md entry #16.
 - Routing goes through `routing.openstreetmap.de` (FOSSGIS), one OSRM instance per mode, selected by a `routed-car`/`routed-bike`/`routed-foot` path prefix. The `/route/v1/{profile}/` segment after that prefix is ignored by every OSRM server and is not validated, so a wrong value there fails silently with a plausible route instead of an error. Never select a graph with it. See decision-log.md entry #15.
 - `.dark` in index.css must define every CSS variable `:root` defines; a variable missing from `.dark` silently falls back to the light value even with dark mode active.
-- Two approved exceptions to the no-raw-color-value rule: discover-map.tsx's Catppuccin Latte/Mocha palette (maplibre-gl's StyleSpecification takes literal color strings, not CSS variables) and auth-layout.tsx's gradient scrim (entry #2).
+- One approved exception to the no-raw-color-value rule: discover-map.tsx's Catppuccin Latte/Mocha palette (maplibre-gl's StyleSpecification takes literal color strings, not CSS variables). auth-layout.tsx's gradient scrim was the other; it is retired along with the file, see decision-log.md entry #2.

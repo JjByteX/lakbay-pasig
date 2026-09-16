@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchSavedPlaces } from "@/lib/saved-places";
@@ -28,15 +29,14 @@ import { usePageTitle } from "@/lib/page-title";
  * render the guest message and then flash to the real content a moment
  * later.
  *
- * Sign in button is a real navigation action, not a save/start control
- * with a conditional redirect branch (contrast save-button.tsx,
- * save-route-button.tsx, trail-detail.tsx's handleStart, which all use
- * navigate("/login") inside a click handler for something else). Its only
- * purpose here is "go to /login," matching home.tsx's own Log in button
- * and signup.tsx's sign-in links, all of which use Link rather than a
- * programmatic navigate for the same reason. Button asChild + Link
- * follows result-card.tsx's own established composition for this exact
- * pairing, not a new pattern.
+ * Sign in button opens the auth popup via openAuth("login")
+ * (landing-hero-phases.md 7.7), same as every other guest gate in the app
+ * now (save-button.tsx, save-route-button.tsx, trail-detail.tsx's
+ * handleStart) -- previously this was the one guest gate that used a real
+ * navigation (Link to="/login") rather than a click handler, since its
+ * only purpose was "go to /login." That distinction is gone now that
+ * /login itself just opens the same popup: a guest lands back on this
+ * page, signed in, instead of losing their place.
  *
  * No disabled control anywhere on this branch, per ux-ui-guidelines.md's
  * Disabled/gated rule (a disabled action must clearly communicate what
@@ -150,6 +150,7 @@ export default function SavedPage() {
   usePageTitle("Saved");
   const { session, loading } = useAuth();
   const navigate = useNavigate();
+  const { openAuth } = useAuthModal();
 
   const [places, setPlaces] = useState<DiscoverPlace[]>([]);
   const [placesLoading, setPlacesLoading] = useState(true);
@@ -218,9 +219,7 @@ export default function SavedPage() {
         <p className="text-base text-muted-foreground">
           Sign in to see your saved places, saved trails, and completed trails.
         </p>
-        <Button asChild>
-          <Link to="/login">Sign in</Link>
-        </Button>
+        <Button onClick={() => openAuth("login")}>Sign in</Button>
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
 import { fetchItems, createItem, updateItem, deleteItem } from "@/lib/vendor-items";
 import type { VendorItem } from "@/lib/vendor-types";
@@ -129,6 +130,7 @@ function ItemFormFields({
 
 export default function VendorItemsPage() {
   const { session, loading } = useAuth();
+  const { openAuth } = useAuthModal();
 
   const [business, setBusiness] = useState<VendorBusiness | null>(null);
   const [businessChecked, setBusinessChecked] = useState(false);
@@ -201,9 +203,7 @@ export default function VendorItemsPage() {
         <p className="text-base text-muted-foreground">
           Sign in to manage your business's items.
         </p>
-        <Button asChild>
-          <Link to="/login">Sign in</Link>
-        </Button>
+        <Button onClick={() => openAuth("login")}>Sign in</Button>
       </div>
     );
   }

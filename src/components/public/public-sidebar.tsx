@@ -2,6 +2,7 @@ import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as Set
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import {
@@ -134,6 +135,7 @@ export function PublicSidebar({
   onToggleSearch: () => void;
 }>) {
   const { session, profile } = useAuth();
+  const { openAuth } = useAuthModal();
   const { pathname: currentPath } = useLocation();
   const navigate = useNavigate();
 
@@ -218,7 +220,7 @@ export function PublicSidebar({
         {!session ? (
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => navigate("/login")} tooltip="Sign in">
+              <SidebarMenuButton onClick={() => openAuth("login")} tooltip="Sign in">
                 <UserIcon className="h-4 w-4 shrink-0" />
                 <span>Sign in</span>
               </SidebarMenuButton>

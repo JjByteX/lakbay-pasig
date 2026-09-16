@@ -25,6 +25,15 @@ export function ProtectedRoute({ children, requireStaff, requireAdmin, requiredP
   const { session, profile, loading } = useAuth();
 
   if (loading) return null;
+  // The one exception to landing-hero-phases.md Phase 7's guest-gate
+  // migration (7.12): every other guest gate now calls openAuth("login")
+  // to open the popup in place, but this keeps a real redirect to /login.
+  // A route-level redirect has no "in place" to return to -- there is no
+  // page underneath yet, since the protected page itself never rendered.
+  // /login (App.tsx) opens the landing page with the popup already open
+  // over it, which is exactly landing-hero-plan.md's Flagged Conflict #4:
+  // /login stays a real route so a hard-gated admin URL has somewhere sane
+  // to land.
   if (!session) return <Navigate to="/login" replace />;
 
   if ((requireStaff || requireAdmin || requiredPermission) && !profile?.staff_role) {

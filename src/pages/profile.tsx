@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Store, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import { supabase } from "@/lib/supabase";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ function errorMessageFrom(err: unknown, fallback: string): string {
 export default function ProfilePage() {
   usePageTitle("Profile");
   const { session, profile, loading, refreshProfile } = useAuth();
+  const { openAuth } = useAuthModal();
 
   // Log-out confirmation: this button no longer calls signOut directly,
   // it opens SignOutDialog, which owns the actual signOut() call. See
@@ -129,9 +131,7 @@ export default function ProfilePage() {
         <p className="text-base text-muted-foreground">
           Sign in to view and edit your account.
         </p>
-        <Button asChild>
-          <Link to="/login">Sign in</Link>
-        </Button>
+        <Button onClick={() => openAuth("login")}>Sign in</Button>
       </div>
     );
   }

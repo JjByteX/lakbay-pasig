@@ -161,6 +161,7 @@ To change which URL/key `dev:hosted` uses, edit `.env.hosted.local` directly. To
 | Staff | `staff.business@lakbay-demo.local` | Business review permission only |
 | Staff | `staff.events@lakbay-demo.local` | **Inactive** — use to test the forced-signout path |
 | Staff | `staff.new@lakbay-demo.local` | No permissions assigned — tests the empty "no sections" state |
+| Staff | `staff.landing@lakbay-demo.local` | Landing Page permission only |
 | Resident | `resident1@lakbay-demo.local` – `resident6@lakbay-demo.local` | Registered users, no business |
 | Vendor | `vendor1@lakbay-demo.local` – `vendor6@lakbay-demo.local` | Residents with a business (vendor mode) — mixed ages and verification states |
 

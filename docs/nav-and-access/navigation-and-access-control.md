@@ -54,6 +54,14 @@ Account info and preferences. Vendor accounts get business management tools here
 - Same access as Registered User
 - Profile includes business management: listing status, views/saves count, trail inclusion metrics
 
+## Landing Page and Auth Popup
+
+The existing Guest rules above (Home, Discover, Trails, Saved, Profile) are unchanged by this section — nothing here is a rewrite of them.
+
+A landing page at `/welcome` is a public entry surface for someone arriving cold (e.g. a shared link to a heritage site), separate from the tab structure above. It is not a gate: `/` still opens straight to the Home feed for Guest and Registered User alike, matching Home's "view only" access for Guests already listed above. The landing page sits outside the tabbed shell (no bottom nav, no shell header) and offers three actions: Get started, Log in, and Continue as Guest (a link to `/`).
+
+Get started and Log in both open a short, centered sign-in/sign-up popup, not a full-page navigation. This is now how every Guest gate in the app prompts for sign-in — tapping Save on a place or trail, Start on a Trail, or the Sign in row/button on Saved, Profile, or Settings all open the same popup in place, over whatever the Guest was already looking at, rather than navigating away to a separate `/login` page. `/login` and `/signup` remain real routes (for email confirmation links and direct bookmarks) but render the landing page underneath with the popup already open, rather than a dedicated page of their own.
+
 ## Guest Trail Preview Decision
 
 Trail preview, including stops, duration, and budget, is visible to Guests with no restriction. Sign-in is required only where state needs to be stored: starting a trail, tracking progress, saving a trail, or earning a credential. Reason: sign-in exists to store data, not to gate viewing, and gating a fully designed trail behind a login gives a visitor no reason to actually create an account.

@@ -114,6 +114,11 @@ values
   ('00000000-0000-0000-0000-000000000000', 'fed52550-3ee1-48da-b033-211f6245fbb6', 'authenticated', 'authenticated', 'staff.business@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '130 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', 'e283c6fb-4dcd-455f-a60c-e35add77a330', 'authenticated', 'authenticated', 'staff.events@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '95 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '9756f8d7-2a8e-4bd8-8669-0eac163096c6', 'authenticated', 'authenticated', 'staff.new@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '5 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  -- landing-hero-phases.md Phase 3.15: demo account holding only the new
+  -- manage_landing permission, so the Phase 3 gate ("a staff account with
+  -- only this permission ... sees no other admin section") has a real
+  -- login to exercise, same reasoning as staff.places/staff.business above.
+  ('00000000-0000-0000-0000-000000000000', 'b13f9b4b-6d0a-4f9a-8f5a-2f7cf3a1e6a1', 'authenticated', 'authenticated', 'staff.landing@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '40 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
 
   -- Registered Users, no business (6)
   ('00000000-0000-0000-0000-000000000000', 'ed8d4b57-6a77-418b-9db3-11c18e18fbca', 'authenticated', 'authenticated', 'resident1@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '300 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
@@ -206,6 +211,15 @@ update public.profiles set
   position = 'Incoming Hire',
   system_permission = array[]::text[]
 where id = '9756f8d7-2a8e-4bd8-8669-0eac163096c6';
+
+-- landing-hero-phases.md Phase 3.15: holds only manage_landing, nothing
+-- else. Landing Page must be the only content section this login sees.
+update public.profiles set
+  role = 'staff', staff_role = 'staff', active_status = 'active',
+  display_name = 'Demo Staff Landing', contact_number = '+639170000007',
+  position = 'Landing Page Content Editor',
+  system_permission = array['manage_landing']
+where id = 'b13f9b4b-6d0a-4f9a-8f5a-2f7cf3a1e6a1';
 
 -- 2.3 Residents (no business)
 update public.profiles set
@@ -686,5 +700,22 @@ insert into public.events (
    'a1e10004-0004-4c1a-9c1a-000000000004',
    'Walk-ins welcome; no pre-registration required for attendees. Exhibitor slots full.',
    'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days');
+
+-- -----------------------------------------------------------------------------
+-- 8. Landing slides — landing-hero-phases.md Phase 3.15.
+-- -----------------------------------------------------------------------------
+-- Per decision-log.md entry #17 ("real sourced content or a comment saying
+-- what it is"): these two point at the same real, already-uploaded Pasig
+-- City Museum and Immaculate Conception Cathedral photography used by
+-- section 4's place_photos above, under the landing/ prefix's sibling
+-- places/ path -- not new files, and not picsum.photos placeholders. No
+-- separate landing/ uploads exist yet, so the hero reuses CATO's own
+-- verified photography rather than inventing a placeholder image just to
+-- have two rows.
+insert into public.landing_slides (image_url, caption, sort_order, active) values
+  (':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/01.jpg',
+   'Discover the stories behind Pasig City Museum', 0, true),
+  (':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/01.jpg',
+   'Walk through centuries of Pasigueño heritage', 1, true);
 
 commit;
