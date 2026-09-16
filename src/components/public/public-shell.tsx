@@ -15,6 +15,7 @@ import {
   User as UserIcon,
   Settings as SettingsIcon,
   LogOut,
+  Home as HomeIcon,
 } from "lucide-react";
 import { BottomNav } from "./bottom-nav";
 import { PublicSidebar } from "./public-sidebar";
@@ -507,6 +508,17 @@ function AccountMenu() {
           <DropdownMenuItem onClick={() => navigate("/profile/settings")}>
             <SettingsIcon className="mr-2 h-4 w-4" />
             Settings
+          </DropdownMenuItem>
+          {/* Home Page: takes a signed-in user back to the landing page
+              (/welcome, landing.tsx) -- distinct from "Home" the bottom-
+              nav/sidebar tab (bottom-nav.tsx, public-sidebar.tsx's own
+              NAV_ITEMS), which is the "/" feed. Landing now has its own
+              top nav with a "Go to Dashboard" way back into the app
+              (landing.tsx's NavAction), so this is a real round trip, not
+              a dead end. */}
+          <DropdownMenuItem onClick={() => navigate("/welcome")}>
+            <HomeIcon className="mr-2 h-4 w-4" />
+            Home Page
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setSignOutOpen(true)}>

@@ -289,6 +289,17 @@ export function PublicSidebar({
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
+              {/* Home Page: same new item as public-shell.tsx's mobile
+                  AccountMenu -- takes a signed-in user back to the landing
+                  page (/welcome, landing.tsx), distinct from this sidebar's
+                  own "Home" nav tab above (NAV_ITEMS' "/" feed). Reuses the
+                  same Home icon already imported for that tab; the two
+                  never render side by side so there's no visual ambiguity
+                  between them. */}
+              <DropdownMenuItem onClick={() => navigate("/welcome")}>
+                <Home className="mr-2 h-4 w-4" />
+                Home Page
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
                 <LogOut className="mr-2 h-4 w-4" />
