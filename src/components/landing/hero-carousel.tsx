@@ -108,6 +108,14 @@ interface HeroSlideTileProps {
   slide: LandingSlide;
   slotOffset: number;
   containerWidthPx: number;
+  /** Landing redesign: right-panel variant fills its container edge to
+   *  edge (no rounded corners, no border, no solid caption bar -- a
+   *  gradient scrim instead, like the reference layout's photo panel),
+   *  matching HeroCarousel's own `fill` prop below. Off by default so
+   *  every other existing caller (there are none yet, but the shape is
+   *  kept optional rather than a breaking rename) keeps the original
+   *  bordered-card tile untouched. */
+  fill?: boolean;
 }
 
 // One tile in the filmstrip. Image filling the tile with object-cover,
@@ -116,10 +124,23 @@ interface HeroSlideTileProps {
 // retired, not inherited (see landing-hero-plan.md's Flagged Conflicts
 // #2), so this is a fresh, gradient-free legibility answer. No link, no
 // click target: these are not navigation, unlike AnnouncementTile.
-function HeroSlideTile({ slide, slotOffset, containerWidthPx }: Readonly<HeroSlideTileProps>) {
+//
+// Landing redesign: `fill` variant swaps the bordered/rounded card look
+// for an edge-to-edge tile (this component's right-panel use case, full
+// viewport height, no gutter around it) and swaps the solid bg-card
+// caption bar for a bottom gradient scrim, reusing category-photo-row.tsx's
+// own scrim recipe (rgb(7 46 87 / 0.85) fading to transparent, that file's
+// own citation of auth-layout.tsx's original scrim) rather than a new
+// gradient value -- a photo-over-dark-navy caption needs the same
+// legibility treatment this codebase already has one answer for.
+function HeroSlideTile({ slide, slotOffset, containerWidthPx, fill = false }: Readonly<HeroSlideTileProps>) {
   return (
     <motion.div
-      className="absolute top-0 h-full w-full overflow-hidden rounded-lg border border-border bg-card"
+      className={
+        fill
+          ? "absolute top-0 h-full w-full overflow-hidden"
+          : "absolute top-0 h-full w-full overflow-hidden rounded-lg border border-border bg-card"
+      }
       style={{
         width: tileWidthPx(containerWidthPx, TILES_IN_VIEWPORT, TILE_GAP_PX),
         left: 0,
@@ -127,9 +148,20 @@ function HeroSlideTile({ slide, slotOffset, containerWidthPx }: Readonly<HeroSli
       }}
     >
       <img src={slide.image_url} alt="" className="h-full w-full object-cover" />
-      <div className="absolute inset-x-0 bottom-0 bg-card px-4 py-3">
-        <p className="truncate text-sm font-medium text-foreground">{slide.caption}</p>
-      </div>
+      {fill ? (
+        <div
+          className="absolute inset-x-0 bottom-0 h-1/2"
+          style={{ background: "linear-gradient(to top, rgb(7 46 87 / 0.85), transparent)" }}
+        >
+          <p className="absolute inset-x-0 bottom-6 line-clamp-2 px-6 text-lg font-semibold text-primary-foreground">
+            {slide.caption}
+          </p>
+        </div>
+      ) : (
+        <div className="absolute inset-x-0 bottom-0 bg-card px-4 py-3">
+          <p className="truncate text-sm font-medium text-foreground">{slide.caption}</p>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -141,10 +173,12 @@ function HeroFilmstripInner({
   slides,
   offset,
   containerWidthPx,
+  fill,
 }: Readonly<{
   slides: LandingSlide[];
   offset: MotionValue<number>;
   containerWidthPx: number;
+  fill: boolean;
 }>) {
   const [liveOffset, setLiveOffset] = useState(() => offset.get());
   useMotionValueEvent(offset, "change", (v) => setLiveOffset(v));
@@ -157,7 +191,7 @@ function HeroFilmstripInner({
         const slot = wrappedSlot(i, count, liveOffset);
         if (Math.abs(slot) > SLOT_CULL_THRESHOLD) return null;
         return (
-          <HeroSlideTile key={slide.id} slide={slide} slotOffset={slot} containerWidthPx={containerWidthPx} />
+          <HeroSlideTile key={slide.id} slide={slide} slotOffset={slot} containerWidthPx={containerWidthPx} fill={fill} />
         );
       })}
     </>
@@ -168,7 +202,19 @@ function HeroFilmstripInner({
 // there is no fallback photo to reach for once auth-bg.png is gone (see
 // landing-hero-plan.md's Hero Carousel render rules), so an empty,
 // loading, or failed state renders this instead of inventing one.
-function HeroCarouselFallback() {
+//
+// Landing redesign: `fill` variant drops the rounded/bordered card shape
+// (h-full min-h-64 -> h-full, no border/radius) so a zero-slide or failed
+// fetch still occupies the entire right-panel height rather than
+// collapsing to a small centered box floating in the dark navy column.
+function HeroCarouselFallback({ fill = false }: Readonly<{ fill?: boolean }>) {
+  if (fill) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-secondary">
+        <p className="text-sm text-secondary-foreground/70">Pasig, up close.</p>
+      </div>
+    );
+  }
   return (
     <div className="flex h-full min-h-64 w-full items-center justify-center rounded-lg border border-border bg-card">
       <p className="text-sm text-muted-foreground">Pasig, up close.</p>
@@ -182,6 +228,15 @@ interface HeroCarouselProps {
   slides: LandingSlide[];
   loading?: boolean;
   error?: boolean;
+  /** Landing redesign: edge-to-edge right-panel variant -- fills its
+   *  container's full height, tiles carry no border/radius, caption
+   *  becomes a bottom gradient overlay instead of a solid bar, and the
+   *  progress dots float over the image (absolutely positioned) instead
+   *  of sitting in normal flow beneath it, since there is no space below
+   *  a full-height panel for them to sit in. Off by default, so this
+   *  stays additive to the original small-carousel shape rather than
+   *  replacing it. */
+  fill?: boolean;
 }
 
 /**
@@ -191,7 +246,7 @@ interface HeroCarouselProps {
  * animated fill, click-settle guard (kept even though tiles have no click
  * target, since dot clicks still jump the clock, per 4.7).
  */
-export function HeroCarousel({ slides, loading = false, error = false }: Readonly<HeroCarouselProps>) {
+export function HeroCarousel({ slides, loading = false, error = false, fill = false }: Readonly<HeroCarouselProps>) {
   const count = slides.length;
   const { tick, paused, setPaused, goToTick } = useSyncedCarousel();
   const index = count > 0 ? loopIndex(tick, count) : 0;
@@ -218,7 +273,56 @@ export function HeroCarousel({ slides, loading = false, error = false }: Readonl
 
   // Zero slides, loading, or fetch failed: flat fallback panel, per 4.8.
   if (loading || error || count === 0) {
-    return <HeroCarouselFallback />;
+    return <HeroCarouselFallback fill={fill} />;
+  }
+
+  if (fill) {
+    return (
+      <div
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        className="relative h-full w-full overflow-hidden"
+        ref={containerRef}
+      >
+        {containerWidthPx > 0 && (
+          <HeroFilmstripInner slides={slides} offset={track.offset} containerWidthPx={containerWidthPx} fill />
+        )}
+
+        {/* Dots float over the image (bottom-center, absolutely
+            positioned) since a full-height panel has no space below the
+            image for them to sit in normal flow, unlike the original
+            small carousel's dots-beneath-image layout. */}
+        {count > 1 && (
+          <div className="absolute inset-x-0 bottom-6 flex items-center justify-center gap-2">
+            {slides.map((slide, i) => (
+              <button
+                key={slide.id}
+                type="button"
+                onClick={() => handleDotClick(i)}
+                aria-label={`Show slide ${i + 1}`}
+                className="group/dot relative flex h-4 items-center"
+              >
+                <span
+                  className={`relative block h-2 overflow-hidden rounded-full bg-primary-foreground/30 transition-all duration-300 ${
+                    i === index ? "w-8" : "w-2 group-hover/dot:bg-primary-foreground/50"
+                  }`}
+                >
+                  {i === index && (
+                    <motion.span
+                      key={`${slide.id}-${index}`}
+                      className="absolute inset-y-0 left-0 rounded-full bg-primary-foreground"
+                      initial={{ width: "0%" }}
+                      animate={{ width: paused ? undefined : "100%" }}
+                      transition={{ duration: SLIDE_DURATION / 1000, ease: "linear" }}
+                    />
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -230,7 +334,7 @@ export function HeroCarousel({ slides, loading = false, error = false }: Readonl
         ref={containerRef}
       >
         {containerWidthPx > 0 && (
-          <HeroFilmstripInner slides={slides} offset={track.offset} containerWidthPx={containerWidthPx} />
+          <HeroFilmstripInner slides={slides} offset={track.offset} containerWidthPx={containerWidthPx} fill={false} />
         )}
       </div>
 
