@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   motion,
   useMotionValueEvent,
@@ -90,16 +90,41 @@ function useFilmstripTrack(index: number, length: number) {
 
 // Measures a container's live pixel width via ResizeObserver, same as
 // announcement-carousel.tsx's useContainerWidth.
+//
+// Landing redesign bug fix: the `fill` variant's right-panel container
+// sits inside a CSS Grid column whose own width only fully resolves once
+// the grid has completed layout against its sibling (the left column) --
+// a plain useEffect's first synchronous offsetWidth read can land before
+// that resolution finishes, capturing 0 and never being told about the
+// later, correct width, since ResizeObserver only reports *changes* from
+// whatever it saw first, and a value that is wrong from its very first
+// observation can end up looking unchanged to it. This is what produced
+// the fully-empty <div class="relative h-full w-full overflow-hidden">
+// with no <img> inside it at all: containerWidthPx > 0 (below, in
+// HeroCarousel) never passed, so HeroFilmstripInner never mounted, for
+// every image, including this file's original small-carousel usage
+// having never hit this failure mode (that container isn't a grid
+// column, so its width was always resolvable on first read). Switched
+// from useEffect to useLayoutEffect (reads after the DOM has been
+// mutated but before the browser paints, matching when Grid track sizing
+// is actually final) and added a resize-based re-measurement as a
+// standing safety net, so a first read of 0 -- if it ever still happens
+// on some browser/layout combination -- gets corrected on the very next
+// paint instead of getting stuck permanently.
 function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
   const [width, setWidth] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const update = () => setWidth(el.offsetWidth);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, [ref]);
   return width;
 }
