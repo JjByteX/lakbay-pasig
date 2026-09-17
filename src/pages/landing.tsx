@@ -320,14 +320,29 @@ export default function LandingPage() {
           ("keep what it is today... just make it occupy the whole space
           from top to bottom with no top bar") -- the header lives only in
           the left column (LandingHeader above), so the right panel is
-          never cut into by a bar. lg:grid-cols-2, both columns min-h-screen
-          so the split reads full-viewport-height on desktop; stacks to one
-          column on mobile (left content above, right carousel below) since
-          a true side-by-side split has no room to breathe at phone widths,
-          same mobile-stacks-vertically pattern the original two-column
-          hero already used. */}
-      <div className="flex flex-col lg:grid lg:grid-cols-2">
-        <div className="flex min-h-screen flex-col bg-secondary">
+          never cut into by a bar.
+
+          Height chain, fixed after the initial build shipped with a blank
+          right panel: the grid container itself now carries lg:min-h-screen
+          (a real, resolvable height), not just its left child -- CSS
+          Grid's stretch only has something to stretch into once the
+          container's own row height is set. The right column then uses
+          lg:h-full (resolves against that definite parent height) instead
+          of lg:h-auto (had nothing to measure, since HeroCarousel's `fill`
+          tiles are all position:absolute and contribute zero intrinsic
+          height to an h-auto box) -- h-auto was collapsing this column to
+          0px, rendering neither the carousel nor its fallback panel, even
+          though both were mounted and receiving real data. Left column
+          drops to lg:min-h-0 so it no longer double-forces a second,
+          possibly-conflicting min-height once the grid container already
+          guarantees the row's height itself.
+
+          lg:grid-cols-2, mobile stacks to one column (left content above,
+          right carousel below) since a true side-by-side split has no
+          room to breathe at phone widths, same mobile-stacks-vertically
+          pattern the original two-column hero already used. */}
+      <div className="flex flex-col lg:grid lg:min-h-screen lg:grid-cols-2">
+        <div className="flex min-h-screen flex-col bg-secondary lg:min-h-0">
           <LandingHeader />
 
           <div className="flex flex-1 flex-col justify-center gap-8 px-6 py-16 lg:px-12">
@@ -355,7 +370,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="h-80 w-full sm:h-96 lg:h-auto">
+        <div className="h-80 w-full sm:h-96 lg:h-full">
           <HeroCarousel slides={slides} loading={loading} error={error} fill />
         </div>
       </div>
