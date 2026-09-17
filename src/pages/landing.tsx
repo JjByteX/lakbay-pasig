@@ -322,27 +322,40 @@ export default function LandingPage() {
           the left column (LandingHeader above), so the right panel is
           never cut into by a bar.
 
-          Height chain, fixed after the initial build shipped with a blank
-          right panel: the grid container itself now carries lg:min-h-screen
-          (a real, resolvable height), not just its left child -- CSS
-          Grid's stretch only has something to stretch into once the
-          container's own row height is set. The right column then uses
-          lg:h-full (resolves against that definite parent height) instead
-          of lg:h-auto (had nothing to measure, since HeroCarousel's `fill`
-          tiles are all position:absolute and contribute zero intrinsic
-          height to an h-auto box) -- h-auto was collapsing this column to
-          0px, rendering neither the carousel nor its fallback panel, even
-          though both were mounted and receiving real data. Left column
-          drops to lg:min-h-0 so it no longer double-forces a second,
-          possibly-conflicting min-height once the grid container already
-          guarantees the row's height itself.
+          Height chain, fixed twice now: the first pass used CSS Grid with
+          the right column on lg:h-auto, which collapsed to 0px (h-auto had
+          nothing to measure, since HeroCarousel's `fill` tiles are all
+          position:absolute and contribute zero intrinsic height). A second
+          pass kept Grid but added lg:min-h-screen to the grid container
+          plus lg:h-full on the column, expecting stretch to resolve it --
+          this still left containerWidthPx stuck at 0 in production
+          (confirmed via a temporary on-screen debug readout), meaning
+          Grid's own stretch-then-report timing was still landing before
+          ResizeObserver's first read on some real-world paint path, not
+          just a one-off local quirk.
 
-          lg:grid-cols-2, mobile stacks to one column (left content above,
-          right carousel below) since a true side-by-side split has no
-          room to breathe at phone widths, same mobile-stacks-vertically
-          pattern the original two-column hero already used. */}
-      <div className="flex flex-col lg:grid lg:min-h-screen lg:grid-cols-2">
-        <div className="flex min-h-screen flex-col bg-secondary lg:min-h-0">
+          Root cause, found by diffing against qula's own work.tsx (the
+          file this carousel's spring/filmstrip math was ported from in
+          the first place): that carousel's container is a PLAIN fixed
+          pixel height (h-[486px]), never CSS Grid stretch, never h-full/
+          h-auto -- offsetWidth reads correctly on the very first
+          synchronous pass specifically because the element's height is
+          concretely resolvable with no dependency on a sibling or a grid
+          track at all. Grid stretch is extra indirection this component
+          never needed. Fixed the same way here: plain flex row
+          (lg:flex-row, no grid), both columns given lg:min-h-screen
+          directly rather than one column's height being derived from the
+          other via stretch -- every element's height now resolves from a
+          concrete viewport unit on its own, matching qula's own
+          reasoning exactly, not inherited through layout algorithm
+          indirection.
+
+          Mobile stacks to one column (left content above, right carousel
+          below) since a true side-by-side split has no room to breathe at
+          phone widths, same mobile-stacks-vertically pattern the original
+          two-column hero already used. */}
+      <div className="flex flex-col lg:flex-row">
+        <div className="flex min-h-screen flex-col bg-secondary lg:w-1/2">
           <LandingHeader />
 
           <div className="flex flex-1 flex-col justify-center gap-8 px-6 py-16 lg:px-12">
@@ -370,7 +383,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="h-80 w-full sm:h-96 lg:h-full">
+        <div className="h-80 w-full sm:h-96 lg:h-screen lg:w-1/2">
           <HeroCarousel slides={slides} loading={loading} error={error} fill />
         </div>
       </div>

@@ -91,26 +91,21 @@ function useFilmstripTrack(index: number, length: number) {
 // Measures a container's live pixel width via ResizeObserver, same as
 // announcement-carousel.tsx's useContainerWidth.
 //
-// Landing redesign bug fix: the `fill` variant's right-panel container
-// sits inside a CSS Grid column whose own width only fully resolves once
-// the grid has completed layout against its sibling (the left column) --
-// a plain useEffect's first synchronous offsetWidth read can land before
-// that resolution finishes, capturing 0 and never being told about the
-// later, correct width, since ResizeObserver only reports *changes* from
-// whatever it saw first, and a value that is wrong from its very first
-// observation can end up looking unchanged to it. This is what produced
-// the fully-empty <div class="relative h-full w-full overflow-hidden">
-// with no <img> inside it at all: containerWidthPx > 0 (below, in
-// HeroCarousel) never passed, so HeroFilmstripInner never mounted, for
-// every image, including this file's original small-carousel usage
-// having never hit this failure mode (that container isn't a grid
-// column, so its width was always resolvable on first read). Switched
-// from useEffect to useLayoutEffect (reads after the DOM has been
-// mutated but before the browser paints, matching when Grid track sizing
-// is actually final) and added a resize-based re-measurement as a
-// standing safety net, so a first read of 0 -- if it ever still happens
-// on some browser/layout combination -- gets corrected on the very next
-// paint instead of getting stuck permanently.
+// Landing redesign note: this hook was briefly suspected as the cause of
+// the fill variant's right panel staying permanently empty (no <img> ever
+// mounted, confirmed via DevTools -- containerWidthPx > 0, below, never
+// passed). Switching this hook from useEffect to useLayoutEffect (kept
+// here since it's a real, if minor, improvement) did not actually fix it
+// in production. The real cause was landing.tsx's own layout: the right
+// column's height came from CSS Grid stretch against a sibling rather
+// than a concrete value of its own, and stretch's resolution timing
+// wasn't reliably ahead of this hook's first read on every real-world
+// paint path. Diffed against qula's work.tsx (the file this carousel's
+// filmstrip math was ported from), whose own working carousel never uses
+// Grid stretch at all -- a plain fixed pixel height instead. landing.tsx
+// was changed to match that pattern (plain flex row, concrete heights on
+// both columns) rather than patching this hook further; this hook itself
+// was never the bug.
 function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
