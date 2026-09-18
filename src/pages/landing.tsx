@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail, Phone, MapPin, Facebook, ExternalLink } from "lucide-react";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { Button } from "@/components/ui/button";
+import { fetchActiveSlides, type LandingSlide } from "@/lib/landing-slides";
 import { fetchHomeShowcase } from "@/lib/home-query";
 import type { CategoryRow } from "@/lib/home-types";
 import {
@@ -24,10 +25,12 @@ import { useAuth } from "@/lib/auth-context";
  * Landing redesign (split hero), per direct reference image + spec:
  * the hero is a two-column split, left column dark (bg-secondary,
  * the brand navy token, not a new hardcoded color) carrying the nav,
- * headline, and CTAs; right column is a plain static flat panel, full
- * viewport height, no image, no carousel -- the earlier HeroCarousel /
- * landing_slides setup (hero-carousel.tsx) was removed for simplicity.
- * The header sits inside the left column only (sticky, translucent,
+ * headline, and CTAs; right column shows a single static photo (the
+ * first active row from landing_slides) full viewport height -- the
+ * animated HeroCarousel (hero-carousel.tsx, spring/filmstrip math,
+ * autoplay, dots) was simplified away, but the admin-managed
+ * landing_slides table and its admin screen are unchanged. The header
+ * sits inside the left column only (sticky, translucent,
  * backdrop-blur -- "like Apple," per direct answer), it does not span
  * both columns the way the previous single-
  * column layout's header did.
@@ -187,6 +190,29 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { openAuth } = useAuthModal();
 
+  // Hero image, simplified: no carousel, no animation, no dots -- just the
+  // first active slide from the same landing_slides admin table
+  // (fetchActiveSlides, sorted by sort_order) as a single static photo.
+  // Admin management of slides (admin-landing.tsx, slide-form-dialog.tsx)
+  // is unchanged; this page just no longer cycles through them.
+  const [heroSlide, setHeroSlide] = useState<LandingSlide | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const active = await fetchActiveSlides();
+        if (!cancelled) setHeroSlide(active[0] ?? null);
+      } catch {
+        if (!cancelled) setHeroSlide(null);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Features section: same fetchHomeShowcase call home.tsx's own effect
   // (Phase 5.1) makes, kept as its own independent effect here for the
   // same reason home.tsx keeps its Announcements and Showcase effects
@@ -286,12 +312,13 @@ export default function LandingPage() {
     <div id="top" className="flex min-h-screen flex-col">
       {/* Hero: two-column split. Left column is the dark navy panel
           (bg-secondary, the brand token) holding the header, headline,
-          and CTAs. Right column is now a plain static flat panel (no
-          image, no carousel, no data fetch) -- the hero carousel and its
-          landing_slides data source were removed for simplicity; this
-          panel is just a flat surface with a short line of text,
-          full-height on desktop, matching the original carousel's
-          footprint so the rest of the layout is unaffected.
+          and CTAs. Right column is a single static photo -- the animated
+          carousel (hero-carousel.tsx, spring/filmstrip math) was removed
+          for simplicity; this just shows the first active row from the
+          same landing_slides admin table (fetchActiveSlides), no
+          autoplay, no dots, no sliding. Admin management of slides is
+          unchanged. Falls back to a flat panel with a short line of text
+          if there are no active slides yet.
 
           Mobile stacks to one column (left content above, right panel
           below), same mobile-stacks-vertically pattern the original
@@ -325,8 +352,18 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="flex h-80 w-full items-center justify-center bg-secondary-foreground/5 sm:h-96 lg:h-screen lg:w-1/2">
-          <p className="text-sm text-secondary-foreground/50">Pasig, up close.</p>
+        <div className="relative h-80 w-full overflow-hidden bg-secondary-foreground/5 sm:h-96 lg:h-screen lg:w-1/2">
+          {heroSlide ? (
+            <img
+              src={heroSlide.image_url}
+              alt={heroSlide.caption}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <p className="text-sm text-secondary-foreground/50">Pasig, up close.</p>
+            </div>
+          )}
         </div>
       </div>
 

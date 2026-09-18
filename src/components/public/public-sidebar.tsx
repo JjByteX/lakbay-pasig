@@ -213,12 +213,22 @@ export function PublicSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        {/* Guest (no session): a single Sign in row, same "hide what
+        {/* Guest (no session): Home Page above Sign in, same "hide what
             doesn't apply rather than show it disabled" rule public-shell.
             tsx's mobile AccountMenu already follows for its own guest
-            branch. */}
+            branch. Home Page here is the same /welcome destination as the
+            signed-in profile menu's own Home Page item below -- a guest
+            landed inside the app (e.g. mid auth flow) gets the same way
+            back to the landing page a signed-in resident already has,
+            rather than only being able to open the sign-in popup. */}
         {!session ? (
           <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => navigate("/welcome")} tooltip="Home Page">
+                <Home className="h-4 w-4 shrink-0" />
+                <span>Home Page</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={() => openAuth("login")} tooltip="Sign in">
                 <UserIcon className="h-4 w-4 shrink-0" />

@@ -1,5 +1,5 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Settings as SettingsIcon, LogOut } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Settings as SettingsIcon, LogOut, Home, ChevronsUpDown } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -15,9 +15,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
-import { Button } from "@/components/ui/button";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 
 // Sidebar Sections per admin-panel-spec.md. Dashboard always visible.
@@ -79,10 +85,11 @@ const NAV_ITEMS = [
 
 export function AdminSidebar() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const { pathname: currentPath } = useLocation();
   const isAdmin = profile?.staff_role === "admin";
 
-  // Log-out confirmation: the footer icon button no longer calls
+  // Log-out confirmation: the footer's Sign out menu item doesn't call
   // signOut directly, it opens SignOutDialog (owns the actual signOut()
   // call), same shared component and pattern public-shell.tsx's
   // AccountMenu and profile.tsx's Sign out button use. See
@@ -171,43 +178,75 @@ export function AdminSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center">
-          {/* Phase 6.5/6.6/6.8: AvatarImage renders profile.profile_picture
-              when set, same AvatarFallback initial as before when it's
-              null (a signed-in staff member with no uploaded picture) --
-              Radix's Avatar already falls back automatically on a missing/
-              broken src, no extra loading branch needed here. Size now
-              reads from avatar-storage.ts's shared AVATAR_SIZE.sm instead
-              of a locally hardcoded h-8 w-8, per 6.8's one-shared-scale
-              requirement. */}
-          <Avatar className={cn(AVATAR_SIZE.sm, "shrink-0")}>
-            {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
-            <AvatarFallback>{initial}</AvatarFallback>
-          </Avatar>
-          <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-            {/* Bumped one step up the type scale, matching the header's
-                CATO Admin label above (text-sm -> text-base, text-xs ->
-                text-sm), keeping the same relative primary/secondary
-                two-size relationship this block already had, just
-                shifted up one rung, per the same Consistency Rules
-                reasoning as the header. */}
-            <span className="truncate text-base font-semibold text-foreground">
-              {profile?.display_name ?? "Staff"}
-            </span>
-            <span className="truncate text-sm text-muted-foreground">
-              {profile?.position ?? (isAdmin ? "Admin" : "Staff")}
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 group-data-[collapsible=icon]:hidden"
-            onClick={() => setSignOutOpen(true)}
-          >
-            <LogOut />
-            <span className="sr-only">Log out</span>
-          </Button>
-        </div>
+        {/* Profile menu: same Amkor-style pattern as public-sidebar.tsx's
+            own footer -- the account row itself is the trigger (avatar +
+            name/position, same content this row always showed), and
+            clicking it opens a floating menu instead of the row carrying
+            a separate always-visible log-out icon button beside it. Radix's
+            DropdownMenu, same primitive public-sidebar.tsx and public-
+            shell.tsx's mobile AccountMenu already use for this exact job,
+            reused here rather than a third bespoke popup.
+            Menu items: Home Page (takes staff to the public landing page,
+            /welcome, same destination and Home icon as the resident-side
+            menus) then Sign out. No Profile/Settings items here unlike
+            public-sidebar.tsx's version -- admin has no separate account
+            page, and Settings already has its own top-level nav entry
+            above (NAV_ITEMS' "/admin/settings" row), so repeating it in
+            this menu would be the same destination reachable two ways for
+            no reason. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              tooltip={profile?.display_name ?? "Account"}
+              className="h-auto py-1"
+              aria-label="Account menu"
+            >
+              {/* Phase 6.5/6.6/6.8: AvatarImage renders profile.profile_picture
+                  when set, same AvatarFallback initial as before when it's
+                  null (a signed-in staff member with no uploaded picture) --
+                  Radix's Avatar already falls back automatically on a missing/
+                  broken src, no extra loading branch needed here. Size reads
+                  from avatar-storage.ts's shared AVATAR_SIZE.sm, per 6.8's
+                  one-shared-scale requirement. */}
+              <Avatar className={cn(AVATAR_SIZE.sm, "shrink-0")}>
+                {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
+                <AvatarFallback>{initial}</AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
+                {/* Bumped one step up the type scale, matching the header's
+                    CATO Admin label above (text-sm -> text-base, text-xs ->
+                    text-sm), keeping the same relative primary/secondary
+                    two-size relationship this block already had, just
+                    shifted up one rung, per the same Consistency Rules
+                    reasoning as the header. */}
+                <span className="truncate text-base font-semibold text-foreground">
+                  {profile?.display_name ?? "Staff"}
+                </span>
+                <span className="truncate text-sm text-muted-foreground">
+                  {profile?.position ?? (isAdmin ? "Admin" : "Staff")}
+                </span>
+              </div>
+              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          {/* side="top"/align="start": same bug-fix reasoning as public-
+              sidebar.tsx's own footer menu -- this is the bottom-of-rail
+              row, so the menu opens upward, hugging the trigger's left
+              edge, rather than side="right" floating away from a narrow
+              collapsed rail. */}
+          <DropdownMenuContent side="top" align="start" sideOffset={8}>
+            <DropdownMenuItem onClick={() => navigate("/welcome")}>
+              <Home className="mr-2 h-4 w-4" />
+              Home Page
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
 
       <SignOutDialog open={signOutOpen} onOpenChange={setSignOutOpen} />
