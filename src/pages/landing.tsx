@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail, Phone, MapPin, Facebook, ExternalLink } from "lucide-react";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { Button } from "@/components/ui/button";
-import { HeroCarousel } from "@/components/landing/hero-carousel";
-import { fetchActiveSlides, type LandingSlide } from "@/lib/landing-slides";
 import { fetchHomeShowcase } from "@/lib/home-query";
 import type { CategoryRow } from "@/lib/home-types";
 import {
@@ -24,16 +22,14 @@ import { useAuth } from "@/lib/auth-context";
  * reasoning admin-landing.tsx never borrows AdminDataTable for 2 rows.
  *
  * Landing redesign (split hero), per direct reference image + spec:
- * the hero is now a two-column split, left column dark (bg-secondary,
+ * the hero is a two-column split, left column dark (bg-secondary,
  * the brand navy token, not a new hardcoded color) carrying the nav,
- * headline, and CTAs; right column is HeroCarousel's own new `fill`
- * variant (hero-carousel.tsx), running the full viewport height with no
- * bar cutting into it -- matching the reference's photo/video panel
- * exactly, "keep what it is today" per direct answer (same slides query,
- * same admin-managed content, just laid out full-bleed instead of a
- * small bordered card). The header sits inside the left column only
- * (sticky, translucent, backdrop-blur -- "like Apple," per direct
- * answer), it does not span both columns the way the previous single-
+ * headline, and CTAs; right column is a plain static flat panel, full
+ * viewport height, no image, no carousel -- the earlier HeroCarousel /
+ * landing_slides setup (hero-carousel.tsx) was removed for simplicity.
+ * The header sits inside the left column only (sticky, translucent,
+ * backdrop-blur -- "like Apple," per direct answer), it does not span
+ * both columns the way the previous single-
  * column layout's header did.
  *
  * Hero copy shortened post-launch (not in the original landing-hero-
@@ -191,30 +187,6 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const { openAuth } = useAuthModal();
 
-  const [slides, setSlides] = useState<LandingSlide[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError(false);
-      try {
-        const active = await fetchActiveSlides();
-        if (!cancelled) setSlides(active);
-      } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Features section: same fetchHomeShowcase call home.tsx's own effect
   // (Phase 5.1) makes, kept as its own independent effect here for the
   // same reason home.tsx keeps its Announcements and Showcase effects
@@ -312,47 +284,17 @@ export default function LandingPage() {
 
   return (
     <div id="top" className="flex min-h-screen flex-col">
-      {/* Hero: two-column split per the reference image. Left column is
-          the dark navy panel (bg-secondary, the brand token, matches the
-          reference's dark left panel color without inventing a new hex
-          value) holding the header, headline, and CTAs; right column is
-          the full-height HeroCarousel "fill" variant, per direct answer
-          ("keep what it is today... just make it occupy the whole space
-          from top to bottom with no top bar") -- the header lives only in
-          the left column (LandingHeader above), so the right panel is
-          never cut into by a bar.
+      {/* Hero: two-column split. Left column is the dark navy panel
+          (bg-secondary, the brand token) holding the header, headline,
+          and CTAs. Right column is now a plain static flat panel (no
+          image, no carousel, no data fetch) -- the hero carousel and its
+          landing_slides data source were removed for simplicity; this
+          panel is just a flat surface with a short line of text,
+          full-height on desktop, matching the original carousel's
+          footprint so the rest of the layout is unaffected.
 
-          Height chain, fixed twice now: the first pass used CSS Grid with
-          the right column on lg:h-auto, which collapsed to 0px (h-auto had
-          nothing to measure, since HeroCarousel's `fill` tiles are all
-          position:absolute and contribute zero intrinsic height). A second
-          pass kept Grid but added lg:min-h-screen to the grid container
-          plus lg:h-full on the column, expecting stretch to resolve it --
-          this still left containerWidthPx stuck at 0 in production
-          (confirmed via a temporary on-screen debug readout), meaning
-          Grid's own stretch-then-report timing was still landing before
-          ResizeObserver's first read on some real-world paint path, not
-          just a one-off local quirk.
-
-          Root cause, found by diffing against qula's own work.tsx (the
-          file this carousel's spring/filmstrip math was ported from in
-          the first place): that carousel's container is a PLAIN fixed
-          pixel height (h-[486px]), never CSS Grid stretch, never h-full/
-          h-auto -- offsetWidth reads correctly on the very first
-          synchronous pass specifically because the element's height is
-          concretely resolvable with no dependency on a sibling or a grid
-          track at all. Grid stretch is extra indirection this component
-          never needed. Fixed the same way here: plain flex row
-          (lg:flex-row, no grid), both columns given lg:min-h-screen
-          directly rather than one column's height being derived from the
-          other via stretch -- every element's height now resolves from a
-          concrete viewport unit on its own, matching qula's own
-          reasoning exactly, not inherited through layout algorithm
-          indirection.
-
-          Mobile stacks to one column (left content above, right carousel
-          below) since a true side-by-side split has no room to breathe at
-          phone widths, same mobile-stacks-vertically pattern the original
+          Mobile stacks to one column (left content above, right panel
+          below), same mobile-stacks-vertically pattern the original
           two-column hero already used. */}
       <div className="flex flex-col lg:flex-row">
         <div className="flex min-h-screen flex-col bg-secondary lg:w-1/2">
@@ -383,8 +325,8 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="h-80 w-full sm:h-96 lg:h-screen lg:w-1/2">
-          <HeroCarousel slides={slides} loading={loading} error={error} fill />
+        <div className="flex h-80 w-full items-center justify-center bg-secondary-foreground/5 sm:h-96 lg:h-screen lg:w-1/2">
+          <p className="text-sm text-secondary-foreground/50">Pasig, up close.</p>
         </div>
       </div>
 
