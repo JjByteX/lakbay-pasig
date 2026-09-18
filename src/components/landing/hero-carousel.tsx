@@ -304,9 +304,21 @@ export function HeroCarousel({ slides, loading = false, error = false, fill = fa
         className="relative h-full w-full overflow-hidden"
         ref={containerRef}
       >
-        {containerWidthPx > 0 && (
-          <HeroFilmstripInner slides={slides} offset={track.offset} containerWidthPx={containerWidthPx} fill />
-        )}
+        {/* Tiles now always mount once slides exist, rather than waiting
+            for containerWidthPx > 0 first. That gate was meant to avoid
+            drawing tiles at a wrong (zero) width before the first real
+            measurement landed, but in production it was outliving its
+            purpose: the dots (which don't depend on containerWidthPx)
+            were confirmed rendering while the tiles stayed permanently
+            unmounted, meaning the gate itself -- not slides/loading/error,
+            all confirmed fine -- was the dead end, on a timing path this
+            file's own useLayoutEffect/resize-listener fix still didn't
+            reach. A tile with containerWidthPx=0 briefly renders at 0
+            width for at most one frame (tileWidthPx/tileOffsetPx both
+            degrade to 0 or a small number, never NaN or a crash) and then
+            self-corrects the instant useContainerWidth's own effect fires
+            -- a one-frame flash beats a permanently empty panel. */}
+        <HeroFilmstripInner slides={slides} offset={track.offset} containerWidthPx={containerWidthPx} fill />
 
         {/* Dots float over the image (bottom-center, absolutely
             positioned) since a full-height panel has no space below the
