@@ -12,6 +12,7 @@ import {
   type CategoryPhotoRowItem,
 } from "@/components/public/category-photo-row";
 import { HeroCarousel } from "@/components/public/hero-carousel";
+import { HeroLinesBackground } from "@/components/public/hero-lines-background";
 import { useAuthModal } from "@/lib/auth-modal";
 import { usePageTitle } from "@/lib/page-title";
 import { useAuth } from "@/lib/auth-context";
@@ -24,21 +25,26 @@ import { useAuth } from "@/lib/auth-context";
  * reasoning admin-landing.tsx never borrows AdminDataTable for 2 rows.
  *
  * Landing redesign (split hero), per direct reference image + spec:
- * the hero is a two-column split, left column dark (bg-secondary,
- * the brand navy token, not a new hardcoded color) carrying the nav,
- * headline, and CTAs; right column is the animated HeroCarousel
- * (components/public/hero-carousel.tsx), full viewport height,
- * cycling every active row from landing_slides (fetchActiveSlides,
- * sort_order) with autoplay, spring/filmstrip drag, and progress dots
- * -- ported from Qula's src/components/sections/work.tsx Portal
- * filmstrip carousel per direct instruction, reusing the same
+ * the hero is a two-column split, left column carrying the headline and
+ * CTAs over HeroLinesBackground (white panel + the supplied animated
+ * line artwork, recolored blue -- see that component's own top comment;
+ * originally this column was flat bg-secondary navy, changed per direct
+ * instruction: "I don't like the color blue [as a panel fill]. I like
+ * white. Use this background and make the lines blue"); right column is
+ * the animated HeroCarousel (components/public/hero-carousel.tsx), full
+ * viewport height, cycling every active row from landing_slides
+ * (fetchActiveSlides, sort_order) with autoplay, spring/filmstrip drag,
+ * and progress dots -- ported from Qula's src/components/sections/work.tsx
+ * Portal filmstrip carousel per direct instruction, reusing the same
  * lib/filmstrip.ts wraparound math announcement-carousel.tsx's own
  * port already extracted. The admin-managed landing_slides table and
  * its admin screen are unchanged; this only changes how the public
- * hero displays them. The header sits inside the left column only
- * (sticky, translucent, backdrop-blur -- "like Apple," per direct
- * answer), it does not span both columns the way the previous single-
- * column layout's header did.
+ * hero displays them. The header (LandingHeader, below) now spans the
+ * FULL page width and is fixed for the entire page's scroll range, not
+ * scoped to the left column -- per direct instruction, it was "just
+ * half" and needed to "still appear down to the bottom part of the
+ * page" while scrolling; see LandingHeader's own top comment for why
+ * `sticky` inside the left column wasn't enough for that second part.
  *
  * Hero copy shortened post-launch (not in the original landing-hero-
  * plan.md): the original headline carried project-brief.md's full "The
@@ -115,18 +121,15 @@ function NavAction() {
   const { openAuth } = useAuthModal();
   const navigate = useNavigate();
 
-  // variant="secondary" is bg-secondary, the same navy as this header's
-  // own background (LandingHeader below) -- invisible against it. The
-  // reference image's own pill button is light against the dark panel,
-  // so this uses a plain light pill (bg-card via the existing "outline"
-  // variant, no border needed here since the header's own translucent
-  // bg already provides the separation) rather than a new button
-  // variant just for this one dark-panel case.
-  const pillClass = "border-0 bg-card text-foreground hover:bg-card/90";
-
+  // The header itself is now bg-card (light), full page width, per this
+  // file's own top comment on LandingHeader -- no longer the dark navy
+  // panel this button was originally tuned against. variant="secondary"
+  // (bg-secondary navy, secondary-foreground text) now supplies the
+  // needed contrast directly, so this no longer needs its own pill
+  // override or the "outline" variant's border-stripping.
   if (!session) {
     return (
-      <Button onClick={() => openAuth("login")} variant="outline" size="sm" className={pillClass}>
+      <Button onClick={() => openAuth("login")} variant="secondary" size="sm">
         Sign in
       </Button>
     );
@@ -136,24 +139,38 @@ function NavAction() {
   const dashboardPath = isStaff ? "/admin" : "/";
 
   return (
-    <Button onClick={() => navigate(dashboardPath)} variant="outline" size="sm" className={pillClass}>
+    <Button onClick={() => navigate(dashboardPath)} variant="secondary" size="sm">
       Go to Dashboard
     </Button>
   );
 }
 
-// Header, now scoped to the left (dark) column only, not the full page
-// width -- matches the reference image's nav sitting inside the dark
-// panel, not spanning above both columns. Sticky + translucent +
-// backdrop-blur, "like Apple," per direct answer: fixed to the top of
-// its own column while the column's content scrolls beneath it, same
-// sticky top-0 z-10 convention admin-data-table.tsx's own sticky header
-// already establishes in this codebase, extended here with a translucent
-// bg + backdrop-blur rather than admin-data-table's opaque bg-card, since
-// that file's header has no dark hero image behind it to blur.
+// Header, now full page width and fixed for the ENTIRE page, not scoped
+// to the left (hero) column and not merely sticky-within-that-column.
+// Direct instruction: the bar was "just half" (it stopped at the hero's
+// lg:w-1/2 split) and needed to "still appear down to the bottom part of
+// the page" while scrolling -- a plain `sticky` header inside the left
+// column only tracks that column, and that column's own min-h-screen
+// height means the header visually disappears once the page scrolls past
+// the hero into About/Features/Contact. `fixed inset-x-0 top-0` pins it
+// to the viewport itself (spanning full width, both former columns) for
+// the page's entire scroll range, the same "persistent element never
+// resizes or disappears on navigation" rule ux-ui-guidelines.md's Layout
+// Pattern Rules states for header/nav/footer, applied here to scroll
+// position rather than route navigation. z-50 keeps it above the hero's
+// HeroLinesBackground layer and every section below. Since a fixed
+// element is pulled out of flow, the hero wrapper below adds matching
+// top padding (pt-16, this header's own h-16) so no content starts
+// underneath it.
+//
+// Still translucent + backdrop-blur, "like Apple," per the original
+// direct answer -- now over bg-card (this page's own light surfaces)
+// rather than bg-secondary/70, since the header spans past the dark hero
+// panel into the light About/Features/Contact sections beneath it and a
+// navy-tinted translucency would mismatch those.
 function LandingHeader() {
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-secondary/70 px-6 py-4 backdrop-blur-md lg:px-12">
+    <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-md lg:px-12">
       <Link to="/welcome" className="flex items-center gap-2">
         <img src={logo} alt="Lakbay Pasig" className="h-8 w-8" />
       </Link>
@@ -161,25 +178,25 @@ function LandingHeader() {
       <nav className="flex items-center gap-6">
         <a
           href="#top"
-          className="hidden text-sm font-medium text-secondary-foreground/80 hover:text-secondary-foreground sm:inline"
+          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
         >
           Home
         </a>
         <a
           href="#about"
-          className="hidden text-sm font-medium text-secondary-foreground/80 hover:text-secondary-foreground sm:inline"
+          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
         >
           About
         </a>
         <a
           href="#features"
-          className="hidden text-sm font-medium text-secondary-foreground/80 hover:text-secondary-foreground sm:inline"
+          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
         >
           Features
         </a>
         <a
           href="#contact"
-          className="hidden text-sm font-medium text-secondary-foreground/80 hover:text-secondary-foreground sm:inline"
+          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
         >
           Contact
         </a>
@@ -316,12 +333,21 @@ export default function LandingPage() {
 
   return (
     <div id="top" className="flex min-h-screen flex-col">
-      {/* Hero: two-column split. Left column is the dark navy panel
-          (bg-secondary, the brand token) holding the header, headline,
-          and CTAs. Right column is HeroCarousel, cycling every active row
-          from the same landing_slides admin table (fetchActiveSlides) --
-          autoplay, spring/filmstrip drag, and progress dots, ported from
-          Qula's work.tsx Portal carousel. Admin management of slides is
+      {/* Header now renders once here, fixed to the full viewport width
+          for the whole page (see LandingHeader's own top comment) --
+          pt-16 below matches its h-16 so the hero content underneath
+          doesn't start hidden beneath the fixed bar. */}
+      <LandingHeader />
+
+      {/* Hero: two-column split. Left column carries the headline and
+          CTAs over HeroLinesBackground -- direct instruction: white
+          panel (not the previous bg-secondary navy) with the supplied
+          animated line artwork recolored blue (HeroLinesBackground's own
+          top comment has the full detail on that recoloring). Right
+          column is HeroCarousel, cycling every active row from the same
+          landing_slides admin table (fetchActiveSlides) -- autoplay,
+          spring/filmstrip drag, and progress dots, ported from Qula's
+          work.tsx Portal carousel. Admin management of slides is
           unchanged. HeroCarousel itself falls back to a flat panel with a
           short line of text when there are no active slides yet, and to
           a plain static photo (no carousel chrome) when there's exactly
@@ -330,28 +356,28 @@ export default function LandingPage() {
           Mobile stacks to one column (left content above, right panel
           below), same mobile-stacks-vertically pattern the original
           two-column hero already used. */}
-      <div className="flex flex-col lg:flex-row">
-        <div className="flex min-h-screen flex-col bg-secondary lg:w-1/2">
-          <LandingHeader />
+      <div className="flex flex-col pt-16 lg:flex-row">
+        <div className="relative flex min-h-screen flex-col overflow-hidden lg:w-1/2">
+          <HeroLinesBackground />
 
-          <div className="flex flex-1 flex-col justify-center gap-8 px-6 py-16 lg:px-12">
-            <div className="flex flex-col gap-4">
-              <h1 className="text-4xl font-semibold text-secondary-foreground lg:text-5xl">
-                Pasig heritage, verified and guided.
+          <div className="relative flex flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center lg:px-12">
+            <div className="flex flex-col items-center gap-4">
+              <h1 className="text-4xl font-semibold text-foreground lg:text-5xl">
+                Lakbay Pasig.
               </h1>
-              <p className="max-w-md text-base text-secondary-foreground/70">
-                A Tourism Office backed platform for heritage sites, businesses, and guided routes across
-                Pasig -- every listing verified by CATO before it reaches you.
+              <p className="max-w-md text-base text-muted-foreground">
+                A thousand small moments in this city worth living for. A sunset by the river, a
+                meal at your new favorite spot, a place that means more once you know its story.
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col items-center gap-3 sm:flex-row">
               <Button onClick={() => openAuth("signup")} size="lg" className="flex-1 sm:flex-none">
                 Get started
               </Button>
               <Link
                 to="/"
-                className="flex items-center justify-center text-center text-sm text-secondary-foreground/70 underline underline-offset-4 hover:text-secondary-foreground sm:justify-start"
+                className="flex items-center justify-center text-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
               >
                 Continue as Guest
               </Link>
@@ -359,7 +385,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="relative h-80 w-full overflow-hidden bg-secondary-foreground/5 sm:h-96 lg:h-screen lg:w-1/2">
+        <div className="relative h-80 w-full overflow-hidden bg-muted sm:h-96 lg:h-screen lg:w-1/2">
           <HeroCarousel slides={heroSlides} />
         </div>
       </div>
