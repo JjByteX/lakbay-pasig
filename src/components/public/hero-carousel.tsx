@@ -46,10 +46,20 @@ import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from 
  * to show, and the schema is not this file's to change.
  *
  * Adapted to this codebase, not to Qula's:
- * - Caption legibility: a solid caption bar under the image at the full
- *   card surface token, per decision-log.md entry #18. Qula's dark
- *   gradient scrim over the photo is a structural gradient, which
- *   ux-ui-guidelines.md bans.
+ * - Caption legibility: originally a solid caption bar under the image
+ *   at the full card surface token (its own row, pushing the image to
+ *   share height with it), per decision-log.md entry #18. Changed per
+ *   direct instruction ("move the text in front of the picture... just
+ *   add a box behind the text depending on its width"): the caption is
+ *   now an overlay, absolutely positioned over the bottom-left corner of
+ *   the full-height photo, in a small bg-card pill sized to its own text
+ *   content (px-3 py-1.5, no explicit width) rather than a full-width
+ *   bar -- so the image fills the ENTIRE tile height (no more shared
+ *   row eating into it) and the caption floats on top of it instead of
+ *   displacing it. This is still not Qula's dark gradient scrim over the
+ *   photo (a structural gradient, which ux-ui-guidelines.md bans) -- a
+ *   solid, opaque, self-sized pill is legible against any photo without
+ *   introducing a gradient.
  * - Tile count follows the PANEL's own measured width, not the viewport.
  *   On desktop this panel is half the screen, so Qula's viewport
  *   breakpoint would pick the wrong layout. Wide panel + 3 or more
@@ -307,10 +317,13 @@ interface HeroTileProps {
   onSelect: () => void;
 }
 
-// One tile. Every tile is the same fixed box (Qula's rule): the image
-// fills the top, the caption sits in a solid bar below it in normal
-// flow, never overlaid on the photo. Side tiles stay visible as peeks
-// but get no pointer target of their own beyond "bring me to center".
+// One tile. Every tile is the same fixed box: the image fills the
+// ENTIRE tile (top to bottom), and the caption is a small self-sized
+// pill overlaid on the photo's bottom-left corner -- see this file's
+// top comment's "Adapted to this codebase" note for why this replaced
+// the earlier solid-bar-below-the-image layout. Side tiles stay visible
+// as peeks but get no pointer target of their own beyond "bring me to
+// center".
 function HeroTile({
   slide,
   slotOffset,
@@ -331,14 +344,14 @@ function HeroTile({
       tabIndex={isCenter ? -1 : 0}
       aria-hidden={isCenter ? undefined : true}
       aria-label={isCenter ? undefined : `Show ${slide.caption}`}
-      className="absolute top-0 flex h-full flex-col overflow-hidden rounded-lg bg-card text-left"
+      className="absolute top-0 h-full overflow-hidden rounded-lg bg-card text-left"
       style={{
         width: tileWidthPx(containerWidthPx, tilesInViewport, TILE_GAP_PX),
         left: 0,
         x: tileOffsetPx(slotOffset, containerWidthPx, tilesInViewport, TILE_GAP_PX),
       }}
     >
-      <div className="relative w-full flex-1 overflow-hidden bg-muted">
+      <div className="relative h-full w-full overflow-hidden bg-muted">
         {imageFailed ? (
           <div className="flex h-full w-full items-center justify-center">
             <ImageOff className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
@@ -355,7 +368,7 @@ function HeroTile({
           />
         )}
       </div>
-      <div className="flex h-16 items-center border-t border-border bg-card px-4 sm:h-20 sm:px-6">
+      <div className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] rounded-md bg-card px-3 py-1.5 sm:bottom-4 sm:left-4">
         <p className="line-clamp-2 text-sm font-semibold text-card-foreground sm:text-base">
           {slide.caption}
         </p>
@@ -411,13 +424,14 @@ function HeroFilmstripInner({
   );
 }
 
-// A carousel of one has nothing to loop or drag, so render the photo and
-// caption bar with none of the carousel chrome.
+// A carousel of one has nothing to loop or drag, so render the photo
+// with the same overlaid caption pill as HeroTile, with none of the
+// carousel chrome.
 function StaticSlide({ slide }: Readonly<{ slide: LandingSlide }>) {
   const [imageFailed, setImageFailed] = useState(false);
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-lg bg-card">
-      <div className="relative w-full flex-1 overflow-hidden bg-muted">
+    <div className="relative h-full w-full overflow-hidden rounded-lg bg-card">
+      <div className="relative h-full w-full overflow-hidden bg-muted">
         {imageFailed ? (
           <div className="flex h-full w-full items-center justify-center">
             <ImageOff className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
@@ -433,7 +447,7 @@ function StaticSlide({ slide }: Readonly<{ slide: LandingSlide }>) {
           />
         )}
       </div>
-      <div className="flex h-16 items-center border-t border-border bg-card px-4 sm:h-20 sm:px-6">
+      <div className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] rounded-md bg-card px-3 py-1.5 sm:bottom-4 sm:left-4">
         <p className="line-clamp-2 text-sm font-semibold text-card-foreground sm:text-base">
           {slide.caption}
         </p>
