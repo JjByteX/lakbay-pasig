@@ -45,7 +45,15 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
   return data as Profile;
 }
 
+// activity-log-plan.md, Auth Events. The signed_out row is written first and
+// awaited, because the RPC reads auth.uid() from the session and that is gone
+// once auth.signOut() resolves. Residents call it too and are skipped server
+// side. The 3 second abort keeps a hung request from holding sign-out;
+// aborting resolves as { error }, so signOut() below always runs.
 async function signOut() {
+  await supabase
+    .rpc("log_auth_event", { p_action: "signed_out" })
+    .abortSignal(AbortSignal.timeout(3000));
   await supabase.auth.signOut();
 }
 

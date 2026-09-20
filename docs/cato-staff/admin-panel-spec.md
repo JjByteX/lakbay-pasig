@@ -28,6 +28,9 @@ Build routes. Set theme, place order, estimated duration and budget. Assign Disc
 ### Staff
 Manage other CATO Staff accounts: permissions, position, active status. Limited to Admin role only, Staff role has no access to this section.
 
+### Activity
+Admin only, Staff role has no access and the item does not appear. A read only table of what staff and admins did, newest first, with Time, User, Action, Target, and Details columns, filterable by user, action, and target.
+
 ### Landing Page
 Manage the image carousel shown on the public landing page (`/welcome`). Upload, caption, reorder, and activate/deactivate slides. Gated on the `manage_landing` system permission (Admin or a Staff member holding it).
 
@@ -40,6 +43,10 @@ Reason: each type has different review criteria. A business review checks permit
 ## Review Action Log
 
 Every review action is logged, not just the final result. Each log entry stores: staff ID, action taken (verify, reject), timestamp, and review notes if rejected. The record itself still keeps a Reviewed By field for the current status, but the full history stays visible for accountability.
+
+## Activity Log
+
+Every staff and admin action is logged automatically: sign in and sign out, create, edit, and delete, verify and reject, feature, publish, activate, and staff account and permission changes. Not logged: reorder saves, avatar, theme, and font size changes, and anything by a resident or vendor. The Review Action Log above stays as the per record history, the Activity Log is the separate all actions view for Admins.
 
 ## Staff Roles
 

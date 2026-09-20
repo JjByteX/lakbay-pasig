@@ -91,6 +91,14 @@ export function LoginForm() {
         .eq("id", data.session.user.id)
         .single();
 
+      // Staff and admin sign-ins are logged, residents are not
+      // (activity-log-plan.md, Auth Events). The call has to be started, not
+      // just built: supabase-js rpc() sends nothing until something .then()s
+      // it. Never awaited and it cannot reject, so logging never blocks login.
+      if (profile?.staff_role) {
+        void supabase.rpc("log_auth_event", { p_action: "signed_in" }).then(() => {});
+      }
+
       closeAuth();
       if (profile?.staff_role) {
         navigate("/admin");

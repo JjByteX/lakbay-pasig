@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Settings as SettingsIcon, LogOut, Home, ArrowLeftRight, ChevronsUpDown } from "lucide-react";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Activity, Settings as SettingsIcon, LogOut, Home, ArrowLeftRight, ChevronsUpDown } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -75,6 +75,11 @@ const NAV_ITEMS = [
   // editor control over the first screen a new visitor sees.
   { to: "/admin/landing", label: "Landing Page", icon: Image, permission: "manage_landing" as const, permissions: null, adminOnly: false },
   { to: "/admin/staff", label: "Staff", icon: Users, permission: null, permissions: null, adminOnly: true },
+  // Activity (activity-log-phases.md Phase 4.1): read only table of staff and
+  // admin actions (activity_log, migration 0037). adminOnly: true, same as
+  // Staff above, RLS already returns zero rows to a non admin, so hiding
+  // the item is the second layer, not the only one.
+  { to: "/admin/activity", label: "Activity", icon: Activity, permission: null, permissions: null, adminOnly: true },
   // Personal display preference, not a content section -- visible to
   // every staff member the same way Dashboard is (permission: null,
   // adminOnly: false), not gated behind any system_permission or the

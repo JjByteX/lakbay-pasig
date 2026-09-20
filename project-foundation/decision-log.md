@@ -152,6 +152,15 @@ Caption legibility for the hero carousel was decided fresh, not inherited from e
 
 ---
 
+**#:** 19
+**Milestone:** Activity log (activity-log-plan.md, activity-log-phases.md)
+
+**Decision:** Append only `activity_log` table (0037) with admin only read, where triggers capture data actions, one `log_auth_event` RPC captures sign in and sign out, and the create-staff-account function inserts `staff_created` itself. The review tables own `verified` and `rejected`, so places and businesses ignore `verification_status` and an approval logs once. `route_stops` and `place_photos` log inserts and deletes only, so trail stop reordering stays invisible.
+
+**Standing rule:** Any new staff writable table gets its `log_activity` trigger in the same migration, and any new sign in path calls `log_auth_event`. Run `supabase/activity_log_check.sql` after any change to a log function.
+
+---
+
 **#:**
 **Milestone:**
 

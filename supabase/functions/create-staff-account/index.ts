@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
   const { data: callerProfile, error: callerProfileError } = await callerClient
     .from("profiles")
-    .select("staff_role, active_status")
+    .select("staff_role, active_status, display_name")
     .eq("id", caller.id)
     .single();
 
@@ -164,6 +164,27 @@ Deno.serve(async (req) => {
     // behind if the staff fields couldn't be set.
     await adminClient.auth.admin.deleteUser(created.user.id);
     return json({ error: profileError.message }, 500);
+  }
+
+  // staff_created can only come from here: this function writes as the
+  // service role (no auth.uid()), so no trigger can attribute it, and the
+  // promotion update above never fires activity_log_profiles_staff (its WHEN
+  // needs old.staff_role non null). The actor is the caller verified as an
+  // active Admin at the top. It sits after the rollback branch so a failed
+  // creation leaves no row, and an insert failure is only logged, never
+  // returned.
+  const { error: logError } = await adminClient.from("activity_log").insert({
+    actor_id: caller.id,
+    actor_name: callerProfile.display_name ?? "Admin",
+    actor_role: "admin",
+    action: "staff_created",
+    target_type: "staff",
+    target_id: created.user.id,
+    target_label: fullName,
+    details: { changed: { system_permission: { from: null, to: systemPermission } } },
+  });
+  if (logError) {
+    console.error("activity_log insert failed:", logError.message);
   }
 
   return json({ id: created.user.id });

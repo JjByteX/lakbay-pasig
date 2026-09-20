@@ -34,3 +34,6 @@ What to build, in order. Each step assumes the ones before it exist.
 
 - [ ] 11. **Content population**
        Import or enter real Places, Businesses, and past vendor list data from CATO. Content task, not a build task, do last so the schema is stable first.
+
+- [x] 12. **Activity log**
+      Admin only, append only table of staff and admin actions, captured by database triggers plus one sign in and sign out RPC.

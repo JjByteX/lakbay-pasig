@@ -18,6 +18,7 @@ const BOUNDED_LIST_ROUTES = new Set([
   "/admin/trails",
   "/admin/categories",
   "/admin/staff",
+  "/admin/activity",
 ]);
 
 export default function AdminPage() {

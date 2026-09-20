@@ -30,6 +30,7 @@ import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
 import AdminCategoriesPage from "@/pages/admin-categories";
 import AdminLandingPage from "@/pages/admin-landing";
 import AdminStaffPage from "@/pages/admin-staff";
+import AdminActivityPage from "@/pages/admin-activity";
 import AdminSettingsPage from "@/pages/admin-settings";
 import LandingPage from "@/pages/landing";
 
@@ -284,6 +285,18 @@ export default function App() {
               element={
                 <ProtectedRoute requireAdmin>
                   <AdminStaffPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Activity (activity-log-phases.md Phase 4.3): read only log of
+                staff and admin actions. requireAdmin, same guard as Staff
+                above, matching admin-sidebar.tsx's adminOnly item so the
+                route and the sidebar stay in sync. */}
+            <Route
+              path="activity"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminActivityPage />
                 </ProtectedRoute>
               }
             />
