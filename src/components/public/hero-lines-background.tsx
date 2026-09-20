@@ -200,30 +200,169 @@ import { startHeroLinesAnimation } from "./hero-lines-animation.js";
  * white -- close enough to look "roughly white" in isolation but visibly
  * a different, boxed-in rectangle once this component is mounted as a
  * full hero backdrop (landing.tsx) sitting on that page background
- * rather than filling its own isolated column. Fix: this root now uses
- * bg-background (the same token/class the page itself paints with, per
- * index.css's `body { @apply bg-background ... }`) instead of the
- * hardcoded bg-white, so this layer is always exactly the same color as
- * whatever surface it sits on, in both the light and dark theme
- * variants index.css defines for that token -- not just a close visual
- * match to one of them.
+ * rather than filling its own isolated column. Fix at the time: this
+ * root switched to bg-background (the same token/class the page itself
+ * paints with, per index.css's `body { @apply bg-background ... }`)
+ * instead of the hardcoded bg-white, so this layer was always exactly
+ * the same color as whatever surface it sat on.
+ *
+ * Fourteenth direct instruction ("make the background of the hero same
+ * background as the top bar color"): the HERO SECTION itself (landing.
+ * tsx, not this component) switched from inheriting bg-background to an
+ * explicit bg-card, to match LandingHeader's own bg-card/80. This
+ * component's own root is updated to match -- bg-card, not bg-background
+ * -- for the exact same reason the tenth instruction's fix above
+ * originally mattered: this layer needs to always match whatever
+ * surface it is mounted on, and that surface is now bg-card, not
+ * bg-background. Leaving this on bg-background after the hero itself
+ * moved to bg-card would have reintroduced the exact same "visible
+ * rectangle" bug the tenth instruction fixed, just with the two colors'
+ * roles swapped.
  */
 const RIGHT_SIDE_LINE_INDICES = [11, 12, 13, 14, 15, 16, 17, 18, 19, 33, 39];
 
-// The surviving (left-cluster) lines' own bounding box in source units,
-// measured directly off hero-lines-animation.js's CURVES data after
-// excluding RIGHT_SIDE_LINE_INDICES (see this file's top comment) --
-// x:0-860, y:0-897, versus the full viewBox's 1639x923.
+// Thirteenth direct instruction ("I think they're cut off maybe because
+// of the crop? why put it in a container too when you can just slap it
+// on there since no ones occupying the space"): correct diagnosis, and
+// simpler than the twelfth instruction's fix addressed. The extension
+// itself (EXTEND_PX, LEFT_EDGE_LINE_INDICES, extendPathStart above) WAS
+// drawing and WAS being let through by the overflow changes -- but it
+// was still landing fully inside a small, sized, bottom-left-anchored
+// BOX (the old BOX_WIDTH_PCT x BOX_HEIGHT_PCT box), which itself sat
+// well inside the hero's own empty left-side space. So the extended
+// line still had a real, visible endpoint -- just further along, inside
+// a mostly-empty box, floating in open space rather than reaching the
+// panel's actual edge. A tangent extension can only ever look like it
+// "exits the frame" if the frame's own edge is close enough to reach;
+// a small box floating inside a much bigger empty area was never going
+// to look like an edge no matter how far any one line was extended.
+//
+// The old box existed to solve a DIFFERENT, now-irrelevant problem: the
+// artwork used to share the hero with a photo carousel taking up the
+// other half of the page (this file's own top comment, second
+// paragraph), so BOX_WIDTH_PCT capped the artwork well short of the
+// panel's own center to keep it off the carousel and, later, off the
+// centered headline. That two-column layout no longer exists (see
+// landing.tsx's own top comment) and the hero copy is centered with its
+// own max-w-2xl column, not spanning the panel's full width -- so a
+// sized box no longer serves any purpose, it was just left over from
+// when the layout needed it, and it is what was silently causing every
+// extended line to still read as "cut off": not a clipping bug, a
+// leftover container this artwork no longer needs.
+//
+// Fix: removed the box entirely. The SVG's own viewBox is still cropped
+// to the left cluster's real content (CONTENT_W/H, CROP_PAD below,
+// unchanged) so meet still scales it sensibly, but it now renders
+// straight into this component's own full-size root (the existing
+// outer `absolute inset-0` div, spanning the entire hero) instead of a
+// second, smaller div nested inside it -- "slap it on there", not put
+// it in its own container. Anchored bottom-left exactly as before
+// (xMinYMax meet), it now naturally reaches all the way to the hero's
+// own real left and bottom edges, because there is no longer a smaller
+// box holding it back from them.
 const CONTENT_W = 860;
 const CONTENT_H = 897;
 
+// Eleventh direct instruction, with a screenshot showing hand-drawn red
+// arrows continuing several lines' visible endpoints further up and to
+// the left, off the edge of the artwork ("make the lines exit on the
+// left... take the end points, extend it by making new like photoshop
+// does with the curvature pen tool"): of the 37 surviving left-cluster
+// lines, two different groups start at two different edges of the crop
+// window (see the start/end points measured directly off CURVES) --
+// lines 0-10 start at the crop's TOP edge (y=0, x:16-268, the "S-bend"
+// this file's ninth-instruction comment already describes), while lines
+// 20-47 start already flush against the crop's LEFT edge (x=0,
+// y:88-895). Only this second group is what the reference screenshot's
+// arrows are drawn on and what "exit on the left" describes -- they
+// already touch the left edge but still render a visible rounded start
+// cap right there, reading as a dead end, rather than continuing past
+// the edge the way the rest of that same line continues past the
+// bottom/right edges it also touches. LEFT_EDGE_LINE_INDICES below is
+// exactly that second group (lines 0-10 are deliberately left alone --
+// extending a top-edge start further "left" along ITS OWN tangent
+// mostly moves further along the top edge or back into the canvas, not
+// toward the left edge the reference is about; verified by computing
+// that extension for line 0 before deciding to exclude this group,
+// rather than assuming one rule fits every start point).
+//
+// This is fixed here, NOT in hero-lines-animation.js's CURVES data --
+// that file stays an untouched, byte-for-byte port (this file's own top
+// comment's standing rule) and its CURVES/PH/AMP arrays are private to
+// its own closure, unreachable from outside. Instead this extends each
+// path's rendered `d` string after the animation script writes it, the
+// same "wrap the output, don't edit the source" approach this file
+// already uses for right-side hiding (CSS display:none on specific
+// [data-i], rather than deleting those lines from CURVES) and for the
+// crop window (runtime viewBox/preserveAspectRatio edits on the
+// injected <svg>, rather than editing hero-lines.svg on disk).
+//
+// Mechanism: a MutationObserver watches every one of these paths' `d`
+// attribute (the animation script rewrites `d` on every one of its own
+// requestAnimationFrame ticks). Each time `d` changes, extendPathStart
+// reads that path's OWN first two points straight back out of the `d`
+// string it just wrote (M x0,y0 then the first C control point) and
+// treats (start point - control point) as that curve's own tangent AT
+// its start, continuing backward -- the standard way to read a cubic
+// bezier's direction of travel at t=0 and extend before it, and exactly
+// what a curvature-pen "extend along the existing handle" does in an
+// image editor: it does not invent a new direction, it continues the
+// one the curve already has.
+//
+// A synthetic point is placed EXTEND_PX further out along that same
+// tangent (normalized to unit length first, so every line -- regardless
+// of its own point spacing -- extends by the same on-screen distance),
+// and a new "M (that far point) C ... (back to the original start)"
+// segment is spliced onto the FRONT of the existing `d`, before the
+// path's own original M. The new segment's own two control points are
+// simple linear interpolations along that same straight tangent line
+// (a straight C segment, not curved), which is visually seamless
+// because it shares the exact tangent direction the original curve
+// already had at that point -- there is no kink where old and new
+// segments meet.
+//
+// Twelfth direct instruction ("it still cut off, maybe its the crop"):
+// correct diagnosis -- since every one of these lines' start already
+// sits at x=0, and CROP_MIN_X was ALSO 0 (the viewBox's own left edge),
+// the extension's new far point at x<0 was outside the viewBox from the
+// instant it was drawn, so the SVG clipped it before it could ever
+// render -- the extension existed in the `d` string but was invisible,
+// which looks identical to "still cut off" from the outside.
+//
+// The first fix attempted here widened CROP_W/CROP_MIN_X so the viewBox
+// itself included that negative-x space. That was reverted before
+// shipping: under preserveAspectRatio="meet", the viewBox's own aspect
+// ratio and the box's aspect ratio together decide which axis "meet"
+// scales to fit, and widening the viewBox risked silently rescaling
+// (shrinking) the ENTIRE already-tuned artwork if width happened to be
+// the tighter-fitting axis at real panel sizes -- unverifiable without
+// rendering the real component at real panel widths, exactly the "check
+// the real thing, don't just reason about the numbers" discipline this
+// file's fifth/sixth-instruction comments already established, so this
+// was not risked.
+//
+// A second fix kept the viewBox itself untouched and instead made the
+// SVG overflow:visible so x<0 geometry could draw, clipped one level
+// out by a small bottom-left BOX <div>'s own edges instead of the
+// viewBox. That got the extension actually rendering, but the visible
+// result STILL read as "cut off" (thirteenth direct instruction, with a
+// screenshot) -- because that box was itself small and sat well inside
+// a much bigger empty area of the hero, so the extended line now had a
+// real endpoint further along, floating in open space, rather than
+// reaching anything that reads as an edge. See CONTENT_W/H's own
+// comment further up this file for why that box was removed entirely
+// rather than resized again -- the fix that actually worked was
+// dropping the box, not further tuning its size or its clipping
+// mechanism.
+const EXTEND_PX = 220;
+
 // Padding kept on the crop window's TOP/RIGHT/BOTTOM edges, so stroke
-// width and motion amplitude never clip right at the box's own edge.
-// The LEFT edge gets none of this pad (see CROP_MIN_X below) -- the
-// content's own bounding box already starts at x=0, flush with the
-// source data's left edge, so any left pad here just becomes a visible
-// gap between the box's left edge and where the lines actually start
-// (reported directly: "it has a little gap on the left").
+// width and motion amplitude never clip right at the viewBox's own
+// edge. The LEFT edge gets none of this pad -- the content's own
+// bounding box already starts at x=0, flush with the source data's left
+// edge, so any left pad here just becomes a visible gap between where
+// the crop starts and where the lines actually start (reported directly
+// at the time: "it has a little gap on the left").
 const CROP_PAD = 30;
 
 const CROP_MIN_X = 0;
@@ -231,27 +370,69 @@ const CROP_MIN_Y = -CROP_PAD;
 const CROP_W = CONTENT_W + CROP_PAD;
 const CROP_H = CONTENT_H + CROP_PAD * 2;
 
-// Size of the box the animated SVG itself renders into, as a percentage
-// of the PANEL (not the viewport) -- this is what actually keeps the
-// artwork out of the panel's horizontal center, where the headline and
-// CTAs sit, regardless of preserveAspectRatio. Per this file's top
-// comment's ninth instruction ("continue the lines... like a river on
-// the top side"): BOX_HEIGHT_PCT is now 100 (the full height of this
-// component's own container, which already starts below the fixed
-// header) instead of 57, so the artwork runs the whole left edge of the
-// panel rather than stopping partway up; BOX_WIDTH_PCT comes down from
-// 74 to 34 so that taller box still clears the centered headline/CTA
-// column instead of growing into it (a tall box at the old 74% width
-// would reach past the text -- confirmed by rendering that combination
-// before settling on 34%). Anchored bottom-left exactly as before.
-const BOX_WIDTH_PCT = 74;
-const BOX_HEIGHT_PCT = 57;
-
 // Opacity applied to the whole line layer so it reads as a light
 // decorative backdrop behind the headline/CTA copy, never competing with
 // it for attention -- independent of, and in addition to, the per-line
 // luminance the feColorMatrix filter below already varies.
 const LINE_OPACITY = 0.35;
+
+// The left-edge-starting group described above -- lines 0-10 (the
+// top-edge S-bend group) and the already-hidden RIGHT_SIDE_LINE_INDICES
+// are both deliberately excluded, see this file's comment above.
+const LEFT_EDGE_LINE_INDICES = [
+  20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 40,
+  41, 42, 43, 44, 45, 46, 47,
+];
+
+function extendPathStart(pathEl: SVGPathElement) {
+  const d = pathEl.getAttribute("d");
+  if (!d) return;
+
+  // Every `d` this component ever sees is toPath()'s own output:
+  // "M x0,y0" followed by one or more "C cx1,cy1 cx2,cy2 x,y" commands,
+  // always starting with exactly one M. Pulling out just the M and the
+  // FIRST C's first control point is enough to get the start point and
+  // start tangent -- everything after that first C is left untouched,
+  // string-appended back on unparsed.
+  const match = /^M(-?[\d.]+),(-?[\d.]+)C(-?[\d.]+),(-?[\d.]+)/.exec(d);
+  if (!match) return;
+
+  const [, mx, my, c1x, c1y] = match;
+  const x0 = parseFloat(mx);
+  const y0 = parseFloat(my);
+  const cx1 = parseFloat(c1x);
+  const cy1 = parseFloat(c1y);
+
+  // Tangent at the start point, pointing FROM the first control point
+  // BACK THROUGH the start point (i.e. continuing in the direction the
+  // curve arrives from) -- the reverse of (c1 - start), which is the
+  // direction the curve leaves the start point heading further into the
+  // line, not back out of it.
+  let tx = x0 - cx1;
+  let ty = y0 - cy1;
+  const len = Math.hypot(tx, ty) || 1;
+  tx /= len;
+  ty /= len;
+
+  const farX = x0 + tx * EXTEND_PX;
+  const farY = y0 + ty * EXTEND_PX;
+  // Control points a third and two-thirds of the way along the same
+  // straight tangent line, so the new segment is a straight run (not a
+  // curved one) that meets the original curve's own start tangent with
+  // no kink.
+  const ctrl1X = x0 + tx * (EXTEND_PX / 3);
+  const ctrl1Y = y0 + ty * (EXTEND_PX / 3);
+  const ctrl2X = x0 + tx * (EXTEND_PX * (2 / 3));
+  const ctrl2Y = y0 + ty * (EXTEND_PX * (2 / 3));
+
+  const prefix =
+    `M${farX.toFixed(1)},${farY.toFixed(1)}` +
+    `C${ctrl1X.toFixed(1)},${ctrl1Y.toFixed(1)} ` +
+    `${ctrl2X.toFixed(1)},${ctrl2Y.toFixed(1)} ` +
+    `${x0.toFixed(1)},${y0.toFixed(1)}`;
+
+  pathEl.setAttribute("d", prefix + d);
+}
 
 export function HeroLinesBackground() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -264,10 +445,11 @@ export function HeroLinesBackground() {
     // viewBox to the surviving left cluster's own bounding box (CROP_W x
     // CROP_H, tightly padded) instead of the full 1639x923 source box,
     // and switch preserveAspectRatio to "xMinYMax meet". meet (not
-    // slice) scales the whole cropped box DOWN to fit entirely inside
-    // this component's own box -- see this file's top comment for why
-    // the box itself, not preserveAspectRatio, is what pins the artwork
-    // to the corner. hero-lines.svg on disk is left byte-for-byte
+    // slice) scales the whole cropped viewBox DOWN to fit the SVG
+    // element's own rendered size (h-full, width auto -- set in the JSX
+    // below, not a separate sized box; see this file's top comment,
+    // thirteenth instruction, for why there is no longer a smaller box
+    // in between). hero-lines.svg on disk is left byte-for-byte
     // unmodified; this only edits the one injected <svg> element's
     // attributes at runtime, the same way the animation script below
     // only ever rewrites `d` attributes, never structure.
@@ -280,8 +462,48 @@ export function HeroLinesBackground() {
       svgEl.setAttribute("preserveAspectRatio", "xMinYMax meet");
     }
 
+    // The MutationObserver below is attached BEFORE
+    // startHeroLinesAnimation runs, so it already catches that
+    // function's very first frame(0) call (which paints the resting
+    // shape synchronously, see hero-lines-animation.js) -- there is no
+    // separate "extend once on mount" step needed here: every path
+    // ships with no `d` attribute at all until frame(0) sets one for
+    // the first time (hero-lines.svg's own <path> elements carry only
+    // stroke/stroke-width), and the observer's own first callback
+    // extends that first-ever `d` exactly the same way as every frame
+    // after it.
+    const isLeftEdgePath = (el: Element): el is SVGPathElement =>
+      el instanceof SVGPathElement &&
+      LEFT_EDGE_LINE_INDICES.includes(Number(el.dataset.i));
+
+    const observer = new MutationObserver((records) => {
+      observer.disconnect();
+      for (const record of records) {
+        if (
+          record.type === "attributes" &&
+          record.attributeName === "d" &&
+          isLeftEdgePath(record.target as Element)
+        ) {
+          extendPathStart(record.target as SVGPathElement);
+        }
+      }
+      observer.observe(root, {
+        attributes: true,
+        attributeFilter: ["d"],
+        subtree: true,
+      });
+    });
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["d"],
+      subtree: true,
+    });
+
     const destroy = startHeroLinesAnimation(root);
-    return () => destroy?.();
+    return () => {
+      observer.disconnect();
+      destroy?.();
+    };
   }, []);
 
   const hideRightSideCss = RIGHT_SIDE_LINE_INDICES.map(
@@ -289,7 +511,7 @@ export function HeroLinesBackground() {
   ).join(",");
 
   return (
-    <div className="absolute inset-0 overflow-hidden bg-background">
+    <div className="absolute inset-0 overflow-hidden bg-card">
       {/* Right-side line cluster hidden here, in CSS, rather than by
           editing hero-lines.svg -- see this file's own top comment. Each
           index gets its own fully-scoped ".hero-lines-left-only [data-i]"
@@ -326,18 +548,25 @@ export function HeroLinesBackground() {
         </defs>
       </svg>
 
-      {/* Tall, narrow box anchored bottom-left (not the full panel's
-          h-full w-full, and no longer capped to the panel's bottom
-          portion either -- see this file's top comment, ninth
-          instruction) -- this is what keeps the artwork running the
-          panel's full left edge, top to bottom, while still clearing the
-          headline and CTAs, regardless of preserveAspectRatio. */}
+      {/* Full panel, no separate sized box -- thirteenth direct
+          instruction ("why put it in a container too when you can just
+          slap it on there since no ones occupying the space"). This div
+          now matches the outer root exactly (absolute inset-0) instead
+          of a smaller bottom-left-anchored box; see CONTENT_W/H's own
+          comment further up this file for why that box was removed
+          rather than resized again. overflow-hidden stays here as a
+          safety backstop (the hero's own real edges are still a clip
+          boundary, so nothing can spill past the hero section itself),
+          but it is no longer the boundary doing the day-to-day work of
+          keeping the artwork off the centered headline -- the SVG's own
+          sizing below (h-full, width auto) does that now, by simply
+          never scaling wider than its own fixed aspect ratio, the same
+          way a plain image element with only its height set keeps its
+          own proportions instead of stretching to fill a wider box. */}
       <div
         ref={containerRef}
-        className="hero-lines-left-only absolute bottom-0 left-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-full"
+        className="hero-lines-left-only absolute inset-0 overflow-hidden [&_svg]:absolute [&_svg]:bottom-0 [&_svg]:left-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-auto"
         style={{
-          width: `${BOX_WIDTH_PCT}%`,
-          height: `${BOX_HEIGHT_PCT}%`,
           filter: "url(#hero-lines-tint)",
           opacity: LINE_OPACITY,
         }}

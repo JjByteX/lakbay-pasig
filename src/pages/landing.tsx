@@ -196,11 +196,13 @@ function NavAction() {
 // top padding (pt-16, this header's own h-16) so no content starts
 // underneath it.
 //
-// Still translucent + backdrop-blur, "like Apple," per the original
-// direct answer -- now over bg-card (this page's own light surfaces)
-// rather than bg-secondary/70, since the header spans past the dark hero
-// panel into the light About/Features/Contact sections beneath it and a
-// navy-tinted translucency would mismatch those.
+// Originally translucent + backdrop-blur, "like Apple," per an earlier
+// direct answer, over bg-card/80 rather than bg-secondary/70 since the
+// header spans past the hero into the light About/Features/Contact
+// sections beneath it and a navy-tinted translucency would mismatch
+// those. That translucency is gone now -- see the fifteenth-instruction
+// comment right below, on LandingHeader itself, for why plain, fully
+// opaque bg-card replaced it.
 // Three-part bar (logo / centered links / action) via a 3-column grid,
 // per the Notion reference: nav links sit centered as their own group in
 // the middle of the bar, independent of the logo's and action's own
@@ -210,9 +212,38 @@ function NavAction() {
 // visually centered on the bar as a whole, not just centered between
 // wherever the logo and action happen to end; the logo and action each
 // sit in their own column with justify-self so they don't stretch.
+// Fifteenth direct instruction ("remove all outline dividers and
+// outline in the top bar in the landing page completely. also nav and
+// background color of hero must be identical"): two related changes.
+//
+// border-b border-border is dropped from this header entirely -- that
+// was the one border/divider actually on the top bar itself (at the
+// time, the section dividers further down the page -- About/Features/
+// Contact's own border-t border-border -- were a different, separate
+// part of the page this instruction didn't reference, so those were
+// left alone here; a follow-up sixteenth instruction removed those too,
+// see the About section's own comment). With no border-bottom, there is
+// no outline left on the top bar at all.
+//
+// bg-card/80 + backdrop-blur-md is also dropped, down to a plain, fully
+// opaque bg-card. Those were there because this header floats `fixed`
+// over the page and other sections scroll up underneath it -- partial
+// opacity plus blur is what let whatever was scrolling by underneath
+// show through softly instead of a hard cut. But partial opacity is, by
+// definition, never IDENTICAL to a flat color behind it -- once
+// anything other than the hero's own flat bg-card scrolls underneath
+// (About, Features, Contact, all bg-card or bg-background depending on
+// section), the header would render as a translucent blend of bg-card
+// and whatever's beneath it, not bg-card itself. Since the instruction
+// specifically requires the nav and the hero background to be
+// IDENTICAL colors, not just similar, this header now uses plain
+// bg-card at full opacity -- the exact same class the hero wrapper
+// itself uses (landing.tsx's hero <div>, see its own comment) -- so the
+// two are the same color under every circumstance, not just while the
+// page happens to be scrolled to the top.
 function LandingHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 grid h-16 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-card/80 px-6 backdrop-blur-md lg:px-12">
+    <header className="fixed inset-x-0 top-0 z-50 grid h-16 grid-cols-[1fr_auto_1fr] items-center bg-card px-6 lg:px-12">
       <Link to="/welcome" className="flex items-center gap-2 justify-self-start">
         <img src={logo} alt="Lakbay Pasig" className="h-8 w-8" />
       </Link>
@@ -432,8 +463,37 @@ export default function LandingPage() {
           own slides (hero-carousel.tsx) already paint their own bg-card
           surface per slide, so this wrapper needed no fill of its own at
           all -- removing bg-muted here doesn't leave a gap, it just
-          stops adding a second, redundant panel underneath. */}
-      <div className="relative flex flex-col items-center gap-10 overflow-hidden px-6 pb-16 pt-24 text-center lg:px-12 lg:pt-28">
+          stops adding a second, redundant panel underneath.
+
+          Fourteenth direct instruction ("make the background of the
+          hero same background as the top bar color"): this wrapper now
+          carries bg-card explicitly, matching LandingHeader's own
+          bg-card (at the time, bg-card/80 -- the header added /80
+          opacity + backdrop-blur only because it floats fixed OVER this
+          hero as the page scrolls underneath it, while a flat section
+          fill like this one has nothing to blur or see through). Before
+          this, the hero had no background class of its own and
+          inherited bg-background from body (see index.css) -- a
+          different, slightly warmer off-white token than bg-card's pure
+          white in light mode (index.css: `--card: 0 0% 100%` vs
+          `--background: 60 40% 98%`), close enough to look like a
+          coincidental match at a glance but not the same color.
+
+          Fifteenth direct instruction ("nav and background color of
+          hero must be identical"): LandingHeader's own bg-card/80 +
+          backdrop-blur, mentioned above, is gone now too -- see that
+          component's own comment for why partial opacity can never be
+          IDENTICAL to a flat color once anything other than this exact
+          hero happens to be scrolled underneath it. Both this hero and
+          the header now use the exact same plain, fully opaque bg-card
+          class, so "identical" holds under every scroll position, not
+          only when the header happens to be sitting directly on top of
+          this section.
+          HeroLinesBackground's own root fill is updated to match (its
+          own file, see that component's comment on this same change)
+          so it continues to blend into whatever this section's real
+          background is, rather than the two drifting apart again. */}
+      <div className="relative flex flex-col items-center gap-10 overflow-hidden bg-card px-6 pb-16 pt-24 text-center lg:px-12 lg:pt-28">
         <HeroLinesBackground />
 
         <div className="relative z-10 flex max-w-2xl flex-col items-center gap-1">
@@ -461,10 +521,30 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* About: project-brief.md's own Problem/Goal lines, not new copy.
+      {/* About: project-brief.md's own Problem/Goal lines as the base,
+          rewritten per the seventeenth direct instruction ("the about is
+          being too much and not what the app is about... some can have
+          not verified. I don't like comparison with others. I don't
+          like em dash"). Three fixes to the prior copy:
+          (1) "Every place, business, and trail... is verified by CATO"
+          overstated data-model.md's actual field -- Local Historical
+          Place and Local Business both carry a Verification Status of
+          Pending, Verified, or Unverified, reviewed per item by CATO
+          staff (Reviewed By), not a blanket claim that everything on
+          the platform is verified. Rewritten to describe the status
+          itself (checked by CATO, shown plainly) rather than assert a
+          universal state the data model doesn't support.
+          (2) No comparison to other platforms/competitors -- direct
+          instruction. Earlier drafts leaned on competitive-positioning.
+          md's "Google Maps shows X, this app shows Y" framing; that
+          framing is for a pitch deck, not this page, so it's dropped
+          here even though the source doc uses it.
+          (3) No em dashes, anywhere in this paragraph or its own
+          comment -- direct instruction, plain periods/commas throughout
+          instead.
           Same page, own section, flat surface (bg-card) per the
           no-gradient rule, 8px-grid spacing throughout. */}
-      <section id="about" className="scroll-mt-20 border-t border-border bg-card px-6 py-16 lg:px-16">
+      <section id="about" className="scroll-mt-20 bg-card px-6 py-16 lg:px-16">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
           <h2 className="text-2xl font-semibold text-foreground">About</h2>
           <p className="text-base text-muted-foreground">
@@ -473,9 +553,10 @@ export default function LandingPage() {
             to one source: the Pasig City Tourism Office (CATO).
           </p>
           <p className="text-base text-muted-foreground">
-            Every place, business, and trail on this platform is verified by CATO and delivered as sequenced,
-            location based storytelling, turning a walk around the city into a guided experience instead of a
-            plain search result.
+            CATO staff review every place and business submitted to the platform and mark its status clearly,
+            verified, pending, or not yet verified, so you always know where a listing stands. Places and
+            trails are also shown as sequenced, location based stories, so a walk around the city comes with
+            context instead of just a pin on a map.
           </p>
         </div>
       </section>
@@ -489,7 +570,7 @@ export default function LandingPage() {
           themselves). Trails and Events named in a plain closing line
           rather than a third photo strip, per this file's own top comment
           on why trail-card.tsx's row shape doesn't fit this strip. */}
-      <section id="features" className="scroll-mt-20 border-t border-border px-6 py-16 lg:px-16">
+      <section id="features" className="scroll-mt-20 px-6 py-16 lg:px-16">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
           <div className="flex flex-col gap-3">
             <h2 className="text-2xl font-semibold text-foreground">Features</h2>
@@ -521,7 +602,7 @@ export default function LandingPage() {
           link beneath the embed opens the same address in Google Maps
           proper, for anyone who wants turn-by-turn rather than just a
           look at the pin. */}
-      <section id="contact" className="scroll-mt-20 border-t border-border bg-card px-6 py-16 lg:px-16">
+      <section id="contact" className="scroll-mt-20 bg-card px-6 py-16 lg:px-16">
         <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
             <h2 className="text-2xl font-semibold text-foreground">Contact</h2>
