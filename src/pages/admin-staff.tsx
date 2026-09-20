@@ -79,9 +79,9 @@ function PermissionsCell({ row }: Readonly<{ row: StaffRow }>) {
   }
   if (row.system_permission && row.system_permission.length > 0) {
     return (
-      <div className="flex flex-wrap gap-1">
+      <div className="flex gap-1">
         {row.system_permission.map((p) => (
-          <Badge key={p} variant="secondary">
+          <Badge key={p} variant="secondary" className="shrink-0">
             {PERMISSION_LABEL[p] ?? p}
           </Badge>
         ))}

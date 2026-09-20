@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { usePageTitle } from "@/lib/page-title";
 
 /**
- * Staff/Admin Settings, sidebar item at /admin/settings. Added because
+ * Staff/Admin Settings, reached from the sidebar's profile menu at /admin/settings. Added because
  * profiles.theme_preference/font_size_preference (migration 0021,
  * settings-personalization-plan.md) always applied to every signed-in
  * session, staff included -- auth-context.tsx's applyTheme/applyFontSize

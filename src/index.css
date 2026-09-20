@@ -39,6 +39,11 @@
     --ring: 208 98% 43%;
 
     --radius: 0.5rem;
+
+    /* Admin table geometry. Every row is exactly this tall, so
+       use-auto-page-size.ts can compute rows per page without measuring. */
+    --height-table-row: 56px;
+    --height-table-header: 40px;
   }
 
   .dark {
@@ -69,6 +74,9 @@
     --border: 211 40% 22%;
     --input: 211 40% 22%;
     --ring: 208 98% 55%;
+
+    --height-table-row: 56px;
+    --height-table-header: 40px;
   }
 }
 

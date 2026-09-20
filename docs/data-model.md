@@ -31,7 +31,6 @@
 - Estimated Visit Duration -Matthew
 - Accessibility Info -Matthew
 - Available Facilities (restrooms, parking, info desk, waiting area) -Matthew
-- Nearby Places -Matthew
 - Language (English, Filipino, or both) -JJ
 - Trails Included In (list of route IDs) -Matthew
 - Verification Status -Matthew

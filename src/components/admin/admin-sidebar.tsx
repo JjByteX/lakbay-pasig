@@ -80,12 +80,6 @@ const NAV_ITEMS = [
   // Staff above, RLS already returns zero rows to a non admin, so hiding
   // the item is the second layer, not the only one.
   { to: "/admin/activity", label: "Activity", icon: Activity, permission: null, permissions: null, adminOnly: true },
-  // Personal display preference, not a content section -- visible to
-  // every staff member the same way Dashboard is (permission: null,
-  // adminOnly: false), not gated behind any system_permission or the
-  // Staff section's admin-only rule. See admin-settings.tsx's own header
-  // comment for the full reasoning.
-  { to: "/admin/settings", label: "Settings", icon: SettingsIcon, permission: null, permissions: null, adminOnly: false },
 ];
 
 export function AdminSidebar() {
@@ -191,15 +185,14 @@ export function AdminSidebar() {
             DropdownMenu, same primitive public-sidebar.tsx and public-
             shell.tsx's mobile AccountMenu already use for this exact job,
             reused here rather than a third bespoke popup.
-            Menu items: Resident View (this same signed-in
-            account, browsing "/" as a resident would -- distinct from Home
-            Page below, which is the signed-out-style landing page, not the
-            app itself), then Home Page, then Sign out. No Profile/Settings
-            items here unlike public-sidebar.tsx's version -- admin has no
-            separate account page, and Settings already has its own
-            top-level nav entry above (NAV_ITEMS' "/admin/settings" row),
-            so repeating it in this menu would be the same destination
-            reachable two ways for no reason. */}
+            Menu items: Settings (personal display preference, visible to
+            every staff member, same as public-sidebar.tsx's own Settings
+            item, which is also only in the menu and not a nav tab), then
+            Resident View (this same signed-in account, browsing "/" as a
+            resident would -- distinct from Home Page below, which is the
+            signed-out-style landing page, not the app itself), then Home
+            Page, then Sign out. No Profile item unlike public-sidebar.tsx's
+            version -- admin has no separate account page. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
@@ -249,6 +242,10 @@ export function AdminSidebar() {
                 A resident's own counterpart to this item (public-sidebar.
                 tsx, public-shell.tsx's AccountMenu) sends staff/admin back
                 here the same way. */}
+            <DropdownMenuItem onClick={() => navigate("/admin/settings")}>
+              <SettingsIcon className="mr-2 h-4 w-4" />
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/")}>
               <ArrowLeftRight className="mr-2 h-4 w-4" />
               Resident View

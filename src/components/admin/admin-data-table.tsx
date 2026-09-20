@@ -1,4 +1,4 @@
-import { useMemo, useReducer, type ReactNode, type Ref } from "react";
+import { useMemo, useReducer, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import {
   Table,
@@ -50,20 +50,12 @@ import { useAutoPageSize } from "@/hooks/use-auto-page-size";
  * flow) so that bounded height actually reaches this component instead of
  * stopping at the page's own wrapper — see each admin-*.tsx page.
  *
- * Two differences from the original, both required by this app's own
- * column shapes, not arbitrary simplifications:
- *   - amkor's rows are a fixed 52px (--height-table-row) because every
- *     cell there is single-line text. This table's rows hold badges and
- *     occasionally-wrapping text (business/place/event columns), so row
- *     height is genuinely variable — use-auto-page-size.ts measures one
- *     real rendered row's height directly instead of assuming a constant.
- *   - No server round trip exists to correct against (amkor's hook exists
- *     partly to reconcile a server-paginated response with the client's
- *     own measurement, hence its debounce/correcting/navLock machinery).
- *     Every list here is already a full client-side array, so the
- *     computed page size is applied directly, no correction window,
- *     no per-route remembered size (tablePageSize.js's whole reason to
- *     exist — seeding a server's first response — doesn't apply here).
+ * Rows are a fixed height, like amkor's 52px: every row is exactly
+ * --height-table-row (index.css) and its cell content is clipped to fit, so
+ * rows per page is container height minus toolbar, header and pagination,
+ * divided by that constant, nothing measured from a rendered row. A row that
+ * could grow makes the page size depend on which row is first on the page,
+ * and the table then flips between pages forever.
  *
  * Opt-in via the `autoPageSize` prop, matching amkor's own prop name.
  * When false (the default), `pageSize` behaves exactly as before: a fixed
@@ -149,9 +141,15 @@ function isActionsColumn<T>(col: AdminColumn<T>) {
 // Named here so the cell's fallback chain (custom render -> raw field ->
 // em dash) reads as one sequence of steps instead of adding its own nested
 // branch to AdminDataTable's cognitive complexity.
+// Fixed row height: a cell's content is clipped to the row height minus the
+// cell's py-2, so no cell can make its row taller than --height-table-row.
+const ROW_STYLE = { height: "var(--height-table-row)" };
+const CELL_CLASS = "py-2";
+const CELL_CLIP = "max-h-[calc(var(--height-table-row)_-_1rem)] overflow-hidden";
+
 function renderCellContent<T>(row: T, col: AdminColumn<T>): ReactNode {
   const content = col.render ? col.render(row) : ((readField(row, col.key) as ReactNode) ?? "—");
-  if (!isActionsColumn(col)) return content;
+  if (!isActionsColumn(col)) return <div className={CELL_CLIP}>{content}</div>;
   return <div className="flex items-center justify-center gap-1">{content}</div>;
 }
 
@@ -225,7 +223,7 @@ function SortableHeaderCell<T>({
   return (
     <TableHead
       key={col.key}
-      style={{ width: col.width }}
+      style={{ width: col.width, height: "var(--height-table-header)" }}
       className={cn(actionsCol && "w-px text-center", col.align === "right" && "text-right")}
       aria-sort={ariaSortValue}
     >
@@ -264,8 +262,6 @@ export default function AdminDataTable<T>({
   const {
     containerRef: apsContainerRef,
     toolbarRef: apsToolbarRef,
-    headerRef: apsHeaderRef,
-    rowRef: apsRowRef,
     pageSize: effectivePageSize,
   } = useAutoPageSize({
     enabled: autoPageSize,
@@ -307,7 +303,7 @@ export default function AdminDataTable<T>({
   // below the table).
   let tableBody: ReactNode = null;
   if (loading) {
-    tableBody = <TableSkeletonRows columns={columns} rowCount={effectivePageSize || 10} rowRef={apsRowRef} />;
+    tableBody = <TableSkeletonRows columns={columns} rowCount={effectivePageSize || 10} />;
   } else if (!isEmpty) {
     tableBody = (
       <TableBody>
@@ -316,7 +312,7 @@ export default function AdminDataTable<T>({
           return (
             <TableRow
               key={rowKey}
-              ref={rowIndex === 0 ? apsRowRef : undefined}
+              style={ROW_STYLE}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={onRowClick ? "cursor-pointer" : undefined}
             >
@@ -326,6 +322,7 @@ export default function AdminDataTable<T>({
                   <TableCell
                     key={col.key}
                     className={cn(
+                      CELL_CLASS,
                       actionsCol && "w-px whitespace-nowrap text-center",
                       !actionsCol && col.align === "right" && "text-right"
                     )}
@@ -357,7 +354,7 @@ export default function AdminDataTable<T>({
 
         <div className={cn(autoPageSize ? "flex-1 min-h-0 overflow-auto" : "max-h-[70dvh] overflow-auto")}>
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card" ref={apsHeaderRef}>
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 {columns.map((col) => (
                   <SortableHeaderCell key={col.key} col={col} sortState={sortState} onSort={handleSort} />
@@ -436,22 +433,20 @@ function widthFor(rowIndex: number, colIndex: number) {
 function TableSkeletonRows<T>({
   columns,
   rowCount,
-  rowRef,
 }: Readonly<{
   columns: AdminColumn<T>[];
   rowCount: number;
-  rowRef?: Ref<HTMLTableRowElement>;
 }>) {
   const rowIndexes = Array.from({ length: Math.max(1, rowCount) }, (_, i) => i);
 
   return (
     <TableBody>
       {rowIndexes.map((rowIndex) => (
-        <TableRow key={rowIndex} ref={rowIndex === 0 ? rowRef : undefined}>
+        <TableRow key={rowIndex} style={ROW_STYLE}>
           {columns.map((col, colIndex) => {
             const actionsCol = isActionsColumn(col);
             return (
-              <TableCell key={col.key} className={cn(actionsCol && "w-px text-center")}>
+              <TableCell key={col.key} className={cn(CELL_CLASS, actionsCol && "w-px text-center")}>
                 {actionsCol ? (
                   <div className="flex items-center justify-center gap-1">
                     <Skeleton className="h-6 w-6 rounded-md" />

@@ -3,6 +3,7 @@ import { Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import {
   Tooltip,
   TooltipContent,
@@ -356,29 +357,30 @@ export function BusinessFields({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <FieldLabel htmlFor="contact" help={FIELD_HELP.contact}>
-            Contact
-          </FieldLabel>
-          <Input
-            id="contact"
-            value={form.contact}
-            onChange={(e) => onChange("contact", e.target.value)}
-            maxLength={150}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <FieldLabel htmlFor="opening_hours" help={FIELD_HELP.opening_hours}>
-            Opening Hours
-          </FieldLabel>
-          <Input
-            id="opening_hours"
-            value={form.opening_hours}
-            onChange={(e) => onChange("opening_hours", e.target.value)}
-            maxLength={150}
-          />
-        </div>
+      <div className="flex flex-col gap-2">
+        <FieldLabel htmlFor="contact" help={FIELD_HELP.contact}>
+          Contact
+        </FieldLabel>
+        <Input
+          id="contact"
+          value={form.contact}
+          onChange={(e) => onChange("contact", e.target.value)}
+          maxLength={150}
+        />
+      </div>
+
+      {/* Opening hours is a weekly schedule editor, too tall to sit beside
+          Contact in a two column row, so each gets its own full width row. */}
+      <div className="flex flex-col gap-2">
+        <FieldLabel htmlFor="opening_hours" help={FIELD_HELP.opening_hours}>
+          Opening Hours
+        </FieldLabel>
+        <WeeklyHoursField
+          id="opening_hours"
+          ariaLabel="Opening hours"
+          value={form.opening_hours}
+          onChange={(next) => onChange("opening_hours", next)}
+        />
       </div>
 
       <div className="flex flex-col gap-2">

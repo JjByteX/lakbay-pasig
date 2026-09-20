@@ -7,6 +7,7 @@ import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SaveButton } from "@/components/public/save-button";
+import { HoursDisplay } from "@/components/public/hours-display";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6.3 (step-5-phases.md): full record fields from places (migration
@@ -166,7 +167,7 @@ export default function DiscoverPlaceDetailPage() {
           {place.operating_hours && (
             <div className="flex flex-col gap-1">
               <h2 className="text-base font-semibold text-foreground">Hours</h2>
-              <p className="text-base text-muted-foreground">{place.operating_hours}</p>
+              <HoursDisplay value={place.operating_hours} />
             </div>
           )}
 

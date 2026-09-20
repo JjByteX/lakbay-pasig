@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HoursDisplay } from "@/components/public/hours-display";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6.4 (step-5-phases.md): full record fields from businesses and
@@ -136,7 +137,7 @@ export default function DiscoverBusinessDetailPage() {
           {business.opening_hours && (
             <div className="flex flex-col gap-1">
               <h2 className="text-base font-semibold text-foreground">Hours</h2>
-              <p className="text-base text-muted-foreground">{business.opening_hours}</p>
+              <HoursDisplay value={business.opening_hours} />
             </div>
           )}
 

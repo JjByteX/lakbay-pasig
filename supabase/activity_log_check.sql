@@ -223,7 +223,7 @@ select pg_temp.as_user((select id from pg_temp.demo_users where name = 'staff.pl
 update public.places set
   description = '', historical_background = '', historical_significance = '',
   year_or_period = '', source_reference = '', operating_hours = '',
-  visit_duration = '', accessibility_info = '', nearby_places = '',
+  visit_duration = '', accessibility_info = '',
   facility_ids = '{}'
 where id = '11111111-0000-0000-0000-000000000009';
 

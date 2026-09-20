@@ -214,7 +214,10 @@ export default function AdminActivityPage() {
       key: "details",
       label: "Details",
       sortable: false,
-      render: (row) => describeDetails(row),
+      render: (row) => {
+        const text = describeDetails(row);
+        return <span title={text}>{text}</span>;
+      },
     },
   ];
 

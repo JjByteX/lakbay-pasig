@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, Loader2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CharCount } from "@/components/business/business-fields";
+import { DurationField } from "@/components/ui/duration-field";
+import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import { usePageTitle } from "@/lib/page-title";
 
 // Storage bucket for place photos. Not yet created by any migration in this
@@ -63,7 +65,6 @@ interface PlaceFormState {
   visit_duration: string;
   accessibility_info: string;
   facility_ids: string[];
-  nearby_places: string;
 }
 
 const EMPTY_FORM: PlaceFormState = {
@@ -80,7 +81,6 @@ const EMPTY_FORM: PlaceFormState = {
   visit_duration: "",
   accessibility_info: "",
   facility_ids: [],
-  nearby_places: "",
 };
 
 interface PlacePhoto {
@@ -143,6 +143,9 @@ export default function AdminPlaceDetailPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // New Place only: 1 = the place and visit details, 2 = the historical
+  // story. The edit form (Current Info tab) shows both halves at once.
+  const [step, setStep] = useState<1 | 2>(1);
 
   const [historicalPhotos, setHistoricalPhotos] = useState<PlacePhoto[]>([]);
   const [currentPhotos, setCurrentPhotos] = useState<PlacePhoto[]>([]);
@@ -201,7 +204,7 @@ export default function AdminPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places, verification_status, reviewed_by, category_id"
+        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facility_ids, verification_status, reviewed_by, category_id"
       )
       .eq("id", id)
       .single()
@@ -225,7 +228,6 @@ export default function AdminPlaceDetailPage() {
           visit_duration: data.visit_duration ?? "",
           accessibility_info: data.accessibility_info ?? "",
           facility_ids: data.facility_ids ?? [],
-          nearby_places: data.nearby_places ?? "",
         });
         setStatus(data.verification_status);
         setLoading(false);
@@ -298,11 +300,22 @@ export default function AdminPlaceDetailPage() {
     }));
   }
 
-  const canSubmit = form.name.trim().length > 0 && form.category_id.length > 0 && form.address.trim().length > 0 && !saving;
+  const missingRequired = [
+    !form.name.trim() && "Place Name",
+    !form.category_id && "Category",
+    !form.address.trim() && "Address",
+  ].filter(Boolean) as string[];
+  const canSubmit = missingRequired.length === 0 && !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+    // Enter inside a step 1 field submits the form; that means "Next", not
+    // save, or step 2 would be skipped.
+    if (step === 1) {
+      setStep(2);
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -510,6 +523,91 @@ export default function AdminPlaceDetailPage() {
     reviewSubmitLabel = "Verify";
   }
 
+  let submitLabel = isNew ? "Create Place" : "Save Changes";
+  if (saving) submitLabel = "Saving…";
+
+  // One two-step form for both a new place and an existing one (the page
+  // Verify/Reject lives on), so a reviewer reads a place in the same order
+  // staff entered it. Only step 2's tail and the last button differ: a new
+  // place has no id yet, so photos can't be added until it is saved.
+  const placeForm = (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <p className="text-sm font-semibold text-foreground">
+        Step {step} of 2: {step === 1 ? "Place" : "History"}
+      </p>
+
+      <PlaceFormFields
+        form={form}
+        updateField={updateField}
+        toggleFacility={toggleFacility}
+        categories={categories}
+        categoriesError={categoriesError}
+        facilities={facilities}
+        facilitiesError={facilitiesError}
+        section={step === 1 ? "place" : "history"}
+      />
+
+      {step === 2 && isNew && (
+        <p className="text-sm text-muted-foreground">
+          Save this place before adding historical or current photos.
+        </p>
+      )}
+
+      {step === 2 && !isNew && (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <PhotoUploadArea
+            label="Historical Photos"
+            photos={historicalPhotos}
+            uploading={uploading === "historical"}
+            onSelect={(e) => handlePhotoSelected(e, "historical")}
+            onRemove={(photo) => handleRemovePhoto(photo, "historical")}
+          />
+          <PhotoUploadArea
+            label="Current Photos"
+            photos={currentPhotos}
+            uploading={uploading === "current"}
+            onSelect={(e) => handlePhotoSelected(e, "current")}
+            onRemove={(photo) => handleRemovePhoto(photo, "current")}
+          />
+        </div>
+      )}
+
+      {step === 1 && !canSubmit && (
+        <p className="text-sm text-muted-foreground">
+          Required to continue: {missingRequired.join(", ")}.
+        </p>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {/* The keys are load-bearing: Next (type="button") and the submit button
+          share a slot, and without keys React reuses the one DOM button and
+          flips its type mid-click, submitting the form. */}
+      <div className="flex justify-between gap-2">
+        {step === 1 ? (
+          <Button key="cancel" type="button" variant="outline" onClick={() => navigate("/admin/places")}>
+            Cancel
+          </Button>
+        ) : (
+          <Button key="back" type="button" variant="outline" onClick={() => setStep(1)}>
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </Button>
+        )}
+        {step === 1 ? (
+          <Button key="next" type="button" disabled={missingRequired.length > 0} onClick={() => setStep(2)}>
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button key="save" type="submit" disabled={!canSubmit}>
+            {submitLabel}
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
@@ -530,32 +628,7 @@ export default function AdminPlaceDetailPage() {
       </div>
 
       {isNew ? (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          <PlaceFormFields
-            form={form}
-            updateField={updateField}
-            toggleFacility={toggleFacility}
-            categories={categories}
-            categoriesError={categoriesError}
-            facilities={facilities}
-            facilitiesError={facilitiesError}
-          />
-
-          <p className="text-sm text-muted-foreground">
-            Save this place before adding historical or current photos.
-          </p>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => navigate("/admin/places")}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {saving ? "Saving…" : "Create Place"}
-            </Button>
-          </div>
-        </form>
+        placeForm
       ) : (
         <Tabs defaultValue="info">
           <TabsList>
@@ -563,47 +636,7 @@ export default function AdminPlaceDetailPage() {
             <TabsTrigger value="history">Review History</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="info">
-            <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-              <PlaceFormFields
-                form={form}
-                updateField={updateField}
-                toggleFacility={toggleFacility}
-                categories={categories}
-                categoriesError={categoriesError}
-                facilities={facilities}
-                facilitiesError={facilitiesError}
-              />
-
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <PhotoUploadArea
-                  label="Historical Photos"
-                  photos={historicalPhotos}
-                  uploading={uploading === "historical"}
-                  onSelect={(e) => handlePhotoSelected(e, "historical")}
-                  onRemove={(photo) => handleRemovePhoto(photo, "historical")}
-                />
-                <PhotoUploadArea
-                  label="Current Photos"
-                  photos={currentPhotos}
-                  uploading={uploading === "current"}
-                  onSelect={(e) => handlePhotoSelected(e, "current")}
-                  onRemove={(photo) => handleRemovePhoto(photo, "current")}
-                />
-              </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => navigate("/admin/places")}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={!canSubmit}>
-                  {saving ? "Saving…" : "Save Changes"}
-                </Button>
-              </div>
-            </form>
-          </TabsContent>
+          <TabsContent value="info">{placeForm}</TabsContent>
 
           <TabsContent value="history">
             <ReviewHistoryList reviews={reviews} />
@@ -665,6 +698,7 @@ function PlaceFormFields({
   categoriesError,
   facilities,
   facilitiesError,
+  section,
 }: Readonly<{
   form: PlaceFormState;
   updateField: <K extends keyof PlaceFormState>(key: K, value: PlaceFormState[K]) => void;
@@ -673,19 +707,20 @@ function PlaceFormFields({
   categoriesError: string | null;
   facilities: PlaceFacility[];
   facilitiesError: string | null;
+  section: "place" | "history";
 }>) {
-  // Wrapped in the same `rounded-lg border border-border bg-card p-4` card
-  // shape settings.tsx (8.10) and business-fields.tsx's BusinessFields
-  // already use, so the form fields read as one bounded surface instead of
-  // floating directly on the page background. Wrapped here rather than at
-  // each of this file's own two call sites (the New Place form and the
-  // Current Info tab's edit form), since both render PlaceFormFields as
-  // their entire field set and would otherwise duplicate the same div.
-  // Photo uploads (Current Info tab only) and the Cancel/Save row stay
-  // outside the card at each call site, same split BusinessFields' own
-  // callers already use for their error text and buttons.
-  return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+  // One card, same `rounded-lg border border-border bg-card p-4` shape as
+  // before. Fields are grouped into three blocks by importance:
+  //   identity: what the place is (name through accessibility)
+  //   hours:    when it is open, the tallest single control
+  //   details:  what a visitor needs to plan a trip (fee, duration, facilities)
+  //   history:  the story, last because it is the longest and least urgent
+  // The two step form renders "place" (identity + details on the left, hours
+  // alone on the right, two columns from lg up) then "history" on its own
+  // page.
+
+  const identity = (
+    <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="name">Place Name</Label>
@@ -730,52 +765,6 @@ function PlaceFormFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="historical_background">Historical Background</Label>
-        <Textarea
-          id="historical_background"
-          placeholder="The longer origin and development story"
-          value={form.historical_background}
-          onChange={(e) => updateField("historical_background", e.target.value)}
-          className="min-h-30"
-          maxLength={5000}
-        />
-        <CharCount value={form.historical_background} max={5000} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="historical_significance">Historical Significance</Label>
-        <Textarea
-          id="historical_significance"
-          value={form.historical_significance}
-          onChange={(e) => updateField("historical_significance", e.target.value)}
-          className="min-h-30"
-          maxLength={5000}
-        />
-        <CharCount value={form.historical_significance} max={5000} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="year_or_period">Year Built or Historical Period</Label>
-          <Input
-            id="year_or_period"
-            value={form.year_or_period}
-            onChange={(e) => updateField("year_or_period", e.target.value)}
-            maxLength={100}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="source_reference">Source or Reference</Label>
-          <Input
-            id="source_reference"
-            value={form.source_reference}
-            onChange={(e) => updateField("source_reference", e.target.value)}
-            maxLength={300}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
         <Label htmlFor="address">Address</Label>
         <Input
           id="address"
@@ -787,16 +776,36 @@ function PlaceFormFields({
         />
       </div>
 
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="accessibility_info">Accessibility Info</Label>
+        <Textarea
+          id="accessibility_info"
+          value={form.accessibility_info}
+          onChange={(e) => updateField("accessibility_info", e.target.value)}
+          maxLength={300}
+        />
+        <CharCount value={form.accessibility_info} max={300} />
+      </div>
+    </div>
+  );
+
+  // Operating hours is a weekly schedule editor, far taller than any other
+  // field once a schedule is set, so it gets a column of its own on step 1.
+  const hours = (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="operating_hours">Operating Hours</Label>
+      <WeeklyHoursField
+        id="operating_hours"
+        ariaLabel="Operating hours"
+        value={form.operating_hours}
+        onChange={(next) => updateField("operating_hours", next)}
+      />
+    </div>
+  );
+
+  const details = (
+    <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="operating_hours">Operating Hours</Label>
-          <Input
-            id="operating_hours"
-            value={form.operating_hours}
-            onChange={(e) => updateField("operating_hours", e.target.value)}
-            maxLength={150}
-          />
-        </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="entrance_fee">Entrance Fee</Label>
           {/* entrance_fee is numeric (migration 0019): a plain peso amount,
@@ -822,24 +831,12 @@ function PlaceFormFields({
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="visit_duration">Estimated Visit Duration</Label>
-          <Input
+          <DurationField
             id="visit_duration"
             value={form.visit_duration}
-            onChange={(e) => updateField("visit_duration", e.target.value)}
-            maxLength={150}
+            onChange={(next) => updateField("visit_duration", next)}
           />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="accessibility_info">Accessibility Info</Label>
-        <Textarea
-          id="accessibility_info"
-          value={form.accessibility_info}
-          onChange={(e) => updateField("accessibility_info", e.target.value)}
-          maxLength={300}
-        />
-        <CharCount value={form.accessibility_info} max={300} />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -865,17 +862,71 @@ function PlaceFormFields({
         </div>
         {facilitiesError && <p className="text-sm text-destructive">{facilitiesError}</p>}
       </div>
+    </div>
+  );
+
+  const history = (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="year_or_period">Year Built or Historical Period</Label>
+          <Input
+            id="year_or_period"
+            value={form.year_or_period}
+            onChange={(e) => updateField("year_or_period", e.target.value)}
+            maxLength={100}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="source_reference">Source or Reference</Label>
+          <Input
+            id="source_reference"
+            value={form.source_reference}
+            onChange={(e) => updateField("source_reference", e.target.value)}
+            maxLength={300}
+          />
+        </div>
+      </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="nearby_places">Nearby Places</Label>
+        <Label htmlFor="historical_significance">Historical Significance</Label>
         <Textarea
-          id="nearby_places"
-          value={form.nearby_places}
-          onChange={(e) => updateField("nearby_places", e.target.value)}
-          maxLength={300}
+          id="historical_significance"
+          value={form.historical_significance}
+          onChange={(e) => updateField("historical_significance", e.target.value)}
+          className="min-h-30"
+          maxLength={5000}
         />
-        <CharCount value={form.nearby_places} max={300} />
+        <CharCount value={form.historical_significance} max={5000} />
       </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="historical_background">Historical Background</Label>
+        <Textarea
+          id="historical_background"
+          placeholder="The longer origin and development story"
+          value={form.historical_background}
+          onChange={(e) => updateField("historical_background", e.target.value)}
+          className="min-h-30"
+          maxLength={5000}
+        />
+        <CharCount value={form.historical_background} max={5000} />
+      </div>
+    </div>
+  );
+
+  if (section === "history") {
+    return <div className="rounded-lg border border-border bg-card p-4">{history}</div>;
+  }
+
+  // Two columns from lg up, one column below it, divider between.
+  return (
+    <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
+      <div className="flex flex-col gap-4 lg:pr-4">
+        {identity}
+        {details}
+      </div>
+      <div className="lg:pl-4">{hours}</div>
     </div>
   );
 }

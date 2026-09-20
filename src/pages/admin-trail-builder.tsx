@@ -27,38 +27,28 @@ import {
 } from "@/components/admin/place-business-picker";
 import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
 import { CharCount } from "@/components/business/business-fields";
+import { DurationField } from "@/components/ui/duration-field";
+import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
 import { usePageTitle } from "@/lib/page-title";
 
-// Phase 4.2 (step-4-phases.md): stepper layout, not sidebar-style, per
-// ux-ui-guidelines.md's Layout Pattern Rules ("linear flow ... never use a
-// sidebar"). No existing stepper component in this codebase
-// (grep confirmed), so this is a plain index-based control built from
-// existing Button/Badge primitives rather than repurposing Tabs, which
-// this codebase already uses for non-linear content switching
-// (admin-place-detail.tsx's Current Info / Review History) — reusing it
-// here would blur that distinction rather than reuse a pattern.
+// Trail builder: one screen, no stepper. The trail info form is the left
+// column, Stops the right, and per stop Discovery Content (5.1) is a centered
+// modal, per ux-ui-guidelines.md's modal rule (focused task, fits one
+// viewport), not a side panel. Publish/Unpublish sits top right beside the
+// status badge, the placement convention for a primary action, with the reason
+// shown next to it whenever it is unavailable (Disabled/gated rule).
 //
-// Four steps named in step-4-phases.md 4.2: Info, Stops, Discovery
-// Content, Review and Publish. Info (4.3) and Stops (4.5) are built here.
-// Discovery Content is 5.1 scope, built below: a centered modal per
-// stop, per ux-ui-guidelines.md's modal rule (focused task, fits one
-// viewport), not a side panel. needs_place_review (5.2) is computed by
-// migration 0012's trigger on every insert/update to discovery_content,
-// this page never sets it on a write — see the insert/update calls below.
-// The Places queue extension (5.3) that surfaces flagged rows is built in
-// admin-places.tsx / admin-discovery-content-review.tsx.
-// Review and Publish (5.4) is now built: a trail-wide summary (stop count,
-// discovery content count, any flagged entries with a link to
-// admin-discovery-content-review.tsx) plus the same publish/unpublish gate
-// admin-trails.tsx's list page already applies (Phase 5.4, partial, per
-// architecture-notes.md) — no stops, or any linked discovery_content still
-// needs_place_review, blocks draft -> published with a visible reason, per
-// ux-ui-guidelines.md's Disabled/gated rule and admin-panel-spec.md's Trail
-// Publishing exception. Unpublishing a live trail is never blocked, same as
-// the list page.
-
-const STEPS = ["Info", "Stops", "Discovery Content", "Review and Publish"] as const;
-type Step = (typeof STEPS)[number];
+// This used to be two steps, Details then Review and Publish. The second step
+// only mirrored what Details already shows and repeated the publish action
+// admin-trails.tsx's list page has, so it was removed: ux-ui-guidelines.md's
+// "if content fits on a single screen, keep it on a single screen" and its
+// default-to-removing rule. The gate itself is unchanged, see
+// publishBlockedReason below. Flagged discovery content still links to
+// admin-discovery-content-review.tsx (Phase 5.3), listed under Stops.
+//
+// needs_place_review is computed by migration 0012's trigger on every insert/
+// update to discovery_content, this page never sets it on a write, see the
+// insert/update calls below.
 
 // Category Directory Phase 6.1: Theme renamed Category per direct
 // instruction (category-directory-phases.md 6.1, category-directory-
@@ -395,8 +385,32 @@ function DiscoveryContentModalBody({
   );
 }
 
-// Extracted from AdminTrailBuilderPage's Review and Publish step (previously
-// an inline IIFE). Same early-return-when-none behavior, same markup.
+// Why Publish is unavailable right now, or null when it is allowed. Unpublishing
+// is never blocked, so a published trail always returns null. Same two blocking
+// rules as admin-trails.tsx's handleTogglePublish (no stops, or discovery
+// content still flagged), per admin-panel-spec.md's Trail Publishing exception,
+// plus unsaved stops, which exist only in this page's state and would not be
+// counted by the database.
+function publishBlockedReason(
+  status: "draft" | "published",
+  stops: StopRow[],
+  flaggedCount: number
+): string | null {
+  if (status === "published") return null;
+  if (stops.some((s) => s.id.startsWith("temp-"))) return "Save your stops to publish.";
+  if (stops.length === 0) return "Add at least one stop to publish.";
+  if (flaggedCount > 0) {
+    return flaggedCount === 1
+      ? "1 discovery entry still needs review."
+      : `${flaggedCount} discovery entries still need review.`;
+  }
+  return null;
+}
+
+// Lists discovery content still flagged needs_place_review, each with the stop
+// it belongs to and a link to its review page. Returns nothing when none are
+// flagged. Shown under Stops so the reason Publish is unavailable is next to the
+// content that has to be fixed.
 function FlaggedForReview({
   discoveryContent,
   stops,
@@ -433,7 +447,7 @@ export default function AdminTrailBuilderPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
-  const [step, setStep] = useState<Step>("Info");
+  const [infoSaved, setInfoSaved] = useState(false);
   const [routeId, setRouteId] = useState<string | null>(isNew ? null : id ?? null);
   const [status, setStatus] = useState<"draft" | "published">("draft");
 
@@ -449,7 +463,7 @@ export default function AdminTrailBuilderPage() {
   // Phase 5.1 already established for its own Category field, reused
   // rather than reinvented per constraints.md's Inventory Before
   // Suggesting rule. Loaded once on mount, independent of isNew/routeId,
-  // since a new trail's Info step needs the picker just as much as an
+  // since a new trail's Details step needs the picker just as much as an
   // existing one's does.
   const [categories, setCategories] = useState<TrailCategory[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
@@ -471,8 +485,8 @@ export default function AdminTrailBuilderPage() {
   const [savingStops, setSavingStops] = useState(false);
 
   // 5.1: discovery content, loaded once per trail alongside stops (both
-  // read from routeId), not lazily per stop, so the Stops step's own list
-  // (see the "content count" badge below) and the Discovery Content step
+  // read from routeId), not lazily per stop, so the Stops list's
+  // "content count" badge (below) and the per stop modal
   // share one source of truth instead of two independent fetches drifting.
   const [discoveryContent, setDiscoveryContent] = useState<DiscoveryContentRow[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(!isNew);
@@ -485,12 +499,12 @@ export default function AdminTrailBuilderPage() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [discoveryForm, setDiscoveryForm] = useState<DiscoveryContentFormState>(EMPTY_DISCOVERY_FORM);
 
-  // 5.4: Review and Publish. Mirrors admin-trails.tsx's publish gate exactly
-  // (same two blocking conditions, same message/link shape), per constraints.md's
-  // Inventory Before Suggesting rule — this is the same gate, reached from
-  // inside the builder instead of the list row.
+  // 5.4: Publish. Same gate as admin-trails.tsx's list page (see
+  // publishBlockedReason), reached from the page header instead of a list
+  // row. publishError only holds a failed database write, the blocking rules
+  // are shown as publishBlockedReason instead of an error.
   const [publishSaving, setPublishSaving] = useState(false);
-  const [publishError, setPublishError] = useState<{ message: string; link: { href: string; label: string } | null } | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNew || !routeId) return;
@@ -623,14 +637,15 @@ export default function AdminTrailBuilderPage() {
 
   function updateInfoField<K extends keyof TrailInfoFormState>(key: K, value: TrailInfoFormState[K]) {
     setInfo((prev) => ({ ...prev, [key]: value }));
+    setInfoSaved(false);
   }
 
   const canSaveInfo = info.name.trim().length > 0 && !saving;
 
-  // Extracted from a nested ternary in the Info step's Save button JSX.
+  // Extracted from a nested ternary in the Details step's Save button JSX.
   function saveInfoButtonLabel(): string {
     if (saving) return "Saving…";
-    return routeId ? "Save and Continue" : "Create Trail";
+    return routeId ? "Save Changes" : "Create Trail";
   }
 
   // 4.3: saves as a routes row with status = draft, per step-4-phases.md.
@@ -673,21 +688,47 @@ export default function AdminTrailBuilderPage() {
         return;
       }
       setRouteId(data.id);
-      setStops([]);
       setStopsLoading(false);
+
+      // Stops picked before the trail existed are written now that there is
+      // a route_id for them. If that write fails the trail row already
+      // exists, so stay on this page with routeId set: the button becomes
+      // "Save Changes" and the next save retries the stops instead of
+      // creating a duplicate trail. Navigating away here would remount the
+      // page and drop the unsaved stops.
+      if (stops.length > 0) {
+        const stopsSaved = await persistStops(stops, data.id);
+        if (!stopsSaved) {
+          setSaving(false);
+          return;
+        }
+      }
+
+      setSaving(false);
       navigate(`/admin/trails/${data.id}`, { replace: true });
-      setStep("Stops");
       return;
     }
 
     const { error: updateError } = await supabase.from("routes").update(payload).eq("id", routeId!);
 
-    setSaving(false);
     if (updateError) {
+      setSaving(false);
       setError(updateError.message);
       return;
     }
-    setStep("Stops");
+
+    // Retry path for the failed first write described above: any stop still
+    // carrying a `temp-` id was never persisted.
+    if (stops.some((s) => s.id.startsWith("temp-"))) {
+      const stopsSaved = await persistStops(stops);
+      if (!stopsSaved) {
+        setSaving(false);
+        return;
+      }
+    }
+
+    setSaving(false);
+    setInfoSaved(true);
   }
 
   // 4.5: add, remove, reorder. route_stops.sequence_order has a unique
@@ -711,8 +752,19 @@ export default function AdminTrailBuilderPage() {
   // negative, out-of-range sequence_order first, then set to their real
   // final value in a second pass, so no in-flight state can collide with
   // another row's current value.
-  async function persistStops(nextStops: StopRow[]) {
-    if (!routeId) return;
+  //
+  // Stops can now be added before the trail itself is saved. With no
+  // routeId yet there is no route_stops.route_id to write against, so the
+  // list is only held in state (every row keeps its `temp-` id) and written
+  // out for real by handleSaveInfo once the routes row exists. handleSaveInfo
+  // passes forRouteId explicitly for that first write, since the routeId
+  // state hasn't updated yet at that point. Returns true when the stops are
+  // in the state the caller asked for, false if a database write failed.
+  async function persistStops(nextStops: StopRow[], forRouteId: string | null = routeId): Promise<boolean> {
+    if (!forRouteId) {
+      setStops(nextStops.map((s, index) => ({ ...s, sequence_order: index })));
+      return true;
+    }
 
     setSavingStops(true);
     setStopsError(null);
@@ -728,7 +780,7 @@ export default function AdminTrailBuilderPage() {
       if (deleteError) {
         setSavingStops(false);
         setStopsError(deleteError.message);
-        return;
+        return false;
       }
     }
 
@@ -736,7 +788,7 @@ export default function AdminTrailBuilderPage() {
     if ("error" in renumberResult) {
       setSavingStops(false);
       setStopsError(renumberResult.error);
-      return;
+      return false;
     }
 
     let insertedRows: { id: string; stop_type: string; stop_id: string; sequence_order: number }[] = [];
@@ -750,11 +802,11 @@ export default function AdminTrailBuilderPage() {
       // table right before insert, same verified-only bar the picker
       // itself queries against, rather than trusting the payload handlePick
       // already had in hand. See insertNewStops above.
-      const result = await insertNewStops(routeId, newStops, nextStops);
+      const result = await insertNewStops(forRouteId, newStops, nextStops);
       if ("error" in result) {
         setSavingStops(false);
         setStopsError(result.error);
-        return;
+        return false;
       }
       insertedRows = result.rows;
     }
@@ -780,6 +832,7 @@ export default function AdminTrailBuilderPage() {
         }))
         .sort((a, b) => a.sequence_order - b.sequence_order)
     );
+    return true;
   }
 
   function handlePick(location: PickedLocation) {
@@ -964,30 +1017,15 @@ export default function AdminTrailBuilderPage() {
     setDiscoveryContent((prev) => prev.filter((entry) => entry.id !== entryId));
   }
 
-  // 5.4: same two blocking conditions as admin-trails.tsx's handleTogglePublish
-  // — no stops, or any linked discovery_content still needs_place_review —
-  // per admin-panel-spec.md's Trail Publishing exception and
-  // ux-ui-guidelines.md's Disabled/gated rule (visible reason, link to the
-  // blocking content). Unpublishing a live trail is never blocked, matching
-  // the list page. flaggedEntries below (computed at render) supplies the
-  // first flagged entry the same way blockingEntry does there.
+  // The gate is publishBlockedReason, shown beside the button while it applies.
+  // The button is disabled while blocked, so the check here is only a guard.
+  // Unpublishing a live trail is never blocked, matching the list page.
+  const flaggedEntries = discoveryContent.filter((entry) => entry.needs_place_review);
+  const blockedReason = publishBlockedReason(status, stops, flaggedEntries.length);
+
   async function handleTogglePublish() {
-    if (!routeId) return;
+    if (!routeId || blockedReason) return;
     setPublishError(null);
-
-    if (status === "draft" && stops.length === 0) {
-      setPublishError({ message: "Add at least one stop before publishing this trail.", link: null });
-      return;
-    }
-
-    const firstFlagged = discoveryContent.find((entry) => entry.needs_place_review);
-    if (status === "draft" && firstFlagged) {
-      setPublishError({
-        message: `"${firstFlagged.title}" still needs review before this trail can publish.`,
-        link: { href: `/admin/places/discovery/${firstFlagged.id}`, label: "Review it" },
-      });
-      return;
-    }
 
     setPublishSaving(true);
     const nextStatus = status === "draft" ? "published" : "draft";
@@ -999,13 +1037,13 @@ export default function AdminTrailBuilderPage() {
 
     setPublishSaving(false);
     if (updateError) {
-      setPublishError({ message: updateError.message, link: null });
+      setPublishError(updateError.message);
       return;
     }
     setStatus(nextStatus);
   }
 
-  // Extracted from a nested ternary in the Review and Publish step's button.
+  // Extracted from a nested ternary in the Publish button.
   function publishButtonLabel(): string {
     if (publishSaving) return "Saving…";
     return status === "published" ? "Unpublish" : "Publish";
@@ -1041,7 +1079,8 @@ export default function AdminTrailBuilderPage() {
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                disabled={savingStops}
+                disabled={savingStops || stop.id.startsWith("temp-")}
+                title={stop.id.startsWith("temp-") ? "Save the trail first to add discovery content" : undefined}
                 onClick={() => openDiscoveryModal(stop.id)}
               >
                 <BookOpen className="h-4 w-4" />
@@ -1099,125 +1138,139 @@ export default function AdminTrailBuilderPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-h-9 items-center gap-3">
           <h1 className="text-xl font-semibold text-foreground">
             {isNew && !routeId ? "New Trail" : info.name || "Edit Trail"}
           </h1>
           {routeId && <Badge variant={status === "published" ? "default" : "outline"}>{status}</Badge>}
         </div>
+
+        {/* Publish/Unpublish: top right, only once the trail exists. While it is
+            unavailable the reason sits directly under it, never a silently
+            disabled button. */}
+        {routeId && (
+          <div className="flex max-w-sm flex-col items-end gap-1">
+            <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null}>
+              {publishButtonLabel()}
+            </Button>
+            {blockedReason && <p className="text-right text-sm text-muted-foreground">{blockedReason}</p>}
+            {publishError && <p className="text-right text-sm text-destructive">{publishError}</p>}
+          </div>
+        )}
       </div>
 
-      <StepIndicator
-        currentStep={step}
-        onSelect={setStep}
-        // Stops, Discovery Content, and Review and Publish all need a
-        // saved routes row to attach to, per 4.3's "saves as a routes row"
-        // — a brand new trail can't jump ahead until Info is saved once.
-        disabledSteps={routeId ? new Set() : new Set<Step>(["Stops", "Discovery Content", "Review and Publish"])}
-      />
-
-      {step === "Info" && (
+      {/* Two columns on large screens: the trail info form on the left, Stops on
+          the right. Stacks to one column below lg so neither side gets squeezed
+          on tablets and phones. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Route Name</Label>
-              <Input
-                id="name"
-                value={info.name}
-                onChange={(e) => updateInfoField("name", e.target.value)}
-                required
-                maxLength={150}
-              />
-              <CharCount value={info.name} max={150} />
+          {/* Info fields share one card, same shape as admin-place-detail.tsx's
+              PlaceFormFields. The error line and the Cancel/Save row stay outside
+              it, same split. */}
+          <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Route Name</Label>
+                <Input
+                  id="name"
+                  value={info.name}
+                  onChange={(e) => updateInfoField("name", e.target.value)}
+                  required
+                  maxLength={150}
+                />
+                <CharCount value={info.name} max={150} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="category">Category</Label>
+                <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
+                  <SelectTrigger id="category">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="estimated_duration">Estimated Duration</Label>
+                <DurationField
+                  id="estimated_duration"
+                  value={info.estimated_duration}
+                  onChange={(next) => updateInfoField("estimated_duration", next)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="estimated_budget">Estimated Budget</Label>
+                {/* estimated_budget is numeric (migration 0019): a single
+                    peso amount, not a range, per admin-form-fields-plan.md
+                    #4 -- drops the old "e.g. ₱300–500" range placeholder.
+                    The ₱ sign is a fixed label beside the field, never
+                    typed by the user; the number input's own up/down
+                    arrows step the value. Same pattern as
+                    admin-place-detail.tsx's entrance_fee field. */}
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    ₱
+                  </span>
+                  <Input
+                    id="estimated_budget"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={100000}
+                    step={1}
+                    placeholder="e.g. 300"
+                    value={info.estimated_budget}
+                    onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
+                    className="pl-7"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Recommended time is day chips plus a time range, too wide for
+                the three column row it used to share with duration and
+                budget, so it gets its own row. */}
             <div className="flex flex-col gap-2">
-              <Label htmlFor="category">Category</Label>
-              <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select a category" />
+              <Label htmlFor="recommended_time">Recommended Time</Label>
+              <RecommendedTimeField
+                id="recommended_time"
+                ariaLabel="Recommended time"
+                value={info.recommended_time}
+                onChange={(next) => updateInfoField("recommended_time", next)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 sm:w-60">
+              <Label htmlFor="run_type">Run Type</Label>
+              <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
+                <SelectTrigger id="run_type">
+                  <SelectValue placeholder="Select a run type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
+                  {RUN_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="estimated_duration">Estimated Duration</Label>
-              <Input
-                id="estimated_duration"
-                placeholder="e.g. 2 hours"
-                value={info.estimated_duration}
-                onChange={(e) => updateInfoField("estimated_duration", e.target.value)}
-                maxLength={100}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="estimated_budget">Estimated Budget</Label>
-              {/* estimated_budget is numeric (migration 0019): a single
-                  peso amount, not a range, per admin-form-fields-plan.md
-                  #4 -- drops the old "e.g. ₱300–500" range placeholder.
-                  The ₱ sign is a fixed label beside the field, never
-                  typed by the user; the number input's own up/down
-                  arrows step the value. Same pattern as
-                  admin-place-detail.tsx's entrance_fee field. */}
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  ₱
-                </span>
-                <Input
-                  id="estimated_budget"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={100000}
-                  step={1}
-                  placeholder="e.g. 300"
-                  value={info.estimated_budget}
-                  onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
-                  className="pl-7"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="recommended_time">Recommended Time</Label>
-              <Input
-                id="recommended_time"
-                placeholder="e.g. Weekend mornings"
-                value={info.recommended_time}
-                onChange={(e) => updateInfoField("recommended_time", e.target.value)}
-                maxLength={150}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:w-60">
-            <Label htmlFor="run_type">Run Type</Label>
-            <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
-              <SelectTrigger id="run_type">
-                <SelectValue placeholder="Select a run type" />
-              </SelectTrigger>
-              <SelectContent>
-                {RUN_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="flex justify-end gap-2">
+          <div className="flex items-center justify-end gap-2">
+            {infoSaved && <span className="text-sm text-muted-foreground">Saved</span>}
             <Button type="button" variant="outline" onClick={() => navigate("/admin/trails")}>
               Cancel
             </Button>
@@ -1226,19 +1279,30 @@ export default function AdminTrailBuilderPage() {
             </Button>
           </div>
         </div>
-      )}
 
-      {step === "Stops" && routeId && (
+        {/* Stops: right column, no card behind it. Available before the trail is
+            created, stops picked now are saved together with the trail. */}
         <div className="flex flex-col gap-4">
+          <h2 className="text-base font-semibold text-foreground">Stops</h2>
           {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
 
           {stopsListBody()}
+
+          {stops.some((s) => s.id.startsWith("temp-")) && (
+            <p className="text-xs text-muted-foreground">
+              {routeId
+                ? "Some stops are not saved yet. Press Save Changes to save them."
+                : "Stops are saved when you create the trail. Discovery content can be added after that."}
+            </p>
+          )}
 
           <div>
             <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
               Add Stop
             </Button>
           </div>
+
+          <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
 
           <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
             <DialogContent>
@@ -1252,11 +1316,9 @@ export default function AdminTrailBuilderPage() {
             </DialogContent>
           </Dialog>
 
-          {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal
-              rule — a focused task fitting one viewport, not a side panel.
-              Reachable from the Discovery Content button above, on the same
-              stop's row, so staff never has to remember which numbered stop
-              they meant once they reach the separate Discovery Content step. */}
+          {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal rule,
+              a focused task fitting one viewport, not a side panel. Reachable
+              from the Discovery Content button on the same stop's row. */}
           <Dialog
             open={discoveryModalStopId !== null}
             onOpenChange={(open) => {
@@ -1293,104 +1355,7 @@ export default function AdminTrailBuilderPage() {
             </DialogContent>
           </Dialog>
         </div>
-      )}
-
-      {step === "Discovery Content" && (
-        <p className="text-sm text-muted-foreground">
-          Discovery content is managed per stop from the Stops step above —
-          open a stop's "Discovery Content" button to add, edit, or remove
-          its content. See the Review and Publish step for a trail-wide
-          summary, including anything still flagged for review.
-        </p>
-      )}
-
-      {step === "Review and Publish" && routeId && (
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-foreground">Stops</span>
-              <span className="text-sm text-muted-foreground">{stops.length}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-foreground">Discovery content</span>
-              <span className="text-sm text-muted-foreground">{discoveryContent.length}</span>
-            </div>
-          </div>
-
-          {/* 5.4: "any discovery content still flagged," per step-4-phases.md —
-              needs_place_review comes from migration 0012's trigger, this step
-              only reads it. Each row names which stop it's attached to, per
-              step-4-plan.md's "show which stop's content is blocking," and
-              links to admin-discovery-content-review.tsx, the same review
-              destination admin-trails.tsx's list-page gate already links to
-              (Phase 5.3). */}
-          <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
-
-          {publishError && (
-            <p className="text-sm text-destructive">
-              {publishError.message}
-              {publishError.link && (
-                <>
-                  {" "}
-                  <Link to={publishError.link.href} className="underline underline-offset-2">
-                    {publishError.link.label}
-                  </Link>
-                </>
-              )}
-            </p>
-          )}
-
-          <div className="flex items-center gap-3">
-            <Badge variant={status === "published" ? "default" : "outline"}>{status}</Badge>
-            <Button
-              type="button"
-              onClick={handleTogglePublish}
-              disabled={
-                publishSaving ||
-                (status === "draft" &&
-                  (stops.length === 0 || discoveryContent.some((entry) => entry.needs_place_review)))
-              }
-            >
-              {publishButtonLabel()}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StepIndicator({
-  currentStep,
-  onSelect,
-  disabledSteps,
-}: Readonly<{
-  currentStep: Step;
-  onSelect: (step: Step) => void;
-  disabledSteps: Set<Step>;
-}>) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {STEPS.map((s, index) => {
-        const isActive = s === currentStep;
-        const isDisabled = disabledSteps.has(s);
-        return (
-          <Button
-            key={s}
-            type="button"
-            variant={isActive ? "default" : "outline"}
-            size="sm"
-            disabled={isDisabled}
-            onClick={() => onSelect(s)}
-            className="gap-2"
-          >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-background/20 text-[10px]">
-              {index + 1}
-            </span>
-            {s}
-          </Button>
-        );
-      })}
+      </div>
     </div>
   );
 }
