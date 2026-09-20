@@ -54,13 +54,13 @@ export default function AdminPage() {
     <SidebarProvider>
       <AdminSidebar />
       <SidebarInset className="h-svh overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-6">
           <SidebarTrigger />
           {/* Phase 3.4/4.3: search and notifications land here together,
               both new to this header, which previously held only the
               trigger (confirmed directly before adding anything, per
               constraints.md's File Traversal rule). Search sits top
-              right at a bounded width (its own max-w-sm) rather than
+              right at a bounded width (its own max-w-xs) rather than
               stretching the full remaining row, per ux-ui-guidelines.md's
               Component Sizing Rules ("size components proportionally to
               the amount of content they hold") -- a full-width bar here
@@ -76,7 +76,13 @@ export default function AdminPage() {
               search (previously search, then bell) -- plain JSX order
               swap, this row has no separate CSS order property either
               child relies on, so DOM order alone decides the visual
-              left-to-right order in this flex row. */}
+              left-to-right order in this flex row.
+              Bug fix / direct instruction: px-4 -> px-6, matching the
+              content area's own p-6 below -- the header's right edge sat
+              noticeably closer to the viewport edge than the page content
+              underneath it did, since the two used different horizontal
+              padding scales for what should read as one consistent page
+              margin running the full height of the admin shell. */}
           <div className="ml-auto flex items-center gap-2">
             <AdminNotificationBell />
             <AdminSearchBar />

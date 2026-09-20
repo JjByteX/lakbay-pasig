@@ -15,6 +15,7 @@ import {
   User as UserIcon,
   Settings as SettingsIcon,
   LogOut,
+  ArrowLeftRight,
   Home as HomeIcon,
 } from "lucide-react";
 import { BottomNav } from "./bottom-nav";
@@ -442,7 +443,9 @@ function isSearchVisible(pathname: string): boolean {
 // the header the same amount the search bar already is, not a mismatched
 // third depth on this same row. "Profile" and "Settings" labels/
 // destinations match profile.tsx's own Settings link row and page title
-// exactly, no synonym introduced for either concept.
+// exactly, no synonym introduced for either concept. A staff/admin account
+// also gets an "Admin View"/"Staff View" item (/admin) between Settings
+// and Home Page -- see that item's own comment below.
 function AccountMenu() {
   const { session, profile } = useAuth();
   const navigate = useNavigate();
@@ -509,6 +512,19 @@ function AccountMenu() {
             <SettingsIcon className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>
+          {/* View switcher, staff/admin accounts only: same session, same
+              account, just "/admin" instead of "/" -- not a role change,
+              staff_role/system_permission are untouched, only the URL
+              changes. Same item/reasoning as public-sidebar.tsx's desktop
+              counterpart, mirrored here for the mobile header menu. Hidden
+              entirely for a resident with no staff_role, matching this
+              codebase's existing "hide what doesn't apply" rule. */}
+          {profile?.staff_role && (
+            <DropdownMenuItem onClick={() => navigate("/admin")}>
+              <ArrowLeftRight className="mr-2 h-4 w-4" />
+              {profile.staff_role === "admin" ? "Admin" : "Staff"} View
+            </DropdownMenuItem>
+          )}
           {/* Home Page: takes a signed-in user back to the landing page
               (/welcome, landing.tsx) -- distinct from "Home" the bottom-
               nav/sidebar tab (bottom-nav.tsx, public-sidebar.tsx's own

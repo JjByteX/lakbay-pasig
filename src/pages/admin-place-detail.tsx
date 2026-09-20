@@ -49,8 +49,6 @@ function getStoragePathFromPublicUrl(publicUrl: string): string | null {
   return decodeURIComponent(publicUrl.slice(index + marker.length));
 }
 
-const LANGUAGES = ["English", "Filipino", "Both"] as const;
-
 interface PlaceFormState {
   name: string;
   category_id: string;
@@ -66,7 +64,6 @@ interface PlaceFormState {
   accessibility_info: string;
   facility_ids: string[];
   nearby_places: string;
-  language: string;
 }
 
 const EMPTY_FORM: PlaceFormState = {
@@ -84,7 +81,6 @@ const EMPTY_FORM: PlaceFormState = {
   accessibility_info: "",
   facility_ids: [],
   nearby_places: "",
-  language: "",
 };
 
 interface PlacePhoto {
@@ -205,7 +201,7 @@ export default function AdminPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places, language, verification_status, reviewed_by, category_id"
+        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places, verification_status, reviewed_by, category_id"
       )
       .eq("id", id)
       .single()
@@ -230,7 +226,6 @@ export default function AdminPlaceDetailPage() {
           accessibility_info: data.accessibility_info ?? "",
           facility_ids: data.facility_ids ?? [],
           nearby_places: data.nearby_places ?? "",
-          language: data.language ?? "",
         });
         setStatus(data.verification_status);
         setLoading(false);
@@ -679,8 +674,18 @@ function PlaceFormFields({
   facilities: PlaceFacility[];
   facilitiesError: string | null;
 }>) {
+  // Wrapped in the same `rounded-lg border border-border bg-card p-4` card
+  // shape settings.tsx (8.10) and business-fields.tsx's BusinessFields
+  // already use, so the form fields read as one bounded surface instead of
+  // floating directly on the page background. Wrapped here rather than at
+  // each of this file's own two call sites (the New Place form and the
+  // Current Info tab's edit form), since both render PlaceFormFields as
+  // their entire field set and would otherwise duplicate the same div.
+  // Photo uploads (Current Info tab only) and the Cancel/Save row stay
+  // outside the card at each call site, same split BusinessFields' own
+  // callers already use for their error text and buttons.
   return (
-    <>
+    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="name">Place Name</Label>
@@ -824,21 +829,6 @@ function PlaceFormFields({
             maxLength={150}
           />
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="language">Language</Label>
-          <Select value={form.language} onValueChange={(v) => updateField("language", v)}>
-            <SelectTrigger id="language">
-              <SelectValue placeholder="Select a language" />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map((l) => (
-                <SelectItem key={l} value={l}>
-                  {l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -886,7 +876,7 @@ function PlaceFormFields({
         />
         <CharCount value={form.nearby_places} max={300} />
       </div>
-    </>
+    </div>
   );
 }
 

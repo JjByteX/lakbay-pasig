@@ -224,37 +224,37 @@ where id = 'b13f9b4b-6d0a-4f9a-8f5a-2f7cf3a1e6a1';
 -- 2.3 Residents (no business)
 update public.profiles set
   display_name = 'Demo Resident One', contact_number = '+639180000001',
-  date_of_birth = '1998-03-14', preferred_language = 'English',
+  date_of_birth = '1998-03-14',
   preferred_categories = array['Heritage Site', 'Museum']
 where id = 'ed8d4b57-6a77-418b-9db3-11c18e18fbca';
 
 update public.profiles set
   display_name = 'Demo Resident Two', contact_number = '+639180000002',
-  date_of_birth = '1995-07-22', preferred_language = 'Filipino',
+  date_of_birth = '1995-07-22',
   preferred_categories = array['Church', 'Monument']
 where id = '75486d5a-d222-4853-8046-8a55199c6208';
 
 update public.profiles set
   display_name = 'Demo Resident Three', contact_number = '+639180000003',
-  date_of_birth = '2002-11-02', preferred_language = 'Both',
+  date_of_birth = '2002-11-02',
   preferred_categories = array['Cultural Site']
 where id = 'e927ff41-bff8-43f0-9c1f-98fcaa54793d';
 
 update public.profiles set
   display_name = 'Demo Resident Four', contact_number = '+639180000004',
-  date_of_birth = '1990-01-30', preferred_language = 'English',
+  date_of_birth = '1990-01-30',
   preferred_categories = array['Heritage Site', 'Church']
 where id = 'db860542-f964-4290-a8f4-72c58c0dfff3';
 
 update public.profiles set
   display_name = 'Demo Resident Five', contact_number = '+639180000005',
-  date_of_birth = '1988-09-09', preferred_language = 'Filipino',
+  date_of_birth = '1988-09-09',
   preferred_categories = array['Museum']
 where id = 'c5a73b63-20bd-4310-9515-3f22fa9dd40c';
 
 update public.profiles set
   display_name = 'Demo Resident Six', contact_number = '+639180000006',
-  date_of_birth = '2004-05-18', preferred_language = 'English',
+  date_of_birth = '2004-05-18',
   preferred_categories = array['Cultural Site', 'Monument']
 where id = '62acb632-8642-4b55-86ac-dfdee7f1d953';
 
@@ -264,32 +264,32 @@ where id = '62acb632-8642-4b55-86ac-dfdee7f1d953';
 -- these a vendor.
 update public.profiles set
   display_name = 'Demo Vendor One', contact_number = '+639190000001',
-  date_of_birth = '1985-02-11', preferred_language = 'English'
+  date_of_birth = '1985-02-11'
 where id = 'a77bf9f3-1107-4e9e-9677-ebbcaa662cba';
 
 update public.profiles set
   display_name = 'Demo Vendor Two', contact_number = '+639190000002',
-  date_of_birth = '1979-06-25', preferred_language = 'Filipino'
+  date_of_birth = '1979-06-25'
 where id = 'fd00f3e8-88bf-4536-96af-86a764856066';
 
 update public.profiles set
   display_name = 'Demo Vendor Three', contact_number = '+639190000003',
-  date_of_birth = '1993-12-08', preferred_language = 'Both'
+  date_of_birth = '1993-12-08'
 where id = '1f73e1d0-9eaa-498e-a19d-d6b07b02e9d0';
 
 update public.profiles set
   display_name = 'Demo Vendor Four', contact_number = '+639190000004',
-  date_of_birth = '1997-04-19', preferred_language = 'English'
+  date_of_birth = '1997-04-19'
 where id = '813367e0-97dc-442c-9511-0e6c506c0883';
 
 update public.profiles set
   display_name = 'Demo Vendor Five', contact_number = '+639190000005',
-  date_of_birth = '2000-08-27', preferred_language = 'Filipino'
+  date_of_birth = '2000-08-27'
 where id = '66c28540-f93a-48e2-aaa3-792f34b84491';
 
 update public.profiles set
   display_name = 'Demo Vendor Six', contact_number = '+639190000006',
-  date_of_birth = '1991-10-03', preferred_language = 'English'
+  date_of_birth = '1991-10-03'
 where id = '3541db59-0c27-4324-b685-eb66de017874';
 
 commit;
@@ -320,7 +320,7 @@ insert into public.places (
   id, name, category_id, description, historical_background, historical_significance,
   year_or_period, source_reference, address, latitude, longitude, operating_hours,
   entrance_fee, visit_duration, accessibility_info, facility_ids, nearby_places,
-  language, verification_status, reviewed_by, updated_at
+  verification_status, reviewed_by, updated_at
 ) values
   ('a1e10001-0001-4c1a-9c1a-000000000001', 'Pasig City Museum (Concepcion Mansion)',
    (select id from public.place_categories where name = 'Museum'),
@@ -334,7 +334,7 @@ insert into public.places (
    'Ground floor exhibits accessible via ramp; upper floors accessible primarily via stairs.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk', 'Parking')),
    'Immaculate Conception Cathedral, Plaza Rizal & Bitukang Manok Area',
-   'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
+   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
 
   ('a1e10002-0002-4c1a-9c1a-000000000002', 'Immaculate Conception Cathedral',
    (select id from public.place_categories where name = 'Church'),
@@ -348,7 +348,7 @@ insert into public.places (
    'Ramp access available at side entry doors; main floor area is level and paved.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Waiting Area')),
    'Pasig City Museum, Plaza Rizal & Bitukang Manok Area',
-   'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
+   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
 
   ('a1e10003-0003-4c1a-9c1a-000000000003', 'Bahay na Tisa (Don Cecilio Tech House)',
    (select id from public.place_categories where name = 'Heritage Site'),
@@ -363,7 +363,7 @@ insert into public.places (
    'Street-level exterior viewing fully accessible; interior contains steep wooden stairways with limited access for visitors with reduced mobility.',
    '{}'::uuid[],
    'Pasig City Museum, Immaculate Conception Cathedral',
-   'Both', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
+   'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
 
   ('a1e10004-0004-4c1a-9c1a-000000000004', 'Plaza Rizal & Bitukang Manok Area (Parian Creek)',
    (select id from public.place_categories where name = 'Monument'),
@@ -377,7 +377,7 @@ insert into public.places (
    'Open-air flat surface, fully wheelchair accessible with concrete paved walkways.',
    (select array_agg(id) from public.place_facilities where name in ('Waiting Area')),
    'Pasig City Museum, Immaculate Conception Cathedral, Ado''s Panciteria',
-   'Both', 'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
+   'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
 
   -- Added per open-questions.md #7: not among the 4 originally submitted
   -- Places, but required as discovery_content's related_place_id target
@@ -396,7 +396,7 @@ insert into public.places (
    0, '30 to 45 minutes, program-dependent',
    'Ground floor accessible; specific accessibility features not yet documented.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
-   'Pasig Rainforest Park', 'Both', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '2 days');
+   'Pasig Rainforest Park', 'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '2 days');
 
 -- -----------------------------------------------------------------------------
 -- 4. Place photos — real Pasig photography per storage-manifest.md.
@@ -493,7 +493,7 @@ insert into public.business_categories (name, icon, sort_order) values
 insert into public.businesses (
   id, name, business_type, category_text_legacy, category_id, description, address, latitude, longitude,
   contact, opening_hours, business_story, unique_specialty, accessibility_info,
-  social_media_links, language, verification_status, reviewed_by, review_notes,
+  social_media_links, verification_status, reviewed_by, review_notes,
   featured_status, submitted_by, registered_or_informal, views_count, saves_count,
   updated_at
 ) values
@@ -505,7 +505,7 @@ insert into public.businesses (
    'Established in 1919 by Teresa Raymundo and Ambrosio Lozada, the bakeshop took its name from Dimas-Alang, the revolutionary nom de plume of Dr. José Rizal. Managing operations through World War II and urban modernization, the Lozada family has preserved early 20th-century Filipino artisanal baking methods across four generations.',
    'Heirloom heritage pastries including Pan de San Nicolas, Aglipay, Biscocho de Caña, and Hindi Ko Akalain.',
    'Ground-floor street entry, flat sidewalk access, street parking available nearby.',
-   array['https://www.facebook.com/PanaderiaDimasalang1919'], 'Both', 'verified',
+   array['https://www.facebook.com/PanaderiaDimasalang1919'], 'verified',
    'fed52550-3ee1-48da-b033-211f6245fbb6', 'CATO-submitted, address and contact confirmed against the business''s own Facebook page.',
    'featured', 'a77bf9f3-1107-4e9e-9677-ebbcaa662cba', 'registered', 0, 0, now() - interval '5 days'),
 
@@ -521,7 +521,7 @@ insert into public.businesses (
    'Signature sweet-savory Pork Barbecue, Pancit Bihon, and traditional Halo-Halo.',
    'Ground-floor dining access, wheelchair-accessible seating options, customer parking space.',
    array['https://www.facebook.com/profile.php?id=100080226190377', 'https://www.instagram.com/threesisterspasig/'],
-   'Both', 'verified', 'fed52550-3ee1-48da-b033-211f6245fbb6',
+   'verified', 'fed52550-3ee1-48da-b033-211f6245fbb6',
    'CATO-submitted; address corrected from the outdated East Capitol Drive location to the current West Capitol Drive address per web search verification (Instagram, most recent).',
    'featured', 'fd00f3e8-88bf-4536-96af-86a764856066', 'registered', 0, 0, now() - interval '5 days'),
 
@@ -533,7 +533,7 @@ insert into public.businesses (
    'Founded in 1952 by local barber-turned-cook Ado, the panciteria originated near the historic town square of Pasig. Built on affordable, flavorful noodle dishes, it grew from a simple neighborhood counter into a beloved culinary institution frequented by generations of Pasigueños.',
    'Pasig-style Pancit Bihon and Pancit Canton topped with toasted garlic and savory pork bits.',
    'Street-level entry, accessible ground-floor dining tables, limited street parking along A. Luna Street.',
-   array['https://www.facebook.com/theoriginaladospanciteria'], 'Both', 'verified',
+   array['https://www.facebook.com/theoriginaladospanciteria'], 'verified',
    'fed52550-3ee1-48da-b033-211f6245fbb6', 'CATO-submitted, address and contact confirmed against public business listings.',
    'listed', '1f73e1d0-9eaa-498e-a19d-d6b07b02e9d0', 'registered', 0, 0, now() - interval '5 days');
 
@@ -675,7 +675,7 @@ begin;
 insert into public.events (
   id, title, description, category_id, related_program, date_time, end_date_time,
   location, related_place_id, enrollment_info, posted_by, lifecycle_status, published,
-  language, updated_at
+  updated_at
 ) values
   ('c3e30001-0001-4c1a-9c1a-000000000001', 'Pasig Heritage & Gastronomic Walking Tour 2026',
    'Inaanyayahan ng Pamahalaang Lungsod ng Pasig, sa pamamagitan ng Cultural Affairs and Tourism Office (CATO), ang lahat ng Pasigueño na lumahok sa ating 2026 Heritage & Gastronomic Walking Tour. Tuklasin ang mayamang pamana, arkitektura, at natatanging kulinarya ng Poblacion! Kabilang sa tour ang pagbisita sa Pasig City Museum, Bahay na Tisa, at Immaculate Conception Cathedral.',
@@ -683,7 +683,7 @@ insert into public.events (
    '2026-05-24 07:00:00+08', '2026-05-24 11:30:00+08', 'Plaza Rizal, Brgy. San Jose, Pasig City',
    'a1e10004-0004-4c1a-9c1a-000000000004',
    '50 slots available. Free entry on a first-come, first-served basis for Pasig residents aged 15 and above. Register at bit.ly/PasigTour2026.',
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days'),
+   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, now() - interval '5 days'),
 
   ('c3e30002-0002-4c1a-9c1a-000000000002', 'Pasig Creative Arts Academy: Summer Youth Workshops',
    'Free summer creative workshops for Pasigueño youth offering modules in Visual Arts & Painting, Performing Arts & Theater, and Traditional Crafts. Organized under CATO pursuant to Executive Order No. PCG-20, Series of 2026. Materials will be provided free of charge for all accepted participants.',
@@ -691,7 +691,7 @@ insert into public.events (
    '2026-06-15 09:00:00+08', '2026-07-20 16:00:00+08', 'Youth Development Center Hall, Pasig City Hall Complex',
    'a1e10005-0005-4c1a-9c1a-000000000005',
    'Open to Pasig residents aged 10–24. Requires valid Pasig Resident ID and parental consent form. Registration deadline: June 5, 2026.',
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days'),
+   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, now() - interval '5 days'),
 
   ('c3e30003-0003-4c1a-9c1a-000000000003', 'LikhaFest: Pasig City Arts & Crafts Fair 2026',
    'A two-day arts fair held in celebration of National Arts Month. Showcasing local Pasigueño artisans, micro-entrepreneurs, live painting performances, and musical acts to celebrate homegrown talent and community creativity.',
@@ -699,7 +699,7 @@ insert into public.events (
    '2026-02-26 10:00:00+08', '2026-02-27 20:00:00+08', 'Plaza Rizal Grounds, Brgy. San Jose, Pasig City',
    'a1e10004-0004-4c1a-9c1a-000000000004',
    'Walk-ins welcome; no pre-registration required for attendees. Exhibitor slots full.',
-   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, 'Both', now() - interval '5 days');
+   'e283c6fb-4dcd-455f-a60c-e35add77a330', 'past', true, now() - interval '5 days');
 
 -- -----------------------------------------------------------------------------
 -- 8. Landing slides — landing-hero-phases.md Phase 3.15.

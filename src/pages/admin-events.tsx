@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { MoreHorizontal } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import EventFormDialog from "@/components/admin/event-form-dialog";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -33,7 +34,7 @@ import { usePageTitle } from "@/lib/page-title";
 // function like admin-businesses.tsx uses.
 //
 // Row actions (2.1/2.3): "Both live as row actions and inside the detail
-// view" — admin-event-detail.tsx already has publish/unpublish and a
+// view" — event-form-dialog.tsx already has publish/unpublish and a
 // lifecycle_status control, this list page was missing its half. Mirrors
 // admin-trails.tsx's row-action publish/unpublish shape (dropdown item +
 // inline error line above the table) per constraints.md's Inventory Before
@@ -46,6 +47,18 @@ import { usePageTitle } from "@/lib/page-title";
 // side over the already-fetched `events` array. The initial date_time
 // ascending order from the Supabase query stays the default row order
 // (AdminDataTable only re-sorts once a column header is clicked).
+//
+// Modal conversion: New/Edit no longer navigate to /admin/events/new or
+// /admin/events/:id (that route and admin-event-detail.tsx are retired).
+// Both open event-form-dialog.tsx over this list instead, matching
+// admin-landing.tsx + slide-form-dialog.tsx's existing "list page owns a
+// create/edit modal" shape -- the closest precedent in this codebase for a
+// dialog with real form fields (category-form-dialog.tsx exists too, but
+// has none of this form's date/place/toggle fields to borrow layout from).
+// The ?event= search param keeps a shareable/refreshable deep link into a
+// specific event's modal, since admin-search-bar.tsx's Announcements
+// results and other in-app links still navigate to a single "open this
+// event" URL rather than carrying dialog state across a route change.
 
 interface EventRow {
   id: string;
@@ -77,7 +90,7 @@ function publishedFilterOptionLabel(option: (typeof PUBLISHED_OPTIONS)[number]):
 
 export default function AdminEventsPage() {
   usePageTitle("Announcements");
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState<EventRow[] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -85,18 +98,49 @@ export default function AdminEventsPage() {
   const [lifecycleFilter, setLifecycleFilter] = useState<(typeof LIFECYCLE_FILTER_OPTIONS)[number]>("all");
   const [publishedFilter, setPublishedFilter] = useState<(typeof PUBLISHED_OPTIONS)[number]>("all");
 
-  useEffect(() => {
-    let cancelled = false;
+  // Modal conversion: dialog open/closed and which event it's editing
+  // (null = New) both derive from the ?event= search param rather than
+  // separate useState, so a deep link (admin-search-bar.tsx's Announcements
+  // result, a bookmarked URL) opens the right event's modal on load, and
+  // closing/saving clears the param the same way it was set -- one source
+  // of truth instead of two that could drift apart.
+  const eventParam = searchParams.get("event");
+  const dialogOpen = eventParam !== null;
+  const editingEventId = eventParam && eventParam !== "new" ? eventParam : null;
 
+  function openNew() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("event", "new");
+      return next;
+    });
+  }
+
+  function openEdit(id: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("event", id);
+      return next;
+    });
+  }
+
+  function closeDialog() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("event");
+      return next;
+    });
+  }
+
+  function load() {
     // Category Directory Phase 1.10: category is now a joined event_
     // categories.name (migration 0024), flattened below so EventRow's
     // own category field stays string | null, unchanged.
-    supabase
+    return supabase
       .from("events")
       .select("id, title, date_time, lifecycle_status, published, event_categories(name)")
       .order("date_time", { ascending: true, nullsFirst: false })
       .then(({ data }) => {
-        if (cancelled) return;
         const rows = (data ?? []) as (Omit<EventRow, "category"> & {
           event_categories: { name: string } | { name: string }[] | null;
         })[];
@@ -107,10 +151,10 @@ export default function AdminEventsPage() {
           }))
         );
       });
+  }
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    load();
   }, []);
 
   // 2.3: "Publish toggles `published` boolean" — a separate control from
@@ -209,7 +253,7 @@ export default function AdminEventsPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/admin/events/${event.id}`)}>Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openEdit(event.id)}>Edit</DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleTogglePublished(event)}>
               {event.published ? "Unpublish" : "Publish"}
             </DropdownMenuItem>
@@ -238,7 +282,7 @@ export default function AdminEventsPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Announcements</h1>
-        <Button onClick={() => navigate("/admin/events/new")}>New Event</Button>
+        <Button onClick={openNew}>New Event</Button>
       </div>
 
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
@@ -279,6 +323,15 @@ export default function AdminEventsPage() {
             </Select>
           </AdminFilterBar>
         }
+      />
+
+      <EventFormDialog
+        open={dialogOpen}
+        onOpenChange={(next) => {
+          if (!next) closeDialog();
+        }}
+        eventId={editingEventId}
+        onSaved={load}
       />
     </div>
   );

@@ -418,17 +418,25 @@ export default function VendorItemsPage() {
           visible beneath the list rather than behind a toggle -- fewer
           than 5 items is the common case per ux-ui-guidelines.md's
           Component Sizing Rules, so this doesn't need to be hidden away
-          to keep the page uncluttered. */}
+          to keep the page uncluttered. Wrapped in the same `rounded-lg
+          border border-border bg-card p-4` card shape settings.tsx (8.10)
+          and BusinessFields already use, at this call site rather than
+          inside ItemFormFields itself -- the row-edit form above also
+          renders ItemFormFields, already sitting inside the item list's
+          own bg-card <li>, so carding ItemFormFields directly would
+          double the card there. */}
       <form onSubmit={handleAdd} className="flex flex-col gap-3 border-t border-border pt-6">
         <h2 className="text-base font-semibold text-foreground">Add an item</h2>
-        <ItemFormFields
-          name={addName}
-          price={addPrice}
-          onNameChange={setAddName}
-          onPriceChange={setAddPrice}
-        />
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+          <ItemFormFields
+            name={addName}
+            price={addPrice}
+            onNameChange={setAddName}
+            onPriceChange={setAddPrice}
+          />
 
-        {addError && <p className="text-sm text-destructive">{addError}</p>}
+          {addError && <p className="text-sm text-destructive">{addError}</p>}
+        </div>
 
         <p className="text-xs text-muted-foreground">* Required</p>
 

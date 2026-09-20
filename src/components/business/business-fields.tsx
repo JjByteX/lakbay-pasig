@@ -28,14 +28,14 @@ import {
  * visual pass entry): one shared component, callers keep their own state,
  * submit handler, and surrounding page chrome.
  *
- * BUSINESS_TYPES, LANGUAGES, REGISTERED_OR_INFORMAL, and BusinessFormState
- * move here as the single source. Both pages now import from here instead
- * of each keeping a page-local copy.
+ * BUSINESS_TYPES, REGISTERED_OR_INFORMAL, and BusinessFormState move here
+ * as the single source. Both pages now import from here instead of each
+ * keeping a page-local copy.
  *
  * Category Directory Expansion, Phase 4.1: Category field changes from a
  * free text Input to a Select pulling from business_categories (migration
- * 0027), same Select pattern this file's own Business Type and Language
- * fields already use. BusinessFormState.category (string) becomes
+ * 0027), same Select pattern this file's own Business Type field already
+ * uses. BusinessFormState.category (string) becomes
  * category_id (string), matching place/trail/event category's own
  * category_id shape -- a business category is now a real fixed list, not
  * free text, for the first time. The picker's own active-row list is
@@ -43,10 +43,17 @@ import {
  * same shape as admin-place-detail.tsx's own categories fetch, and passed
  * in as a prop here rather than fetched inside this shared field block, so
  * neither caller pays for a second independent fetch of the same list.
+ *
+ * BusinessFields returns one `rounded-lg border border-border bg-card p-4`
+ * card wrapping every field, same card shape settings.tsx already uses
+ * (8.10) -- both call sites (admin-business-detail.tsx, vendor-
+ * dashboard.tsx x2) render this as their entire form body, with only the
+ * error text, required-fields note, and Cancel/Save buttons left outside
+ * the card, so wrapping once here covers every caller instead of each
+ * page repeating the same card div around its own BusinessFields call.
  */
 
 export const BUSINESS_TYPES = ["Product", "Service", "Both"] as const;
-export const LANGUAGES = ["English", "Filipino", "Both"] as const;
 export const REGISTERED_OR_INFORMAL = ["registered", "informal"] as const;
 
 /**
@@ -69,7 +76,6 @@ export interface BusinessFormState {
   unique_specialty: string;
   accessibility_info: string;
   social_media_links: string;
-  language: string;
   registered_or_informal?: string;
 }
 
@@ -85,7 +91,6 @@ export const EMPTY_BUSINESS_FORM: BusinessFormState = {
   unique_specialty: "",
   accessibility_info: "",
   social_media_links: "",
-  language: "",
   registered_or_informal: "",
 };
 
@@ -122,7 +127,6 @@ const FIELD_HELP: Record<
   | "unique_specialty"
   | "accessibility_info"
   | "social_media_links"
-  | "language"
   | "registered_or_informal",
   string
 > = {
@@ -137,7 +141,6 @@ const FIELD_HELP: Record<
   unique_specialty: "What makes this business worth a special trip.",
   accessibility_info: "Helps visitors with access needs plan ahead.",
   social_media_links: "Shown as links on the listing for visitors to follow.",
-  language: "Matches the listing to a visitor's language preference.",
   registered_or_informal: "Doesn't affect approval, shown for CATO's records only.",
 };
 
@@ -293,7 +296,7 @@ export function BusinessFields({
   );
 
   return (
-    <>
+    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
       {nameAndTypeInRow ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {nameField}
@@ -420,36 +423,17 @@ export function BusinessFields({
         <CharCount value={form.accessibility_info} max={300} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <FieldLabel htmlFor="social_media_links" help={FIELD_HELP.social_media_links}>
-            Social Media Links
-          </FieldLabel>
-          <Input
-            id="social_media_links"
-            placeholder="Comma separated"
-            value={form.social_media_links}
-            onChange={(e) => onChange("social_media_links", e.target.value)}
-            maxLength={500}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <FieldLabel htmlFor="language" help={FIELD_HELP.language}>
-            Language
-          </FieldLabel>
-          <Select value={form.language} onValueChange={(v) => onChange("language", v)}>
-            <SelectTrigger id="language">
-              <SelectValue placeholder="Select a language" />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map((l) => (
-                <SelectItem key={l} value={l}>
-                  {l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex flex-col gap-2">
+        <FieldLabel htmlFor="social_media_links" help={FIELD_HELP.social_media_links}>
+          Social Media Links
+        </FieldLabel>
+        <Input
+          id="social_media_links"
+          placeholder="Comma separated"
+          value={form.social_media_links}
+          onChange={(e) => onChange("social_media_links", e.target.value)}
+          maxLength={500}
+        />
       </div>
 
       {showRegisteredOrInformal && (
@@ -474,6 +458,6 @@ export function BusinessFields({
           </Select>
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -30,7 +30,6 @@ export interface VendorBusinessDetail {
   unique_specialty: string | null;
   accessibility_info: string | null;
   social_media_links: string[] | null;
-  language: string | null;
   verification_status: "pending" | "verified" | "unverified";
   review_notes: string | null;
   featured_status: "listed" | "featured";
@@ -62,7 +61,6 @@ export interface VendorBusinessPayload {
   unique_specialty: string | null;
   accessibility_info: string | null;
   social_media_links: string[] | null;
-  language: string | null;
   registered_or_informal: "registered" | "informal" | null;
 }
 

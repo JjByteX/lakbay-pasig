@@ -20,7 +20,6 @@ export interface Profile {
   profile_picture: string | null;
   contact_number: string | null;
   date_of_birth: string | null;
-  preferred_language: string | null;
   preferred_categories: string[] | null;
   position: string | null;
   system_permission: SystemPermission[] | null;

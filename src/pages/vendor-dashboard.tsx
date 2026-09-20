@@ -29,9 +29,9 @@ import { usePageTitle } from "@/lib/page-title";
  * shared BusinessFields component (src/components/business/business-fields.tsx),
  * pulled out after SonarQube flagged 93 duplicated lines against
  * admin-business-detail.tsx, which had the same field set copied
- * verbatim. BUSINESS_TYPES, LANGUAGES, REGISTERED_OR_INFORMAL,
- * BusinessFormState, and EMPTY_BUSINESS_FORM all moved to that shared
- * module too, this file no longer keeps its own copies.
+ * verbatim. BUSINESS_TYPES, REGISTERED_OR_INFORMAL, BusinessFormState, and
+ * EMPTY_BUSINESS_FORM all moved to that shared module too, this file no
+ * longer keeps its own copies.
  *
  * Step 9, Phase 4: loaded-branch dashboard. Same STATUS_VARIANT mapping
  * and accent Featured badge admin-business-detail.tsx already uses (4.1),
@@ -98,7 +98,6 @@ function businessToForm(business: VendorBusinessDetail): BusinessFormState {
     unique_specialty: business.unique_specialty ?? "",
     accessibility_info: business.accessibility_info ?? "",
     social_media_links: (business.social_media_links ?? []).join(", "),
-    language: business.language ?? "",
     registered_or_informal: business.registered_or_informal ?? "",
   };
 }
@@ -118,7 +117,6 @@ function formToPayload(form: BusinessFormState): VendorBusinessPayload {
     social_media_links: form.social_media_links
       ? form.social_media_links.split(",").map((s) => s.trim()).filter(Boolean)
       : null,
-    language: form.language || null,
     registered_or_informal: (form.registered_or_informal || null) as
       | "registered"
       | "informal"

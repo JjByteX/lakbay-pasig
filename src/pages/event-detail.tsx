@@ -137,7 +137,7 @@ export default function EventDetailPage() {
 
           {event.enrollment_info && (
             <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Enrollment</h2>
+              <h2 className="text-base font-semibold text-foreground">Application Info</h2>
               <p className="text-base text-muted-foreground">{event.enrollment_info}</p>
             </div>
           )}

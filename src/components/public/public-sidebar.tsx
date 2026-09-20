@@ -1,4 +1,4 @@
-import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as SettingsIcon, LogOut, ChevronsUpDown, PanelLeftOpen } from "lucide-react";
+import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as SettingsIcon, LogOut, ArrowLeftRight, ChevronsUpDown, PanelLeftOpen } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -299,6 +299,24 @@ export function PublicSidebar({
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
+              {/* View switcher, staff/admin accounts only: same session,
+                  same account, just "/admin" instead of "/" -- not a role
+                  change, staff_role/system_permission are untouched, only
+                  the URL changes. Sits right after Settings/before Home
+                  Page since it's the same "which app am I in" concept the
+                  Home Page item below already is, just the other
+                  direction. admin-sidebar.tsx's own footer menu sends
+                  staff/admin back here the same way (Resident View).
+                  Hidden entirely for a resident with no staff_role,
+                  rather than shown disabled, matching this codebase's
+                  existing "hide what doesn't apply" rule (e.g. bottom-nav.
+                  tsx's own header comment). */}
+              {profile?.staff_role && (
+                <DropdownMenuItem onClick={() => navigate("/admin")}>
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  {profile.staff_role === "admin" ? "Admin" : "Staff"} View
+                </DropdownMenuItem>
+              )}
               {/* Home Page: same new item as public-shell.tsx's mobile
                   AccountMenu -- takes a signed-in user back to the landing
                   page (/welcome, landing.tsx), distinct from this sidebar's

@@ -104,7 +104,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onFocus={() => setOpen(true)}
-        placeholder="Search Lakbay Pasig"
+        placeholder="Lakbay Pasig"
         aria-label="Search"
         className="pl-9"
       />

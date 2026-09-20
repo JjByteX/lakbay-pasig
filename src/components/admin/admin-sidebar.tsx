@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Settings as SettingsIcon, LogOut, Home, ChevronsUpDown } from "lucide-react";
+import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Settings as SettingsIcon, LogOut, Home, ArrowLeftRight, ChevronsUpDown } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -186,14 +186,15 @@ export function AdminSidebar() {
             DropdownMenu, same primitive public-sidebar.tsx and public-
             shell.tsx's mobile AccountMenu already use for this exact job,
             reused here rather than a third bespoke popup.
-            Menu items: Home Page (takes staff to the public landing page,
-            /welcome, same destination and Home icon as the resident-side
-            menus) then Sign out. No Profile/Settings items here unlike
-            public-sidebar.tsx's version -- admin has no separate account
-            page, and Settings already has its own top-level nav entry
-            above (NAV_ITEMS' "/admin/settings" row), so repeating it in
-            this menu would be the same destination reachable two ways for
-            no reason. */}
+            Menu items: Resident View (this same signed-in
+            account, browsing "/" as a resident would -- distinct from Home
+            Page below, which is the signed-out-style landing page, not the
+            app itself), then Home Page, then Sign out. No Profile/Settings
+            items here unlike public-sidebar.tsx's version -- admin has no
+            separate account page, and Settings already has its own
+            top-level nav entry above (NAV_ITEMS' "/admin/settings" row),
+            so repeating it in this menu would be the same destination
+            reachable two ways for no reason. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
@@ -236,6 +237,17 @@ export function AdminSidebar() {
               edge, rather than side="right" floating away from a narrow
               collapsed rail. */}
           <DropdownMenuContent side="top" align="start" sideOffset={8}>
+            {/* View switcher: same session, same account, just the "/"
+                resident app instead of "/admin" -- not a role change and
+                not a second sign-in, staff_role/system_permission are
+                untouched by this, only the URL you're looking at changes.
+                A resident's own counterpart to this item (public-sidebar.
+                tsx, public-shell.tsx's AccountMenu) sends staff/admin back
+                here the same way. */}
+            <DropdownMenuItem onClick={() => navigate("/")}>
+              <ArrowLeftRight className="mr-2 h-4 w-4" />
+              Resident View
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/welcome")}>
               <Home className="mr-2 h-4 w-4" />
               Home Page

@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth-context";
 import { AuthModalProvider } from "@/lib/auth-modal";
 import { AuthModalRoute } from "@/lib/auth-modal-route";
@@ -25,7 +25,6 @@ import AdminDiscoveryContentReviewPage from "@/pages/admin-discovery-content-rev
 import AdminBusinessesPage from "@/pages/admin-businesses";
 import AdminBusinessDetailPage from "@/pages/admin-business-detail";
 import AdminEventsPage from "@/pages/admin-events";
-import AdminEventDetailPage from "@/pages/admin-event-detail";
 import AdminTrailsPage from "@/pages/admin-trails";
 import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
 import AdminCategoriesPage from "@/pages/admin-categories";
@@ -33,6 +32,19 @@ import AdminLandingPage from "@/pages/admin-landing";
 import AdminStaffPage from "@/pages/admin-staff";
 import AdminSettingsPage from "@/pages/admin-settings";
 import LandingPage from "@/pages/landing";
+
+// Announcements modal conversion: /admin/events/new and /admin/events/:id
+// (admin-event-detail.tsx) are retired -- create/edit now happens in
+// event-form-dialog.tsx, opened over the /admin/events list itself. This
+// redirect keeps every existing /admin/events/:id link (admin-search-
+// bar.tsx's Announcements results, any bookmarked URL) working: it lands
+// on the list with ?event=:id set, which admin-events.tsx reads to open
+// that event's modal on mount. See admin-events.tsx's own header comment
+// for the full reasoning.
+function AdminEventRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/admin/events?event=${id}`} replace />;
+}
 
 export default function App() {
   return (
@@ -186,19 +198,17 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="events/new"
-              element={
-                <ProtectedRoute requiredPermission="publish_events">
-                  <AdminEventDetailPage />
-                </ProtectedRoute>
-              }
-            />
+            {/* New/edit no longer own routes -- event-form-dialog.tsx
+                handles both as a modal over the events list above. This
+                redirect only exists so old /admin/events/:id links (the
+                "new" case has nothing to redirect from; New Event never
+                linked anywhere but the list's own button) keep resolving.
+                See AdminEventRedirect above. */}
             <Route
               path="events/:id"
               element={
                 <ProtectedRoute requiredPermission="publish_events">
-                  <AdminEventDetailPage />
+                  <AdminEventRedirect />
                 </ProtectedRoute>
               }
             />

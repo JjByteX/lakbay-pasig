@@ -26,11 +26,10 @@ const MIN_PASSWORD_LENGTH = 8;
 // 4.1: three fixed options, single-select -- a Select reads better here
 // than a three-button toggle group (profile.tsx's own multi-select Button
 // row is for Preferred Categories, a genuine multi-select; font size is a
-// single choice among three, closer to profile.tsx's own Preferred
-// Language Select, which this reuses the same composition for). No new
-// primitive: src/components/ui/select.tsx already exists and is already
-// used elsewhere in this codebase, per constraints.md's Inventory Before
-// Suggesting rule.
+// single choice among three, closer to a plain single-select Select
+// usage). No new primitive: src/components/ui/select.tsx already exists
+// and is already used elsewhere in this codebase, per constraints.md's
+// Inventory Before Suggesting rule.
 //
 // Step 8 cleanup: FONT_SIZE_LABELS/FONT_SIZES and the handleDarkModeChange/
 // handleFontSizeChange module-scope handlers below were byte-identical
@@ -84,8 +83,8 @@ const MIN_PASSWORD_LENGTH = 8;
  * text-destructive error line. 3.5 calls refreshProfile() on success.
  *
  * Phase 4: font size control. 4.1 checked src/components/ui/select.tsx
- * first (already exists, already used by profile.tsx's Preferred
- * Language field) rather than a three-button toggle group -- font size is
+ * first (already exists, already used elsewhere in this codebase)
+ * rather than a three-button toggle group -- font size is
  * a single-select of three fixed options, matching that existing Select
  * usage more closely than profile.tsx's Preferred Categories row, which
  * is a genuine multi-select. 4.2 seeds from profile.font_size_preference,

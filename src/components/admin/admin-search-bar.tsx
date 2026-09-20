@@ -83,13 +83,13 @@ export function AdminSearchBar() {
   const showPanel = open && trimmed.length > 0;
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-sm">
+    <div ref={containerRef} className="relative w-full max-w-xs">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => setOpen(true)}
-        placeholder="Search Places, Businesses, Trails, Events, Staff"
+        placeholder="Search"
         aria-label="Admin search"
         className="pl-9"
       />
@@ -169,7 +169,7 @@ export function AdminSearchBar() {
                   title={event.title}
                   subtitle={event.category}
                   badge={<StatusBadge status={event.published ? "published" : "draft"} />}
-                  onClick={() => goTo(`/admin/events/${event.id}`)}
+                  onClick={() => goTo(`/admin/events?event=${event.id}`)}
                 />
               ))}
             </ResultGroup>

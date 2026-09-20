@@ -8,13 +8,6 @@ import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { CharCount } from "@/components/business/business-fields";
@@ -25,12 +18,6 @@ import { usePageTitle } from "@/lib/page-title";
 // not redefined, per constraints.md's Inventory Before Suggesting rule --
 // this is the one existing enumeration of the concept in the codebase.
 const CATEGORIES = ["Heritage Site", "Museum", "Monument", "Church", "Cultural Site"] as const;
-
-// Phase 4.1: same language set admin-place-detail.tsx, admin-business-
-// detail.tsx, and admin-event-detail.tsx's own LANGUAGES constants already
-// use. End User's Preferred Language (data-model.md) is the same concept,
-// not a new one.
-const LANGUAGES = ["English", "Filipino", "Both"] as const;
 
 // Shared with saved.tsx and trails.tsx's own page-local copies (same
 // PostgrestError shape check, not an Error subclass). Kept as a local copy
@@ -82,7 +69,6 @@ export default function ProfilePage() {
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [contactNumber, setContactNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
-  const [preferredLanguage, setPreferredLanguage] = useState("");
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
@@ -105,7 +91,6 @@ export default function ProfilePage() {
     setProfilePicture(profile.profile_picture ?? null);
     setContactNumber(profile.contact_number ?? "");
     setDateOfBirth(profile.date_of_birth ?? "");
-    setPreferredLanguage(profile.preferred_language ?? "");
     setPreferredCategories(profile.preferred_categories ?? []);
   }, [profile]);
 
@@ -167,7 +152,6 @@ export default function ProfilePage() {
       display_name: displayName.trim() || null,
       contact_number: contactNumber.trim() || null,
       date_of_birth: dateOfBirth || null,
-      preferred_language: preferredLanguage || null,
       preferred_categories: preferredCategories.length > 0 ? preferredCategories : null,
     };
 
@@ -180,9 +164,9 @@ export default function ProfilePage() {
       return;
     }
 
-    // 4.3: preferred_language and preferred_categories feed Home and
-    // Discover live (navigation-and-access-control.md), so context has to
-    // reflect the write immediately, not on next session load. Phase 0.8's
+    // 4.3: preferred_categories feeds Home and Discover live
+    // (navigation-and-access-control.md), so context has to reflect the
+    // write immediately, not on next session load. Phase 0.8's
     // refreshProfile does this without a page reload.
     await refreshProfile();
   }
@@ -224,81 +208,67 @@ export default function ProfilePage() {
       />
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="display_name">Display Name</Label>
-          <Input
-            id="display_name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            maxLength={150}
-          />
-          <CharCount value={displayName} max={150} />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" value={session.user.email ?? ""} readOnly disabled />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="contact_number">Contact Number</Label>
-          <Input
-            id="contact_number"
-            type="tel"
-            inputMode="numeric"
-            value={contactNumber}
-            onChange={(e) => updateContactNumber(e.target.value)}
-            maxLength={15}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="date_of_birth">Date of Birth</Label>
-          <Input
-            id="date_of_birth"
-            type="date"
-            value={dateOfBirth}
-            onChange={(e) => setDateOfBirth(e.target.value)}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="preferred_language">Preferred Language</Label>
-          <Select value={preferredLanguage} onValueChange={setPreferredLanguage}>
-            <SelectTrigger id="preferred_language">
-              <SelectValue placeholder="Select a language" />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map((l) => (
-                <SelectItem key={l} value={l}>
-                  {l}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Label>Preferred Categories</Label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((category) => {
-              const active = preferredCategories.includes(category);
-              return (
-                <Button
-                  key={category}
-                  type="button"
-                  variant={active ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleCategory(category)}
-                >
-                  {category}
-                </Button>
-              );
-            })}
+        <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="display_name">Display Name</Label>
+            <Input
+              id="display_name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={150}
+            />
+            <CharCount value={displayName} max={150} />
           </div>
-        </div>
 
-        {saveError && <p className="text-base text-destructive">{saveError}</p>}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" value={session.user.email ?? ""} readOnly disabled />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="contact_number">Contact Number</Label>
+            <Input
+              id="contact_number"
+              type="tel"
+              inputMode="numeric"
+              value={contactNumber}
+              onChange={(e) => updateContactNumber(e.target.value)}
+              maxLength={15}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="date_of_birth">Date of Birth</Label>
+            <Input
+              id="date_of_birth"
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Preferred Categories</Label>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((category) => {
+                const active = preferredCategories.includes(category);
+                return (
+                  <Button
+                    key={category}
+                    type="button"
+                    variant={active ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleCategory(category)}
+                  >
+                    {category}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          {saveError && <p className="text-base text-destructive">{saveError}</p>}
+        </div>
 
         <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save changes"}

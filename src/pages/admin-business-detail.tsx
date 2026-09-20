@@ -66,8 +66,8 @@ interface BusinessReviewRow {
 
 // 6.4: form fields matching the businesses table, per build-3-phases-plan.md
 // 6.4 — name, business type, category, description, address, contact, hours,
-// business story, unique specialty, accessibility info, social links,
-// language. Column names taken from 0004_businesses.sql, not re-derived.
+// business story, unique specialty, accessibility info, social links.
+// Column names taken from 0004_businesses.sql, not re-derived.
 // Field-list JSX now lives in the shared BusinessFields component
 // (src/components/business/business-fields.tsx), imported above, since it
 // was duplicated verbatim in vendor-dashboard.tsx and flagged by
@@ -170,7 +170,7 @@ export default function AdminBusinessDetailPage() {
     supabase
       .from("businesses")
       .select(
-        "id, name, business_type, category_id, description, address, contact, opening_hours, business_story, unique_specialty, accessibility_info, social_media_links, language, verification_status, featured_status"
+        "id, name, business_type, category_id, description, address, contact, opening_hours, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, featured_status"
       )
       .eq("id", id)
       .single()
@@ -192,7 +192,6 @@ export default function AdminBusinessDetailPage() {
           unique_specialty: data.unique_specialty ?? "",
           accessibility_info: data.accessibility_info ?? "",
           social_media_links: (data.social_media_links ?? []).join(", "),
-          language: data.language ?? "",
         });
         setStatus(data.verification_status);
         setFeaturedStatus(data.featured_status);
@@ -300,7 +299,6 @@ export default function AdminBusinessDetailPage() {
       social_media_links: form.social_media_links.trim()
         ? form.social_media_links.split(",").map((link) => link.trim()).filter(Boolean)
         : null,
-      language: form.language || null,
       updated_at: new Date().toISOString(),
     };
 
