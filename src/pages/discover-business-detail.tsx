@@ -22,6 +22,7 @@ interface BusinessDetail {
   id: string;
   name: string;
   category: string | null;
+  address: string | null;
   description: string | null;
   opening_hours: string | null;
   contact: string | null;
@@ -62,7 +63,7 @@ export default function DiscoverBusinessDetailPage() {
 
     supabase
       .from("businesses")
-      .select("id, name, description, opening_hours, contact, rules, verification_status, business_categories(name)")
+      .select("id, name, address, description, opening_hours, contact, rules, verification_status, business_categories(name)")
       .eq("id", id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -115,6 +116,14 @@ export default function DiscoverBusinessDetailPage() {
             <h1 className="text-xl font-semibold text-foreground">{business.name}</h1>
             {business.category && (
               <p className="text-sm text-muted-foreground">{business.category}</p>
+            )}
+            {/* Location field, phase 6.2 (location-field-plan.md): same
+                muted line as the place detail page, under the category
+                line and above the badge. Conditional on its own -- a
+                business with no category and an address still shows the
+                address in the right spot. No heading, no icon. */}
+            {business.address && (
+              <p className="text-sm text-muted-foreground">{business.address}</p>
             )}
             {/* Same badge mapping as result-card.tsx's VerificationBadge:
                 verified gets the institutional label, pending gets a

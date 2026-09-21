@@ -36,6 +36,7 @@ interface PlaceDetail {
   id: string;
   name: string;
   category: string;
+  address: string | null;
   description: string | null;
   historical_background: string | null;
   operating_hours: string | null;
@@ -73,7 +74,7 @@ export default function DiscoverPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, description, historical_background, operating_hours, entrance_fee, rules, verification_status, place_categories(name), place_facilities(name, icon)"
+        "id, name, address, description, historical_background, operating_hours, entrance_fee, rules, verification_status, place_categories(name), place_facilities(name, icon)"
       )
       .eq("id", id)
       .maybeSingle()
@@ -149,6 +150,14 @@ export default function DiscoverPlaceDetailPage() {
           <div className="flex flex-col gap-2">
             <h1 className="text-xl font-semibold text-foreground">{place.name}</h1>
             <p className="text-sm text-muted-foreground">{place.category}</p>
+            {/* Location field, phase 6.1 (location-field-plan.md): address
+                is a label filled from the pin, not a visit info block, so
+                it sits here as a muted line, same style as the category
+                line above it, rather than under entry #20's position
+                rule. No heading, no icon. Hidden when empty. */}
+            {place.address && (
+              <p className="text-sm text-muted-foreground">{place.address}</p>
+            )}
             <Badge variant="default" className="w-fit">
               Verified by Pasig Tourism Office
             </Badge>

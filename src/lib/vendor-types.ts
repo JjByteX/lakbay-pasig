@@ -24,6 +24,10 @@ export interface VendorBusinessDetail {
   category_id: string | null;
   description: string | null;
   address: string;
+  // The map pin. Null on a row made before the pin existed, which the
+  // required pin repairs on its next edit.
+  latitude: number | null;
+  longitude: number | null;
   contact: string | null;
   opening_hours: string | null;
   rules: string | null;
@@ -45,10 +49,9 @@ export interface VendorBusinessDetail {
  * submitted_by, per architecture-notes.md's Known Fragile Areas note: RLS
  * update policies guard the row, not the column, so the app layer is what
  * must keep a vendor's own write from ever touching a staff-only field.
- * latitude/longitude are left out for the same reason they're absent from
- * this form: data-model.md states they are auto-generated from address,
- * and no geocoding step exists yet anywhere in this codebase (grepped,
- * confirmed in Phase 0.3), so this phase cannot honestly collect them.
+ * latitude/longitude are on the allow list, location-field-plan.md: the
+ * vendor sets them with the map pin, and nothing geocodes an address on
+ * save. They are not staff-only, so they carry no fragile-area risk.
  */
 export interface VendorBusinessPayload {
   name: string;
@@ -56,6 +59,8 @@ export interface VendorBusinessPayload {
   category_id: string | null;
   description: string | null;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
   contact: string | null;
   opening_hours: string | null;
   rules: string | null;

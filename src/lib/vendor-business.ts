@@ -18,7 +18,7 @@ export async function fetchOwnBusiness(userId: string): Promise<VendorBusinessDe
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, business_type, category_id, description, address, contact, opening_hours, rules, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, review_notes, featured_status, registered_or_informal, views_count, saves_count"
+      "id, name, business_type, category_id, description, address, latitude, longitude, contact, opening_hours, rules, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, review_notes, featured_status, registered_or_informal, views_count, saves_count"
     )
     .eq("submitted_by", userId)
     .maybeSingle();

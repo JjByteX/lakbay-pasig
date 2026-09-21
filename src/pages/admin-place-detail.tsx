@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CharCount } from "@/components/business/business-fields";
+import { LocationPicker } from "@/components/location-picker";
 import { DurationField } from "@/components/ui/duration-field";
 import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import { usePageTitle } from "@/lib/page-title";
@@ -60,6 +61,11 @@ interface PlaceFormState {
   year_or_period: string;
   source_reference: string;
   address: string;
+  // The map pin, location-field-plan.md. Both null until one is placed; the
+  // required Map pin gate below keeps a null pair from being saved. Numbers,
+  // not strings, since they are double precision columns and never typed.
+  latitude: number | null;
+  longitude: number | null;
   operating_hours: string;
   entrance_fee: string; // numeric column (migration 0019), kept as a string here since the number input's value must be a string; parsed to a number or null at submit time
   visit_duration: string;
@@ -77,6 +83,8 @@ const EMPTY_FORM: PlaceFormState = {
   year_or_period: "",
   source_reference: "",
   address: "",
+  latitude: null,
+  longitude: null,
   operating_hours: "",
   entrance_fee: "",
   visit_duration: "",
@@ -206,7 +214,7 @@ export default function AdminPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, rules, facility_ids, verification_status, reviewed_by, category_id"
+        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, latitude, longitude, operating_hours, entrance_fee, visit_duration, accessibility_info, rules, facility_ids, verification_status, reviewed_by, category_id"
       )
       .eq("id", id)
       .single()
@@ -225,6 +233,8 @@ export default function AdminPlaceDetailPage() {
           year_or_period: data.year_or_period ?? "",
           source_reference: data.source_reference ?? "",
           address: data.address ?? "",
+          latitude: data.latitude ?? null,
+          longitude: data.longitude ?? null,
           operating_hours: data.operating_hours ?? "",
           entrance_fee: data.entrance_fee !== null ? String(data.entrance_fee) : "",
           visit_duration: data.visit_duration ?? "",
@@ -307,6 +317,7 @@ export default function AdminPlaceDetailPage() {
     !form.name.trim() && "Place Name",
     !form.category_id && "Category",
     !form.address.trim() && "Address",
+    (form.latitude === null || form.longitude === null) && "Map pin",
   ].filter(Boolean) as string[];
   const canSubmit = missingRequired.length === 0 && !saving;
 
@@ -314,7 +325,9 @@ export default function AdminPlaceDetailPage() {
     e.preventDefault();
     if (!canSubmit) return;
     // Enter inside a step 1 field submits the form; that means "Next", not
-    // save, or step 2 would be skipped.
+    // save, or step 2 would be skipped. The Address field is the one
+    // exception: the location picker's Enter runs the address search and
+    // never reaches this handler (location-picker.tsx).
     if (step === 1) {
       setStep(2);
       return;
@@ -716,12 +729,17 @@ function PlaceFormFields({
   // before. Fields are grouped into three blocks by importance:
   //   identity: what the place is (name through accessibility)
   //   hours:    when it is open, the tallest single control
+  //   location: the address and map pin (location-field-plan.md). It sits
+  //             under hours, not in identity: the map adds about 250px, which
+  //             in identity leaves the hours column mostly empty at its
+  //             default height. Under hours the two columns stay level.
   //   details:  what a visitor needs to plan a trip (fee, duration, facilities)
   //   history:  page 2. Rules first (short, quick to fill), then the story,
   //             last because it is the longest and least urgent
   // The two step form renders "place" (identity + details on the left, hours
-  // alone on the right, two columns from lg up) then "history" (rules and
-  // history) on its own page.
+  // + location on the right, two columns from lg up) then "history" (rules
+  // and history) on its own page. Below lg the columns stack, so the address
+  // and pin come last, right above the required note that names them.
 
   const identity = (
     <div className="flex flex-col gap-4">
@@ -769,18 +787,6 @@ function PlaceFormFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="address">Address</Label>
-        <Input
-          id="address"
-          placeholder="Source of truth, map coordinates are generated from this"
-          value={form.address}
-          onChange={(e) => updateField("address", e.target.value)}
-          required
-          maxLength={300}
-        />
-      </div>
-
-      <div className="flex flex-col gap-2">
         <Label htmlFor="accessibility_info">Accessibility Info</Label>
         <Textarea
           id="accessibility_info"
@@ -794,7 +800,7 @@ function PlaceFormFields({
   );
 
   // Operating hours is a weekly schedule editor, far taller than any other
-  // field once a schedule is set, so it gets a column of its own on step 1.
+  // field once a schedule is set, so it leads the right column on step 1.
   const hours = (
     <div className="flex flex-col gap-2">
       <Label htmlFor="operating_hours">Operating Hours</Label>
@@ -805,6 +811,30 @@ function PlaceFormFields({
         onChange={(next) => updateField("operating_hours", next)}
       />
     </div>
+  );
+
+  // Label stays "Address". The pin is the source of truth and the address is
+  // a label filled from it, so the placeholder no longer promises generated
+  // coordinates. No asterisk and no help tooltip: this form has neither on
+  // any field, "Required to continue" names what is missing.
+  const locationPicker = (
+    <LocationPicker
+      label="Address"
+      placeholder="Type an address and press Enter to search"
+      address={form.address}
+      coordinates={
+        form.latitude !== null && form.longitude !== null
+          ? { latitude: form.latitude, longitude: form.longitude }
+          : null
+      }
+      onChange={({ address, coordinates }) => {
+        // Three calls, one render: React 18 batches them, so the form
+        // never holds a half updated address and pin pair.
+        updateField("address", address);
+        updateField("latitude", coordinates?.latitude ?? null);
+        updateField("longitude", coordinates?.longitude ?? null);
+      }}
+    />
   );
 
   const details = (
@@ -942,7 +972,10 @@ function PlaceFormFields({
         {identity}
         {details}
       </div>
-      <div className="lg:pl-4">{hours}</div>
+      <div className="flex flex-col gap-4 lg:pl-4">
+        {hours}
+        {locationPicker}
+      </div>
     </div>
   );
 }

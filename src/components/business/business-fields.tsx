@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { LocationPicker } from "@/components/location-picker";
 import type { BusinessCategory } from "@/lib/business-categories";
 import {
   Select,
@@ -45,6 +46,14 @@ import {
  * in as a prop here rather than fetched inside this shared field block, so
  * neither caller pays for a second independent fetch of the same list.
  *
+ * Location field (location-field-plan.md): the Address block is now the
+ * LocationPicker, a search field plus a draggable map pin. The pin is the
+ * source of truth and the address is a label filled from it, so the form
+ * state carries latitude and longitude alongside address, and all three
+ * callers require a pin before Save. location-picker.tsx imports
+ * CharCount and FieldLabel from this file, so the two files import each
+ * other. Safe: both are function declarations only used while rendering.
+ *
  * BusinessFields returns one `rounded-lg border border-border bg-card p-4`
  * card wrapping every field, same card shape settings.tsx already uses
  * (8.10) -- both call sites (admin-business-detail.tsx, vendor-
@@ -71,6 +80,9 @@ export interface BusinessFormState {
   category_id: string;
   description: string;
   address: string;
+  // The map pin, both null until one is placed. Numbers, never typed.
+  latitude: number | null;
+  longitude: number | null;
   contact: string;
   opening_hours: string;
   rules: string;
@@ -87,6 +99,8 @@ export const EMPTY_BUSINESS_FORM: BusinessFormState = {
   category_id: "",
   description: "",
   address: "",
+  latitude: null,
+  longitude: null,
   contact: "",
   opening_hours: "",
   rules: "",
@@ -138,7 +152,7 @@ const FIELD_HELP: Record<
   business_type: "Lets visitors filter by product, service, or both.",
   category: "Groups the listing under Discover's category filters.",
   description: "One line, shown on the listing card before someone taps in.",
-  address: "Source of truth for the map pin, generated from this.",
+  address: "Shown on the listing. The map pin sets the location, not this text.",
   contact: "How a visitor reaches the business directly.",
   opening_hours: "Shown so visitors know when to expect the business open.",
   rules: "Shown on the listing so visitors know what to follow.",
@@ -222,12 +236,12 @@ interface BusinessFieldsProps {
   form: BusinessFormState;
   onChange: <K extends keyof BusinessFormState>(key: K, value: BusinessFormState[K]) => void;
   /**
-   * Admin's field labels carry no asterisk and its Address placeholder
-   * names map coordinates explicitly, since staff already know a value is
-   * required by the surrounding Save Changes flow. Vendor's create form
-   * shows both, a first-time vendor has no equivalent context yet. Real
-   * copy differences, not accidental drift, kept as a prop rather than
-   * picking one wording for both callers.
+   * Admin's field labels carry no asterisk, since staff already know a
+   * value is required by the surrounding Save Changes flow. Vendor's forms
+   * show one and word the Address placeholder for the vendor themselves,
+   * a first-time vendor has no equivalent context yet. Real copy
+   * differences, not accidental drift, kept as props rather than picking
+   * one wording for every caller.
    */
   requiredMarkers?: boolean;
   addressPlaceholder?: string;
@@ -254,12 +268,17 @@ export function BusinessFields({
   form,
   onChange,
   requiredMarkers = false,
-  addressPlaceholder = "Source of truth, map coordinates are generated from this",
+  addressPlaceholder = "Type an address and press Enter to search",
   nameAndTypeInRow = false,
   showRegisteredOrInformal = false,
   categories,
   categoriesError = null,
 }: Readonly<BusinessFieldsProps>) {
+  const pin =
+    form.latitude !== null && form.longitude !== null
+      ? { latitude: form.latitude, longitude: form.longitude }
+      : null;
+
   const nameField = (
     <div className="flex flex-col gap-2">
       <FieldLabel htmlFor="name" help={FIELD_HELP.name} requiredMarker={requiredMarkers}>
@@ -348,17 +367,27 @@ export function BusinessFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="address" help={FIELD_HELP.address} requiredMarker={requiredMarkers}>
-          Address
-        </FieldLabel>
-        <Input
-          id="address"
+        <LocationPicker
+          label="Address"
+          help={FIELD_HELP.address}
+          requiredMarker={requiredMarkers}
           placeholder={addressPlaceholder}
-          value={form.address}
-          onChange={(e) => onChange("address", e.target.value)}
-          required
-          maxLength={300}
+          address={form.address}
+          coordinates={pin}
+          onChange={({ address, coordinates }) => {
+            // Three calls, one render: React 18 batches them, so the form
+            // never holds a half updated address and pin pair.
+            onChange("address", address);
+            onChange("latitude", coordinates?.latitude ?? null);
+            onChange("longitude", coordinates?.longitude ?? null);
+          }}
         />
+        {/* All three callers disable Save without a pin, so this says why.
+            Shown only while it is missing, so it is never a second message
+            beside a placed pin. */}
+        {pin === null && (
+          <p className="text-sm text-muted-foreground">Map pin required. Tap the map to place it.</p>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

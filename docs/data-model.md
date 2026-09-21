@@ -24,8 +24,8 @@
 - Source or Reference -Matthew
 - Historical Photos -Jonald
 - Current Photos -Jonald
-- Address (source of truth, coordinates generated from this) -Jonald
-- Map Coordinates (auto generated from Address) -Matthew
+- Address (a label filled from the pin, editable) -Jonald
+- Map Coordinates (set by the pin, source of truth) -Matthew
 - Operating Hours -Jonald
 - Entrance Fee -Jonald
 - Estimated Visit Duration -Matthew
@@ -82,8 +82,8 @@ Rule: only proximity triggered secrets go here, radius and sequence required. Ge
 - Category -Jonald
 - Description (one line, what the business sells or offers) -Jonald
 - Pictures -JJ
-- Address (source of truth, coordinates generated from this) -Jonald
-- Map Coordinates (auto generated from Address) -Matthew
+- Address (a label filled from the pin, editable) -Jonald
+- Map Coordinates (set by the pin, source of truth) -Matthew
 - Contact -Jonald
 - Opening Hours -Jonald
 - Price Range -Matthew

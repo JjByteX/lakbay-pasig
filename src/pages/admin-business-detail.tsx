@@ -170,7 +170,7 @@ export default function AdminBusinessDetailPage() {
     supabase
       .from("businesses")
       .select(
-        "id, name, business_type, category_id, description, address, contact, opening_hours, rules, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, featured_status"
+        "id, name, business_type, category_id, description, address, latitude, longitude, contact, opening_hours, rules, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, featured_status"
       )
       .eq("id", id)
       .single()
@@ -186,6 +186,8 @@ export default function AdminBusinessDetailPage() {
           category_id: data.category_id ?? "",
           description: data.description ?? "",
           address: data.address ?? "",
+          latitude: data.latitude ?? null,
+          longitude: data.longitude ?? null,
           contact: data.contact ?? "",
           opening_hours: data.opening_hours ?? "",
           rules: data.rules ?? "",
@@ -273,7 +275,15 @@ export default function AdminBusinessDetailPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const canSubmit = form.name.trim().length > 0 && form.address.trim().length > 0 && !saving;
+  // The map pin is required (location-field-plan.md). BusinessFields shows
+  // "Map pin required" beside the map while it is missing, so a disabled
+  // Save never goes unexplained.
+  const canSubmit =
+    form.name.trim().length > 0 &&
+    form.address.trim().length > 0 &&
+    form.latitude !== null &&
+    form.longitude !== null &&
+    !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -292,6 +302,8 @@ export default function AdminBusinessDetailPage() {
       category_id: form.category_id || null,
       description: form.description || null,
       address: form.address,
+      latitude: form.latitude,
+      longitude: form.longitude,
       contact: form.contact || null,
       opening_hours: form.opening_hours || null,
       rules: form.rules || null,

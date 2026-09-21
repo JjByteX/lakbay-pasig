@@ -92,6 +92,8 @@ function businessToForm(business: VendorBusinessDetail): BusinessFormState {
     category_id: business.category_id ?? "",
     description: business.description ?? "",
     address: business.address,
+    latitude: business.latitude,
+    longitude: business.longitude,
     contact: business.contact ?? "",
     opening_hours: business.opening_hours ?? "",
     rules: business.rules ?? "",
@@ -110,6 +112,8 @@ function formToPayload(form: BusinessFormState): VendorBusinessPayload {
     category_id: form.category_id || null,
     description: form.description || null,
     address: form.address,
+    latitude: form.latitude,
+    longitude: form.longitude,
     contact: form.contact || null,
     opening_hours: form.opening_hours || null,
     rules: form.rules || null,
@@ -438,15 +442,25 @@ export default function VendorDashboardPage() {
   // plus a check constraint), re-confirmed before writing this gate, so it
   // belongs in canSubmit alongside name and address, not left to surface
   // as a raw Postgres constraint error on submit.
+  //
+  // The map pin is required too (location-field-plan.md), on the edit gate
+  // as well: a listing made before the pin existed has no coordinates, and
+  // this is what repairs it on its next edit. BusinessFields shows "Map pin
+  // required" beside the map while it is missing, so a disabled Save never
+  // goes unexplained.
   const canSubmit =
     form.name.trim().length > 0 &&
     form.address.trim().length > 0 &&
+    form.latitude !== null &&
+    form.longitude !== null &&
     form.business_type.trim().length > 0 &&
     !creating;
 
   const canSaveEdit =
     editForm.name.trim().length > 0 &&
     editForm.address.trim().length > 0 &&
+    editForm.latitude !== null &&
+    editForm.longitude !== null &&
     editForm.business_type.trim().length > 0 &&
     !saving;
 
@@ -540,7 +554,7 @@ export default function VendorDashboardPage() {
               form={editForm}
               onChange={updateEditField}
               requiredMarkers
-              addressPlaceholder="Source of truth for your location"
+              addressPlaceholder="Type your address and press Enter to search"
               showRegisteredOrInformal
               categories={categories}
               categoriesError={categoriesError}
@@ -608,7 +622,7 @@ export default function VendorDashboardPage() {
           form={form}
           onChange={updateField}
           requiredMarkers
-          addressPlaceholder="Source of truth for your location"
+          addressPlaceholder="Type your address and press Enter to search"
           showRegisteredOrInformal
           categories={categories}
           categoriesError={categoriesError}

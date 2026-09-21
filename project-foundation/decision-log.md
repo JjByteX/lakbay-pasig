@@ -172,6 +172,19 @@ Directions discussed, per rule 6: on the place form, the hours column or the lef
 
 ---
 
+**#:** 21
+**Milestone:** Location field (location-field-plan.md, location-field-phases.md)
+
+**Decision:** A draggable map pin sets `latitude` and `longitude` on `places` and `businesses` (no schema change, both columns exist nullable since 0003/0004). The pin is the source of truth; the Address field is a label filled from the pin, editable, and a drag never overwrites typed text. Provider is Photon's public server (free, no key, search and reverse), one base URL constant in `geocode.ts`, same shape as `OSRM_BASE_URL`. Address is basic info shown as a muted line under the category line on both public detail pages, outside entry #20's visit-info position rule, since it is a label rather than a visit info block. The pin is required on all three forms (admin place, admin business, vendor), which repairs old rows with no coordinates on their next edit.
+
+Checks done before build: Photon answers browser calls with no CORS preflight (`limit` and `bbox` accepted, `lang` untested and left out). Searching the 8 seeded rows found 5 within 150 m of the seeded point and 3 farther off (cathedral, Panaderia Dimas-Alang, Three Sisters'), so the results list shows every hit and never auto-picks the top one. Reverse lookup on all 8 seeded points returned the barangay under `locality` (not `district`, which holds a congressional district); `street` was missing on 3 of 8 and `housenumber` on 7 of 8, so `formatAddress` treats every part as optional. Photon's public server is a demo with no uptime promise, asks for fair use, and carries no attribution requirement beyond Discover's existing OSM credit. Hosted counts: 2 of 7 places and 0 of 3 businesses had null coordinates going into this change.
+
+Directions weighed, per rule 6: autocomplete-first (type an address, suggestions appear as you type, pin follows the pick), pin-first (place the pin, address fills in and stays editable), and both equally (neither leads). Chosen: pin-first. Pasig addresses commonly use lot, block, sitio and barangay, and OSM house-number coverage here is patchy (7 of 8 seeded points had none), so an address-led flow would frequently have nothing to suggest or match. A pin is exact regardless of how the address is written, and it is also the value every other feature (Discover's map, directions, distance sort, trail stop unlocking) actually depends on. Autocomplete still exists as a convenience — search on Enter, not as you type, to respect Photon's fair-use terms and avoid a debounce — but it only ever sets the pin; it never contributes an address string the pin can't back up.
+
+**Standing rule:** Any future map picker or geocoder call goes through `geocode.ts` and `location-picker.tsx`. A new provider is one base URL change.
+
+---
+
 **#:**
 **Milestone:**
 
