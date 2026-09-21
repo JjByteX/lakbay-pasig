@@ -161,6 +161,17 @@ Caption legibility for the hero carousel was decided fresh, not inherited from e
 
 ---
 
+**#:** 20
+**Milestone:** Rules field (0039, rules-field-plan.md, rules-field-phases.md)
+
+**Decision:** `places` and `businesses` each gained one nullable `rules` text column (0039), no default, no check, per entry #7. The 500 character cap lives in the forms only, like every other text column on these tables, so raising it later is one number per form. No RLS or `log_activity` change: policies are row based and the log diffs whole rows. `seed.sql` stays as is, since entry #17 bars invented content and a made up rule would read as real CATO content. Place form: step 2, first field, above the history fields, and the step label reads "Rules and history". Business form: right after Opening Hours, shared by the admin and vendor forms. Public pages: Rules sits right after the last visit info section (after Facilities on a place, after Contact on a business), before long content such as Items, with the same heading and text styles as the sections beside it, line breaks kept, hidden when empty.
+
+Directions discussed, per rule 6: on the place form, the hours column or the left column on step 1; on the public pages, last or right after Hours. Chosen instead: step 2 and after Facilities or Contact. Step 1 stays as it was, two columns and the same fields. Rules are short and quick to fill, so they lead step 2 with history last, in one card with no inner card, per ux-ui-guidelines.md's card nesting and fragmentation rules. On the public pages, after Facilities or Contact keeps the visit info together and ahead of anything that can run long. Google Maps puts "Know before you go" just under a place's basic info, and Airbnb and Booking.com ("The fine print") each give rules their own section.
+
+**Standing rule:** A new visit info text field takes the same public position, right after the last visit info section and before long content. A new optional column takes the entry #7 shape.
+
+---
+
 **#:**
 **Milestone:**
 

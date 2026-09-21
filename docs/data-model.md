@@ -30,6 +30,7 @@
 - Entrance Fee -Jonald
 - Estimated Visit Duration -Matthew
 - Accessibility Info -Matthew
+- Rules (one per line, what visitors must follow)
 - Available Facilities (restrooms, parking, info desk, waiting area) -Matthew
 - Language (English, Filipino, or both) -JJ
 - Trails Included In (list of route IDs) -Matthew
@@ -89,6 +90,7 @@ Rule: only proximity triggered secrets go here, radius and sequence required. Ge
 - Business Story (the longer background, why it exists, how it started) -Matthew
 - Unique Specialty -Matthew
 - Accessibility Info (parking, wheelchair access, nearby transport) -Matthew
+- Rules (one per line, what visitors must follow)
 - Social Media Links -Matthew
 - Language (English, Filipino, or both) -JJ
 - Verification Status (Pending, Verified, Unverified) -Matthew

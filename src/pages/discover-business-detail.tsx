@@ -25,6 +25,7 @@ interface BusinessDetail {
   description: string | null;
   opening_hours: string | null;
   contact: string | null;
+  rules: string | null;
   verification_status: "verified" | "pending";
 }
 
@@ -61,7 +62,7 @@ export default function DiscoverBusinessDetailPage() {
 
     supabase
       .from("businesses")
-      .select("id, name, description, opening_hours, contact, verification_status, business_categories(name)")
+      .select("id, name, description, opening_hours, contact, rules, verification_status, business_categories(name)")
       .eq("id", id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -145,6 +146,18 @@ export default function DiscoverBusinessDetailPage() {
             <div className="flex flex-col gap-1">
               <h2 className="text-base font-semibold text-foreground">Contact</h2>
               <p className="text-base text-muted-foreground">{business.contact}</p>
+            </div>
+          )}
+
+          {/* Rules (migration 0039, rules-field-plan.md): after Contact,
+              before Items, since the item list can run long and would
+              bury it. One rule per line in the form, so
+              whitespace-pre-line keeps the line breaks. Hidden when
+              empty, same as the sections beside it. */}
+          {business.rules && (
+            <div className="flex flex-col gap-1">
+              <h2 className="text-base font-semibold text-foreground">Rules</h2>
+              <p className="whitespace-pre-line text-base text-muted-foreground">{business.rules}</p>
             </div>
           )}
 

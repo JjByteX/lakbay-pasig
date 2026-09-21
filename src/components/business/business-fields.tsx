@@ -73,6 +73,7 @@ export interface BusinessFormState {
   address: string;
   contact: string;
   opening_hours: string;
+  rules: string;
   business_story: string;
   unique_specialty: string;
   accessibility_info: string;
@@ -88,6 +89,7 @@ export const EMPTY_BUSINESS_FORM: BusinessFormState = {
   address: "",
   contact: "",
   opening_hours: "",
+  rules: "",
   business_story: "",
   unique_specialty: "",
   accessibility_info: "",
@@ -124,6 +126,7 @@ const FIELD_HELP: Record<
   | "address"
   | "contact"
   | "opening_hours"
+  | "rules"
   | "business_story"
   | "unique_specialty"
   | "accessibility_info"
@@ -138,6 +141,7 @@ const FIELD_HELP: Record<
   address: "Source of truth for the map pin, generated from this.",
   contact: "How a visitor reaches the business directly.",
   opening_hours: "Shown so visitors know when to expect the business open.",
+  rules: "Shown on the listing so visitors know what to follow.",
   business_story: "The longer background, shown on the full listing page.",
   unique_specialty: "What makes this business worth a special trip.",
   accessibility_info: "Helps visitors with access needs plan ahead.",
@@ -381,6 +385,20 @@ export function BusinessFields({
           value={form.opening_hours}
           onChange={(next) => onChange("opening_hours", next)}
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <FieldLabel htmlFor="rules" help={FIELD_HELP.rules}>
+          Rules
+        </FieldLabel>
+        <Textarea
+          id="rules"
+          placeholder="One rule per line"
+          value={form.rules}
+          onChange={(e) => onChange("rules", e.target.value)}
+          maxLength={500}
+        />
+        <CharCount value={form.rules} max={500} />
       </div>
 
       <div className="flex flex-col gap-2">

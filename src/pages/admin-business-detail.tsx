@@ -170,7 +170,7 @@ export default function AdminBusinessDetailPage() {
     supabase
       .from("businesses")
       .select(
-        "id, name, business_type, category_id, description, address, contact, opening_hours, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, featured_status"
+        "id, name, business_type, category_id, description, address, contact, opening_hours, rules, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, featured_status"
       )
       .eq("id", id)
       .single()
@@ -188,6 +188,7 @@ export default function AdminBusinessDetailPage() {
           address: data.address ?? "",
           contact: data.contact ?? "",
           opening_hours: data.opening_hours ?? "",
+          rules: data.rules ?? "",
           business_story: data.business_story ?? "",
           unique_specialty: data.unique_specialty ?? "",
           accessibility_info: data.accessibility_info ?? "",
@@ -293,6 +294,7 @@ export default function AdminBusinessDetailPage() {
       address: form.address,
       contact: form.contact || null,
       opening_hours: form.opening_hours || null,
+      rules: form.rules || null,
       business_story: form.business_story || null,
       unique_specialty: form.unique_specialty || null,
       accessibility_info: form.accessibility_info || null,

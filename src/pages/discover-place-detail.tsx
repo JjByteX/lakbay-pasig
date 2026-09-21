@@ -41,6 +41,7 @@ interface PlaceDetail {
   operating_hours: string | null;
   entrance_fee: string | null;
   facilities: PlaceFacilityChip[];
+  rules: string | null;
   verification_status: "verified";
 }
 
@@ -72,7 +73,7 @@ export default function DiscoverPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, description, historical_background, operating_hours, entrance_fee, verification_status, place_categories(name), place_facilities(name, icon)"
+        "id, name, description, historical_background, operating_hours, entrance_fee, rules, verification_status, place_categories(name), place_facilities(name, icon)"
       )
       .eq("id", id)
       .maybeSingle()
@@ -192,6 +193,18 @@ export default function DiscoverPlaceDetailPage() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Rules (migration 0039, rules-field-plan.md): sits right
+              after Facilities, the last visit info block, ahead of any
+              long content. One rule per line in the form, so
+              whitespace-pre-line keeps the line breaks. Hidden when
+              empty, same as the sections beside it. */}
+          {place.rules && (
+            <div className="flex flex-col gap-1">
+              <h2 className="text-base font-semibold text-foreground">Rules</h2>
+              <p className="whitespace-pre-line text-base text-muted-foreground">{place.rules}</p>
             </div>
           )}
         </div>

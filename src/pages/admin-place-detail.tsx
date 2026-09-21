@@ -64,6 +64,7 @@ interface PlaceFormState {
   entrance_fee: string; // numeric column (migration 0019), kept as a string here since the number input's value must be a string; parsed to a number or null at submit time
   visit_duration: string;
   accessibility_info: string;
+  rules: string;
   facility_ids: string[];
 }
 
@@ -80,6 +81,7 @@ const EMPTY_FORM: PlaceFormState = {
   entrance_fee: "",
   visit_duration: "",
   accessibility_info: "",
+  rules: "",
   facility_ids: [],
 };
 
@@ -204,7 +206,7 @@ export default function AdminPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, facility_ids, verification_status, reviewed_by, category_id"
+        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, operating_hours, entrance_fee, visit_duration, accessibility_info, rules, facility_ids, verification_status, reviewed_by, category_id"
       )
       .eq("id", id)
       .single()
@@ -227,6 +229,7 @@ export default function AdminPlaceDetailPage() {
           entrance_fee: data.entrance_fee !== null ? String(data.entrance_fee) : "",
           visit_duration: data.visit_duration ?? "",
           accessibility_info: data.accessibility_info ?? "",
+          rules: data.rules ?? "",
           facility_ids: data.facility_ids ?? [],
         });
         setStatus(data.verification_status);
@@ -533,7 +536,7 @@ export default function AdminPlaceDetailPage() {
   const placeForm = (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       <p className="text-sm font-semibold text-foreground">
-        Step {step} of 2: {step === 1 ? "Place" : "History"}
+        Step {step} of 2: {step === 1 ? "Place" : "Rules and history"}
       </p>
 
       <PlaceFormFields
@@ -714,10 +717,11 @@ function PlaceFormFields({
   //   identity: what the place is (name through accessibility)
   //   hours:    when it is open, the tallest single control
   //   details:  what a visitor needs to plan a trip (fee, duration, facilities)
-  //   history:  the story, last because it is the longest and least urgent
+  //   history:  page 2. Rules first (short, quick to fill), then the story,
+  //             last because it is the longest and least urgent
   // The two step form renders "place" (identity + details on the left, hours
-  // alone on the right, two columns from lg up) then "history" on its own
-  // page.
+  // alone on the right, two columns from lg up) then "history" (rules and
+  // history) on its own page.
 
   const identity = (
     <div className="flex flex-col gap-4">
@@ -867,6 +871,18 @@ function PlaceFormFields({
 
   const history = (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="rules">Rules</Label>
+        <Textarea
+          id="rules"
+          placeholder="One rule per line"
+          value={form.rules}
+          onChange={(e) => updateField("rules", e.target.value)}
+          maxLength={500}
+        />
+        <CharCount value={form.rules} max={500} />
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="year_or_period">Year Built or Historical Period</Label>

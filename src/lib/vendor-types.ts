@@ -26,6 +26,7 @@ export interface VendorBusinessDetail {
   address: string;
   contact: string | null;
   opening_hours: string | null;
+  rules: string | null;
   business_story: string | null;
   unique_specialty: string | null;
   accessibility_info: string | null;
@@ -57,6 +58,7 @@ export interface VendorBusinessPayload {
   address: string;
   contact: string | null;
   opening_hours: string | null;
+  rules: string | null;
   business_story: string | null;
   unique_specialty: string | null;
   accessibility_info: string | null;
