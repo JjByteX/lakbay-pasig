@@ -9,12 +9,14 @@ import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categorie
 import { getCategoryIcon } from "@/lib/place-category-icons";
 import { fetchActiveCategories as fetchActiveBusinessCategories, type BusinessCategory } from "@/lib/business-categories";
 import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
+import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 import { DirectionsPanel } from "./directions-panel";
+import type { CustomFrom } from "./public-shell";
 
 // Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
 // raster tiles with a `mix-blend-mode: color` div. Positron's raster tiles
@@ -145,7 +147,24 @@ function markerElement(result: DiscoverResult): HTMLElement {
 
 interface DiscoverMapProps {
   results: DiscoverResult[];
+  // The live GPS fix. Drives the blue dot and the recenter effect below --
+  // both stay on the live position even when a custom From is set (the
+  // dot should keep tracking where the person actually is).
   userLocation: Coordinates | null;
+  // directions-distance-and-from-phases.md Phase 3.2: the route origin from
+  // the shell's directions state (customFrom?.coordinates ?? userLocation).
+  // Added beside userLocation, not in place of it. Handed only to this
+  // file's ResultCard, so a custom From unlocks Directions from a map
+  // marker tap with no GPS fix.
+  origin: Coordinates | null;
+  // directions-distance-and-from-phases.md Phase 5.1: the custom From
+  // (drawn as the start pin, and the reason the GPS recenter below stands
+  // down), the pick-mode flag (arms the one-tap click listener), and the
+  // tap's callback. onMapPick's optional name is a tapped place marker's
+  // own name (open-questions.md Resolved #9); the shell picks the label.
+  customFrom: CustomFrom | null;
+  pickingOnMap: boolean;
+  onMapPick: (coordinates: Coordinates, name?: string) => void;
   resultsLoading: boolean;
   resultsError: string | null;
   // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
@@ -187,8 +206,34 @@ interface DiscoverMapProps {
   onSelectMode: (mode: TravelMode) => void;
   onCancelDirections: () => void;
   routeDuration: number | null;
+  // directions-distance-and-from-phases.md Phase 1.4: mirrors routeDuration
+  // above one-for-one, threaded straight through to the desktop
+  // DirectionsPanel below same as every other directions prop here.
+  routeDistance: number | null;
   modeLoading: boolean;
   modeErrorReason: DirectionsErrorReason | null;
+  // directions-distance-and-from-phases.md Phase 4.7: the custom From's
+  // label and handlers, threaded straight through to the desktop
+  // DirectionsPanel, same as every other directions prop above -- this
+  // file reads none of them itself in Phase 4. Six props on top of the
+  // existing list is long, but a wrapper object was not asked for in this
+  // change (Phase 4.7). Flagged for a later cleanup instead.
+  //
+  //
+  // Phase 5.1: this file now also reads three of them itself -- customFrom
+  // (to draw the start pin), pickingOnMap (to arm the click listener) and
+  // onMapPick (the tap's callback) -- so they are declared just below,
+  // beside userLocation/origin, where the map-owned props live.
+  //
+  // ponytail: eight flat From props now. Group them into one
+  // `fromControl` object if a third DirectionsPanel host appears, or the
+  // next From feature adds another. Not done here: a wrapper object was
+  // not asked for in this change (Phase 4.7).
+  fromLabel: string | null;
+  onSelectFrom: (from: CustomFrom) => void;
+  onResetFrom: () => void;
+  onPickOnMap: () => void;
+  onCancelPickOnMap: () => void;
 }
 
 // Feature-request-phases.md Phase 1.1/1.4: legend content (categories +
@@ -590,6 +635,10 @@ function HoverPreview({
 export function DiscoverMap({
   results,
   userLocation,
+  origin,
+  customFrom,
+  pickingOnMap,
+  onMapPick,
   resultsLoading,
   resultsError,
   onLocationFound,
@@ -600,8 +649,14 @@ export function DiscoverMap({
   onSelectMode,
   onCancelDirections,
   routeDuration,
+  routeDistance,
   modeLoading,
   modeErrorReason,
+  fromLabel,
+  onSelectFrom,
+  onResetFrom,
+  onPickOnMap,
+  onCancelPickOnMap,
 }: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -779,11 +834,23 @@ export function DiscoverMap({
   // Phase 4.2: recenter once a user location resolves. MapLibre's own
   // constructor `center` option, like react-leaflet's, only applies on
   // first mount, so a later location needs an imperative call.
+  //
+  // Phase 5.5: with a custom From set the camera stands down. This effect
+  // runs on every GPS tick, and setCenter/setZoom would pull the view off
+  // the route just drawn from the custom From every second. The blue dot
+  // below keeps tracking the live position either way, since the person is
+  // still where they are. The same recenter also fires during an ordinary
+  // route with no custom From -- existing behavior, out of scope here.
+  //
+  // ponytail: guard on customFrom only. Guard on any open route
+  // (directionsPanelResult) if the ordinary case is reported.
   useEffect(() => {
     const map = mapRef.current;
     if (!userLocation || !map) return;
-    map.setCenter([userLocation.longitude, userLocation.latitude]);
-    map.setZoom(DEFAULT_ZOOM);
+    if (!customFrom) {
+      map.setCenter([userLocation.longitude, userLocation.latitude]);
+      map.setZoom(DEFAULT_ZOOM);
+    }
 
     if (!userMarkerRef.current) {
       const dot = document.createElement("div");
@@ -795,7 +862,11 @@ export function DiscoverMap({
     } else {
       userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
     }
-  }, [userLocation]);
+    // customFrom is a dependency so the effect also runs once when a From
+    // is *cleared* (Cancel): with the guard now open it recenters, and the
+    // view returns to the person's live position. Setting or replacing a
+    // From re-runs it too, but the guard makes that a no-op for the camera.
+  }, [userLocation, customFrom]);
 
   useEffect(() => {
     return () => {
@@ -803,6 +874,109 @@ export function DiscoverMap({
       userMarkerRef.current = null;
     };
   }, []);
+
+  // directions-distance-and-from-phases.md Phase 5.4: the start pin. One
+  // MapPin marker, created once and moved, same icon and styling as
+  // location-picker.tsx's (fill-primary stroke-card, h-10 w-10, anchor
+  // bottom, 3px offset so the tip lands on the coordinate). Not draggable:
+  // one tap is the whole flow (plan). Held in a ref like userMarkerRef.
+  //
+  // Driven by customFrom alone, so it shows for a search pick and a map
+  // tap alike (both are a point on the map), is removed when the From is
+  // cleared, and comes back on its own when this component remounts from a
+  // Map/List toggle, since the shell holds the truth, not this file.
+  const fromMarkerRef = useRef<maplibregl.Marker | null>(null);
+
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map) return;
+    if (!customFrom) {
+      fromMarkerRef.current?.remove();
+      fromMarkerRef.current = null;
+      return;
+    }
+    const lngLat: [number, number] = [customFrom.coordinates.longitude, customFrom.coordinates.latitude];
+    if (fromMarkerRef.current) {
+      fromMarkerRef.current.setLngLat(lngLat);
+      return;
+    }
+    const el = document.createElement("div");
+    el.setAttribute("role", "img");
+    // "Start point", not "Map pin": that label belongs to the form picker.
+    el.setAttribute("aria-label", "Start point");
+    // Display only, so pointer-events-none: this marker is added after the
+    // place markers and would otherwise stack on top of one at the same
+    // spot and swallow its tap. With it, a tap on the pin's box falls
+    // through to whatever is underneath -- a place marker, or empty map
+    // (which in pick mode sets From again, the right outcome). A z-index
+    // would not do this job: markers are all positioned, so equal or auto
+    // z-index falls back to DOM order, and the pin is later in the DOM.
+    el.className = "pointer-events-none";
+    el.innerHTML = renderToStaticMarkup(
+      <MapPin className="block h-10 w-10 fill-primary stroke-card" aria-hidden="true" />,
+    );
+    fromMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, 3] })
+      .setLngLat(lngLat)
+      .addTo(map);
+  }, [customFrom, mapInstance]);
+
+  useEffect(() => {
+    return () => {
+      fromMarkerRef.current?.remove();
+      fromMarkerRef.current = null;
+    };
+  }, []);
+
+  // Phase 5.2: mirrors pickingOnMap for the marker click listeners below.
+  // Those listeners are created inside an effect keyed on [results,
+  // isMobile], so reading the prop directly would close over whatever
+  // value it had when the marker was built and never see a later change.
+  // A ref read at click time always sees the current value. Also holds
+  // the latest onMapPick for the same reason -- the shell's handler is
+  // recreated whenever its own dependencies change.
+  const pickingOnMapRef = useRef(pickingOnMap);
+  const onMapPickRef = useRef(onMapPick);
+  useEffect(() => {
+    pickingOnMapRef.current = pickingOnMap;
+    onMapPickRef.current = onMapPick;
+  }, [pickingOnMap, onMapPick]);
+
+  // Phase 5.2: the map tap. Attached only while pickingOnMap is true and
+  // removed the moment it turns false -- never an always-on listener,
+  // which would open a card and set From on the same tap. A marker click
+  // is a DOM click on the marker's own element, and maplibre also fires
+  // map "click" for it (the event bubbles up to the canvas container), so
+  // the check below hands marker taps to the marker listener alone and
+  // never counts one twice -- location-picker.tsx's guard, inverted:
+  // there it ignores taps on its own pin, here it ignores taps on any
+  // place marker.
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !pickingOnMap) return;
+    const handleMapClick = (e: maplibregl.MapMouseEvent) => {
+      const target = e.originalEvent.target as Node | null;
+      if (target && markersRef.current.some((m) => m.getElement().contains(target))) return;
+      onMapPickRef.current({ latitude: e.lngLat.lat, longitude: e.lngLat.lng });
+    };
+    map.on("click", handleMapClick);
+    return () => {
+      map.off("click", handleMapClick);
+    };
+  }, [mapInstance, pickingOnMap]);
+
+  // Phase 5.3: Escape ends pick mode and keeps the previous From. Same
+  // rule as the listener above: attached only while picking, removed
+  // after. The prompt's own X calls the same handler.
+  useEffect(() => {
+    if (!pickingOnMap) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancelPickOnMap();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [pickingOnMap, onCancelPickOnMap]);
 
   // locate-me-and-directions-phases.md Phase 3.5-3.7: route line, drawn
   // imperatively on demand rather than kept in buildStyle (buildStyle
@@ -937,7 +1111,23 @@ export function DiscoverMap({
           .setLngLat([result.longitude as number, result.latitude as number])
           .addTo(map);
         const el = marker.getElement();
-        el.addEventListener("click", () => setSelected(result));
+        // Phase 5.2: while picking From, a marker tap is a pin drop at that
+        // marker's own coordinates, carrying the place's name as the label
+        // (open-questions.md Resolved #9 -- Google draws no line between a
+        // tap on empty map and a tap on an existing point), and never opens
+        // the ResultCard. Reads the refs, not the props: this closure is
+        // built once per [results, isMobile] and would otherwise see a
+        // stale pickingOnMap. Outside pick mode: unchanged.
+        el.addEventListener("click", () => {
+          if (pickingOnMapRef.current) {
+            onMapPickRef.current(
+              { latitude: result.latitude as number, longitude: result.longitude as number },
+              result.name,
+            );
+            return;
+          }
+          setSelected(result);
+        });
         if (!isMobile) {
           el.addEventListener("mouseenter", (e: MouseEvent) => {
             const bounds = containerRef.current?.getBoundingClientRect();
@@ -1008,7 +1198,22 @@ export function DiscoverMap({
 
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="h-full w-full" />
+      {/* Phase 5.3: crosshair while picking, desktop only. A class on the
+          container (md: matches ZoomControl's own desktop breakpoint), not
+          a poke at maplibre's own canvas styles. maplibre sets its own
+          cursor (grab/grabbing) on its canvas container and canvas from
+          its own stylesheet, so the arbitrary-variant selectors reach
+          down to both, and !important is what lets them win over that
+          stylesheet's higher-specificity selectors.
+          Place markers keep cursor-pointer from markerElement's own class,
+          which is right: in pick mode a marker tap also sets From. */}
+      <div
+        ref={containerRef}
+        className={cn(
+          "h-full w-full",
+          pickingOnMap && "md:[&_.maplibregl-canvas-container]:!cursor-crosshair md:[&_.maplibregl-canvas]:!cursor-crosshair",
+        )}
+      />
 
       {resultsError ? (
         <div className="pointer-events-none absolute inset-x-0 top-6 z-[1000] flex justify-center px-6">
@@ -1070,9 +1275,16 @@ export function DiscoverMap({
           selectedMode={selectedMode}
           onSelectMode={onSelectMode}
           durationSeconds={routeDuration}
+          distanceMeters={routeDistance}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={onCancelDirections}
+          fromLabel={fromLabel}
+          onSelectFrom={onSelectFrom}
+          onResetFrom={onResetFrom}
+          onPickOnMap={onPickOnMap}
+          pickingOnMap={pickingOnMap}
+          onCancelPickOnMap={onCancelPickOnMap}
         />
       )}
 
@@ -1085,7 +1297,11 @@ export function DiscoverMap({
         onOpenChange={(open) => {
           if (!open) setSelected(null);
         }}
-        userLocation={userLocation}
+        // Phase 3.2: origin, not userLocation -- ResultCard's prop keeps its
+        // old name (renaming needs approval) but now carries the route
+        // origin. The blue dot and recenter effect above stay on
+        // userLocation.
+        userLocation={origin}
         onRouteFound={onRouteFound}
       />
     </div>

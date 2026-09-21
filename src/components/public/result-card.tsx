@@ -46,6 +46,17 @@ interface ResultCardProps {
   // fetch. Same userLocation prop discover-map.tsx already receives from
   // discover.tsx, passed straight through -- no second geolocation call,
   // per the plan's own "confirm userLocation stays single-sourced" check.
+  //
+  // directions-distance-and-from-phases.md Phase 3.1: this is now the
+  // *route origin*, not strictly the live GPS fix -- both callers
+  // (discover-map.tsx, discover-list.tsx) pass the shell's `origin`
+  // (customFrom?.coordinates ?? userLocation, public-shell.tsx) through
+  // this prop. The name is kept as-is: renaming an existing prop needs
+  // explicit human approval (constraints.md), and the card itself never
+  // needed to know *where* the value came from, only that null means
+  // "nowhere to route from". That is why the Directions gate and the
+  // fetch below already unlock for a custom From with no GPS fix, with no
+  // shell read inside this card.
   userLocation: Coordinates | null;
   // Called with the route geometry and the result it was fetched for, on a
   // successful fetch. discover-map.tsx owns the actual map instance and the
@@ -78,8 +89,11 @@ interface ResultCardProps {
  *
  * locate-me-and-directions-phases.md Phase 3: adds a Directions button
  * beside "View full details." Disabled with a visible reason when
- * userLocation is null (admin-event-detail.tsx's publish-gate pattern,
- * same Disabled/gated shape per ux-ui-guidelines.md). Loading and error
+ * userLocation is null -- which, since directions-distance-and-from-
+ * phases.md Phase 3, means "no route origin" (no GPS fix *and* no custom
+ * From), see the prop's own comment above (admin-event-detail.tsx's
+ * publish-gate pattern, same Disabled/gated shape per ux-ui-guidelines.md).
+ * Loading and error
  * state are local to this card, not lifted -- they're ephemeral to one
  * button press and nothing else in the app reads them. On success, hands
  * the route geometry up via onRouteFound and closes the popup itself

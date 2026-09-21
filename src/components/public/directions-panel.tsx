@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Car, Bike, Footprints, MapPin, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DirectionsErrorReason, TravelMode } from "@/lib/directions";
+import { formatDistance, type DirectionsErrorReason, type TravelMode } from "@/lib/directions";
 import type { DiscoverResult } from "@/lib/discover-types";
+import type { CustomFrom } from "@/components/public/public-shell";
+import { FromSearch } from "./from-search";
 
 // directions-panel-phases.md Phase 3: static shell only, no fetch, no
 // open/close wiring, no mode switching -- confirms the layout fits before
@@ -64,6 +67,10 @@ interface DirectionsPanelProps {
   // fetch resolves. discover.tsx owns the fetch (5.2/5.3), this component
   // stays presentational -- formats and displays, does not fetch itself.
   durationSeconds: number | null;
+  // directions-distance-and-from-phases.md Phase 1.4: RouteGeometry.distance
+  // for the currently selected mode, same lifecycle as durationSeconds
+  // above -- null under the same conditions, set and cleared together.
+  distanceMeters: number | null;
   // Phase 6.1: true while a mode tap's fetchRoute is in flight
   // (discover.tsx's modeLoading, already tracked since 5.3's single-
   // flight guard -- reused here rather than a second loading flag).
@@ -73,6 +80,28 @@ interface DirectionsPanelProps {
   // means no error to show -- the normal duration or loading row renders
   // instead.
   errorReason: DirectionsErrorReason | null;
+  // directions-distance-and-from-phases.md Phase 4.6: the custom From's
+  // display label, or null when none is set (the common case), in which
+  // case the From row reads "Your location". Only the label crosses into
+  // this component, not the whole CustomFrom: nothing here reads its
+  // coordinates, and hasCustomFrom below is just `fromLabel !== null`.
+  fromLabel: string | null;
+  // A search pick from FromSearch. The shell owns the state and the
+  // refetch (handleSelectFrom), this component only closes its own field.
+  onSelectFrom: (from: CustomFrom) => void;
+  // "Your location" row: clears the custom From (handleResetFrom).
+  onResetFrom: () => void;
+  // "Choose on map" row (handlePickFromOnMap). A stub until Phase 5 wires
+  // the map's tap handler: it turns pickingOnMap on and nothing else.
+  onPickOnMap: () => void;
+  // True while the map tap mode is on. Replaces the From field with a one
+  // line prompt below.
+  pickingOnMap: boolean;
+  // Ends pick mode only, restoring the previous From
+  // (handleCancelPickOnMap). Distinct from onCancel above, which ends the
+  // whole Directions session -- Phase 5.3 asks for two clearly labeled
+  // controls so the two are never confused.
+  onCancelPickOnMap: () => void;
   // desktop-directions-panel-phases.md Phase 1.1: the two variants share
   // every prop and every inner row -- only the outer wrapper's
   // positioning and card chrome differ (mobile: viewport-fixed bottom
@@ -94,17 +123,121 @@ function DirectionsStatusRow({
   isLoading,
   errorReason,
   durationSeconds,
-}: Readonly<Pick<DirectionsPanelProps, "isLoading" | "errorReason" | "durationSeconds">>) {
+  distanceMeters,
+}: Readonly<
+  Pick<DirectionsPanelProps, "isLoading" | "errorReason" | "durationSeconds" | "distanceMeters">
+>) {
   if (isLoading) {
     return <p className="mt-4 text-sm text-muted-foreground">Getting directions…</p>;
   }
   if (errorReason) {
     return <p className="mt-4 text-sm text-destructive">{ERROR_MESSAGES[errorReason]}</p>;
   }
+  // Phase 1.4: time first, then distance, joined by a middle dot -- "12
+  // min · 2.4 km" -- per the plan. When either value is null (should only
+  // happen transiently, before the first fetch resolves), render whichever
+  // exists rather than a lone separator with nothing on one side.
+  const duration = durationSeconds === null ? null : formatDuration(durationSeconds);
+  const distance = distanceMeters === null ? null : formatDistance(distanceMeters);
+  const text = [duration, distance].filter(Boolean).join(" · ");
+  return <p className="mt-4 text-sm text-muted-foreground">{text}</p>;
+}
+
+// directions-distance-and-from-phases.md Phase 4.6: the From row's three
+// mutually exclusive states, as early returns rather than a nested ternary
+// (same Sonar reason DirectionsStatusRow above gives). Order matters:
+// pick mode wins over an open field, since Phase 5 closes the field the
+// moment pick mode starts, but a stale editingFrom must never show the
+// search field on top of the prompt. Every state is min-h-10 so the panel
+// does not jump when the row swaps.
+function DirectionsFromRow({
+  fromLabel,
+  pickingOnMap,
+  editingFrom,
+  onStartEditing,
+  onStopEditing,
+  onSelectFrom,
+  onResetFrom,
+  onPickOnMap,
+  onCancelPickOnMap,
+}: Readonly<{
+  fromLabel: string | null;
+  pickingOnMap: boolean;
+  editingFrom: boolean;
+  onStartEditing: () => void;
+  onStopEditing: () => void;
+  onSelectFrom: (from: CustomFrom) => void;
+  onResetFrom: () => void;
+  onPickOnMap: () => void;
+  onCancelPickOnMap: () => void;
+}>) {
+  if (pickingOnMap) {
+    // Phase 4 stub, completed in Phase 5.3: the prompt takes the From
+    // field's place while pick mode is on. role="status" so a screen
+    // reader announces it, same reason the picker's result lines are
+    // <output>. The X only ends pick mode and keeps the previous From,
+    // and is labeled differently from the panel's Cancel (which ends the
+    // whole session) so the two are never confused.
+    return (
+      <div className="flex min-h-10 items-center gap-2">
+        <MapPin className="h-4 w-4 shrink-0 text-primary" />
+        <p role="status" className="flex-1 text-sm text-foreground">
+          Tap the map to set the start.
+        </p>
+        <button
+          type="button"
+          aria-label="Stop choosing on map"
+          onClick={onCancelPickOnMap}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <X className="h-5 w-5 shrink-0" />
+        </button>
+      </div>
+    );
+  }
+
+  if (editingFrom) {
+    return (
+      <FromSearch
+        hasCustomFrom={fromLabel !== null}
+        onSelect={(from) => {
+          onSelectFrom(from);
+          onStopEditing();
+        }}
+        onUseMyLocation={() => {
+          onResetFrom();
+          onStopEditing();
+        }}
+        // Pick mode replaces the field with the prompt above, so the
+        // field closes here too (Phase 4.6).
+        onPickOnMap={() => {
+          onPickOnMap();
+          onStopEditing();
+        }}
+        onClose={onStopEditing}
+      />
+    );
+  }
+
   return (
-    <p className="mt-4 text-sm text-muted-foreground">
-      {durationSeconds === null ? "" : formatDuration(durationSeconds)}
-    </p>
+    <button
+      type="button"
+      // The visible text is only the current value, so the label adds
+      // what the control does. Announces both: "Starting point: Pasig
+      // City Museum. Change starting point". Also carries the full label
+      // for a screen reader when the visible text is truncated.
+      aria-label={`Starting point: ${fromLabel ?? "Your location"}. Change starting point`}
+      onClick={onStartEditing}
+      className="flex min-h-10 w-full items-center gap-2 rounded-lg text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full border-2 border-muted-foreground" />
+      {/* truncate: a long search-pick label ends in an ellipsis instead
+          of wrapping and growing the panel. min-w-0 is what lets a flex
+          child actually shrink below its content width. */}
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+        {fromLabel ?? "Your location"}
+      </span>
+    </button>
   );
 }
 
@@ -120,9 +253,23 @@ function DirectionsPanelContent({
   onSelectMode,
   onCancel,
   durationSeconds,
+  distanceMeters,
   isLoading,
   errorReason,
+  fromLabel,
+  onSelectFrom,
+  onResetFrom,
+  onPickOnMap,
+  pickingOnMap,
+  onCancelPickOnMap,
 }: Readonly<Omit<DirectionsPanelProps, "variant">>) {
+  // directions-distance-and-from-phases.md Phase 4.6: UI-only. Whether the
+  // From row is currently swapped for the search field. It does not need
+  // to survive a tab switch: the field closes on its own (outside tap,
+  // Escape, a pick), so losing it on unmount costs nothing. The custom
+  // From itself lives in the shell, not here.
+  const [editingFrom, setEditingFrom] = useState(false);
+
   return (
     <>
       {/* Phase 3.3: mode row, Car/Bike/Walk in that order per the
@@ -185,17 +332,30 @@ function DirectionsPanelContent({
       </div>
 
       {/* Phase 3.4/3.5: From/To rows, stacked, matching the reference
-          image's circle-then-pin marker pair. From is never editable --
-          the plan's own Scope section fixes it to "Your location," no
-          swap control, so this is static text, not an input.
+          image's circle-then-pin marker pair.
+          directions-distance-and-from-phases.md Phase 4.6: From used to
+          be static "Your location" text. It is now a button that swaps
+          for FromSearch (Google Maps' own in-place edit: tap the
+          starting point, type, pick). To stays plain text, since the
+          destination is the result being viewed (plan, Scope).
+          Three mutually exclusive From states, same row height in each
+          (min-h-10) so the panel does not jump between them: the
+          button, the open field, and the map-pick prompt.
           gap-2/mt-4 throughout (8px grid, ux-ui-guidelines.md's Spacing
           Rules), not gap-3/mt-3 -- 12px isn't a valid grid step, only
           4px is allowed as the one tight-space exception. */}
       <div className="mt-4 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full border-2 border-muted-foreground" />
-          <p className="text-sm text-foreground">Your location</p>
-        </div>
+        <DirectionsFromRow
+          fromLabel={fromLabel}
+          pickingOnMap={pickingOnMap}
+          editingFrom={editingFrom}
+          onStartEditing={() => setEditingFrom(true)}
+          onStopEditing={() => setEditingFrom(false)}
+          onSelectFrom={onSelectFrom}
+          onResetFrom={onResetFrom}
+          onPickOnMap={onPickOnMap}
+          onCancelPickOnMap={onCancelPickOnMap}
+        />
         <div className="flex items-center gap-2">
           <MapPin className="h-4 w-4 shrink-0 text-primary" />
           <p className="text-sm text-foreground">{result.name}</p>
@@ -215,6 +375,7 @@ function DirectionsPanelContent({
         isLoading={isLoading}
         errorReason={errorReason}
         durationSeconds={durationSeconds}
+        distanceMeters={distanceMeters}
       />
     </>
   );

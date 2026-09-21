@@ -46,10 +46,14 @@ export interface RouteGeometry {
   type: "LineString";
   coordinates: [number, number][]; // [longitude, latitude] pairs, GeoJSON order
   // Phase 1.3: seconds, read straight from OSRM's own route.duration. Powers
-  // the panel's estimated-time row (Phase 5), not used before that phase
-  // wires it up, but fetched now since a second field on an existing
-  // interface is one line here versus a second round-trip later.
+  // the panel's estimated-time row.
   duration: number;
+  // directions-distance-and-from-phases.md Phase 1.1: meters, read straight
+  // from OSRM's own route.distance -- same object, same call, no second
+  // round-trip. Road distance for the selected mode, not the straight-line
+  // distanceKm used elsewhere (discover-query.ts), so it matches the route
+  // actually drawn.
+  distance: number;
 }
 
 // Distinguishable failure shapes so result-card.tsx can render a specific
@@ -109,5 +113,55 @@ export async function fetchRoute(
   return {
     ...data.routes[0].geometry,
     duration: data.routes[0].duration,
+    distance: data.routes[0].distance,
   } as RouteGeometry;
+}
+
+// directions-distance-and-from-phases.md Phase 1.2: lives here, not in
+// directions-panel.tsx, per that phase's own ponytail fallback -- a
+// component file that imports lucide-react and other browser-only
+// dependencies won't load under plain `tsx` in an environment with no
+// node_modules installed (confirmed: `npx tsx directions-panel.tsx` fails
+// on the lucide-react import, `npx tsx directions.ts` does not). Keeping
+// the formatter with its data source (this file, beside fetchRoute) also
+// reads fine on its own.
+//
+// Round first, then branch, so a value that rounds up into the next unit
+// (995 m) never prints in the smaller one -- "1000 m" never appears, only
+// "1.0 km". Meters rounded to the nearest 10 below 1000 m ("350 m"); km
+// with one decimal at 1000 m and over ("2.4 km").
+export function formatDistance(meters: number): string {
+  const roundedMeters = Math.round(meters / 10) * 10;
+  if (roundedMeters < 1000) return `${roundedMeters} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+// Same Node-only guard and assert-check pattern as geocode.ts's demo().
+// Run with: npx tsx src/lib/directions.ts
+function demo() {
+  const assertEqual = (actual: unknown, expected: unknown, label: string) => {
+    if (actual !== expected) {
+      throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  };
+
+  assertEqual(formatDistance(0), "0 m", "zero");
+  assertEqual(formatDistance(4), "0 m", "rounds down to zero");
+  assertEqual(formatDistance(5), "10 m", "rounds up to nearest 10");
+  assertEqual(formatDistance(349), "350 m", "rounds up to 350");
+  assertEqual(formatDistance(350), "350 m", "exact 350");
+  assertEqual(formatDistance(994), "990 m", "rounds down, stays under 1km");
+  assertEqual(formatDistance(995), "1.0 km", "rounds up into km, not 1000 m");
+  assertEqual(formatDistance(1000), "1.0 km", "exact 1km");
+  assertEqual(formatDistance(2449), "2.4 km", "km truncation");
+  assertEqual(formatDistance(2450), "2.5 km", "km rounding up");
+  assertEqual(formatDistance(12000), "12.0 km", "double-digit km");
+
+  console.log("directions.ts formatDistance demo: all checks passed");
+}
+
+// Same Node-only guard as geocode.ts: `process` doesn't exist in the Vite
+// browser bundle, and this must never fire on import.
+if (typeof process !== "undefined" && import.meta.url === `file://${process.argv[1]}`) {
+  demo();
 }

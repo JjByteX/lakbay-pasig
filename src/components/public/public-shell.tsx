@@ -125,6 +125,22 @@ export function useUserLocation() {
   return ctx;
 }
 
+// directions-distance-and-from-phases.md Phase 2.1: the custom From shape,
+// defined once here since the shell owns the state and three files
+// consume it (discover-map.tsx, result-card.tsx, discover-list.tsx, via
+// the `origin` field below). `Coordinates` is reused from
+// discover-query.ts, not redeclared -- same point shape GPS and OSRM
+// already use.
+export interface CustomFrom {
+  label: string;
+  coordinates: Coordinates;
+}
+
+// Phase 5.1: display-only label for a From picked by tapping empty map. No
+// reverse lookup (plan, Decisions): nothing reads it back, and Photon's
+// street field is patchy (decision #21).
+const MAP_PICK_LABEL = "Pinned location";
+
 // Directions: shell-owned for the same reason as the two above. This used
 // to be six separate useState calls inside discover.tsx (route,
 // directionsPanelResult, selectedMode, routeDuration, modeLoading,
@@ -141,11 +157,58 @@ interface DirectionsContextValue {
   directionsPanelResult: DiscoverResult | null;
   selectedMode: TravelMode;
   routeDuration: number | null;
+  // directions-distance-and-from-phases.md Phase 1.3: road distance
+  // (meters) for the currently selected mode, alongside routeDuration --
+  // same source (RouteGeometry, fetchRoute), same lifecycle (set on
+  // route-found and mode-switch success, cleared on cancel).
+  routeDistance: number | null;
   modeLoading: boolean;
   modeErrorReason: DirectionsErrorReason | null;
+  // directions-distance-and-from-phases.md Phase 2.2: a person-chosen
+  // route start, overriding the live GPS fix for routing only. null means
+  // "no custom From set", the common case -- origin below then falls back
+  // to userLocation.
+  customFrom: CustomFrom | null;
+  // Phase 2.4: true while the map-tap-to-set-From mode (Phase 5) is
+  // active. Lives here rather than as page-local state so Cancel (this
+  // context's own handleCancelDirections) can always turn it off, no
+  // matter which page/component turned it on.
+  pickingOnMap: boolean;
+  // Phase 2.2: the actual route start -- customFrom's coordinates when
+  // set, else the live userLocation. Derived once, here, and exposed
+  // alongside customFrom so every consumer (ResultCard in Phase 3,
+  // discover-map.tsx, discover-list.tsx) reads the same value instead of
+  // each re-deriving `customFrom?.coordinates ?? userLocation` and
+  // risking the two falling out of sync.
+  origin: Coordinates | null;
   handleRouteFound: (geometry: RouteGeometry, foundResult: DiscoverResult) => void;
   handleSelectMode: (mode: TravelMode) => Promise<void>;
   handleCancelDirections: () => void;
+  // Phase 2.4: sets customFrom, leaves pickingOnMap off (a search pick and
+  // a map pick are different entry points; picking on the map turns
+  // itself off separately, see handlePickFromOnMap/discover-map.tsx),
+  // and refetches the current route for the new origin.
+  handleSelectFrom: (from: CustomFrom) => Promise<void>;
+  // Phase 2.4: clears customFrom and refetches from userLocation. With no
+  // GPS fix, there is no origin to fetch from, so this clears the route
+  // instead of calling fetchRoute with a null origin.
+  handleResetFrom: () => Promise<void>;
+  // Phase 2.4: turns pickingOnMap on. Setting the From value itself
+  // happens later, in Phase 5's map click handler, via handleSelectFrom.
+  handlePickFromOnMap: () => void;
+  // Phase 2.7: turns pickingOnMap off without touching customFrom, for
+  // Escape / the panel's Cancel control while picking is active. Named
+  // separately from handleCancelDirections, which cancels the whole
+  // Directions session, not just an in-progress pick.
+  handleCancelPickOnMap: () => void;
+  // directions-distance-and-from-phases.md Phase 5.1: called by the map's
+  // tap handler (discover-map.tsx) with the tapped point. Lives here, not
+  // in the map file, so the "Pinned location" label string exists in one
+  // place. `name` is optional (open-questions.md Resolved #9): a tap on a
+  // place marker passes that place's own name, since it is already known
+  // data, and a tap on empty map passes none and gets the generic label.
+  // Same path as a search pick from there on (handleSelectFrom).
+  handleMapPick: (coordinates: Coordinates, name?: string) => Promise<void>;
 }
 
 const DirectionsContext = createContext<DirectionsContextValue | undefined>(
@@ -153,9 +216,10 @@ const DirectionsContext = createContext<DirectionsContextValue | undefined>(
 );
 
 /** Reads the shell's own in-progress Directions session (route, selected
- *  mode, duration, loading/error state) and its mutating actions. Used by
- *  discover.tsx and, through it, DirectionsPanel/DiscoverMap/DiscoverList/
- *  ResultCard -- none of which own this state themselves anymore. */
+ *  mode, duration, distance, custom From, loading/error state) and its
+ *  mutating actions. Used by discover.tsx and, through it,
+ *  DirectionsPanel/DiscoverMap/DiscoverList/ResultCard -- none of which
+ *  own this state themselves anymore. */
 export function useDirections() {
   const ctx = useContext(DirectionsContext);
   if (!ctx) throw new Error("useDirections must be used within PublicShell");
@@ -172,16 +236,81 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     useState<DiscoverResult | null>(null);
   const [selectedMode, setSelectedMode] = useState<TravelMode>("foot");
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [modeLoading, setModeLoading] = useState(false);
   const [modeErrorReason, setModeErrorReason] =
     useState<DirectionsErrorReason | null>(null);
+  // directions-distance-and-from-phases.md Phase 2.2: null (no custom
+  // From) is the common case -- origin then falls back to userLocation.
+  const [customFrom, setCustomFrom] = useState<CustomFrom | null>(null);
+  // Phase 2.4: on while the map-tap-to-pick-From mode (Phase 5) is active.
+  const [pickingOnMap, setPickingOnMap] = useState(false);
+
+  // Phase 2.2: derived once here so ResultCard (Phase 3), discover-map.tsx
+  // and discover-list.tsx all read the same value instead of each
+  // re-deriving `customFrom?.coordinates ?? userLocation` separately.
+  const origin = customFrom?.coordinates ?? userLocation;
+
+  // Phase 2.5: a request counter, same idea as the location picker's
+  // searchSeq. A From change and a mode switch both call fetchRoute, and
+  // either can be slow -- only the response matching the *latest* call
+  // may write route/duration/distance/error. Bumped on every fetch start
+  // and on Cancel, so a late response after Cancel can't redraw a route
+  // the person already closed.
+  const fetchSeqRef = useRef(0);
+
+  // Phase 2.3: the fetch handleSelectMode already did, factored out so
+  // handleSelectFrom/handleResetFrom (Phase 2.4) share it instead of a
+  // second copy drifting from this one. Takes the mode and origin
+  // explicitly rather than reading them from closure, since From handlers
+  // call this with a not-yet-committed origin (the mode stays whatever it
+  // already was -- these handlers never change selectedMode).
+  //
+  // Returns whether the fetch actually landed (true) or was skipped/
+  // superseded/failed (false), so handleSelectMode -- the only caller that
+  // commits selectedMode -- can commit it on success only, matching the
+  // pre-Phase-2 behavior exactly (plan/phase spec, 2.3: "only sets
+  // selectedMode on success").
+  const refetch = useCallback(
+    async (mode: TravelMode, from: Coordinates, destination: DiscoverResult): Promise<boolean> => {
+      if (destination.latitude == null || destination.longitude == null) return false;
+      const seq = ++fetchSeqRef.current;
+      setModeLoading(true);
+      setModeErrorReason(null);
+      try {
+        const geometry = await fetchRoute(
+          from,
+          { latitude: destination.latitude, longitude: destination.longitude },
+          mode,
+        );
+        if (seq !== fetchSeqRef.current) return false; // superseded by a newer fetch or a Cancel
+        setRoute(geometry);
+        setRouteDuration(geometry.duration);
+        setRouteDistance(geometry.distance);
+        return true;
+      } catch (err) {
+        if (seq !== fetchSeqRef.current) return false;
+        setModeErrorReason(err instanceof DirectionsError ? err.reason : "network");
+        return false;
+      } finally {
+        if (seq === fetchSeqRef.current) setModeLoading(false);
+      }
+    },
+    [],
+  );
 
   const handleRouteFound = useCallback(
     (geometry: RouteGeometry, foundResult: DiscoverResult) => {
+      // Phase 2.6: receives a route already fetched from the current
+      // origin (ResultCard fetches it, not this handler), so this only
+      // stores the result -- it must not refetch. It also must not touch
+      // customFrom: a new Directions tap keeps whatever From the person
+      // already set: only Cancel clears it (plan, Notes).
       setRoute(geometry);
       setDirectionsPanelResult(foundResult);
       setSelectedMode("foot");
       setRouteDuration(geometry.duration);
+      setRouteDistance(geometry.distance);
       setModeErrorReason(null);
     },
     [],
@@ -189,48 +318,103 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
 
   const handleSelectMode = useCallback(
     async (mode: TravelMode) => {
-      if (modeLoading || !userLocation || !directionsPanelResult) return;
+      // Phase 2.3: guard changed from !userLocation to !origin, so a
+      // custom From (no GPS needed) still allows a mode switch.
+      if (modeLoading || !origin || !directionsPanelResult) return;
       if (mode === selectedMode) return;
-      const destination = directionsPanelResult;
-      if (destination.latitude == null || destination.longitude == null) return;
-      setModeLoading(true);
-      setModeErrorReason(null);
-      try {
-        const geometry = await fetchRoute(
-          userLocation,
-          { latitude: destination.latitude, longitude: destination.longitude },
-          mode,
-        );
-        setSelectedMode(mode);
-        setRoute(geometry);
-        setRouteDuration(geometry.duration);
-      } catch (err) {
-        setModeErrorReason(err instanceof DirectionsError ? err.reason : "network");
-      } finally {
-        setModeLoading(false);
-      }
+      const ok = await refetch(mode, origin, directionsPanelResult);
+      // Mode only commits on a successful fetch -- same rule the pre-
+      // Phase-2 version enforced by setting it inside the try block.
+      // refetch itself never touches selectedMode: the From handlers
+      // reuse it without changing mode, per Phase 2.3.
+      if (ok) setSelectedMode(mode);
     },
-    [modeLoading, userLocation, directionsPanelResult, selectedMode],
+    [modeLoading, origin, directionsPanelResult, selectedMode, refetch],
   );
 
   const handleCancelDirections = useCallback(() => {
+    fetchSeqRef.current++; // invalidate any fetch still in flight
+    // Bumping the counter also disarms that fetch's own `finally`, which
+    // only clears modeLoading while its seq is still current. So the flag
+    // has to be cleared here, or a Cancel mid-fetch would leave it stuck
+    // true and the next Directions session would show "Getting
+    // directions…" forever with every mode tap ignored.
+    setModeLoading(false);
     setRoute(null);
     setDirectionsPanelResult(null);
     setSelectedMode("foot");
     setRouteDuration(null);
+    setRouteDistance(null);
     setModeErrorReason(null);
+    setCustomFrom(null);
+    setPickingOnMap(false);
   }, []);
+
+  const handleSelectFrom = useCallback(
+    async (from: CustomFrom) => {
+      setCustomFrom(from);
+      setPickingOnMap(false);
+      if (!directionsPanelResult) return; // no active session to reroute yet
+      await refetch(selectedMode, from.coordinates, directionsPanelResult);
+    },
+    [directionsPanelResult, selectedMode, refetch],
+  );
+
+  const handleResetFrom = useCallback(async () => {
+    setCustomFrom(null);
+    if (!directionsPanelResult) return;
+    if (!userLocation) {
+      // No GPS fix to fall back to: there is no origin, so clear the
+      // route instead of calling fetchRoute with one. The panel's
+      // existing no-location state takes over from here.
+      fetchSeqRef.current++;
+      setModeLoading(false); // same reason as handleCancelDirections above
+      setRoute(null);
+      setRouteDuration(null);
+      setRouteDistance(null);
+      setModeErrorReason(null);
+      return;
+    }
+    await refetch(selectedMode, userLocation, directionsPanelResult);
+  }, [directionsPanelResult, userLocation, selectedMode, refetch]);
+
+  const handlePickFromOnMap = useCallback(() => {
+    setPickingOnMap(true);
+  }, []);
+
+  const handleCancelPickOnMap = useCallback(() => {
+    setPickingOnMap(false);
+  }, []);
+
+  // Phase 5.1: the one place the map-tap label is decided. Delegates to
+  // handleSelectFrom, which also turns pickingOnMap off and refetches, so a
+  // map pick and a search pick cannot drift apart. No coordinate rounding:
+  // nothing is stored, and the route origin does not need it (Phase 5.2).
+  const handleMapPick = useCallback(
+    (coordinates: Coordinates, name?: string) =>
+      handleSelectFrom({ label: name ?? MAP_PICK_LABEL, coordinates }),
+    [handleSelectFrom],
+  );
 
   return {
     route,
     directionsPanelResult,
     selectedMode,
     routeDuration,
+    routeDistance,
     modeLoading,
     modeErrorReason,
+    customFrom,
+    pickingOnMap,
+    origin,
     handleRouteFound,
     handleSelectMode,
     handleCancelDirections,
+    handleSelectFrom,
+    handleResetFrom,
+    handlePickFromOnMap,
+    handleCancelPickOnMap,
+    handleMapPick,
   };
 }
 

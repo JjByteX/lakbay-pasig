@@ -8,7 +8,17 @@ import { ResultCard, VerificationBadge } from "./result-card";
 
 interface DiscoverListProps {
   results: DiscoverResult[];
+  // The live GPS fix. Used only for the straight-line distance sort below
+  // (sortDiscoverResults), which stays on the live position even when a
+  // custom From is set -- directions-distance-and-from-plan.md, "Not
+  // touched".
   userLocation: Coordinates | null;
+  // directions-distance-and-from-phases.md Phase 3.2: the route origin from
+  // the shell's directions state (customFrom?.coordinates ?? userLocation).
+  // Added beside userLocation, not in place of it: this component still
+  // needs the live fix for the sort, and only ResultCard's Directions
+  // button needs the origin. Handed straight to ResultCard below.
+  origin: Coordinates | null;
   // Phase 8.1: query-in-flight, distinct from the zero-results empty state
   // below, per discover.tsx's shared `resultsLoading` flag.
   resultsLoading: boolean;
@@ -51,7 +61,14 @@ interface DiscoverListProps {
  * DiscoverMap read from, and switches the page to map view so the line is
  * visible.
  */
-export function DiscoverList({ results, userLocation, resultsLoading, resultsError, onRouteFound }: Readonly<DiscoverListProps>) {
+export function DiscoverList({
+  results,
+  userLocation,
+  origin,
+  resultsLoading,
+  resultsError,
+  onRouteFound,
+}: Readonly<DiscoverListProps>) {
   const [selected, setSelected] = useState<DiscoverResult | null>(null);
   const sorted = sortDiscoverResults(results, userLocation);
 
@@ -125,7 +142,11 @@ export function DiscoverList({ results, userLocation, resultsLoading, resultsErr
         onOpenChange={(open) => {
           if (!open) setSelected(null);
         }}
-        userLocation={userLocation}
+        // Phase 3.2: origin, not userLocation -- ResultCard's prop keeps its
+        // old name (renaming needs approval) but now carries the route
+        // origin, so a custom From unlocks Directions from the List view
+        // too. The distance sort above stays on userLocation.
+        userLocation={origin}
         onRouteFound={onRouteFound}
       />
     </>

@@ -98,8 +98,28 @@ export default function DiscoverPage() {
     directionsPanelResult,
     selectedMode,
     routeDuration,
+    routeDistance,
     modeLoading,
     modeErrorReason,
+    // directions-distance-and-from-phases.md Phase 3.2: the route origin
+    // (customFrom?.coordinates ?? userLocation), derived once in the shell.
+    // Handed to DiscoverMap and DiscoverList *beside* userLocation, which
+    // they still need for the blue dot / recenter and the distance sort.
+    origin,
+    // directions-distance-and-from-phases.md Phase 4.7: the custom From
+    // and its handlers, handed straight to both DirectionsPanel render
+    // sites (the mobile sibling below, and DiscoverMap for desktop). Only
+    // the label crosses into the panel, via customFrom?.label, since
+    // nothing there reads the coordinates.
+    customFrom,
+    pickingOnMap,
+    handleSelectFrom,
+    handleResetFrom,
+    handlePickFromOnMap,
+    handleCancelPickOnMap,
+    // Phase 5.1: the map's tap handler. Only DiscoverMap needs it, the
+    // panel never sets From from a tap itself.
+    handleMapPick,
     handleRouteFound,
     handleSelectMode,
     handleCancelDirections,
@@ -449,6 +469,14 @@ export default function DiscoverPage() {
         <DiscoverMap
           results={filtered}
           userLocation={userLocation}
+          origin={origin}
+          // Phase 5.1: the map draws the start pin from customFrom and
+          // owns the pick-mode click listener (5.2, 5.4). The shell still
+          // owns the state; these are read-only plus one callback.
+          customFrom={customFrom}
+          pickingOnMap={pickingOnMap}
+          onMapPick={handleMapPick}
+          onCancelPickOnMap={handleCancelPickOnMap}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
           onLocationFound={setUserLocation}
@@ -468,13 +496,19 @@ export default function DiscoverPage() {
           onSelectMode={handleSelectMode}
           onCancelDirections={handleCancelDirections}
           routeDuration={routeDuration}
+          routeDistance={routeDistance}
           modeLoading={modeLoading}
           modeErrorReason={modeErrorReason}
+          fromLabel={customFrom?.label ?? null}
+          onSelectFrom={handleSelectFrom}
+          onResetFrom={handleResetFrom}
+          onPickOnMap={handlePickFromOnMap}
         />
       ) : (
         <DiscoverList
           results={filtered}
           userLocation={userLocation}
+          origin={origin}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
           onRouteFound={(geometry, foundResult) => {
@@ -498,9 +532,16 @@ export default function DiscoverPage() {
           selectedMode={selectedMode}
           onSelectMode={handleSelectMode}
           durationSeconds={routeDuration}
+          distanceMeters={routeDistance}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={handleCancelDirections}
+          fromLabel={customFrom?.label ?? null}
+          onSelectFrom={handleSelectFrom}
+          onResetFrom={handleResetFrom}
+          onPickOnMap={handlePickFromOnMap}
+          pickingOnMap={pickingOnMap}
+          onCancelPickOnMap={handleCancelPickOnMap}
         />
       )}
     </div>
