@@ -307,7 +307,7 @@ export default function AdminDataTable<T>({
   } else if (!isEmpty) {
     tableBody = (
       <TableBody>
-        {paginated.map((row, rowIndex) => {
+        {paginated.map((row) => {
           const rowKey = String(row[keyField] ?? JSON.stringify(row));
           return (
             <TableRow
