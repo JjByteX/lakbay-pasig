@@ -381,19 +381,19 @@ export function LocationPicker({
         {open && searchStatus !== "idle" && (
           <div className="absolute inset-x-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-md">
             {searchStatus === "searching" && (
-              <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+              <output className="block px-4 py-3 text-sm text-muted-foreground">
                 Searching…
-              </p>
+              </output>
             )}
             {searchStatus === "error" && (
-              <p role="status" className="px-4 py-3 text-sm text-destructive">
+              <output className="block px-4 py-3 text-sm text-destructive">
                 {searchError}
-              </p>
+              </output>
             )}
             {searchStatus === "done" && results.length === 0 && (
-              <p role="status" className="px-4 py-3 text-sm text-muted-foreground">
+              <output className="block px-4 py-3 text-sm text-muted-foreground">
                 No results for &quot;{searchedQuery}&quot;. Place the pin on the map instead.
-              </p>
+              </output>
             )}
             {showList && (
               <ul id={listId} role="listbox" className="flex flex-col py-1">
@@ -404,6 +404,16 @@ export function LocationPicker({
                     role="option"
                     aria-selected={i === activeIndex}
                     onClick={() => pick(r)}
+                    onKeyDown={(e) => {
+                      // Belt and suspenders: the input's own onKeyDown
+                      // already handles Enter/arrows for the whole
+                      // listbox. This only fires if a row itself ever
+                      // gets focus directly.
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        pick(r);
+                      }
+                    }}
                     className={cn(
                       "flex min-h-10 cursor-pointer flex-col justify-center gap-1 px-4 py-2 text-left hover:bg-muted",
                       i === activeIndex && "bg-muted",

@@ -398,10 +398,10 @@ function extendPathStart(pathEl: SVGPathElement) {
   if (!match) return;
 
   const [, mx, my, c1x, c1y] = match;
-  const x0 = parseFloat(mx);
-  const y0 = parseFloat(my);
-  const cx1 = parseFloat(c1x);
-  const cy1 = parseFloat(c1y);
+  const x0 = Number.parseFloat(mx);
+  const y0 = Number.parseFloat(my);
+  const cx1 = Number.parseFloat(c1x);
+  const cy1 = Number.parseFloat(c1y);
 
   // Tangent at the start point, pointing FROM the first control point
   // BACK THROUGH the start point (i.e. continuing in the direction the

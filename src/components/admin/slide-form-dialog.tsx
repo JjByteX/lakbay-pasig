@@ -117,6 +117,9 @@ export default function SlideFormDialog({
   if (!imageUrl) missing.push("an image");
   if (!caption.trim()) missing.push("a caption");
   const canSubmit = missing.length === 0 && !uploading && !saving;
+  let submitLabel = "Save Changes";
+  if (saving) submitLabel = "Saving…";
+  else if (isNew) submitLabel = "Add Slide";
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -207,7 +210,7 @@ export default function SlideFormDialog({
                 onChange={(e) => setActive(e.target.checked)}
                 className="h-4 w-4 rounded border-input accent-primary"
               />
-              Shown in the carousel
+              <span>Shown in the carousel</span>
             </label>
           </div>
 
@@ -224,7 +227,7 @@ export default function SlideFormDialog({
             Cancel
           </Button>
           <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
-            {saving ? "Saving…" : isNew ? "Add Slide" : "Save Changes"}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

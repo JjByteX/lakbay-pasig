@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ImagePlus, Loader2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { usePlaceReview, type PlaceReviewEntry } from "@/hooks/use-place-review";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
 import { getFacilityIcon } from "@/lib/place-facility-icons";
@@ -100,15 +101,6 @@ interface PlacePhoto {
   sort_order: number;
 }
 
-interface PlaceReviewEntry {
-  id: string;
-  staff_id: string;
-  staff_name: string | null;
-  action: "verify" | "reject";
-  notes: string | null;
-  created_at: string;
-}
-
 // Raw shape returned by the place_reviews select below, before mapping into
 // PlaceReviewEntry. Supabase types a select(...profiles(display_name)) join
 // as an array even for a one-to-one relationship, so profiles comes back as
@@ -179,10 +171,30 @@ export default function AdminPlaceDetailPage() {
   const [facilities, setFacilities] = useState<PlaceFacility[]>([]);
   const [facilitiesError, setFacilitiesError] = useState<string | null>(null);
 
-  const [reviewAction, setReviewAction] = useState<"verify" | "reject" | null>(null);
-  const [reviewNotes, setReviewNotes] = useState("");
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  // Verify/Reject dialog: state and submit logic live in usePlaceReview
+  // (use-place-review.ts), extracted to keep this component's cognitive
+  // complexity under Sonar's limit. onReviewed matches the hook's own
+  // contract: status always updates on a successful submit, the review
+  // list only gains an entry when the insert also returned a row.
+  const {
+    reviewAction,
+    reviewNotes,
+    reviewSubmitting,
+    reviewError,
+    setReviewNotes,
+    setReviewAction,
+    openReviewDialog,
+    handleReviewSubmit,
+  } = usePlaceReview({
+    id,
+    profile,
+    onReviewed: (nextStatus, entry) => {
+      setStatus(nextStatus);
+      if (entry) {
+        setReviews((prev) => [entry, ...(prev ?? [])]);
+      }
+    },
+  });
 
   useEffect(() => {
     // 5.1: independent of isNew/id (unlike the place-record effect below,
@@ -444,86 +456,6 @@ export default function AdminPlaceDetailPage() {
     } else {
       setCurrentPhotos((prev) => prev.filter((p) => p.id !== photo.id));
     }
-  }
-
-  function openReviewDialog(action: "verify" | "reject") {
-    setReviewAction(action);
-    setReviewNotes("");
-    setReviewError(null);
-  }
-
-  async function handleReviewSubmit() {
-    if (!id || !profile) return;
-    if (reviewAction === "reject" && reviewNotes.trim().length === 0) {
-      setReviewError("Rejecting requires a note explaining why.");
-      return;
-    }
-
-    setReviewSubmitting(true);
-    setReviewError(null);
-
-    const nextStatus = reviewAction === "verify" ? "verified" : "rejected";
-
-    // Same submit writes both the audit log row and the record's current
-    // state, per admin-panel-spec.md Review Action Log and plan 5.5.
-    // place_id widened to reviewed_type/reviewed_id in migration 0014
-    // (phase-5-decisions.md Decision 3) — this page always writes
-    // reviewed_type = 'place', since it only ever reviews a places row.
-    const { data: insertedReview, error: reviewInsertError } = await supabase
-      .from("place_reviews")
-      .insert({
-        reviewed_type: "place",
-        reviewed_id: id,
-        staff_id: profile.id,
-        action: reviewAction,
-        notes: reviewNotes.trim() || null,
-      })
-      .select("id, staff_id, action, notes, created_at")
-      .single();
-
-    if (reviewInsertError) {
-      setReviewSubmitting(false);
-      setReviewError(reviewInsertError.message);
-      return;
-    }
-
-    // Phase 1 (step-6-phases.md): verified_at (migration 0017) only set on
-    // the transition into 'verified', not on every save, so an edit to an
-    // already-verified row (handleSubmit's own update, above) never moves
-    // it. Home's "recently verified" section sorts on this column, not on
-    // updated_at, which would also move on an unrelated edit.
-    const { error: updateError } = await supabase
-      .from("places")
-      .update({
-        verification_status: nextStatus,
-        reviewed_by: profile.id,
-        updated_at: new Date().toISOString(),
-        ...(nextStatus === "verified" ? { verified_at: new Date().toISOString() } : {}),
-      })
-      .eq("id", id);
-
-    setReviewSubmitting(false);
-
-    if (updateError) {
-      setReviewError(updateError.message);
-      return;
-    }
-
-    setStatus(nextStatus);
-    if (insertedReview) {
-      setReviews((prev) => [
-        {
-          id: insertedReview.id,
-          staff_id: insertedReview.staff_id,
-          staff_name: profile.display_name ?? null,
-          action: insertedReview.action,
-          notes: insertedReview.notes,
-          created_at: insertedReview.created_at,
-        },
-        ...(prev ?? []),
-      ]);
-    }
-    setReviewAction(null);
   }
 
   if (loading) {
