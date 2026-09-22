@@ -98,6 +98,18 @@ export async function fetchDiscoverResults(): Promise<DiscoverResult[]> {
 export interface Coordinates {
   latitude: number;
   longitude: number;
+  // google-style-location-heading-indicator: the device's live compass
+  // heading in degrees (0 = true north, clockwise), straight off
+  // GeolocationPosition.coords.heading. Optional and nullable because most
+  // callers of this type (search results, saved places, tapped map pins)
+  // have no heading at all, and the GPS fix itself only reports one while
+  // the device is actually moving -- null/undefined both mean "no
+  // heading," same as the browser API itself returns. Only the live
+  // watchPosition subscription (public-shell.tsx) and the locate-me
+  // one-shot read (discover-map.tsx) ever populate this; every other
+  // Coordinates producer in the app leaves it unset, which is fine since
+  // every field below is optional.
+  heading?: number | null;
 }
 
 // Phase 3.3: straight-line (haversine) distance in kilometers. This is a

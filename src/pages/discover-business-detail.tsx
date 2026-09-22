@@ -6,6 +6,7 @@ import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HoursDisplay } from "@/components/public/hours-display";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6.4 (step-5-phases.md): full record fields from businesses and
@@ -18,6 +19,14 @@ import { usePageTitle } from "@/lib/page-title";
 // business_categories.name (migration 0027, category_id replaces the old
 // plain text column), flattened at fetch time so this field and every
 // render below it stay unchanged.
+//
+// Story tab phase: full record view splits into a segmented Details /
+// Story tab control (Tabs primitive, same one discover.tsx already uses
+// for its map/list switch). business_story and unique_specialty were
+// already vendor- and admin-editable (business-fields.tsx,
+// admin-business-detail.tsx) but had no public render at all until now;
+// data-model.md groups both under the same "why it exists, how it
+// started" background note, so both land on the Story tab.
 interface BusinessDetail {
   id: string;
   name: string;
@@ -27,6 +36,8 @@ interface BusinessDetail {
   opening_hours: string | null;
   contact: string | null;
   rules: string | null;
+  business_story: string | null;
+  unique_specialty: string | null;
   verification_status: "verified" | "pending";
 }
 
@@ -63,7 +74,9 @@ export default function DiscoverBusinessDetailPage() {
 
     supabase
       .from("businesses")
-      .select("id, name, address, description, opening_hours, contact, rules, verification_status, business_categories(name)")
+      .select(
+        "id, name, address, description, opening_hours, contact, rules, business_story, unique_specialty, verification_status, business_categories(name)"
+      )
       .eq("id", id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -140,67 +153,113 @@ export default function DiscoverBusinessDetailPage() {
             )}
           </div>
 
-          {business.description && (
-            <p className="text-base text-foreground">{business.description}</p>
-          )}
+          {/* Story tab phase: segmented Details / Story control, same
+              Tabs primitive discover.tsx already uses for map/list.
+              Details keeps every visit-info block this page already had;
+              Story is new and holds business_story plus unique_specialty,
+              both previously admin/vendor-editable with no public render.
+              Defaults to Details, the visit-info tab a user coming from a
+              marker or list row is most likely after. */}
+          <Tabs defaultValue="details">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="story">Story</TabsTrigger>
+            </TabsList>
 
-          {business.opening_hours && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Hours</h2>
-              <HoursDisplay value={business.opening_hours} />
-            </div>
-          )}
+            <TabsContent value="details" className="flex flex-col gap-4">
+              {business.description && (
+                <p className="text-base text-foreground">{business.description}</p>
+              )}
 
-          {business.contact && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Contact</h2>
-              <p className="text-base text-muted-foreground">{business.contact}</p>
-            </div>
-          )}
+              {business.opening_hours && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Hours</h2>
+                  <HoursDisplay value={business.opening_hours} />
+                </div>
+              )}
 
-          {/* Rules (migration 0039, rules-field-plan.md): after Contact,
-              before Items, since the item list can run long and would
-              bury it. One rule per line in the form, so
-              whitespace-pre-line keeps the line breaks. Hidden when
-              empty, same as the sections beside it. */}
-          {business.rules && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Rules</h2>
-              <p className="whitespace-pre-line text-base text-muted-foreground">{business.rules}</p>
-            </div>
-          )}
+              {business.contact && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Contact</h2>
+                  <p className="text-base text-muted-foreground">{business.contact}</p>
+                </div>
+              )}
 
-          {items.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="text-base font-semibold text-foreground">Items</h2>
-              <ul className="flex flex-col divide-y divide-border">
-                {items.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between gap-3 py-2">
-                    {/* Phase 8.4 fix: item names are vendor-submitted free
-                        text (vendor-mode-spec.md), length isn't bounded the
-                        way a fixed label is, so a long name next to the
-                        price in this justify-between row could overflow at
-                        narrow widths with neither span able to shrink
-                        (flex items default to min-width: auto). min-w-0
-                        truncate here lets the name give way to a single
-                        ellipsis line; the price stays shrink-0 since it's
-                        short, fixed-format, and the more important half of
-                        this row to always read in full. */}
-                    <span className="min-w-0 flex-1 truncate text-base text-foreground">
-                      {item.name}
-                    </span>
-                    {/* An item with no price still displays normally here,
-                        per vendor-mode-spec.md's Filter Behavior line, it's
-                        excluded only from the price range filter (Phase 7),
-                        never hidden from the base item list. */}
-                    <span className="shrink-0 text-sm text-muted-foreground">
-                      {item.price != null ? `₱${item.price}` : "No price listed"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+              {/* Rules (migration 0039, rules-field-plan.md): after
+                  Contact, before Items, since the item list can run long
+                  and would bury it. One rule per line in the form, so
+                  whitespace-pre-line keeps the line breaks. Hidden when
+                  empty, same as the sections beside it. */}
+              {business.rules && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Rules</h2>
+                  <p className="whitespace-pre-line text-base text-muted-foreground">{business.rules}</p>
+                </div>
+              )}
+
+              {items.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-base font-semibold text-foreground">Items</h2>
+                  <ul className="flex flex-col divide-y divide-border">
+                    {items.map((item) => (
+                      <li key={item.id} className="flex items-center justify-between gap-3 py-2">
+                        {/* Phase 8.4 fix: item names are vendor-submitted
+                            free text (vendor-mode-spec.md), length isn't
+                            bounded the way a fixed label is, so a long name
+                            next to the price in this justify-between row
+                            could overflow at narrow widths with neither
+                            span able to shrink (flex items default to
+                            min-width: auto). min-w-0 truncate here lets the
+                            name give way to a single ellipsis line; the
+                            price stays shrink-0 since it's short,
+                            fixed-format, and the more important half of
+                            this row to always read in full. */}
+                        <span className="min-w-0 flex-1 truncate text-base text-foreground">
+                          {item.name}
+                        </span>
+                        {/* An item with no price still displays normally
+                            here, per vendor-mode-spec.md's Filter Behavior
+                            line, it's excluded only from the price range
+                            filter (Phase 7), never hidden from the base
+                            item list. */}
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          {item.price != null ? `₱${item.price}` : "No price listed"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!business.description &&
+                !business.opening_hours &&
+                !business.contact &&
+                !business.rules &&
+                items.length === 0 && (
+                  <p className="text-base text-muted-foreground">No details listed yet.</p>
+                )}
+            </TabsContent>
+
+            <TabsContent value="story" className="flex flex-col gap-4">
+              {business.business_story && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Business story</h2>
+                  <p className="whitespace-pre-line text-base text-muted-foreground">{business.business_story}</p>
+                </div>
+              )}
+
+              {business.unique_specialty && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Unique specialty</h2>
+                  <p className="text-base text-muted-foreground">{business.unique_specialty}</p>
+                </div>
+              )}
+
+              {!business.business_story && !business.unique_specialty && (
+                <p className="text-base text-muted-foreground">No story has been added for this business yet.</p>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       )}
     </div>

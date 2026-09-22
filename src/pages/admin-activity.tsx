@@ -154,6 +154,29 @@ export default function AdminActivityPage() {
     [rows]
   );
 
+  // Actions offered depend on the selected target: only action values that
+  // actually occur on that target_type in the loaded rows, in ACTION_LABEL's
+  // order. No target selected falls back to every key ACTION_LABEL knows,
+  // same "closed list" set the Select used before this filter existed.
+  const actionOptions = useMemo(() => {
+    const allActions = Object.keys(ACTION_LABEL);
+    if (targetFilter === ALL) return allActions;
+    const present = new Set(
+      (rows ?? []).filter((row) => row.target_type === targetFilter).map((row) => row.action)
+    );
+    return allActions.filter((action) => present.has(action));
+  }, [rows, targetFilter]);
+
+  // Switching targets can leave a picked action that no longer applies
+  // (e.g. "Role changed" while on "Staff", then the target changes to
+  // "Place"). Clear back to "All actions" rather than silently keeping a
+  // filter that would now hide every row.
+  useEffect(() => {
+    if (actionFilter !== ALL && !actionOptions.includes(actionFilter)) {
+      setActionFilter(ALL);
+    }
+  }, [actionOptions, actionFilter]);
+
   const filtered = useMemo(() => {
     if (!rows) return [];
     const query = search.trim().toLowerCase();
@@ -250,19 +273,6 @@ export default function AdminActivityPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={actionFilter} onValueChange={setActionFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All actions</SelectItem>
-                {Object.entries(ACTION_LABEL).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Select value={targetFilter} onValueChange={setTargetFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Target" />
@@ -272,6 +282,19 @@ export default function AdminActivityPage() {
                 {Object.entries(TARGET_LABEL).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={actionFilter} onValueChange={setActionFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Action" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All actions</SelectItem>
+                {actionOptions.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {ACTION_LABEL[value]}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -145,9 +145,10 @@ export default function AdminPlaceDetailPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // New Place only: 1 = the place and visit details, 2 = the historical
-  // story. The edit form (Current Info tab) shows both halves at once.
-  const [step, setStep] = useState<1 | 2>(1);
+  // 1 = the place and visit details, 2 = the map pin and address, 3 = the
+  // historical story. Shared by both New Place and the Current Info tab on
+  // an existing place (placeForm below is the same stepped form either way).
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [historicalPhotos, setHistoricalPhotos] = useState<PlacePhoto[]>([]);
   const [currentPhotos, setCurrentPhotos] = useState<PlacePhoto[]>([]);
@@ -325,23 +326,33 @@ export default function AdminPlaceDetailPage() {
     }));
   }
 
-  const missingRequired = [
+  // Split by the step that collects each field, now that location is its
+  // own step 2 rather than sharing step 1 with name and category. Step 3
+  // (history) has no required fields of its own.
+  const missingStep1 = [
     !form.name.trim() && "Place Name",
     !form.category_id && "Category",
+  ].filter(Boolean) as string[];
+  const missingStep2 = [
     !form.address.trim() && "Address",
     (form.latitude === null || form.longitude === null) && "Map pin",
   ].filter(Boolean) as string[];
+  const missingRequired = [...missingStep1, ...missingStep2];
   const canSubmit = missingRequired.length === 0 && !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    // Enter inside a step 1 field submits the form; that means "Next", not
-    // save, or step 2 would be skipped. The Address field is the one
-    // exception: the location picker's Enter runs the address search and
-    // never reaches this handler (location-picker.tsx).
+    // Enter inside a step 1 or step 2 field submits the form; that means
+    // "Next", not save, or a later step would be skipped. The Address field
+    // is the one exception: the location picker's Enter runs the address
+    // search and never reaches this handler (location-picker.tsx).
     if (step === 1) {
       setStep(2);
+      return;
+    }
+    if (step === 2) {
+      setStep(3);
       return;
     }
 
@@ -474,14 +485,22 @@ export default function AdminPlaceDetailPage() {
   let submitLabel = isNew ? "Create Place" : "Save Changes";
   if (saving) submitLabel = "Saving…";
 
-  // One two-step form for both a new place and an existing one (the page
+  // One three-step form for both a new place and an existing one (the page
   // Verify/Reject lives on), so a reviewer reads a place in the same order
-  // staff entered it. Only step 2's tail and the last button differ: a new
+  // staff entered it. Only step 3's tail and the last button differ: a new
   // place has no id yet, so photos can't be added until it is saved.
+  let stepLabel = "Place";
+  if (step === 2) stepLabel = "Location";
+  if (step === 3) stepLabel = "Rules and history";
+
+  let stepSection: "place" | "location" | "history" = "place";
+  if (step === 2) stepSection = "location";
+  if (step === 3) stepSection = "history";
+
   const placeForm = (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       <p className="text-sm font-semibold text-foreground">
-        Step {step} of 2: {step === 1 ? "Place" : "Rules and history"}
+        Step {step} of 3: {stepLabel}
       </p>
 
       <PlaceFormFields
@@ -492,16 +511,16 @@ export default function AdminPlaceDetailPage() {
         categoriesError={categoriesError}
         facilities={facilities}
         facilitiesError={facilitiesError}
-        section={step === 1 ? "place" : "history"}
+        section={stepSection}
       />
 
-      {step === 2 && isNew && (
+      {step === 3 && isNew && (
         <p className="text-sm text-muted-foreground">
           Save this place before adding historical or current photos.
         </p>
       )}
 
-      {step === 2 && !isNew && (
+      {step === 3 && !isNew && (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <PhotoUploadArea
             label="Historical Photos"
@@ -520,9 +539,15 @@ export default function AdminPlaceDetailPage() {
         </div>
       )}
 
-      {step === 1 && !canSubmit && (
+      {step === 1 && missingStep1.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          Required to continue: {missingRequired.join(", ")}.
+          Required to continue: {missingStep1.join(", ")}.
+        </p>
+      )}
+
+      {step === 2 && missingStep2.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Required to continue: {missingStep2.join(", ")}.
         </p>
       )}
 
@@ -537,17 +562,29 @@ export default function AdminPlaceDetailPage() {
             Cancel
           </Button>
         ) : (
-          <Button key="back" type="button" variant="outline" onClick={() => setStep(1)}>
+          <Button
+            key="back"
+            type="button"
+            variant="outline"
+            onClick={() => setStep(step === 3 ? 2 : 1)}
+          >
             <ChevronLeft className="h-4 w-4" />
             Back
           </Button>
         )}
-        {step === 1 ? (
-          <Button key="next" type="button" disabled={missingRequired.length > 0} onClick={() => setStep(2)}>
+        {step === 1 && (
+          <Button key="next-1" type="button" disabled={missingStep1.length > 0} onClick={() => setStep(2)}>
             Next
             <ChevronRight className="h-4 w-4" />
           </Button>
-        ) : (
+        )}
+        {step === 2 && (
+          <Button key="next-2" type="button" disabled={missingStep2.length > 0} onClick={() => setStep(3)}>
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
+        {step === 3 && (
           <Button key="save" type="submit" disabled={!canSubmit}>
             {submitLabel}
           </Button>
@@ -655,23 +692,22 @@ function PlaceFormFields({
   categoriesError: string | null;
   facilities: PlaceFacility[];
   facilitiesError: string | null;
-  section: "place" | "history";
+  section: "place" | "location" | "history";
 }>) {
   // One card, same `rounded-lg border border-border bg-card p-4` shape as
-  // before. Fields are grouped into three blocks by importance:
+  // before. Fields are grouped into four blocks by importance:
   //   identity: what the place is (name through accessibility)
   //   hours:    when it is open, the tallest single control
-  //   location: the address and map pin (location-field-plan.md). It sits
-  //             under hours, not in identity: the map adds about 250px, which
-  //             in identity leaves the hours column mostly empty at its
-  //             default height. Under hours the two columns stay level.
+  //   location: the address and map pin (location-field-plan.md), its own
+  //             step. The map is tall enough on its own to earn a full page
+  //             rather than sharing a column with hours.
   //   details:  what a visitor needs to plan a trip (fee, duration, facilities)
-  //   history:  page 2. Rules first (short, quick to fill), then the story,
+  //   history:  step 3. Rules first (short, quick to fill), then the story,
   //             last because it is the longest and least urgent
-  // The two step form renders "place" (identity + details on the left, hours
-  // + location on the right, two columns from lg up) then "history" (rules
-  // and history) on its own page. Below lg the columns stack, so the address
-  // and pin come last, right above the required note that names them.
+  // The three step form renders "place" (identity + details on the left,
+  // hours on the right, two columns from lg up), then "location" (the
+  // address field and pin, one column, full width) on its own page, then
+  // "history" (rules and history) on its own page after that.
 
   const identity = (
     <div className="flex flex-col gap-4">
@@ -897,6 +933,10 @@ function PlaceFormFields({
     return <div className="rounded-lg border border-border bg-card p-4">{history}</div>;
   }
 
+  if (section === "location") {
+    return <div className="rounded-lg border border-border bg-card p-4">{locationPicker}</div>;
+  }
+
   // Two columns from lg up, one column below it, divider between.
   return (
     <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
@@ -906,7 +946,6 @@ function PlaceFormFields({
       </div>
       <div className="flex flex-col gap-4 lg:pl-4">
         {hours}
-        {locationPicker}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SaveButton } from "@/components/public/save-button";
 import { HoursDisplay } from "@/components/public/hours-display";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6.3 (step-5-phases.md): full record fields from places (migration
@@ -27,6 +28,16 @@ import { usePageTitle } from "@/lib/page-title";
 // Phase 3.3: the chip row's own scope now explicitly changes, gaining an
 // icon beside each facility name (matching Discover's place category
 // chips), so each row also carries the facility's icon, not just its name.
+//
+// History tab phase: full record view splits into a segmented Details /
+// History tab control (Tabs primitive, same one discover.tsx already uses
+// for its map/list switch). historical_significance, year_or_period and
+// source_reference were already admin-editable (admin-place-detail.tsx)
+// but had no public render at all until now; they join
+// historical_background as History-tab content per data-model.md's Local
+// Historical Place field list, all four being the "longer origin and
+// development story" grouping. Fetched alongside the rest of the record,
+// same query shape as before.
 interface PlaceFacilityChip {
   name: string;
   icon: string;
@@ -39,6 +50,9 @@ interface PlaceDetail {
   address: string | null;
   description: string | null;
   historical_background: string | null;
+  historical_significance: string | null;
+  year_or_period: string | null;
+  source_reference: string | null;
   operating_hours: string | null;
   entrance_fee: string | null;
   facilities: PlaceFacilityChip[];
@@ -74,7 +88,7 @@ export default function DiscoverPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, address, description, historical_background, operating_hours, entrance_fee, rules, verification_status, place_categories(name), place_facilities(name, icon)"
+        "id, name, address, description, historical_background, historical_significance, year_or_period, source_reference, operating_hours, entrance_fee, rules, verification_status, place_categories(name), place_facilities(name, icon)"
       )
       .eq("id", id)
       .maybeSingle()
@@ -163,59 +177,113 @@ export default function DiscoverPlaceDetailPage() {
             </Badge>
           </div>
 
-          {place.description && (
-            <p className="text-base text-foreground">{place.description}</p>
-          )}
+          {/* History tab phase: segmented Details / History control, same
+              Tabs primitive discover.tsx already uses for map/list. Details
+              keeps every visit-info block this page already had minus the
+              long-form background text; History is new and holds that
+              text plus the three historical fields that previously had no
+              public render (historical_significance, year_or_period,
+              source_reference). Defaults to Details, the visit-info tab a
+              user coming from a marker or list row is most likely after. */}
+          <Tabs defaultValue="details">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
 
-          {place.historical_background && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Historical background</h2>
-              <p className="text-base text-muted-foreground">{place.historical_background}</p>
-            </div>
-          )}
+            <TabsContent value="details" className="flex flex-col gap-4">
+              {place.description && (
+                <p className="text-base text-foreground">{place.description}</p>
+              )}
 
-          {place.operating_hours && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Hours</h2>
-              <HoursDisplay value={place.operating_hours} />
-            </div>
-          )}
+              {place.operating_hours && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Hours</h2>
+                  <HoursDisplay value={place.operating_hours} />
+                </div>
+              )}
 
-          {place.entrance_fee && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Entrance fee</h2>
-              <p className="text-base text-muted-foreground">{place.entrance_fee}</p>
-            </div>
-          )}
+              {place.entrance_fee && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Entrance fee</h2>
+                  <p className="text-base text-muted-foreground">{place.entrance_fee}</p>
+                </div>
+              )}
 
-          {place.facilities.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="text-base font-semibold text-foreground">Facilities</h2>
-              <div className="flex flex-wrap gap-2">
-                {place.facilities.map((facility) => {
-                  const Icon = getFacilityIcon(facility.icon);
-                  return (
-                    <Badge key={facility.name} variant="secondary" className="gap-2">
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      {facility.name}
-                    </Badge>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+              {place.facilities.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-base font-semibold text-foreground">Facilities</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {place.facilities.map((facility) => {
+                      const Icon = getFacilityIcon(facility.icon);
+                      return (
+                        <Badge key={facility.name} variant="secondary" className="gap-2">
+                          <Icon className="h-3.5 w-3.5 shrink-0" />
+                          {facility.name}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-          {/* Rules (migration 0039, rules-field-plan.md): sits right
-              after Facilities, the last visit info block, ahead of any
-              long content. One rule per line in the form, so
-              whitespace-pre-line keeps the line breaks. Hidden when
-              empty, same as the sections beside it. */}
-          {place.rules && (
-            <div className="flex flex-col gap-1">
-              <h2 className="text-base font-semibold text-foreground">Rules</h2>
-              <p className="whitespace-pre-line text-base text-muted-foreground">{place.rules}</p>
-            </div>
-          )}
+              {/* Rules (migration 0039, rules-field-plan.md): sits right
+                  after Facilities, the last visit info block. One rule per
+                  line in the form, so whitespace-pre-line keeps the line
+                  breaks. Hidden when empty, same as the sections beside it. */}
+              {place.rules && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Rules</h2>
+                  <p className="whitespace-pre-line text-base text-muted-foreground">{place.rules}</p>
+                </div>
+              )}
+
+              {!place.description &&
+                !place.operating_hours &&
+                !place.entrance_fee &&
+                place.facilities.length === 0 &&
+                !place.rules && (
+                  <p className="text-base text-muted-foreground">No details listed yet.</p>
+                )}
+            </TabsContent>
+
+            <TabsContent value="history" className="flex flex-col gap-4">
+              {place.historical_background && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Historical background</h2>
+                  <p className="text-base text-muted-foreground">{place.historical_background}</p>
+                </div>
+              )}
+
+              {place.historical_significance && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Historical significance</h2>
+                  <p className="text-base text-muted-foreground">{place.historical_significance}</p>
+                </div>
+              )}
+
+              {place.year_or_period && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Year built or historical period</h2>
+                  <p className="text-base text-muted-foreground">{place.year_or_period}</p>
+                </div>
+              )}
+
+              {place.source_reference && (
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-base font-semibold text-foreground">Source or reference</h2>
+                  <p className="text-base text-muted-foreground">{place.source_reference}</p>
+                </div>
+              )}
+
+              {!place.historical_background &&
+                !place.historical_significance &&
+                !place.year_or_period &&
+                !place.source_reference && (
+                  <p className="text-base text-muted-foreground">No history has been added for this place yet.</p>
+                )}
+            </TabsContent>
+          </Tabs>
         </div>
       )}
     </div>

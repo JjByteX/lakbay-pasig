@@ -125,15 +125,15 @@ function markerElement(result: DiscoverResult): HTMLElement {
   // (previously rounded-full border border-border bg-card ... shadow, the
   // same pill/badge treatment as a status chip) -- plain text now, no
   // background, no border, no shadow, per direct instruction to remove
-  // the container completely. text-shadow (inline style, no Tailwind
-  // utility for it) keeps the name legible over the map's own varied
-  // tile colors now that there's no opaque backing behind it, the same
-  // reason every other floating label in this file (HoverPreview,
-  // MapCornerControls' status pills) keeps an opaque surface behind its
-  // own text -- this is the one label that gives that up per this
-  // instruction, so it needs its own legibility fallback instead.
+  // the container completely. Legibility over the map's own varied tile
+  // colors, now that there's no opaque backing behind it, comes from a
+  // text-shadow outline -- moved to index.css's `.marker-name-label`
+  // rule (theme-scoped light/dark pair) rather than set inline here,
+  // since a single fixed shadow color read fine on Mocha tiles but
+  // washed out on Latte's light ones; see that CSS block's own comment
+  // for why the color has to flip with the theme, not just tune darker
+  // or lighter.
   label.className = "marker-name-label whitespace-nowrap text-xs font-medium text-foreground";
-  label.style.textShadow = "0 1px 2px rgba(0, 0, 0, 0.55), 0 0 4px rgba(0, 0, 0, 0.35)";
   // Read by the zoom-gated visibility effect below to apply the right
   // per-tier minimum zoom (verified vs. pending) to this specific label,
   // without needing a second lookup back into `results` at visibility-
@@ -414,6 +414,11 @@ function MapCornerControls({
         onLocationFound({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
+          // google-style-location-heading-indicator: same field the
+          // shell's own watchPosition now populates (public-shell.tsx),
+          // so a locate-me tap doesn't regress the marker back to "no
+          // heading" if the device happens to report one on this read.
+          heading: position.coords.heading,
         });
       },
       (err) => {
@@ -830,6 +835,16 @@ export function DiscoverMap({
   // setLngLat on every userLocation change, rather than removed/recreated,
   // since the coordinate is the only thing that ever changes about it.
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  // google-style-location-heading-indicator: refs onto the two child
+  // elements that change on every GPS tick without needing to touch the
+  // rest of the marker's DOM (which never changes once built) -- the
+  // cone's rotation and its own show/hide, and the accuracy-circle radius.
+  // Plain refs rather than re-querying the marker element each time, same
+  // reasoning as userMarkerRef itself: this callback can fire once a
+  // second from watchPosition, so re-running querySelector on every tick
+  // is needless work for values a ref reads/writes in one step.
+  const userMarkerConeRef = useRef<HTMLDivElement | null>(null);
+  const userMarkerAccuracyRef = useRef<HTMLDivElement | null>(null);
 
   // Phase 4.2: recenter once a user location resolves. MapLibre's own
   // constructor `center` option, like react-leaflet's, only applies on
@@ -839,39 +854,140 @@ export function DiscoverMap({
   // runs on every GPS tick, and setCenter/setZoom would pull the view off
   // the route just drawn from the custom From every second. The blue dot
   // below keeps tracking the live position either way, since the person is
-  // still where they are. The same recenter also fires during an ordinary
-  // route with no custom From -- existing behavior, out of scope here.
+  // still where they are.
   //
-  // ponytail: guard on customFrom only. Guard on any open route
-  // (directionsPanelResult) if the ordinary case is reported.
+  // Bugfix (map snapping back during Directions): the same forced
+  // recenter/rezoom was still firing every GPS tick during an *ordinary*
+  // route (live location as origin, no custom From) -- open-questions.md
+  // #10 scoped the original fix to customFrom only and explicitly left
+  // this case as "existing behavior, out of scope"; it's now reported as
+  // the map's focus snapping away mid-pan while Directions is open. Fix:
+  // also stand down whenever a Directions session is open at all, i.e.
+  // directionsPanelResult is non-null (discover-map.tsx's own "panel
+  // closed" signal, see that prop's doc comment above), not just when
+  // customFrom specifically is set. A person panning/zooming to inspect
+  // their route no longer gets yanked back to the live dot once a second.
+  // Cancelling the route still recenters once, same as clearing a custom
+  // From already did, since directionsPanelResult is a dependency below.
   useEffect(() => {
     const map = mapRef.current;
     if (!userLocation || !map) return;
-    if (!customFrom) {
+    if (!customFrom && !directionsPanelResult) {
       map.setCenter([userLocation.longitude, userLocation.latitude]);
       map.setZoom(DEFAULT_ZOOM);
     }
 
     if (!userMarkerRef.current) {
+      // google-style-location-heading-indicator: three stacked layers,
+      // same convention Google Maps/Google-style apps use for "you are
+      // here" -- a soft accuracy-circle halo (furthest back), a
+      // direction cone that rotates to the compass heading (middle), and
+      // the solid white-bordered dot on top (unchanged from the old
+      // single-div marker, so the no-heading look is identical to
+      // before). All three live inside one wrapper div so MapLibre still
+      // anchors/positions them as the single marker element it expects;
+      // only the cone and halo need refs since only those two change
+      // after creation (see userMarkerConeRef/userMarkerAccuracyRef
+      // above) -- the dot itself never changes, no ref needed for it.
+      const wrapper = document.createElement("div");
+      wrapper.className = "relative flex h-4 w-4 items-center justify-center";
+      wrapper.setAttribute("aria-label", "Your location");
+
+      // Accuracy circle: a large, low-opacity blue disc behind everything
+      // else, the same "roughly this precise" halo Google Maps draws
+      // around its own dot. Fixed size (not derived from
+      // position.coords.accuracy in meters-per-pixel) since this map has
+      // no need to be metrically precise about GPS accuracy -- it's
+      // reading as the same soft ambient glow every Google-style
+      // implementation uses, not a literal accuracy radius.
+      const accuracy = document.createElement("div");
+      accuracy.className =
+        "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 h-16 w-16 pointer-events-none";
+      userMarkerAccuracyRef.current = accuracy;
+
+      // Direction cone: a CSS-only wedge (radial gradient clipped to a
+      // circle sector), not an SVG/image, so recoloring it is just the
+      // existing --primary token same as the dot and halo already use,
+      // no separate asset. Rotated in place around the dot's own center
+      // (transform-origin, not repositioned) via userMarkerConeRef.
+      // Hidden by default (no heading yet on first paint) and shown only
+      // once a real heading value arrives, below.
+      const cone = document.createElement("div");
+      cone.className =
+        "absolute left-1/2 top-1/2 h-20 w-20 pointer-events-none opacity-0 transition-opacity duration-300";
+      cone.style.background =
+        "conic-gradient(from 0deg, hsl(var(--primary) / 0.35) 0deg, hsl(var(--primary) / 0.35) 45deg, transparent 46deg, transparent 314deg, hsl(var(--primary) / 0.35) 315deg, hsl(var(--primary) / 0.35) 360deg)";
+      cone.style.borderRadius = "50%";
+      cone.style.maskImage =
+        "radial-gradient(circle, black 0%, black 55%, transparent 78%)";
+      cone.style.webkitMaskImage =
+        "radial-gradient(circle, black 0%, black 55%, transparent 78%)";
+      // Centering (translate -50%/-50%) is baked into the base transform
+      // string alongside the heading rotation below, rather than split
+      // across a Tailwind -translate-x-1/2/-translate-y-1/2 class plus an
+      // inline style -- an inline `transform` set later (to rotate)
+      // would otherwise overwrite the whole property and silently drop
+      // the class-based centering, decentering the cone the first time a
+      // heading arrives. One inline transform, always both parts.
+      cone.style.transform = "translate(-50%, -50%) rotate(0deg)";
+      cone.style.transformOrigin = "center";
+      userMarkerConeRef.current = cone;
+
+      // The dot itself, unchanged from the marker's old single-element
+      // look -- same classes, same size, same aria-label content moved
+      // up onto the wrapper. Given a subtle pulse ring (user-location-
+      // pulse, index.css) so the marker still reads as "this is you,
+      // live" even at a glance with no heading cone showing, matching
+      // Google's own soft breathing animation on its blue dot.
       const dot = document.createElement("div");
-      dot.className = "h-4 w-4 rounded-full border-2 border-white bg-primary shadow-md";
-      dot.setAttribute("aria-label", "Your location");
-      userMarkerRef.current = new maplibregl.Marker({ element: dot })
+      dot.className =
+        "relative h-4 w-4 rounded-full border-2 border-white bg-primary shadow-md user-location-pulse";
+
+      wrapper.appendChild(accuracy);
+      wrapper.appendChild(cone);
+      wrapper.appendChild(dot);
+
+      userMarkerRef.current = new maplibregl.Marker({ element: wrapper })
         .setLngLat([userLocation.longitude, userLocation.latitude])
         .addTo(map);
     } else {
       userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
     }
+
+    // google-style-location-heading-indicator: rotate/show-hide the cone
+    // on every tick, whether the marker was just built above or already
+    // existed. heading is null whenever the device isn't reporting one
+    // (stationary, or no compass support) -- same "enhancement, not
+    // required" posture the rest of this geolocation code already takes,
+    // so that case just keeps the cone hidden rather than showing a
+    // stale or fabricated direction.
+    const cone = userMarkerConeRef.current;
+    if (cone) {
+      if (typeof userLocation.heading === "number" && !Number.isNaN(userLocation.heading)) {
+        cone.style.opacity = "1";
+        // Centering translate kept alongside the rotation -- see the
+        // comment where this transform is first set, above.
+        cone.style.transform = `translate(-50%, -50%) rotate(${userLocation.heading}deg)`;
+      } else {
+        cone.style.opacity = "0";
+      }
+    }
     // customFrom is a dependency so the effect also runs once when a From
     // is *cleared* (Cancel): with the guard now open it recenters, and the
     // view returns to the person's live position. Setting or replacing a
     // From re-runs it too, but the guard makes that a no-op for the camera.
-  }, [userLocation, customFrom]);
+    // directionsPanelResult is a dependency for the same reason: closing
+    // the whole Directions session (panel result back to null) re-runs
+    // this effect once with the guard now open, recentering on the live
+    // position, same as the customFrom-clear case above.
+  }, [userLocation, customFrom, directionsPanelResult]);
 
   useEffect(() => {
     return () => {
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
+      userMarkerConeRef.current = null;
+      userMarkerAccuracyRef.current = null;
     };
   }, []);
 

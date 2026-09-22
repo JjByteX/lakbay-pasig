@@ -185,9 +185,20 @@ Directions weighed, per rule 6: autocomplete-first (type an address, suggestions
 
 ---
 
-**#:**
-**Milestone:**
+**#:** 22
+**Milestone:** Location gets its own step on the admin place form
 
-**Decision:**
+**Decision:** `admin-place-detail.tsx`'s New Place / Current Info form goes from two steps to three: step 1 is Place (identity + details on the left, Operating Hours on the right, two columns from `lg` up), step 2 is Location (the Address field and map pin, one column, full width), step 3 is Rules and history, unchanged. The location picker previously shared step 1's right column with Operating Hours (entry #21); it now gets a full page of its own, same reasoning entry #20 used to give Rules and history their own step rather than crowding step 1 further. `missingRequired` (the Save gate) is unchanged, but the per-step Next button now gates only on that step's own fields: step 1's Next checks Place Name and Category, step 2's Next checks Address and Map pin. Enter inside a step 2 field (other than the location picker's own search box) now advances to step 3 instead of submitting, matching step 1's existing Enter-means-Next behavior. No other form (admin business, vendor) changes; they were never step based.
 
-**Standing rule:**
+**Standing rule:** Any future field added to the place form goes on the step that already owns its topic (identity/details/hours on step 1, location on step 2, history on step 3); a new topic big enough to want its own step follows this and entry #20's pattern rather than being folded into an existing step's column.
+
+---
+
+**#:** 23
+**Milestone:** Details / History (or Story) tab control on the public detail pages
+
+**Decision:** Both public detail pages (`discover-place-detail.tsx`, `discover-business-detail.tsx`) split their single long scroll into a segmented tab control, reusing the existing `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` primitive `discover.tsx` already uses for its map/list switch, rather than a new component. A place gets "Details" and "History"; a business gets "Details" and "Story", matching the field each table already uses (`historical_background` on places, `business_story` on businesses, both from data-model.md's own field lists). "Details" keeps every visit-info block each page already rendered (description, hours, entrance fee/contact, facilities, rules, and on a business the item list); the long-form background field moves to the second tab. Defaults to "Details" on load, since a user arriving from a marker or list row is most likely after visit info, not history.
+
+The place History tab also now surfaces `historical_significance`, `year_or_period`, and `source_reference` (all `places` columns since 0003, all already admin-editable on `admin-place-detail.tsx`), and the business Story tab surfaces `unique_specialty` (a `businesses` column since 0004, already vendor- and admin-editable on `business-fields.tsx` and `admin-business-detail.tsx`). None of these four had any public render before this change; they were staff/vendor-fillable with nowhere for a resident or guest to actually read them. data-model.md groups each with its page's respective long-form field under the same background note, so each joins that field's tab rather than staying unrendered. Both tabs carry their own empty state ("No details listed yet." / "No history has been added for this place yet." / "No story has been added for this business yet.") rather than hiding the tab itself, since the tab control is structural and a place or business with no history yet is still a valid record to browse.
+
+**Standing rule:** A new visit-info field takes the Details tab, in the same position rule entry #20 already set (after the last visit-info block, before long content). A new long-form or background field takes the History tab on a place or the Story tab on a business. Any admin- or vendor-editable field that reaches this point without a public render should be treated as a gap to close, not left as staff-only content.

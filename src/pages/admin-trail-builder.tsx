@@ -1160,201 +1160,201 @@ export default function AdminTrailBuilderPage() {
         )}
       </div>
 
-      {/* Two columns on large screens: the trail info form on the left, Stops on
-          the right. Stacks to one column below lg so neither side gets squeezed
-          on tablets and phones. */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-6">
-          {/* Info fields share one card, same shape as admin-place-detail.tsx's
-              PlaceFormFields. The error line and the Cancel/Save row stay outside
-              it, same split. */}
-          <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Route Name</Label>
-                <Input
-                  id="name"
-                  value={info.name}
-                  onChange={(e) => updateInfoField("name", e.target.value)}
-                  required
-                  maxLength={150}
-                />
-                <CharCount value={info.name} max={150} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="category">Category</Label>
-                <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
-                  <SelectTrigger id="category">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="estimated_duration">Estimated Duration</Label>
-                <DurationField
-                  id="estimated_duration"
-                  value={info.estimated_duration}
-                  onChange={(next) => updateInfoField("estimated_duration", next)}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="estimated_budget">Estimated Budget</Label>
-                {/* estimated_budget is numeric (migration 0019): a single
-                    peso amount, not a range, per admin-form-fields-plan.md
-                    #4 -- drops the old "e.g. ₱300–500" range placeholder.
-                    The ₱ sign is a fixed label beside the field, never
-                    typed by the user; the number input's own up/down
-                    arrows step the value. Same pattern as
-                    admin-place-detail.tsx's entrance_fee field. */}
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    ₱
-                  </span>
-                  <Input
-                    id="estimated_budget"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={100000}
-                    step={1}
-                    placeholder="e.g. 300"
-                    value={info.estimated_budget}
-                    onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
-                    className="pl-7"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Recommended time is day chips plus a time range, too wide for
-                the three column row it used to share with duration and
-                budget, so it gets its own row. */}
+      <div className="flex flex-col gap-6">
+        {/* Info fields and Stops share one card -- per ux-ui-guidelines.md's
+            card fragmentation rule, this is one logical "edit this trail"
+            context, not two. Stops used to be a separate no-card right
+            column (a two-column split); it's now a section inside this
+            same card, split off with a divider rather than nesting a
+            second card. The error line and the Cancel/Save row stay
+            outside the card, same split as before. */}
+        <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="recommended_time">Recommended Time</Label>
-              <RecommendedTimeField
-                id="recommended_time"
-                ariaLabel="Recommended time"
-                value={info.recommended_time}
-                onChange={(next) => updateInfoField("recommended_time", next)}
+              <Label htmlFor="name">Route Name</Label>
+              <Input
+                id="name"
+                value={info.name}
+                onChange={(e) => updateInfoField("name", e.target.value)}
+                required
+                maxLength={150}
               />
+              <CharCount value={info.name} max={150} />
             </div>
-
-            <div className="flex flex-col gap-2 sm:w-60">
-              <Label htmlFor="run_type">Run Type</Label>
-              <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
-                <SelectTrigger id="run_type">
-                  <SelectValue placeholder="Select a run type" />
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {RUN_TYPES.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
             </div>
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <div className="flex items-center justify-end gap-2">
-            {infoSaved && <span className="text-sm text-muted-foreground">Saved</span>}
-            <Button type="button" variant="outline" onClick={() => navigate("/admin/trails")}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo}>
-              {saveInfoButtonLabel()}
-            </Button>
-          </div>
-        </div>
-
-        {/* Stops: right column, no card behind it. Available before the trail is
-            created, stops picked now are saved together with the trail. */}
-        <div className="flex flex-col gap-4">
-          <h2 className="text-base font-semibold text-foreground">Stops</h2>
-          {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
-
-          {stopsListBody()}
-
-          {stops.some((s) => s.id.startsWith("temp-")) && (
-            <p className="text-xs text-muted-foreground">
-              {routeId
-                ? "Some stops are not saved yet. Press Save Changes to save them."
-                : "Stops are saved when you create the trail. Discovery content can be added after that."}
-            </p>
-          )}
-
-          <div>
-            <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
-              Add Stop
-            </Button>
-          </div>
-
-          <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
-
-          <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add a stop</DialogTitle>
-              </DialogHeader>
-              <PlaceBusinessPicker
-                onPick={handlePick}
-                excludeIds={new Set(stops.map((s) => s.stop_id))}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="estimated_duration">Estimated Duration</Label>
+              <DurationField
+                id="estimated_duration"
+                value={info.estimated_duration}
+                onChange={(next) => updateInfoField("estimated_duration", next)}
               />
-            </DialogContent>
-          </Dialog>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="estimated_budget">Estimated Budget</Label>
+              {/* estimated_budget is numeric (migration 0019): a single
+                  peso amount, not a range, per admin-form-fields-plan.md
+                  #4 -- drops the old "e.g. ₱300–500" range placeholder.
+                  The ₱ sign is a fixed label beside the field, never
+                  typed by the user; the number input's own up/down
+                  arrows step the value. Same pattern as
+                  admin-place-detail.tsx's entrance_fee field. */}
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  ₱
+                </span>
+                <Input
+                  id="estimated_budget"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100000}
+                  step={1}
+                  placeholder="e.g. 300"
+                  value={info.estimated_budget}
+                  onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
+                  className="pl-7"
+                />
+              </div>
+            </div>
+          </div>
 
-          {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal rule,
-              a focused task fitting one viewport, not a side panel. Reachable
-              from the Discovery Content button on the same stop's row. */}
-          <Dialog
-            open={discoveryModalStopId !== null}
-            onOpenChange={(open) => {
-              if (!open) closeDiscoveryModal();
-            }}
-          >
-            <DialogContent>
-              {(() => {
-                const activeStop = stops.find((s) => s.id === discoveryModalStopId);
-                if (!activeStop) return null;
-                const entriesForStop = discoveryContent
-                  .filter((d) => d.route_stop_id === activeStop.id)
-                  .sort((a, b) => a.sequence_order - b.sequence_order);
+          {/* Recommended time is day chips plus a time range, too wide for
+              the three column row it used to share with duration and
+              budget, so it gets its own row. */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="recommended_time">Recommended Time</Label>
+            <RecommendedTimeField
+              id="recommended_time"
+              ariaLabel="Recommended time"
+              value={info.recommended_time}
+              onChange={(next) => updateInfoField("recommended_time", next)}
+            />
+          </div>
 
-                return (
-                  <DiscoveryContentModalBody
-                    activeStop={activeStop}
-                    entriesForStop={entriesForStop}
-                    discoveryError={discoveryError}
-                    discoveryLoading={discoveryLoading}
-                    discoverySaving={discoverySaving}
-                    editingEntryId={editingEntryId}
-                    discoveryForm={discoveryForm}
-                    setDiscoveryForm={setDiscoveryForm}
-                    canSubmitDiscoveryEntry={canSubmitDiscoveryEntry}
-                    onStartNew={startNewDiscoveryEntry}
-                    onStartEdit={startEditDiscoveryEntry}
-                    onDelete={handleDeleteDiscoveryEntry}
-                    onCancelEdit={() => setEditingEntryId(null)}
-                    onSave={handleSaveDiscoveryEntry}
-                  />
-                );
-              })()}
-            </DialogContent>
-          </Dialog>
+          <div className="flex flex-col gap-2 sm:w-60">
+            <Label htmlFor="run_type">Run Type</Label>
+            <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
+              <SelectTrigger id="run_type">
+                <SelectValue placeholder="Select a run type" />
+              </SelectTrigger>
+              <SelectContent>
+                {RUN_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Stops: a section inside the same card, not a second card and not
+              a separate column. Available before the trail is created, stops
+              picked now are saved together with the trail. */}
+          <div className="flex flex-col gap-4 border-t border-border pt-4">
+            <h2 className="text-base font-semibold text-foreground">Stops</h2>
+            {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
+
+            {stopsListBody()}
+
+            {stops.some((s) => s.id.startsWith("temp-")) && (
+              <p className="text-xs text-muted-foreground">
+                {routeId
+                  ? "Some stops are not saved yet. Press Save Changes to save them."
+                  : "Stops are saved when you create the trail. Discovery content can be added after that."}
+              </p>
+            )}
+
+            <div>
+              <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
+                Add Stop
+              </Button>
+            </div>
+
+            <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
+          </div>
         </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="flex items-center justify-end gap-2">
+          {infoSaved && <span className="text-sm text-muted-foreground">Saved</span>}
+          <Button type="button" variant="outline" onClick={() => navigate("/admin/trails")}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo}>
+            {saveInfoButtonLabel()}
+          </Button>
+        </div>
+
+        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add a stop</DialogTitle>
+            </DialogHeader>
+            <PlaceBusinessPicker
+              onPick={handlePick}
+              excludeIds={new Set(stops.map((s) => s.stop_id))}
+            />
+          </DialogContent>
+        </Dialog>
+
+        {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal rule,
+            a focused task fitting one viewport, not a side panel. Reachable
+            from the Discovery Content button on the same stop's row. */}
+        <Dialog
+          open={discoveryModalStopId !== null}
+          onOpenChange={(open) => {
+            if (!open) closeDiscoveryModal();
+          }}
+        >
+          <DialogContent>
+            {(() => {
+              const activeStop = stops.find((s) => s.id === discoveryModalStopId);
+              if (!activeStop) return null;
+              const entriesForStop = discoveryContent
+                .filter((d) => d.route_stop_id === activeStop.id)
+                .sort((a, b) => a.sequence_order - b.sequence_order);
+
+              return (
+                <DiscoveryContentModalBody
+                  activeStop={activeStop}
+                  entriesForStop={entriesForStop}
+                  discoveryError={discoveryError}
+                  discoveryLoading={discoveryLoading}
+                  discoverySaving={discoverySaving}
+                  editingEntryId={editingEntryId}
+                  discoveryForm={discoveryForm}
+                  setDiscoveryForm={setDiscoveryForm}
+                  canSubmitDiscoveryEntry={canSubmitDiscoveryEntry}
+                  onStartNew={startNewDiscoveryEntry}
+                  onStartEdit={startEditDiscoveryEntry}
+                  onDelete={handleDeleteDiscoveryEntry}
+                  onCancelEdit={() => setEditingEntryId(null)}
+                  onSave={handleSaveDiscoveryEntry}
+                />
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

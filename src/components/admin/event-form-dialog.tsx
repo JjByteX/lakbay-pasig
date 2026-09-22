@@ -392,25 +392,15 @@ export default function EventFormDialog({
                   <CharCount value={form.description} max={2000} />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="related_program">Related Program</Label>
-                    <Input
-                      id="related_program"
-                      placeholder="e.g. Pasig Creative Arts Academy, if recurring"
-                      value={form.related_program}
-                      onChange={(e) => updateField("related_program", e.target.value)}
-                      maxLength={150}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="date_time">Date and Time</Label>
-                    <DateTimeField
-                      id="date_time"
-                      value={form.date_time}
-                      onChange={(v) => updateField("date_time", v)}
-                    />
-                  </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="related_program">Related Program</Label>
+                  <Input
+                    id="related_program"
+                    placeholder="e.g. Pasig Creative Arts Academy, if recurring"
+                    value={form.related_program}
+                    onChange={(e) => updateField("related_program", e.target.value)}
+                    maxLength={150}
+                  />
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -427,18 +417,28 @@ export default function EventFormDialog({
                     />
                     <span>This event has an end date and time</span>
                   </label>
-                  {hasEndDateTime && (
-                    <div className="flex flex-col gap-2 sm:w-1/2 sm:pr-2">
-                      <Label htmlFor="end_date_time">End Date and Time</Label>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="date_time">Date and Time</Label>
                       <DateTimeField
-                        id="end_date_time"
-                        value={form.end_date_time}
-                        onChange={(v) => updateField("end_date_time", v)}
-                        minDate={parseDateTimeLocalValue(form.date_time) ?? undefined}
-                        aria-invalid={endBeforeStart}
+                        id="date_time"
+                        value={form.date_time}
+                        onChange={(v) => updateField("date_time", v)}
                       />
                     </div>
-                  )}
+                    {hasEndDateTime && (
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="end_date_time">End Date and Time</Label>
+                        <DateTimeField
+                          id="end_date_time"
+                          value={form.end_date_time}
+                          onChange={(v) => updateField("end_date_time", v)}
+                          minDate={parseDateTimeLocalValue(form.date_time) ?? undefined}
+                          aria-invalid={endBeforeStart}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

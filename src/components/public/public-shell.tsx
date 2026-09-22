@@ -912,12 +912,45 @@ function DesktopShell({
           so the panel tracks the rail's real width (13rem expanded, 3rem
           collapsed via --sidebar-width-icon) without re-measuring it in
           JS -- it just reads the same CSS custom properties/data-state
-          the rail itself renders with. */}
+          the rail itself renders with.
+          Closed state: previously shrank to `w-0` with padding/border
+          zeroed out, which is a compress-in-place animation -- the
+          panel's own width tweened toward 0, so gap-4's children visibly
+          slid toward the top-left corner as the box around them shrank.
+          Direct instruction was for a slide instead: the box itself
+          (width, padding, gap) never changes, only its position does.
+          `w-80` and `p-4`/`gap-4` now stay constant in both states: the
+          only thing that changes is a `translate-x` on the closed state
+          that pushes the whole panel one width to the left, tucking it
+          behind the sidebar rail until it's fully offscreen under it.
+          The rail itself is `fixed`/z-10 (sidebar.tsx) and this panel is
+          z-20, so while closed the panel is still technically layered
+          above the rail -- but it now sits entirely under the rail's own
+          x-range (translated a full 20rem/`w-80` left of `--sidebar-
+          width`, further left than the rail's `left-0` edge), so nothing
+          of it pokes out from behind the rail -- except z-index doesn't
+          care about x-position: this panel's z-20 still painted it
+          above the rail's z-10 (sidebar.tsx line ~177) even while
+          translated fully into the rail's own x-range, so the slid-away
+          panel was rendering in front of, not behind, the rail. Dropped
+          to z-[5] (an arbitrary value -- Tailwind's default scale has no
+          z-5 utility, only 0/10/20/30/40/50, so a bare `z-5` class would
+          silently fail to apply and leave z-20 in place) so the panel
+          sits below the rail's z-10 but still above SidebarInset's z-0
+          -- the panel only ever needs to sit above the page content,
+          never above the rail itself, in either state. `overflow-hidden`
+          is kept on the closed state only, so nothing inside the panel
+          (e.g. a focused input) can be tabbed to or visually clipped-out
+          while it's tucked away; `pointer-events-none` matches, so the
+          hidden panel can't intercept clicks meant for the map/content
+          behind it. */}
       <div
         className={cn(
-          "fixed inset-y-0 z-20 hidden h-svh flex-col gap-4 overflow-y-auto border-r border-border bg-card p-4 transition-[left,width] duration-200 ease-linear md:flex",
+          "fixed inset-y-0 z-[5] hidden h-svh w-80 flex-col gap-4 overflow-y-auto border-r border-border bg-card p-4 transition-[left,transform] duration-200 ease-linear md:flex",
           "left-[--sidebar-width] peer-data-[state=collapsed]:left-[--sidebar-width-icon]",
-          panelOpen ? "w-80" : "w-0 !border-r-0 !p-0 overflow-hidden",
+          panelOpen
+            ? "translate-x-0"
+            : "-translate-x-80 overflow-hidden pointer-events-none",
         )}
       >
         <GlobalSearchBar query={query} onQueryChange={setQuery} />
@@ -987,6 +1020,13 @@ export function PublicShell() {
         setUserLocation({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
+          // google-style-location-heading-indicator: carried straight
+          // through from the fix. Usually null while standing still (most
+          // devices only report a heading while actually moving), which
+          // is exactly when discover-map.tsx's marker should fall back to
+          // its plain dot with no cone -- no separate "moving" flag
+          // needed, the null itself is the signal.
+          heading: position.coords.heading,
         });
       },
       () => {

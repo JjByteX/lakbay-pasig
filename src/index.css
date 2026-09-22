@@ -90,6 +90,91 @@
 }
 
 /* ============================================================
+   DISCOVER MAP MARKER LABEL LEGIBILITY (light vs dark)
+   Bug fix: discover-map.tsx's markerElement used to set one fixed dark
+   text-shadow inline (rgba(0,0,0,...) glow) on the label span, meant to
+   read as an outline against the map's own varied tile colors now that
+   the label has no opaque pill behind it (see that file's own comment on
+   why the pill was dropped). A dark glow behind light foreground text
+   only reads as an outline when it's sitting on a dark surface -- that's
+   Mocha (dark tiles, light text): the shadow blends into the tile
+   underneath while still darkening the text's own edges. On Latte (light
+   tiles, dark-on-cream text) the same dark shadow has nothing dark to
+   disappear into, so it just reads as a smudgy blur around already-dark
+   text instead of an outline, which is the reported bug -- not a
+   brightness/opacity tuning issue, the shadow color needs to invert with
+   the theme the same way the map tiles themselves do (buildStyle's own
+   LATTE/MOCHA swap).
+   Bug fix #2: first attempt used hsl(var(--background)) as the light-mode
+   outline color -- Latte's --background is 98% lightness, barely
+   different from white, so at this font size (text-xs) the halo read as
+   near-invisible on desktop (bigger viewport, labels smaller relative to
+   the busy tile colors behind them, no pinch-zoom close-up the way
+   mobile naturally gets). Blur-only shadows (0 0 Npx) also spread a
+   color thin rather than building a crisp edge, compounding the same
+   problem. Replaced with a solid near-white and four 1px-offset copies
+   (up/down/left/right) plus a tight blur pass -- that combination is
+   what actually reads as a drawn outline around each glyph rather than a
+   soft glow, at any label size. Same fix mirrored in dark mode: solid
+   near-black four-offset outline instead of the old blur-heavy glow, so
+   both themes get the same crisp treatment rather than light mode alone
+   being held to a higher bar.
+   Fix: moved out of the inline style into these two theme-scoped rules,
+   using this codebase's existing `.dark` class strategy (same selector
+   discover-map.tsx's own MutationObserver watches) instead of adding a
+   second JS-side theme read for one CSS value.
+   ============================================================ */
+.marker-name-label {
+  text-shadow:
+    1px 1px 0 hsl(60 40% 100%),
+    -1px 1px 0 hsl(60 40% 100%),
+    1px -1px 0 hsl(60 40% 100%),
+    -1px -1px 0 hsl(60 40% 100%),
+    0 0 4px hsl(60 40% 100%);
+}
+
+.dark .marker-name-label {
+  text-shadow:
+    1px 1px 0 rgba(0, 0, 0, 0.85),
+    -1px 1px 0 rgba(0, 0, 0, 0.85),
+    1px -1px 0 rgba(0, 0, 0, 0.85),
+    -1px -1px 0 rgba(0, 0, 0, 0.85),
+    0 0 4px rgba(0, 0, 0, 0.6);
+}
+
+/* ============================================================
+   GOOGLE-STYLE LOCATION HEADING INDICATOR (discover-map.tsx "you are
+   here" marker)
+   A soft breathing pulse on the solid blue dot, the same subtle
+   ambient-motion cue Google Maps' own live-location marker uses so the
+   dot still reads as "this is you, live" even when no heading cone is
+   showing (device stationary / no compass). Kept to a box-shadow ring
+   rather than a transform: scale() on the dot itself, since scaling the
+   dot would also scale its border-2 border-white ring and make the
+   whole marker visibly grow/shrink rather than just glow -- the
+   box-shadow ring expands and fades around a dot that otherwise stays a
+   fixed size, matching Google's own effect.
+   ============================================================ */
+@keyframes user-location-pulse {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
+  }
+}
+
+.user-location-pulse {
+  animation: user-location-pulse 2s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-location-pulse {
+    animation: none;
+  }
+}
+
+/* ============================================================
    SIDEBAR LOGO -> EXPAND ICON ON HOVER (desktop, collapsed rail)
    Mirrors Amkor's own sidebar collapse control: while collapsed, the
    header shows only the brand mark; hovering that same button swaps it
