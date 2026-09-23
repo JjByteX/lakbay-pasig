@@ -30,6 +30,7 @@ import { CharCount } from "@/components/business/business-fields";
 import { DurationField } from "@/components/ui/duration-field";
 import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
 import { usePageTitle } from "@/lib/page-title";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 // Trail builder: one screen, no stepper. The trail info form is the left
 // column, Stops the right, and per stop Discovery Content (5.1) is a centered
@@ -1138,27 +1139,25 @@ export default function AdminTrailBuilderPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-h-9 items-center gap-3">
-          <h1 className="text-xl font-semibold text-foreground">
-            {isNew && !routeId ? "New Trail" : info.name || "Edit Trail"}
-          </h1>
-          {routeId && <Badge variant={status === "published" ? "default" : "outline"}>{status}</Badge>}
-        </div>
-
-        {/* Publish/Unpublish: top right, only once the trail exists. While it is
-            unavailable the reason sits directly under it, never a silently
-            disabled button. */}
-        {routeId && (
-          <div className="flex max-w-sm flex-col items-end gap-1">
-            <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null}>
-              {publishButtonLabel()}
-            </Button>
-            {blockedReason && <p className="text-right text-sm text-muted-foreground">{blockedReason}</p>}
-            {publishError && <p className="text-right text-sm text-destructive">{publishError}</p>}
-          </div>
-        )}
-      </div>
+      {/* Publish/Unpublish (the actions slot): top right, only once the trail
+          exists. While it is unavailable the reason sits directly under it,
+          never a silently disabled button. */}
+      <AdminPageHeader
+        breadcrumb={[{ label: "Trails", to: "/admin/trails" }]}
+        title={isNew && !routeId ? "New Trail" : info.name || "Edit Trail"}
+        badges={routeId && <Badge variant={status === "published" ? "default" : "outline"}>{status}</Badge>}
+        actions={
+          routeId && (
+            <div className="flex max-w-sm flex-col items-end gap-1">
+              <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null}>
+                {publishButtonLabel()}
+              </Button>
+              {blockedReason && <p className="text-right text-sm text-muted-foreground">{blockedReason}</p>}
+              {publishError && <p className="text-right text-sm text-destructive">{publishError}</p>}
+            </div>
+          )
+        }
+      />
 
       <div className="flex flex-col gap-6">
         {/* Info fields and Stops share one card -- per ux-ui-guidelines.md's

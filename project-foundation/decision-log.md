@@ -247,3 +247,16 @@ Tab label reads `business_type` (Product, Service, or Both, vendor-mode-spec.md'
 `business_type` is now selected on this page's `businesses` query, it had no public render anywhere before this. `itemsLoaded` state added alongside the existing `loading` state, so the tab strip (2 columns vs 3) does not render before the items fetch settles and does not shift column count after first paint.
 
 **Standing rule:** A label for something the vendor self-classifies (business_type, category, or similar) should read from the structured field meant for that classification, not be inferred from free text elsewhere. When a UI element's presence depends on data that loads separately from the page's main record, gate that element's first render on both fetches settling, not just the main one, so its layout doesn't shift after paint.
+
+---
+
+**#:** 27
+**Milestone:** Admin/staff sub page breadcrumb heading (admin-page-header.tsx)
+
+**Decision:** Admin/staff sub pages now open with a clickable "Previous Page > Current Page" heading, copied from Amkor IMS's `PageHeader` (inline mode): one compact row, small muted ancestors that underline on hover, chevron separators, and the current page at full heading size as the page's `<h1>`. It lives in one shared component, `components/admin/admin-page-header.tsx`, and is not defined per page. Ancestors are react-router `<Link>`s (real anchors) rather than Amkor's `router.visit` buttons, since `<Link>` is this app's own navigation primitive.
+
+Applied to every admin sub page: `admin-place-detail.tsx` (new and edit, parent Places), `admin-discovery-content-review.tsx` (parent Places, since the route lives under `/admin/places/discovery` and is reached from the Places queue), `admin-business-detail.tsx` (parent Businesses), and `admin-trail-builder.tsx` (new and edit, parent Trails). Each page's status badges and action buttons pass through the component's `badges` and `actions` slots unchanged, so no behavior moved. Top-level list pages (Places, Businesses, Trails, and so on) keep their plain `<h1>`, they have no parent to link back to. `/admin/events/:id` is a redirect into the Announcements modal, not a page, so it has no heading to convert.
+
+Parent labels reuse admin-sidebar.tsx's own nav labels word for word (Places, Businesses, Trails), per ux-ui-guidelines.md's rule against synonyms for the same concept.
+
+**Standing rule:** A new admin sub page uses `AdminPageHeader` with its parent list as the one `breadcrumb` entry, it does not hand-roll an `<h1>`. The current page is always `title`, never a `breadcrumb` entry. If a sub page is ever reached from a different parent than its route implies, set `breadcrumb` to the real entry point, as the discovery review page does.

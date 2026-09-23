@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { usePageTitle } from "@/lib/page-title";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 // Phase 5.3 (step-4-phases.md, step-4-plan.md's review exception): the
 // Places queue (admin-places.tsx) reuses "the same table and verify/reject
@@ -298,19 +299,26 @@ export default function AdminDiscoveryContentReviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-foreground">{entry.title}</h1>
-          <Badge variant="secondary">Trail Content</Badge>
-          <Badge variant="outline">pending</Badge>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => openReviewDialog("reject")}>
-            Reject
-          </Button>
-          <Button onClick={() => openReviewDialog("verify")}>Verify</Button>
-        </div>
-      </div>
+      {/* Reached from the Places review queue (this route lives under
+          /admin/places/discovery), so Places is the parent crumb. */}
+      <AdminPageHeader
+        breadcrumb={[{ label: "Places", to: "/admin/places" }]}
+        title={entry.title}
+        badges={
+          <>
+            <Badge variant="secondary">Trail Content</Badge>
+            <Badge variant="outline">pending</Badge>
+          </>
+        }
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => openReviewDialog("reject")}>
+              Reject
+            </Button>
+            <Button onClick={() => openReviewDialog("verify")}>Verify</Button>
+          </div>
+        }
+      />
 
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

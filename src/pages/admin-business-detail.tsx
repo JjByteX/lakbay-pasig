@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 // 6.5: read only list of business_items for staff review, name and price
 // per item, missing price shown plainly, not hidden, per
@@ -504,34 +505,39 @@ export default function AdminBusinessDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-foreground">{form.name || "Business"}</h1>
-          {status && <Badge variant={STATUS_VARIANT[status]}>{status}</Badge>}
-          {featuredStatus === "featured" && <Badge variant="accent">Featured</Badge>}
-        </div>
-        <div className="flex gap-2">
-          {status === "pending" && (
-            <>
-              <Button variant="outline" onClick={() => openReviewDialog("reject")}>
-                Reject
+      <AdminPageHeader
+        breadcrumb={[{ label: "Businesses", to: "/admin/businesses" }]}
+        title={form.name || "Business"}
+        badges={
+          <>
+            {status && <Badge variant={STATUS_VARIANT[status]}>{status}</Badge>}
+            {featuredStatus === "featured" && <Badge variant="accent">Featured</Badge>}
+          </>
+        }
+        actions={
+          <div className="flex gap-2">
+            {status === "pending" && (
+              <>
+                <Button variant="outline" onClick={() => openReviewDialog("reject")}>
+                  Reject
+                </Button>
+                <Button onClick={() => openReviewDialog("verify")}>Verify</Button>
+              </>
+            )}
+            {featuredStatus !== null && (
+              <Button
+                variant={featuredStatus === "featured" ? "secondary" : "outline"}
+                onClick={handleFeatureToggle}
+                disabled={featureSubmitting}
+                className="gap-2"
+              >
+                <Star className="h-4 w-4" />
+                {featureToggleLabel}
               </Button>
-              <Button onClick={() => openReviewDialog("verify")}>Verify</Button>
-            </>
-          )}
-          {featuredStatus !== null && (
-            <Button
-              variant={featuredStatus === "featured" ? "secondary" : "outline"}
-              onClick={handleFeatureToggle}
-              disabled={featureSubmitting}
-              className="gap-2"
-            >
-              <Star className="h-4 w-4" />
-              {featureToggleLabel}
-            </Button>
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        }
+      />
 
       {featureError && <p className="text-sm text-destructive">{featureError}</p>}
 

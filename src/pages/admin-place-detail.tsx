@@ -33,6 +33,7 @@ import { LocationPicker } from "@/components/location-picker";
 import { DurationField } from "@/components/ui/duration-field";
 import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import { usePageTitle } from "@/lib/page-title";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 
 // Storage bucket for place photos. Not yet created by any migration in this
 // repo, per architecture-notes.md's "what must never be touched without
@@ -499,11 +500,8 @@ export default function AdminPlaceDetailPage() {
 
   const placeForm = (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <p className="text-sm font-semibold text-foreground">
-        Step {step} of 3: {stepLabel}
-      </p>
-
       <PlaceFormFields
+        stepHeading={`Step ${step} of 3: ${stepLabel}`}
         form={form}
         updateField={updateField}
         toggleFacility={toggleFacility}
@@ -595,22 +593,21 @@ export default function AdminPlaceDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-foreground">
-            {isNew ? "New Place" : form.name || "Edit Place"}
-          </h1>
-          {status && <Badge variant={STATUS_VARIANT[status]}>{status}</Badge>}
-        </div>
-        {!isNew && status === "pending" && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => openReviewDialog("reject")}>
-              Reject
-            </Button>
-            <Button onClick={() => openReviewDialog("verify")}>Verify</Button>
-          </div>
-        )}
-      </div>
+      <AdminPageHeader
+        breadcrumb={[{ label: "Places", to: "/admin/places" }]}
+        title={isNew ? "New Place" : form.name || "Edit Place"}
+        badges={status && <Badge variant={STATUS_VARIANT[status]}>{status}</Badge>}
+        actions={
+          !isNew && status === "pending" && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => openReviewDialog("reject")}>
+                Reject
+              </Button>
+              <Button onClick={() => openReviewDialog("verify")}>Verify</Button>
+            </div>
+          )
+        }
+      />
 
       {isNew ? (
         placeForm
@@ -676,6 +673,7 @@ export default function AdminPlaceDetailPage() {
 }
 
 function PlaceFormFields({
+  stepHeading,
   form,
   updateField,
   toggleFacility,
@@ -685,6 +683,7 @@ function PlaceFormFields({
   facilitiesError,
   section,
 }: Readonly<{
+  stepHeading: string;
   form: PlaceFormState;
   updateField: <K extends keyof PlaceFormState>(key: K, value: PlaceFormState[K]) => void;
   toggleFacility: (facilityId: string) => void;
@@ -929,23 +928,43 @@ function PlaceFormFields({
     </div>
   );
 
+  // The "Step N of 3" text is the first row of the card on every step
+  // rather than a loose line above it: as a sibling of the card it sat
+  // under the form's gap-6, which read as dead space above the fields.
+  const heading = <p className="text-sm font-semibold text-foreground">{stepHeading}</p>;
+
   if (section === "history") {
-    return <div className="rounded-lg border border-border bg-card p-4">{history}</div>;
+    return (
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        {heading}
+        {history}
+      </div>
+    );
   }
 
   if (section === "location") {
-    return <div className="rounded-lg border border-border bg-card p-4">{locationPicker}</div>;
+    return (
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        {heading}
+        {locationPicker}
+      </div>
+    );
   }
 
-  // Two columns from lg up, one column below it, divider between.
+  // Two columns from lg up, one column below it, divider between. The
+  // heading sits above the columns, so the card is a column wrapper and
+  // the grid (with its divider) moves one level down.
   return (
-    <div className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
-      <div className="flex flex-col gap-4 lg:pr-4">
-        {identity}
-        {details}
-      </div>
-      <div className="flex flex-col gap-4 lg:pl-4">
-        {hours}
+    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+      {heading}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
+        <div className="flex flex-col gap-4 lg:pr-4">
+          {identity}
+          {details}
+        </div>
+        <div className="flex flex-col gap-4 lg:pl-4">
+          {hours}
+        </div>
       </div>
     </div>
   );
