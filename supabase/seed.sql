@@ -35,10 +35,12 @@
 -- the full replacement history. All content rows are verification_status
 -- 'verified' / published true, reflecting that this is CATO's own reviewed
 -- content, not a queue exercising every review state the way the original
--- sample data did. Photos point at the real `content-photos` Supabase
--- Storage bucket (migration 0031), not picsum.photos placeholders — see
--- storage-manifest.md for upload paths; the 30 real photo files must be
--- uploaded there before these URLs resolve to anything.
+-- sample data did. Photos point at local static paths served from the
+-- frontend's own public/content-photos directory (not the Supabase Storage
+-- bucket), so the real photography renders in a local/demo run with no
+-- Storage upload required. See storage-manifest.md for the original
+-- per-file manifest this mirrors; if this project later moves the photos
+-- into Supabase Storage, swap these paths back to the bucket's public URL.
 --
 -- Routes/Trails (routes, route_stops, discovery_content, trail_credentials)
 -- and the personal-record tables that depended on sample route/place ids
@@ -396,39 +398,40 @@ insert into public.places (
 
 -- -----------------------------------------------------------------------------
 -- 4. Place photos — real Pasig photography per storage-manifest.md.
---    All 30 files must be uploaded to the `content-photos` bucket (created
---    by migration 0031) at the paths below before these URLs resolve;
---    see storage-manifest.md and resume-plan.md item 3. photo_type is set
---    to 'current' throughout: storage-manifest.md's manifest does not
---    distinguish historical vs. current per file, and none of the source
---    material called out a specific photo as archival, so nothing here
---    should be read as an archival/historical photo without confirming
---    against the actual files once uploaded.
---    :SUPABASE_URL is a placeholder for the project's own Supabase URL,
---    substituted in per environment same as storage-manifest.md notes.
+--    These now point at local static paths (/content-photos/places/...),
+--    served from the frontend's own public/ directory, so the real photos
+--    render in a local/demo run without uploading anything to Supabase
+--    Storage. photo_type is set to 'current' throughout: storage-
+--    manifest.md's manifest does not distinguish historical vs. current
+--    per file, and none of the source material called out a specific
+--    photo as archival, so nothing here should be read as an archival/
+--    historical photo without confirming against the actual files.
+--    If this project later moves to Supabase Storage for these photos,
+--    swap the /content-photos/... prefix back to the bucket's public URL
+--    (see decision-log.md/storage-manifest.md for that original path).
 -- -----------------------------------------------------------------------------
 insert into public.place_photos (place_id, photo_url, photo_type, sort_order) values
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/01.jpg', 'current', 0),
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/02.jpg', 'current', 1),
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/03.jpg', 'current', 2),
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/04.jpg', 'current', 3),
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/05.jpg', 'current', 4),
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/06.jpg', 'current', 5),
-  ('a1e10001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/07.jpg', 'current', 6),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/01.jpg', 'current', 0),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/02.jpg', 'current', 1),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/03.png', 'current', 2),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/04.jpg', 'current', 3),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/05.jpg', 'current', 4),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/06.jpg', 'current', 5),
+  ('a1e10001-0001-4c1a-9c1a-000000000001', '/content-photos/places/pasig-city-museum/07.jpg', 'current', 6),
 
-  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/01.jpg', 'current', 0),
-  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/02.jpg', 'current', 1),
-  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/03.jpg', 'current', 2),
-  ('a1e10002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/04.png', 'current', 3),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', '/content-photos/places/immaculate-conception-cathedral/01.jpg', 'current', 0),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', '/content-photos/places/immaculate-conception-cathedral/02.jpg', 'current', 1),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', '/content-photos/places/immaculate-conception-cathedral/03.png', 'current', 2),
+  ('a1e10002-0002-4c1a-9c1a-000000000002', '/content-photos/places/immaculate-conception-cathedral/04.png', 'current', 3),
 
-  ('a1e10003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/01.jpg', 'current', 0),
-  ('a1e10003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/02.jpg', 'current', 1),
-  ('a1e10003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/bahay-na-tisa/03.png', 'current', 2),
+  ('a1e10003-0003-4c1a-9c1a-000000000003', '/content-photos/places/bahay-na-tisa/01.jpg', 'current', 0),
+  ('a1e10003-0003-4c1a-9c1a-000000000003', '/content-photos/places/bahay-na-tisa/02.jpg', 'current', 1),
+  ('a1e10003-0003-4c1a-9c1a-000000000003', '/content-photos/places/bahay-na-tisa/03.png', 'current', 2),
 
-  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/01.jpg', 'current', 0),
-  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/02.jpg', 'current', 1),
-  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/03.jpg', 'current', 2),
-  ('a1e10004-0004-4c1a-9c1a-000000000004', ':SUPABASE_URL/storage/v1/object/public/content-photos/places/plaza-rizal-bitukang-manok/04.jpg', 'current', 3);
+  ('a1e10004-0004-4c1a-9c1a-000000000004', '/content-photos/places/plaza-rizal-bitukang-manok/01.jpg', 'current', 0),
+  ('a1e10004-0004-4c1a-9c1a-000000000004', '/content-photos/places/plaza-rizal-bitukang-manok/02.jpg', 'current', 1),
+  ('a1e10004-0004-4c1a-9c1a-000000000004', '/content-photos/places/plaza-rizal-bitukang-manok/03.jpg', 'current', 2),
+  ('a1e10004-0004-4c1a-9c1a-000000000004', '/content-photos/places/plaza-rizal-bitukang-manok/04.jpg', 'current', 3);
   -- Youth Development Center intentionally has no photos: storage-manifest.md
   -- notes none were supplied for it, matching its places/youth-development-center/
   -- path being left empty.
@@ -567,23 +570,23 @@ insert into public.business_items (business_id, name, price) values
 
 -- -----------------------------------------------------------------------------
 -- 8. Business photos — real Pasig photography per storage-manifest.md,
---    same content-photos bucket and upload caveat as section 4 above.
+--    same local static /content-photos path as section 4 above.
 -- -----------------------------------------------------------------------------
 insert into public.business_photos (business_id, photo_url, sort_order) values
-  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/01.jpg', 0),
-  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/02.jpg', 1),
-  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/03.jpg', 2),
-  ('b2e20001-0001-4c1a-9c1a-000000000001', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/panaderia-dimas-alang/04.png', 3),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', '/content-photos/businesses/panaderia-dimas-alang/01.jpg', 0),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', '/content-photos/businesses/panaderia-dimas-alang/02.jpg', 1),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', '/content-photos/businesses/panaderia-dimas-alang/03.jpg', 2),
+  ('b2e20001-0001-4c1a-9c1a-000000000001', '/content-photos/businesses/panaderia-dimas-alang/04.png', 3),
 
-  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/01.jpg', 0),
-  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/02.jpg', 1),
-  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/03.jpg', 2),
-  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/04.jpg', 3),
-  ('b2e20002-0002-4c1a-9c1a-000000000002', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/three-sisters-restaurant/05.jpg', 4),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', '/content-photos/businesses/three-sisters-restaurant/01.jpg', 0),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', '/content-photos/businesses/three-sisters-restaurant/02.jpg', 1),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', '/content-photos/businesses/three-sisters-restaurant/03.jpg', 2),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', '/content-photos/businesses/three-sisters-restaurant/04.jpg', 3),
+  ('b2e20002-0002-4c1a-9c1a-000000000002', '/content-photos/businesses/three-sisters-restaurant/05.jpg', 4),
 
-  ('b2e20003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/01.jpg', 0),
-  ('b2e20003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/02.jpg', 1),
-  ('b2e20003-0003-4c1a-9c1a-000000000003', ':SUPABASE_URL/storage/v1/object/public/content-photos/businesses/ados-panciteria/03.jpg', 2);
+  ('b2e20003-0003-4c1a-9c1a-000000000003', '/content-photos/businesses/ados-panciteria/01.jpg', 0),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', '/content-photos/businesses/ados-panciteria/02.jpg', 1),
+  ('b2e20003-0003-4c1a-9c1a-000000000003', '/content-photos/businesses/ados-panciteria/03.jpg', 2);
 
 -- -----------------------------------------------------------------------------
 -- 9. Business reviews — audit log, mirrors place_reviews. Two of the three
@@ -709,9 +712,9 @@ insert into public.events (
 -- verified photography rather than inventing a placeholder image just to
 -- have two rows.
 insert into public.landing_slides (image_url, caption, sort_order, active) values
-  (':SUPABASE_URL/storage/v1/object/public/content-photos/places/pasig-city-museum/01.jpg',
+  ('/content-photos/places/pasig-city-museum/01.jpg',
    'Discover the stories behind Pasig City Museum', 0, true),
-  (':SUPABASE_URL/storage/v1/object/public/content-photos/places/immaculate-conception-cathedral/01.jpg',
+  ('/content-photos/places/immaculate-conception-cathedral/01.jpg',
    'Walk through centuries of Pasigueño heritage', 1, true);
 
 commit;
