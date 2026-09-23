@@ -1,10 +1,20 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
+import { Loader2, Pencil, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
-import { fetchItems, createItem, updateItem, deleteItem } from "@/lib/vendor-items";
-import type { VendorItem } from "@/lib/vendor-types";
+import {
+  fetchItems,
+  createItem,
+  updateItem,
+  deleteItem,
+  uploadItemPhoto,
+  removeItemPhoto,
+  removeAllItemPhotoFiles,
+  validateItemPhotoFile,
+} from "@/lib/vendor-items";
+import type { ItemPhoto, VendorItem } from "@/lib/vendor-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/business/business-fields";
@@ -124,6 +134,127 @@ function ItemFormFields({
           <p className="text-sm text-muted-foreground">{NO_PRICE_WARNING}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// Item photos plan: photo management for one existing item, shown inside
+// a row's own edit state only. An item needs an id before a photo can
+// upload against it (business_item_photos.item_id is not null), so this
+// never renders in the "Add an item" form -- add-then-edit is the path to
+// give a brand new item its first photo, same as the rest of this page's
+// add/edit split.
+//
+// Thumbnails plus one add control, same file-input-as-label pattern
+// avatar-upload.tsx already uses, sized down to a 16 (h-16 w-16) square
+// row rather than avatar-upload.tsx's own circular AVATAR_SIZE.lg, since
+// several photos sit side by side here instead of one picture next to a
+// name.
+function ItemPhotos({
+  businessId,
+  itemId,
+  photos,
+  onChange,
+}: Readonly<{
+  businessId: string;
+  itemId: string;
+  photos: ItemPhoto[];
+  onChange: (photos: ItemPhoto[]) => void;
+}>) {
+  const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inputId = `item-photo-upload-${itemId}`;
+
+  async function handleSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const validationError = validateItemPhotoFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const photo = await uploadItemPhoto(businessId, itemId, file, photos.length);
+      onChange([...photos, photo]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemove(photo: ItemPhoto) {
+    setRemovingId(photo.id);
+    setError(null);
+    try {
+      await removeItemPhoto(photo);
+      onChange(photos.filter((p) => p.id !== photo.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove this photo.");
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor={inputId} help="Optional. Shown on this item's listing.">
+        Photos
+      </FieldLabel>
+      <div className="flex flex-wrap gap-2">
+        {photos.map((photo) => (
+          <div key={photo.id} className="group relative h-16 w-16">
+            <img
+              src={photo.photo_url}
+              alt=""
+              className="h-16 w-16 rounded-md border border-border object-cover"
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="absolute -right-2 -top-2 h-5 w-5 rounded-full"
+              onClick={() => handleRemove(photo)}
+              disabled={removingId === photo.id}
+              aria-label="Remove photo"
+            >
+              {removingId === photo.id ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <X className="h-3 w-3" />
+              )}
+            </Button>
+          </div>
+        ))}
+        <label
+          htmlFor={inputId}
+          className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input text-muted-foreground hover:bg-muted"
+        >
+          {uploading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Pencil className="h-4 w-4" />
+          )}
+          <span className="text-[10px]">Add</span>
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleSelect}
+            disabled={uploading}
+          />
+        </label>
+      </div>
+      <p className="text-xs text-muted-foreground">JPG, PNG, WEBP, or GIF. Up to 5MB.</p>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
@@ -303,6 +434,13 @@ export default function VendorItemsPage() {
     setDeleteError(null);
 
     try {
+      // Item photos plan: business_item_photos rows cascade at the DB
+      // level (migration 0040) once the item itself is deleted, but the
+      // underlying storage files don't. removeAllItemPhotoFiles only
+      // touches storage, never the rows, so it can't race deleteItem's
+      // own cascade -- same reasoning vendor-items.ts documents for why
+      // this is a separate function from removeItemPhoto.
+      await removeAllItemPhotoFiles(deleteTarget.photos);
       await deleteItem(deleteTarget.id);
       setItems((prev) => prev.filter((item) => item.id !== deleteTarget.id));
       setDeleteTarget(null);
@@ -335,11 +473,20 @@ export default function VendorItemsPage() {
         )}
 
         {!itemsLoading && !itemsError && items.length > 0 && (
-          <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+          <div
+            className={
+              items.length === 1 && editingId === null
+                ? "flex"
+                : "grid grid-cols-2 gap-3"
+            }
+          >
             {items.map((item) => {
               if (editingId === item.id) {
                 return (
-                  <li key={item.id} className="flex flex-col gap-3 p-4">
+                  <div
+                    key={item.id}
+                    className="col-span-2 flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
+                  >
                     <form
                       onSubmit={(e) => handleSaveEdit(e, item)}
                       className="flex flex-col gap-3"
@@ -349,6 +496,19 @@ export default function VendorItemsPage() {
                         price={editPrice}
                         onNameChange={setEditName}
                         onPriceChange={setEditPrice}
+                      />
+
+                      <ItemPhotos
+                        businessId={business.id}
+                        itemId={item.id}
+                        photos={item.photos}
+                        onChange={(photos) =>
+                          setItems((prev) =>
+                            prev.map((existing) =>
+                              existing.id === item.id ? { ...existing, photos } : existing
+                            )
+                          )
+                        }
                       />
 
                       {editError && <p className="text-sm text-destructive">{editError}</p>}
@@ -372,25 +532,43 @@ export default function VendorItemsPage() {
                         </Button>
                       </div>
                     </form>
-                  </li>
+                  </div>
                 );
               }
 
               return (
-                <li key={item.id} className="flex flex-col gap-2 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="min-w-0 max-w-full break-words text-sm text-foreground">
-                      {item.name}
-                    </span>
-                    <span className="shrink-0 text-sm text-muted-foreground">
-                      {formatPrice(item.price)}
-                    </span>
-                  </div>
+                <div
+                  key={item.id}
+                  className={
+                    items.length === 1 && editingId === null
+                      ? "flex w-1/2 flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                      : "flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                  }
+                >
+                  {/* Menu card plan: photo on top, name and price below,
+                      same menu-picker shape as discover-business-detail.tsx.
+                      Empty-photo state is a plain muted square, no
+                      invented icon. */}
+                  {item.photos.length > 0 ? (
+                    <img
+                      src={item.photos[0].photo_url}
+                      alt=""
+                      className="aspect-square w-full rounded-md border border-border object-cover"
+                    />
+                  ) : (
+                    <div className="aspect-square w-full rounded-md border border-border bg-muted" />
+                  )}
+                  <span className="line-clamp-2 text-sm font-medium text-foreground">
+                    {item.name}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {formatPrice(item.price)}
+                  </span>
                   {/* 5.3: dashboard-style visible gap, not just a one-time
-                      entry warning -- same copy, shown per row here so the
+                      entry warning -- same copy, shown per card here so the
                       gap stays visible for an item added earlier too. */}
                   {item.price === null && (
-                    <p className="text-sm text-muted-foreground">{NO_PRICE_WARNING}</p>
+                    <p className="text-xs text-muted-foreground">{NO_PRICE_WARNING}</p>
                   )}
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
@@ -407,10 +585,10 @@ export default function VendorItemsPage() {
                       Delete
                     </Button>
                   </div>
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         )}
       </div>
 

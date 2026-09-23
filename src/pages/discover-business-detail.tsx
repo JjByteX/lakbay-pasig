@@ -45,6 +45,7 @@ interface BusinessItem {
   id: string;
   name: string;
   price: number | null;
+  photos: { id: string; photo_url: string }[];
 }
 
 /**
@@ -103,11 +104,16 @@ export default function DiscoverBusinessDetailPage() {
 
     // Item list, name and price, price nullable per vendor-mode-spec.md
     // (price is optional, never required to publish). business_items_
-    // select_public (0004) follows the parent business's own read rule.
+    // select_public (0004, widened by 0016) follows the parent business's
+    // own read rule. photos joined in from business_item_photos (0040),
+    // its own select_public policy (migration 0040) mirrors 0016's same
+    // widen, so a pending business's item photos show under the same
+    // condition its item names and prices already do.
     supabase
       .from("business_items")
-      .select("id, name, price")
+      .select("id, name, price, photos:business_item_photos(id, photo_url)")
       .eq("business_id", id)
+      .order("sort_order", { referencedTable: "business_item_photos" })
       .then(({ data }) => setItems(data ?? []));
   }, [id]);
 
@@ -197,24 +203,42 @@ export default function DiscoverBusinessDetailPage() {
                 </div>
               )}
 
+              {/* Menu card plan: items move from a row list to a card
+                  grid, photo on top, name and price below, matching the
+                  familiar menu-picker shape (DoorDash/Grubhub style item
+                  cards) rather than a text list. Single item renders
+                  alone, no grid wrapper, per the sizing rule against a
+                  grid for one item. */}
               {items.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <h2 className="text-base font-semibold text-foreground">Items</h2>
-                  <ul className="flex flex-col divide-y divide-border">
+                  <div
+                    className={
+                      items.length === 1 ? "flex" : "grid grid-cols-2 gap-3"
+                    }
+                  >
                     {items.map((item) => (
-                      <li key={item.id} className="flex items-center justify-between gap-3 py-2">
-                        {/* Phase 8.4 fix: item names are vendor-submitted
-                            free text (vendor-mode-spec.md), length isn't
-                            bounded the way a fixed label is, so a long name
-                            next to the price in this justify-between row
-                            could overflow at narrow widths with neither
-                            span able to shrink (flex items default to
-                            min-width: auto). min-w-0 truncate here lets the
-                            name give way to a single ellipsis line; the
-                            price stays shrink-0 since it's short,
-                            fixed-format, and the more important half of
-                            this row to always read in full. */}
-                        <span className="min-w-0 flex-1 truncate text-base text-foreground">
+                      <div
+                        key={item.id}
+                        className={
+                          items.length === 1
+                            ? "flex w-1/2 flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                            : "flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                        }
+                      >
+                        {/* Empty-photo state is a plain muted square, no
+                            invented icon, per the icon rule: "no photo
+                            yet" has no universally recognized symbol. */}
+                        {item.photos.length > 0 ? (
+                          <img
+                            src={item.photos[0].photo_url}
+                            alt=""
+                            className="aspect-square w-full rounded-md border border-border object-cover"
+                          />
+                        ) : (
+                          <div className="aspect-square w-full rounded-md border border-border bg-muted" />
+                        )}
+                        <span className="line-clamp-2 text-sm font-medium text-foreground">
                           {item.name}
                         </span>
                         {/* An item with no price still displays normally
@@ -222,12 +246,12 @@ export default function DiscoverBusinessDetailPage() {
                             line, it's excluded only from the price range
                             filter (Phase 7), never hidden from the base
                             item list. */}
-                        <span className="shrink-0 text-sm text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           {item.price != null ? `₱${item.price}` : "No price listed"}
                         </span>
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
 

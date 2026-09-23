@@ -34,6 +34,7 @@ interface BusinessItem {
   id: string;
   name: string;
   price: number | null;
+  photos: { id: string; photo_url: string }[];
 }
 
 // 6.8: full business_reviews history, staff id (via display name), action,
@@ -203,10 +204,15 @@ export default function AdminBusinessDetailPage() {
 
     // 6.5: staff review only, no add/edit/delete here. Items belong to the
     // vendor's own listing flow (build-order.md #9), this view just reads.
+    // Item photos plan: photos joined in the same way, also read only,
+    // no staff upload -- business_item_photos_write_staff (0040) exists
+    // for parity with business_items/business_photos' own owner-plus-staff
+    // write shape, but this page deliberately never calls it.
     supabase
       .from("business_items")
-      .select("id, name, price")
+      .select("id, name, price, photos:business_item_photos(id, photo_url)")
       .eq("business_id", id)
+      .order("sort_order", { referencedTable: "business_item_photos" })
       .then(({ data }) => {
         setItems(data ?? []);
       });
@@ -688,7 +694,19 @@ function ItemList({ items }: Readonly<{ items: BusinessItem[] | null }>) {
     <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
       {items.map((item) => (
         <li key={item.id} className="flex items-center justify-between gap-4 p-4">
-          <span className="text-sm text-foreground">{item.name}</span>
+          <div className="flex min-w-0 items-center gap-3">
+            {/* Item photos plan: first photo only, read only, matching
+                vendor-items.tsx's and discover-business-detail.tsx's own
+                row treatment for consistency. */}
+            {item.photos.length > 0 && (
+              <img
+                src={item.photos[0].photo_url}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+              />
+            )}
+            <span className="text-sm text-foreground">{item.name}</span>
+          </div>
           {item.price !== null ? (
             <span className="text-sm text-muted-foreground">
               {item.price.toLocaleString(undefined, { style: "currency", currency: "PHP" })}

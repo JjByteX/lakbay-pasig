@@ -82,6 +82,7 @@ Rule: only proximity triggered secrets go here, radius and sequence required. Ge
 - Category -Jonald
 - Description (one line, what the business sells or offers) -Jonald
 - Pictures -JJ
+- Item List, each item optionally carries its own photos, one list per item, same optional shape as the business's own Pictures
 - Address (a label filled from the pin, editable) -Jonald
 - Map Coordinates (set by the pin, source of truth) -Matthew
 - Contact -Jonald

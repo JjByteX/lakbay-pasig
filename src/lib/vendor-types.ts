@@ -71,11 +71,23 @@ export interface VendorBusinessPayload {
   registered_or_informal: "registered" | "informal" | null;
 }
 
-/** business_items row, name and price only, matching migration 0004's columns. */
+/** One business_item_photos row (migration 0040), joined onto a VendorItem. */
+export interface ItemPhoto {
+  id: string;
+  photo_url: string;
+}
+
+/**
+ * business_items row, name and price matching migration 0004's columns,
+ * plus its joined business_item_photos rows (0040). Photos are optional,
+ * per item-photos-plan.md, so this can be an empty array, never required
+ * to publish or edit an item.
+ */
 export interface VendorItem {
   id: string;
   name: string;
   price: number | null;
+  photos: ItemPhoto[];
 }
 
 /**

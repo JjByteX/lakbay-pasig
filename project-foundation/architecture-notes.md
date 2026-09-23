@@ -53,7 +53,8 @@ Reasoning: the data model is relational (Places, Trails, Businesses, and Staff p
 **Key Dependencies Between Files:**
 - auth-context.tsx depends on auth-types.ts, migrations 0001/0002 (profiles columns)
 - Admin Places depends on places, place_photos, place_reviews (0003)
-- Admin Businesses depends on businesses, business_items, business_reviews, business_flags (0004), business_photos and profiles_select_staff_business_submitters (0008)
+- Admin Businesses depends on businesses, business_items, business_reviews, business_flags (0004), business_photos and profiles_select_staff_business_submitters (0008), business_item_photos (0040, read only on this page)
+- vendor-items.ts depends on business_items (0004) and business_item_photos (0040), both through content-photos' existing storage policies (0031), no new storage policy added
 - Admin Trails depends on routes, route_stops, discovery_content (0005)
 - Admin Events depends on events (0006)
 - Public Trails/Saved depends on trail_credentials, user_credentials, completed_routes, saved_places, saved_routes (0007), route_progress (0018)
@@ -101,6 +102,7 @@ All tables have row level security enabled. No table grants unauthenticated writ
 | 0037 | activity_log (new table), profiles, plus triggers on the content tables | Append only, admin read only. `write_activity()` helper, three trigger functions (`log_activity`, `log_activity_child`, `log_review_activity`), and the `log_auth_event` RPC. See decision-log.md entry #19 |
 | 0038 | places | Drops `nearby_places` (free text, never linked to real rows, never read by any public query). Drop-only, same shape as 0036 |
 | 0039 | places, businesses | Adds `rules`, nullable text, no default, on both. Shape from decision-log.md entry #7. The 500 character cap is in the forms only |
+| 0040 | business_item_photos (new table) | Optional photos per business_items row, same shape as business_photos (0008) one level deeper (item_id -> business_id). Owner-plus-staff RLS, public select matches 0016's widen (verified or pending). No log_activity trigger, matching 0037's own exclusion of business_items/business_photos. Reuses the content-photos bucket (0031) and its existing storage policies, no new storage policy |
 
 Fields in docs/data-model.md intentionally left out of the schema, since they're derivable from a join table: places/businesses' Trails Included In, routes' Places Included and Place Order (both live in route_stops), trail_credentials.Users Earned. Recomputing these from route_stops and user_credentials avoids duplicated data going stale.
 
