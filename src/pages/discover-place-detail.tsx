@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
+import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +21,12 @@ import { usePageTitle } from "@/lib/page-title";
 // verification badge every result already carries (navigation-and-access-
 // control.md's v1 scope, no named contributor credit).
 //
-// Category Directory Expansion, Phase 1.3: facilities is now a joined
-// place_facilities[] (migration 0026, facility_ids replaces the old
-// places.facilities text[]), flattened at fetch time so this field needed
-// no render change beyond the embed itself, per the expansion phases doc's
-// own "no change to the render JSX" goal for that phase.
+// Category Directory Expansion, Phase 1.3: facilities is now
+// places.facility_ids (migration 0026, a uuid[] replacing the old
+// places.facilities text[]) resolved against the place_facilities
+// directory client-side, the same pattern admin-place-detail.tsx uses --
+// PostgREST has no foreign-key relationship to embed here, since
+// facility_ids is a plain array column, not a join table.
 //
 // Phase 3.3: the chip row's own scope now explicitly changes, gaining an
 // icon beside each facility name (matching Discover's place category
@@ -39,11 +41,6 @@ import { usePageTitle } from "@/lib/page-title";
 // Historical Place field list, all four being the "longer origin and
 // development story" grouping. Fetched alongside the rest of the record,
 // same query shape as before.
-interface PlaceFacilityChip {
-  name: string;
-  icon: string;
-}
-
 interface PlaceDetail {
   id: string;
   name: string;
@@ -56,7 +53,7 @@ interface PlaceDetail {
   source_reference: string | null;
   operating_hours: string | null;
   entrance_fee: string | null;
-  facilities: PlaceFacilityChip[];
+  facility_ids: string[];
   rules: string | null;
   verification_status: "verified";
 }
@@ -87,6 +84,18 @@ export default function DiscoverPlaceDetailPage() {
   // an empty array here (no rows yet) is a legitimate, unremarkable
   // result, not an error, so there is no separate photosError to track.
   const [photos, setPhotos] = useState<string[]>([]);
+  // place_facilities has no foreign-key relationship PostgREST can embed
+  // on places (facility_ids is a plain uuid[] column, migration 0026), so
+  // the facility directory is fetched separately here and matched against
+  // facility_ids client-side -- the same pattern admin-place-detail.tsx
+  // already uses for this exact relationship.
+  const [allFacilities, setAllFacilities] = useState<PlaceFacility[]>([]);
+
+  useEffect(() => {
+    fetchActiveFacilities()
+      .then(setAllFacilities)
+      .catch(() => setAllFacilities([]));
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -96,7 +105,7 @@ export default function DiscoverPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, address, description, historical_background, historical_significance, year_or_period, source_reference, operating_hours, entrance_fee, rules, verification_status, place_categories(name), place_facilities(name, icon)"
+        "id, name, address, description, historical_background, historical_significance, year_or_period, source_reference, operating_hours, entrance_fee, rules, verification_status, place_categories(name), facility_ids"
       )
       .eq("id", id)
       .maybeSingle()
@@ -120,33 +129,20 @@ export default function DiscoverPlaceDetailPage() {
         // related_place_id being a plain single-value foreign key, the
         // same shape category_id has.
         //
-        // Category Directory Expansion, Phase 1.3: facilities is now a
-        // joined place_facilities[] via facility_ids (migration 0026), a
-        // to-many relationship rather than the to-one category_id above.
-        // Phase 3.3: the embed now also carries icon, not just name, so
-        // the chip row below can render each facility's own icon --
-        // flattened here directly into a {name, icon} row list rather than
-        // through readEmbeddedNames (place-facilities.ts's plural helper),
-        // since that helper only ever returns plain name strings and would
-        // drop the icon. Same defensive array-or-single-object handling
-        // place_categories gets just above, for the same Postgrest embed-
-        // shape uncertainty.
-        const { place_categories, place_facilities, ...rest } = data as typeof data & {
+        // Category Directory Expansion, Phase 1.3: facility_ids (migration
+        // 0026) is a plain uuid[] column, not embeddable via PostgREST
+        // (no foreign-key relationship exists for it), so it's read here
+        // as-is and resolved against the facility directory (fetched in
+        // the effect above) by the placeFacilities lookup near the return
+        // statement -- same client-side match admin-place-detail.tsx uses
+        // for the same relationship.
+        const { place_categories, ...rest } = data as typeof data & {
           place_categories: { name: string } | { name: string }[] | null;
-          place_facilities: PlaceFacilityChip[] | PlaceFacilityChip | null;
         };
-        let facilityRows: PlaceFacilityChip[];
-        if (Array.isArray(place_facilities)) {
-          facilityRows = place_facilities;
-        } else if (place_facilities) {
-          facilityRows = [place_facilities];
-        } else {
-          facilityRows = [];
-        }
         setPlace({
           ...rest,
           category: readEmbeddedName(place_categories) ?? "",
-          facilities: facilityRows,
+          facility_ids: rest.facility_ids ?? [],
         });
         setLoading(false);
       });
@@ -172,6 +168,13 @@ export default function DiscoverPlaceDetailPage() {
         setPhotos((photoRows ?? []).map((row) => row.photo_url));
       });
   }, [id]);
+
+  // Resolves this place's facility_ids against the fetched facility
+  // directory, same client-side match admin-place-detail.tsx does for its
+  // own facility chip row.
+  const placeFacilities: PlaceFacility[] = place
+    ? allFacilities.filter((facility) => place.facility_ids.includes(facility.id))
+    : [];
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
@@ -249,14 +252,14 @@ export default function DiscoverPlaceDetailPage() {
                 </div>
               )}
 
-              {place.facilities.length > 0 && (
+              {placeFacilities.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <h2 className="text-base font-semibold text-foreground">Facilities</h2>
                   <div className="flex flex-wrap gap-2">
-                    {place.facilities.map((facility) => {
+                    {placeFacilities.map((facility) => {
                       const Icon = getFacilityIcon(facility.icon);
                       return (
-                        <Badge key={facility.name} variant="secondary" className="gap-2">
+                        <Badge key={facility.id} variant="secondary" className="gap-2">
                           <Icon className="h-3.5 w-3.5 shrink-0" />
                           {facility.name}
                         </Badge>
@@ -280,7 +283,7 @@ export default function DiscoverPlaceDetailPage() {
               {!place.description &&
                 !place.operating_hours &&
                 !place.entrance_fee &&
-                place.facilities.length === 0 &&
+                placeFacilities.length === 0 &&
                 !place.rules && (
                   <p className="text-base text-muted-foreground">No details listed yet.</p>
                 )}

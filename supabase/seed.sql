@@ -335,7 +335,7 @@ insert into public.places (
    'Tuesday to Sunday, 9:00 AM – 4:00 PM (Closed Mondays)', 0, '45 to 60 minutes',
    'Ground floor exhibits accessible via ramp; upper floors accessible primarily via stairs.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk', 'Parking')),
-   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
+   'pending', null, now() - interval '5 days'),
 
   ('a1e10002-0002-4c1a-9c1a-000000000002', 'Immaculate Conception Cathedral',
    (select id from public.place_categories where name = 'Church'),
@@ -348,7 +348,7 @@ insert into public.places (
    'Open daily, 6:00 AM – 7:00 PM (Mass schedules vary)', 0, '30 to 45 minutes',
    'Ramp access available at side entry doors; main floor area is level and paved.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Waiting Area')),
-   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days'),
+   'pending', null, now() - interval '5 days'),
 
   ('a1e10003-0003-4c1a-9c1a-000000000003', 'Bahay na Tisa (Don Cecilio Tech House)',
    (select id from public.place_categories where name = 'Heritage Site'),
@@ -362,7 +362,7 @@ insert into public.places (
    0, '15 to 30 minutes',
    'Street-level exterior viewing fully accessible; interior contains steep wooden stairways with limited access for visitors with reduced mobility.',
    '{}'::uuid[],
-   'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
+   'pending', null, now() - interval '5 days'),
 
   ('a1e10004-0004-4c1a-9c1a-000000000004', 'Plaza Rizal & Bitukang Manok Area (Parian Creek)',
    (select id from public.place_categories where name = 'Monument'),
@@ -375,7 +375,7 @@ insert into public.places (
    'Open 24 Hours / 7 Days a week (Public Park)', 0, '20 to 30 minutes',
    'Open-air flat surface, fully wheelchair accessible with concrete paved walkways.',
    (select array_agg(id) from public.place_facilities where name in ('Waiting Area')),
-   'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days'),
+   'pending', null, now() - interval '5 days'),
 
   -- Added per open-questions.md #7: not among the 4 originally submitted
   -- Places, but required as discovery_content's related_place_id target
@@ -394,7 +394,7 @@ insert into public.places (
    0, '30 to 45 minutes, program-dependent',
    'Ground floor accessible; specific accessibility features not yet documented.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
-   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '2 days');
+   'pending', null, now() - interval '2 days');
 
 -- -----------------------------------------------------------------------------
 -- 4. Place photos — real Pasig photography per storage-manifest.md.
