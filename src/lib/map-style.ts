@@ -37,6 +37,15 @@ export const LATTE = {
   road: "#9ca0b0", // overlay0
   roadDark: "#8c8fa1", // overlay1, secondary/tertiary, one step darker than minor roads
   peach: "#fe640b",
+  // Bugfix, human-reported: the directions route line used to reuse
+  // `peach`, the exact same color as the road-major layer just below --
+  // a walking/driving route drawn along a major road was visually
+  // indistinguishable from the road itself. `mauve` is unused anywhere
+  // else in this palette (green = parks, blue = water, peach = major
+  // roads, road/roadDark/building = neutral greys), so the route now
+  // reads as its own distinct line against every other layer in both
+  // themes, not just against the one road tier it happens to sit near.
+  mauve: "#8839ef",
   railway: "#6c6f85", // subtext1
   boundary: "#6c6f85", // subtext1
   text: "#4c4f69",
@@ -53,6 +62,7 @@ export const MOCHA: typeof LATTE = {
   road: "#6c7086", // overlay0
   roadDark: "#7f849c", // overlay1
   peach: "#fab387",
+  mauve: "#cba6f7",
   railway: "#a6adc8", // subtext0
   boundary: "#a6adc8", // subtext0
   text: "#cdd6f4",

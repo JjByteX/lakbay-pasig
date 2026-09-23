@@ -782,20 +782,45 @@ export function DiscoverMap({
     // unlike Leaflet, attaching "load" after MapLibre's own constructor-
     // driven initial load is not a race, the listener is attached
     // synchronously in this same effect, before the browser yields).
-    const handleLoad = () => setTilesLoading(false);
+    // Bugfix, human-reported (route/trail vanishes after leaving Discover
+    // for a place/business detail page and coming back): styleReady used
+    // to flip true from "style.load" alone. That event does reliably fire
+    // on this initial construction as well as on a later setStyle() (per
+    // MapLibre's own docs: "fired once the map's style has fully loaded
+    // or changed"), so this was never wrong on paper -- but a remount via
+    // detail-page navigation is a second, independent map instance every
+    // time (this whole effect re-runs from scratch), and relying on one
+    // single event with no fallback leaves no second chance if that one
+    // listener registration ever loses the race with the event firing.
+    // handleLoad below is a second, independent path to the same
+    // conclusion: "load" only ever fires once isStyleLoaded() is
+    // genuinely true (it fires after the initial style AND visible tiles
+    // are ready, a strictly later point than "style.load"), so treating
+    // it as a styleReady signal too is always safe, never premature. Both
+    // paths call the same idempotent setStyleReady(true); whichever
+    // fires first wins, and the [route, styleReady] effect below only
+    // cares about the boolean, not which listener flipped it.
+    const handleLoad = () => {
+      setTilesLoading(false);
+      setStyleReady(true);
+    };
     const handleDataLoading = () => setTilesLoading(true);
     map.on("load", handleLoad);
     map.on("dataloading", handleDataLoading);
     map.on("idle", handleLoad);
 
-    // Bugfix (directions route not appearing): styleReady is this map
-    // instance's own readiness flag, reset false up front (a fresh mount,
-    // e.g. after switching from list view, starts not-ready even though
-    // the previous instance may have finished loading) and flipped true
-    // on "style.load", which fires both for this initial load and for
-    // every later setStyle() call the dark/light MutationObserver below
+    // styleReady is this map instance's own readiness flag, reset false
+    // up front (a fresh mount, e.g. after switching from list view or
+    // returning from a detail page, starts not-ready even though the
+    // previous instance may have finished loading) and flipped true on
+    // "style.load", which fires both for this initial load and for every
+    // later setStyle() call the dark/light MutationObserver below
     // triggers -- one listener covers both cases, so the route-draw
-    // effect never has to guess which case it's in.
+    // effect never has to guess which case it's in. handleLoad above is
+    // the belt-and-suspenders fallback for the very first load only (a
+    // later setStyle() tears down and reloads the style, but does not
+    // re-fire "load", only "style.load" -- handleStyleLoad below remains
+    // the sole source of truth for that case).
     setStyleReady(false);
     const handleStyleLoad = () => setStyleReady(true);
     map.on("style.load", handleStyleLoad);
@@ -1101,9 +1126,12 @@ export function DiscoverMap({
   // route -- an imperative source/layer survives a setStyle only if
   // re-added after, so this is re-added on the same "style.load" event
   // buildStyle's own dark-mode switch fires, not left to silently vanish).
-  // palette.peach reused from the existing road-major layer, not a new
-  // color, per ux-ui-guidelines.md's tokens-only rule -- distinct from
-  // palette.blue's water/waterway use so a route never reads as a river.
+  // Bugfix, human-reported: this used to reuse palette.peach, the same
+  // color as the road-major layer, so a route drawn along a major road
+  // was invisible against it. Now palette.mauve (map-style.ts), a color
+  // not used by any other layer in this style, so the route stays
+  // visually distinct from roads, parks, water, and buildings alike in
+  // both themes, not only distinct from palette.blue's water/waterway use.
   //
   // Map-marker-icons-phase follow-up: geometry now comes from the `route`
   // prop (discover.tsx's own state), not an internal-only ref, so a fresh
@@ -1136,7 +1164,7 @@ export function DiscoverMap({
         type: "line",
         source: ROUTE_SOURCE_ID,
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": palette.peach, "line-width": 4 },
+        paint: { "line-color": palette.mauve, "line-width": 4 },
       });
     }
     const bounds = geometry.coordinates.reduce(
