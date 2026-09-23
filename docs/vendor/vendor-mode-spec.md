@@ -71,7 +71,7 @@ Every business tags itself as Product, Service, or Both at listing creation.
 ### Item List
 Business can add individual products or services as a list, each with its own name and optional price. This replaces relying on one overall Price Range field for the whole business, since a single business can have items across different price points.
 
-An item can also carry photos, optional, same as the business's own listing photos. No caption, no cap in the schema beyond what the form limits to. Never required to publish or edit an item, matching the Price Is Optional section below. Uploaded and removed by the vendor only, staff review is read only for items, matching the rest of the Item List. Shown as a card grid, photo, name, price, on the public page and the vendor's own item page, not a text list.
+An item can also carry photos, optional, same as the business's own listing photos. No caption, no cap in the schema beyond what the form limits to. Never required to publish or edit an item, matching the Price Is Optional section below. Uploaded and removed by the vendor only, staff review is read only for items, matching the rest of the Item List. Shown as a card grid, photo, name, price, on the public page and the vendor's own item page, not a text list. On the public page this sits in its own tab, not inside Details, labeled Products, Services, or Products & Services from business_type, only shown when the business has at least one item.
 
 ### Price Is Optional, Not Required
 

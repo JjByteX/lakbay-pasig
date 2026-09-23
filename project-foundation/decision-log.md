@@ -232,3 +232,18 @@ A Products/Services segmented control was raised alongside this and turned down.
 The edit-row state in `vendor-items.tsx` (name, price, `ItemPhotos`) stays a full-width `col-span-2` cell while a card is open for editing, a form doesn't fit inside a small grid card, then returns to a normal card on save or cancel.
 
 **Standing rule:** Before proposing a new segmented control or filter, check whether the field it would split on is documented as per-item or per-parent-record. A control that needs a field the docs only define one level up is a schema change, not a UI change, and needs its own decision, not a default add. Before any new visual layout, check ux-ui-guidelines.md's Inspiration Rules and pull 2-3 real references first; this codebase already has established card, list, and icon precedent (`line-clamp-2`, `aspect-square`, the file-input-as-label pattern) that should be reused before inventing a new one.
+
+---
+
+**#:** 26
+**Milestone:** Items own tab, tab label from business_type (discover-business-detail.tsx)
+
+**Decision:** The item card grid moved out of the Details tab into its own third tab on the public business page, `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, the same primitive Details/Story already use. Reason: Details' own empty state check used to fold in `items.length === 0`, so a genuine items fetch failure and a business that legitimately has zero items looked identical, both silently showed nothing extra inside Details. Its own tab makes that gap visible on its own, and keeps Details' empty check to the fields that actually belong to Details.
+
+The tab only renders when `items.length > 0`. A service-only or items-less business does not get an always-empty third tab, same reasoning that already made the items block itself conditional.
+
+Tab label reads `business_type` (Product, Service, or Both, vendor-mode-spec.md's Business Listing Type) rather than the business's category text: Products for Product, Services for Service, Products & Services for Both. Category (`business_categories`, migration 0027) is an open, admin-managed list with no fixed values, not safe to pattern match for a label; `business_type` is the one stable, structured field that already exists for exactly this distinction, and the label uses the same words the spec already uses for the field.
+
+`business_type` is now selected on this page's `businesses` query, it had no public render anywhere before this. `itemsLoaded` state added alongside the existing `loading` state, so the tab strip (2 columns vs 3) does not render before the items fetch settles and does not shift column count after first paint.
+
+**Standing rule:** A label for something the vendor self-classifies (business_type, category, or similar) should read from the structured field meant for that classification, not be inferred from free text elsewhere. When a UI element's presence depends on data that loads separately from the page's main record, gate that element's first render on both fetches settling, not just the main one, so its layout doesn't shift after paint.

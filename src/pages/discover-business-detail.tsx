@@ -38,6 +38,7 @@ interface BusinessDetail {
   rules: string | null;
   business_story: string | null;
   unique_specialty: string | null;
+  business_type: "Product" | "Service" | "Both" | null;
   verification_status: "verified" | "pending";
 }
 
@@ -46,6 +47,18 @@ interface BusinessItem {
   name: string;
   price: number | null;
   photos: { id: string; photo_url: string }[];
+}
+
+// Items tab label plan: business_type ("Product", "Service", or "Both",
+// vendor-mode-spec.md's Business Listing Type) is the stable field to key
+// this label on, not category text, which is an open admin-managed list
+// (business_categories, migration 0027) and can't be pattern matched
+// reliably. Uses the same words the spec already uses for the field
+// itself, no invented terminology.
+function itemsTabLabel(businessType: BusinessDetail["business_type"]): string {
+  if (businessType === "Product") return "Products";
+  if (businessType === "Service") return "Services";
+  return "Products & Services";
 }
 
 /**
@@ -65,6 +78,7 @@ export default function DiscoverBusinessDetailPage() {
   const [business, setBusiness] = useState<BusinessDetail | null>(null);
   usePageTitle(business?.name ?? "Discover");
   const [items, setItems] = useState<BusinessItem[]>([]);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -76,7 +90,7 @@ export default function DiscoverBusinessDetailPage() {
     supabase
       .from("businesses")
       .select(
-        "id, name, address, description, opening_hours, contact, rules, business_story, unique_specialty, verification_status, business_categories(name)"
+        "id, name, address, description, opening_hours, contact, rules, business_story, unique_specialty, business_type, verification_status, business_categories(name)"
       )
       .eq("id", id)
       .maybeSingle()
@@ -114,7 +128,10 @@ export default function DiscoverBusinessDetailPage() {
       .select("id, name, price, photos:business_item_photos(id, photo_url)")
       .eq("business_id", id)
       .order("sort_order", { referencedTable: "business_item_photos" })
-      .then(({ data }) => setItems(data ?? []));
+      .then(({ data }) => {
+        setItems(data ?? []);
+        setItemsLoaded(true);
+      });
   }, [id]);
 
   return (
@@ -123,13 +140,13 @@ export default function DiscoverBusinessDetailPage() {
         <ArrowLeft className="h-5 w-5" />
       </Button>
 
-      {loading && <p className="text-base text-muted-foreground">Loading…</p>}
+      {(loading || !itemsLoaded) && <p className="text-base text-muted-foreground">Loading…</p>}
 
       {!loading && notFound && (
         <p className="text-base text-muted-foreground">This business couldn&apos;t be found.</p>
       )}
 
-      {!loading && business && (
+      {!loading && itemsLoaded && business && (
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <h1 className="text-xl font-semibold text-foreground">{business.name}</h1>
@@ -162,13 +179,29 @@ export default function DiscoverBusinessDetailPage() {
           {/* Story tab phase: segmented Details / Story control, same
               Tabs primitive discover.tsx already uses for map/list.
               Details keeps every visit-info block this page already had;
-              Story is new and holds business_story plus unique_specialty,
-              both previously admin/vendor-editable with no public render.
+              Story holds business_story plus unique_specialty, both
+              previously admin/vendor-editable with no public render.
               Defaults to Details, the visit-info tab a user coming from a
-              marker or list row is most likely after. */}
+              marker or list row is most likely after.
+              Items tab plan: items moved out of Details into their own
+              tab, since a fetch failure or a genuinely empty items list
+              otherwise reads identically inside Details' own empty state.
+              Only rendered when the business has at least one item, same
+              reasoning that already gated the items block conditionally,
+              a service-only business with nothing to show here shouldn't
+              carry an always-empty third tab. Label keys off business_type
+              (vendor-mode-spec.md's Business Listing Type), the stable
+              field for this, not the open-ended category text. */}
           <Tabs defaultValue="details">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList
+              className={
+                items.length > 0 ? "grid w-full grid-cols-3" : "grid w-full grid-cols-2"
+              }
+            >
               <TabsTrigger value="details">Details</TabsTrigger>
+              {items.length > 0 && (
+                <TabsTrigger value="items">{itemsTabLabel(business.business_type)}</TabsTrigger>
+              )}
               <TabsTrigger value="story">Story</TabsTrigger>
             </TabsList>
 
@@ -192,8 +225,8 @@ export default function DiscoverBusinessDetailPage() {
               )}
 
               {/* Rules (migration 0039, rules-field-plan.md): after
-                  Contact, before Items, since the item list can run long
-                  and would bury it. One rule per line in the form, so
+                  Contact, last block in Details now that Items has its
+                  own tab. One rule per line in the form, so
                   whitespace-pre-line keeps the line breaks. Hidden when
                   empty, same as the sections beside it. */}
               {business.rules && (
@@ -203,66 +236,64 @@ export default function DiscoverBusinessDetailPage() {
                 </div>
               )}
 
-              {/* Menu card plan: items move from a row list to a card
-                  grid, photo on top, name and price below, matching the
-                  familiar menu-picker shape (DoorDash/Grubhub style item
-                  cards) rather than a text list. Single item renders
-                  alone, no grid wrapper, per the sizing rule against a
-                  grid for one item. */}
-              {items.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-base font-semibold text-foreground">Items</h2>
-                  <div
-                    className={
-                      items.length === 1 ? "flex" : "grid grid-cols-2 gap-3"
-                    }
-                  >
-                    {items.map((item) => (
-                      <div
-                        key={item.id}
-                        className={
-                          items.length === 1
-                            ? "flex w-1/2 flex-col gap-2 rounded-lg border border-border bg-card p-3"
-                            : "flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
-                        }
-                      >
-                        {/* Empty-photo state is a plain muted square, no
-                            invented icon, per the icon rule: "no photo
-                            yet" has no universally recognized symbol. */}
-                        {item.photos.length > 0 ? (
-                          <img
-                            src={item.photos[0].photo_url}
-                            alt=""
-                            className="aspect-square w-full rounded-md border border-border object-cover"
-                          />
-                        ) : (
-                          <div className="aspect-square w-full rounded-md border border-border bg-muted" />
-                        )}
-                        <span className="line-clamp-2 text-sm font-medium text-foreground">
-                          {item.name}
-                        </span>
-                        {/* An item with no price still displays normally
-                            here, per vendor-mode-spec.md's Filter Behavior
-                            line, it's excluded only from the price range
-                            filter (Phase 7), never hidden from the base
-                            item list. */}
-                        <span className="text-sm text-muted-foreground">
-                          {item.price != null ? `₱${item.price}` : "No price listed"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {!business.description &&
                 !business.opening_hours &&
                 !business.contact &&
-                !business.rules &&
-                items.length === 0 && (
+                !business.rules && (
                   <p className="text-base text-muted-foreground">No details listed yet.</p>
                 )}
             </TabsContent>
+
+            {items.length > 0 && (
+              <TabsContent value="items" className="flex flex-col gap-2">
+                {/* Menu card plan: items move from a row list to a card
+                    grid, photo on top, name and price below, matching the
+                    familiar menu-picker shape (DoorDash/Grubhub style item
+                    cards) rather than a text list. Single item renders
+                    alone, no grid wrapper, per the sizing rule against a
+                    grid for one item. */}
+                <div
+                  className={
+                    items.length === 1 ? "flex" : "grid grid-cols-2 gap-3"
+                  }
+                >
+                  {items.map((item) => (
+                    <div
+                      key={item.id}
+                      className={
+                        items.length === 1
+                          ? "flex w-1/2 flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                          : "flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                      }
+                    >
+                      {/* Empty-photo state is a plain muted square, no
+                          invented icon, per the icon rule: "no photo
+                          yet" has no universally recognized symbol. */}
+                      {item.photos.length > 0 ? (
+                        <img
+                          src={item.photos[0].photo_url}
+                          alt=""
+                          className="aspect-square w-full rounded-md border border-border object-cover"
+                        />
+                      ) : (
+                        <div className="aspect-square w-full rounded-md border border-border bg-muted" />
+                      )}
+                      <span className="line-clamp-2 text-sm font-medium text-foreground">
+                        {item.name}
+                      </span>
+                      {/* An item with no price still displays normally
+                          here, per vendor-mode-spec.md's Filter Behavior
+                          line, it's excluded only from the price range
+                          filter (Phase 7), never hidden from the base
+                          item list. */}
+                      <span className="text-sm text-muted-foreground">
+                        {item.price != null ? `₱${item.price}` : "No price listed"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+            )}
 
             <TabsContent value="story" className="flex flex-col gap-4">
               {business.business_story && (
