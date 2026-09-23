@@ -389,11 +389,21 @@ function MapCornerControls({
   businessCategories,
   categoriesLoading,
   onLocationFound,
+  onRecenterRequested,
 }: Readonly<{
   placeCategories: PlaceCategory[];
   businessCategories: BusinessCategory[];
   categoriesLoading: boolean;
   onLocationFound?: (coords: Coordinates) => void;
+  // Bugfix (map snaps back while panning): a locate tap should recenter
+  // the camera exactly once, not keep pulling it back on every later
+  // background GPS tick. onLocationFound above still just updates the
+  // shared coordinate (for the blue dot / distance sort); this separate
+  // callback is the one-shot "please recenter now" signal, fired only
+  // from this tap handler -- see the recenter effect below for the other
+  // half (it now keys off this signal instead of onLocationFound's
+  // coordinate). Optional for the same reason onLocationFound is.
+  onRecenterRequested?: () => void;
 }>) {
   const [legendOpen, setLegendOpen] = useState(false);
   const [locateStatus, setLocateStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -420,6 +430,10 @@ function MapCornerControls({
           // heading" if the device happens to report one on this read.
           heading: position.coords.heading,
         });
+        // One-shot recenter: this tap, and only this tap, should move
+        // the camera. Fired after the coordinate update above so the
+        // recenter effect sees the fresh position on the same tick.
+        onRecenterRequested?.();
       },
       (err) => {
         setLocateStatus("error");
@@ -807,7 +821,17 @@ export function DiscoverMap({
     // unlike Leaflet, attaching "load" after MapLibre's own constructor-
     // driven initial load is not a race, the listener is attached
     // synchronously in this same effect, before the browser yields).
-    const handleLoad = () => setTilesLoading(false);
+    // Bugfix (route vanishes after closing "view full details" and
+    // returning to Discover): on remount, MapLibre can fire "load"/"idle"
+    // without a fresh "style.load" (e.g. a cached/already-applied style),
+    // so styleReady would otherwise never flip true and drawRoute below
+    // would keep bailing out on its `if (!styleReady) return` guard even
+    // though the style is, in fact, ready. handleLoad now also sets
+    // styleReady true as a fallback, same as handleStyleLoad does.
+    const handleLoad = () => {
+      setTilesLoading(false);
+      setStyleReady(true);
+    };
     const handleDataLoading = () => setTilesLoading(true);
     map.on("load", handleLoad);
     map.on("dataloading", handleDataLoading);
@@ -871,36 +895,48 @@ export function DiscoverMap({
   const userMarkerConeRef = useRef<HTMLDivElement | null>(null);
   const userMarkerAccuracyRef = useRef<HTMLDivElement | null>(null);
 
+  // Bugfix (map stuck / snaps back to center while dragging): the camera
+  // used to recenter on every `userLocation` change, and userLocation
+  // updates once a second from the shell's continuous watchPosition (see
+  // public-shell.tsx) even when nobody touched the locate button. So any
+  // pan or drag got yanked back to the live dot within a second, making
+  // the map feel "stuck". A locate tap should recenter the camera exactly
+  // once, the same way it works in every other maps app -- not keep
+  // forcing the view back on every later background GPS tick.
+  //
+  // recenterRequestId below is that one-shot signal: it only increments
+  // from MapCornerControls' own onRecenterRequested (fired once per tap,
+  // after getCurrentPosition resolves), never from the background watch.
+  // hasAutoCenteredRef separately covers the very first fix of a session,
+  // so the map still moves off the default Pasig center automatically
+  // once, without that first move counting as a second "request".
+  const [recenterRequestId, setRecenterRequestId] = useState(0);
+  const requestRecenter = () => setRecenterRequestId((n) => n + 1);
+  const hasAutoCenteredRef = useRef(false);
+  const lastRecenterRequestIdRef = useRef(0);
+
   // Phase 4.2: recenter once a user location resolves. MapLibre's own
   // constructor `center` option, like react-leaflet's, only applies on
   // first mount, so a later location needs an imperative call.
   //
-  // Phase 5.5: with a custom From set the camera stands down. This effect
-  // runs on every GPS tick, and setCenter/setZoom would pull the view off
-  // the route just drawn from the custom From every second. The blue dot
-  // below keeps tracking the live position either way, since the person is
-  // still where they are.
-  //
-  // Bugfix (map snapping back during Directions): the same forced
-  // recenter/rezoom was still firing every GPS tick during an *ordinary*
-  // route (live location as origin, no custom From) -- open-questions.md
-  // #10 scoped the original fix to customFrom only and explicitly left
-  // this case as "existing behavior, out of scope"; it's now reported as
-  // the map's focus snapping away mid-pan while Directions is open. Fix:
-  // also stand down whenever a Directions session is open at all, i.e.
-  // directionsPanelResult is non-null (discover-map.tsx's own "panel
-  // closed" signal, see that prop's doc comment above), not just when
-  // customFrom specifically is set. A person panning/zooming to inspect
-  // their route no longer gets yanked back to the live dot once a second.
-  // Cancelling the route still recenters once, same as clearing a custom
-  // From already did, since directionsPanelResult is a dependency below.
+  // Phase 5.5 / Bugfix (map snapping back during Directions): a custom
+  // From, or any open Directions session (directionsPanelResult), stands
+  // the camera down entirely -- same reasoning as before, just no longer
+  // the main guard now that the effect isn't running on every tick to
+  // begin with.
   useEffect(() => {
     const map = mapRef.current;
     if (!userLocation || !map) return;
-    if (!customFrom && !directionsPanelResult) {
+
+    const isFirstFix = !hasAutoCenteredRef.current;
+    const isExplicitRecenter = recenterRequestId !== lastRecenterRequestIdRef.current;
+    lastRecenterRequestIdRef.current = recenterRequestId;
+
+    if (!customFrom && !directionsPanelResult && (isFirstFix || isExplicitRecenter)) {
       map.setCenter([userLocation.longitude, userLocation.latitude]);
       map.setZoom(DEFAULT_ZOOM);
     }
+    hasAutoCenteredRef.current = true;
 
     if (!userMarkerRef.current) {
       // google-style-location-heading-indicator: three stacked layers,
@@ -998,14 +1034,16 @@ export function DiscoverMap({
       }
     }
     // customFrom is a dependency so the effect also runs once when a From
-    // is *cleared* (Cancel): with the guard now open it recenters, and the
-    // view returns to the person's live position. Setting or replacing a
-    // From re-runs it too, but the guard makes that a no-op for the camera.
-    // directionsPanelResult is a dependency for the same reason: closing
-    // the whole Directions session (panel result back to null) re-runs
-    // this effect once with the guard now open, recentering on the live
-    // position, same as the customFrom-clear case above.
-  }, [userLocation, customFrom, directionsPanelResult]);
+    // is *cleared* (Cancel): with the guard now open, and isFirstFix long
+    // since true, it takes the isExplicitRecenter path only if a locate
+    // tap is also what's pending -- clearing a From on its own no longer
+    // force-recenters the camera either, consistent with the same "only
+    // an explicit request moves the camera" rule as the live-tick case.
+    // directionsPanelResult is a dependency for the same reason on closing
+    // a whole Directions session. userLocation stays a dependency so the
+    // marker/cone code below it still updates on every tick; only the
+    // setCenter/setZoom above is now gated on recenterRequestId instead.
+  }, [userLocation, customFrom, directionsPanelResult, recenterRequestId]);
 
   useEffect(() => {
     return () => {
@@ -1126,9 +1164,12 @@ export function DiscoverMap({
   // route -- an imperative source/layer survives a setStyle only if
   // re-added after, so this is re-added on the same "style.load" event
   // buildStyle's own dark-mode switch fires, not left to silently vanish).
-  // palette.peach reused from the existing road-major layer, not a new
-  // color, per ux-ui-guidelines.md's tokens-only rule -- distinct from
-  // palette.blue's water/waterway use so a route never reads as a river.
+  // Bugfix (route line invisible/hard to see): palette.peach is already
+  // the road-major layer's color, so a peach route drawn over major roads
+  // was indistinguishable from the roads themselves. palette.mauve used
+  // instead -- still a token per ux-ui-guidelines.md's tokens-only rule,
+  // and distinct from palette.blue's water/waterway use so a route never
+  // reads as a river.
   //
   // Map-marker-icons-phase follow-up: geometry now comes from the `route`
   // prop (discover.tsx's own state), not an internal-only ref, so a fresh
@@ -1161,7 +1202,7 @@ export function DiscoverMap({
         type: "line",
         source: ROUTE_SOURCE_ID,
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": palette.peach, "line-width": 4 },
+        paint: { "line-color": palette.mauve, "line-width": 4 },
       });
     }
     const bounds = geometry.coordinates.reduce(
@@ -1394,6 +1435,7 @@ export function DiscoverMap({
         businessCategories={businessCategories}
         categoriesLoading={categoriesLoading}
         onLocationFound={onLocationFound}
+        onRecenterRequested={requestRecenter}
       />
 
       {/* Bottom-right +/- zoom pill, desktop only, per direct instruction
