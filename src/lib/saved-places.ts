@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
+import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverPlace } from "./discover-types";
 
 /**
@@ -109,6 +110,18 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
   // Map-marker-icons phase: same discipline, same grep, for the new
   // required categoryIcon field -- place_categories(name, icon) now widens
   // this select too, kept in sync with discover-query.ts's fetchPlaces.
+  //
+  // Map hover/full-details photos phase: same discipline again, for the
+  // new required coverPhotoUrl field -- same fetchCoverPhotoUrls helper
+  // discover-query.ts's fetchPlaces uses, run after the places themselves
+  // resolve (needs their ids) for the same reason that file's own copy
+  // does, rather than re-querying place_photos separately here.
+  const coverPhotos = await fetchCoverPhotoUrls(
+    "place_photos",
+    "place_id",
+    (places ?? []).map((row) => row.id)
+  );
+
   return (places ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
@@ -120,5 +133,6 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
     longitude: row.longitude,
     verification_status: row.verification_status as "verified",
     facility_ids: row.facility_ids ?? [],
+    coverPhotoUrl: coverPhotos.get(row.id) ?? null,
   }));
 }
