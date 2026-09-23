@@ -821,16 +821,58 @@ export function DiscoverMap({
     // unlike Leaflet, attaching "load" after MapLibre's own constructor-
     // driven initial load is not a race, the listener is attached
     // synchronously in this same effect, before the browser yields).
-    // Bugfix (route vanishes after closing "view full details" and
-    // returning to Discover): on remount, MapLibre can fire "load"/"idle"
-    // without a fresh "style.load" (e.g. a cached/already-applied style),
-    // so styleReady would otherwise never flip true and drawRoute below
-    // would keep bailing out on its `if (!styleReady) return` guard even
-    // though the style is, in fact, ready. handleLoad now also sets
-    // styleReady true as a fallback, same as handleStyleLoad does.
+    //
+    // Bugfix (trail/route line still vanishing after leaving and
+    // returning to Discover -- via "view full details" *or* any other
+    // tab, e.g. Trails/Saved/Home): the previous fix flipped styleReady
+    // true from whichever of "load"/"idle"/"style.load" fired first, on
+    // the assumption that if the event fired, the style must be ready.
+    // That assumption is the actual bug -- MapLibre can emit these events
+    // a tick before map.isStyleLoaded() itself flips true internally, so
+    // styleReady went true, the [route, styleReady] effect below ran
+    // once, drawRoute's own `if (!map.isStyleLoaded()) return` guard
+    // silently bailed out on that one real style-not-ready tick, and
+    // nothing was left to ever call drawRoute again -- styleReady was
+    // already true (no further state change) and route hadn't changed,
+    // so the effect had no reason to re-run. The route source/layer were
+    // simply never created on that mount; the popup (driven by shell
+    // state, not this component) had nothing to do with it, so it kept
+    // showing correctly while the line silently never got drawn.
+    //
+    // Fixed by trusting map.isStyleLoaded() itself, not the event's mere
+    // firing, and retrying with rAF until it's genuinely true instead of
+    // taking one shot. markStyleReady below is called from every
+    // candidate event and only ever *commits* styleReady=true once
+    // isStyleLoaded() actually agrees -- if it doesn't yet, it reschedules
+    // itself on the next animation frame (cheap: this only runs during
+    // the brief not-yet-ready window right after mount/setStyle, not on
+    // every idle tick once ready) rather than trusting a single check.
+    let pending = false;
+    let rafId: number | null = null;
+    const markStyleReady = () => {
+      if (map.isStyleLoaded()) {
+        pending = false;
+        setStyleReady(true);
+        return;
+      }
+      // Not ready yet on this tick -- one retry loop at a time so a burst
+      // of "load"/"idle"/"style.load" firing close together doesn't stack
+      // duplicate rAF chains.
+      if (pending) return;
+      pending = true;
+      const check = () => {
+        if (map.isStyleLoaded()) {
+          pending = false;
+          setStyleReady(true);
+          return;
+        }
+        rafId = requestAnimationFrame(check);
+      };
+      rafId = requestAnimationFrame(check);
+    };
     const handleLoad = () => {
       setTilesLoading(false);
-      setStyleReady(true);
+      markStyleReady();
     };
     const handleDataLoading = () => setTilesLoading(true);
     map.on("load", handleLoad);
@@ -841,12 +883,14 @@ export function DiscoverMap({
     // instance's own readiness flag, reset false up front (a fresh mount,
     // e.g. after switching from list view, starts not-ready even though
     // the previous instance may have finished loading) and flipped true
-    // on "style.load", which fires both for this initial load and for
-    // every later setStyle() call the dark/light MutationObserver below
-    // triggers -- one listener covers both cases, so the route-draw
-    // effect never has to guess which case it's in.
+    // once map.isStyleLoaded() genuinely agrees, on "style.load" (which
+    // fires both for this initial load and for every later setStyle()
+    // call the dark/light MutationObserver below triggers) same as the
+    // other two events above -- one markStyleReady function covers all
+    // three, so the route-draw effect never has to guess which case it's
+    // in or trust an event that fired a tick early.
     setStyleReady(false);
-    const handleStyleLoad = () => setStyleReady(true);
+    const handleStyleLoad = () => markStyleReady();
     map.on("style.load", handleStyleLoad);
 
     const observer = new MutationObserver(() => {
@@ -863,6 +907,14 @@ export function DiscoverMap({
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     return () => {
+      // Bugfix (same trail-vanishes issue): if this component unmounts
+      // (leaving Discover) while a markStyleReady retry loop is still
+      // waiting on isStyleLoaded(), the queued rAF would otherwise fire
+      // after map.remove() below has already torn the instance down,
+      // calling setStyleReady on an unmounted component. Cancelled here so
+      // the next mount's own effect starts that check cleanly instead of
+      // racing a leftover callback from the previous one.
+      if (rafId !== null) cancelAnimationFrame(rafId);
       observer.disconnect();
       map.off("load", handleLoad);
       map.off("dataloading", handleDataLoading);
