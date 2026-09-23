@@ -6,6 +6,7 @@ import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HoursDisplay } from "@/components/public/hours-display";
+import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -81,6 +82,12 @@ export default function DiscoverBusinessDetailPage() {
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  // Map hover/full-details photos phase: the business's own gallery
+  // (business_photos), separate from each item's own photos (items above
+  // already carry those via business_item_photos) -- same distinction
+  // data-model.md draws between a business's general "Pictures" and a
+  // per-item photo.
+  const [photos, setPhotos] = useState<string[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -132,6 +139,21 @@ export default function DiscoverBusinessDetailPage() {
         setItems(data ?? []);
         setItemsLoaded(true);
       });
+
+    // Map hover/full-details photos phase: every business_photos row for
+    // this business, same independent-fetch, sort_order-ordered shape as
+    // the place page's own place_photos fetch (discover-place-detail.tsx).
+    // business_photos_select_public (migration 0008) already follows this
+    // business's own read rule (verified or pending), same as every other
+    // query on this page.
+    supabase
+      .from("business_photos")
+      .select("photo_url")
+      .eq("business_id", id)
+      .order("sort_order", { ascending: true })
+      .then(({ data: photoRows }) => {
+        setPhotos((photoRows ?? []).map((row) => row.photo_url));
+      });
   }, [id]);
 
   return (
@@ -175,6 +197,12 @@ export default function DiscoverBusinessDetailPage() {
               </Badge>
             )}
           </div>
+
+          {/* Map hover/full-details photos phase: same placement as the
+              place detail page's own gallery -- right under the header/
+              badge block, above the tabs. Renders nothing when this
+              business has no photos yet. */}
+          <PhotoGallery photoUrls={photos} />
 
           {/* Story tab phase: segmented Details / Story control, same
               Tabs primitive discover.tsx already uses for map/list.

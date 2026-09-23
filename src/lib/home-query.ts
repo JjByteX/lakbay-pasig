@@ -54,7 +54,14 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
 // Returns the lowest-sort_order photo url per parent id, as a Map for O(1)
 // lookup by the caller; ids with no photo row at all simply have no entry,
 // callers read that absence with `.get(id) ?? null`.
-async function fetchCoverPhotoUrls(
+//
+// Map hover/full-details photos phase: exported, no second copy written.
+// discover-query.ts's own fetchPlaces/fetchBusinesses need the exact same
+// "one cover photo per id, cheapest lookup shape" this already computes
+// for Home's showcase, per constraints.md's Inventory Before Suggesting
+// rule -- reused as-is rather than re-implemented against place_photos/
+// business_photos a second time.
+export async function fetchCoverPhotoUrls(
   table: "place_photos" | "business_photos",
   parentIdColumn: "place_id" | "business_id",
   ids: string[]

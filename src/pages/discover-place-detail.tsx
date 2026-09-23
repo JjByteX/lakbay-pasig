@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SaveButton } from "@/components/public/save-button";
 import { HoursDisplay } from "@/components/public/hours-display";
+import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -79,6 +80,13 @@ export default function DiscoverPlaceDetailPage() {
   usePageTitle(place?.name ?? "Discover");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  // Map hover/full-details photos phase: every photo this place has
+  // uploaded, not just the cover photo the map hover/marker preview use
+  // (result-card.tsx and discover-map.tsx's HoverPreview only need one).
+  // Own state, own load, independent of the notFound branch below --
+  // an empty array here (no rows yet) is a legitimate, unremarkable
+  // result, not an error, so there is no separate photosError to track.
+  const [photos, setPhotos] = useState<string[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -142,6 +150,27 @@ export default function DiscoverPlaceDetailPage() {
         });
         setLoading(false);
       });
+
+    // Map hover/full-details photos phase: every place_photos row for
+    // this place, historical and current alike (photo_type is not
+    // filtered here -- the gallery shows everything uploaded, the
+    // historical/current split stays an admin-only organizing field, per
+    // data-model.md this page has no separate historical-photos section
+    // to route it into). Ordered by sort_order, same order admin-place-
+    // detail.tsx's own photo manager already saves them in. Independent
+    // request from the place fetch above (own .then, not chained), so a
+    // slow or failed photo fetch never blocks the record itself from
+    // rendering -- a fetch error here simply leaves photos empty, same
+    // "absence is unremarkable" reasoning as PhotoGallery's own empty-
+    // list return.
+    supabase
+      .from("place_photos")
+      .select("photo_url")
+      .eq("place_id", id)
+      .order("sort_order", { ascending: true })
+      .then(({ data: photoRows }) => {
+        setPhotos((photoRows ?? []).map((row) => row.photo_url));
+      });
   }, [id]);
 
   return (
@@ -176,6 +205,16 @@ export default function DiscoverPlaceDetailPage() {
               Verified by Pasig Tourism Office
             </Badge>
           </div>
+
+          {/* Map hover/full-details photos phase: every uploaded photo,
+              right under the header/badge block and above the tabs -- the
+              first thing a person sees after the name/category/badge,
+              since it's the most visual content on the page and nothing
+              else here competes for that position. Renders nothing when
+              this place has no photos yet (PhotoGallery's own empty-list
+              return), so a photo-less place's layout is unchanged from
+              before this phase. */}
+          <PhotoGallery photoUrls={photos} />
 
           {/* History tab phase: segmented Details / History control, same
               Tabs primitive discover.tsx already uses for map/list. Details

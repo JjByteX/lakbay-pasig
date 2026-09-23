@@ -33,6 +33,14 @@ export interface DiscoverPlace {
   // opposite case. A place always has an array here (possibly empty),
   // never null, matching facility_ids' own not-null default ('{}').
   facility_ids: string[];
+  // Map hover/full-details photos phase: the same lowest-sort_order
+  // place_photos.photo_url home-query.ts's fetchHomeShowcase already
+  // computes for the Home tab, via that file's now-exported
+  // fetchCoverPhotoUrls, reused rather than a second cover-photo query.
+  // null means no photo row exists yet for this place, same "absence is
+  // null" convention every other optional field on this type already
+  // uses (description, latitude/longitude).
+  coverPhotoUrl: string | null;
 }
 
 export interface DiscoverBusiness {
@@ -56,6 +64,10 @@ export interface DiscoverBusiness {
   // per data-model.md places have no item/price concept, so the price
   // filter naturally excludes every place result without a special case.
   itemPrices: (number | null)[];
+  // Map hover/full-details photos phase: same reasoning as
+  // DiscoverPlace.coverPhotoUrl above, sourced from business_photos
+  // instead of place_photos via the same fetchCoverPhotoUrls helper.
+  coverPhotoUrl: string | null;
 }
 
 export type DiscoverResult = DiscoverPlace | DiscoverBusiness;

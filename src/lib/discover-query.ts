@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
+import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover-types";
 
 // Phase 3.1: places (places_select_public, migration 0003, verified only,
@@ -24,6 +25,20 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
 
   if (error) throw error;
 
+  // Map hover/full-details photos phase: one cover photo per place, same
+  // fetchCoverPhotoUrls helper home-query.ts's fetchHomeShowcase already
+  // uses for the exact same "lowest sort_order place_photos.photo_url per
+  // id" lookup -- reused rather than a second copy of that query, per
+  // constraints.md's Inventory Before Suggesting rule. Run after the
+  // places themselves resolve (needs their ids), not in parallel with
+  // them, same ordering fetchHomeShowcase's own two-step shape already
+  // uses for this helper.
+  const coverPhotos = await fetchCoverPhotoUrls(
+    "place_photos",
+    "place_id",
+    (data ?? []).map((row) => row.id)
+  );
+
   return (data ?? []).map((row) => ({
     kind: "place" as const,
     id: row.id,
@@ -46,6 +61,7 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
     // Nullable at the type layer only defensively; the column itself
     // defaults to '{}' (migration 0028), never actually null.
     facility_ids: row.facility_ids ?? [],
+    coverPhotoUrl: coverPhotos.get(row.id) ?? null,
   }));
 }
 
@@ -71,6 +87,14 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
 
   if (error) throw error;
 
+  // Map hover/full-details photos phase: same cover-photo lookup as
+  // fetchPlaces above, against business_photos instead.
+  const coverPhotos = await fetchCoverPhotoUrls(
+    "business_photos",
+    "business_id",
+    (data ?? []).map((row) => row.id)
+  );
+
   return (data ?? []).map((row) => ({
     kind: "business" as const,
     id: row.id,
@@ -82,6 +106,7 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
     longitude: row.longitude,
     verification_status: row.verification_status as "verified" | "pending",
     itemPrices: (row.business_items ?? []).map((item: { price: number | null }) => item.price),
+    coverPhotoUrl: coverPhotos.get(row.id) ?? null,
   }));
 }
 
