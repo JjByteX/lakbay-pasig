@@ -123,7 +123,7 @@ function markerElement(result: DiscoverResult): HTMLElement {
   // washed out on Latte's light ones; see that CSS block's own comment
   // for why the color has to flip with the theme, not just tune darker
   // or lighter.
-  label.className = "marker-name-label whitespace-nowrap text-xs font-medium";
+  label.className = "marker-name-label whitespace-nowrap text-xs font-bold";
   label.style.color = color;
   // Read by the zoom-gated visibility effect below to apply the right
   // per-tier minimum zoom (verified vs. pending) to this specific label,

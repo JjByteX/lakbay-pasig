@@ -13,17 +13,22 @@ export interface CategoryColorOption {
   label: string;
 }
 
+// Ordered by typical use in a tourism map, most common first, so the admin
+// swatch picker leads with the colors most categories will want. The use
+// case beside each row is a suggestion, not a rule.
 export const CATEGORY_COLORS: CategoryColorOption[] = [
-  { value: "red", label: "Red" },
-  { value: "orange", label: "Orange" },
-  { value: "green", label: "Green" },
-  { value: "teal", label: "Teal" },
-  { value: "blue", label: "Blue" },
-  { value: "indigo", label: "Indigo" },
-  { value: "purple", label: "Purple" },
-  { value: "pink", label: "Pink" },
-  { value: "brown", label: "Brown" },
-  { value: "slate", label: "Slate" },
+  { value: "orange", label: "Orange" }, // food and dining
+  { value: "green", label: "Green" }, // parks and nature
+  { value: "blue", label: "Blue" }, // landmarks, general (default)
+  { value: "red", label: "Red" }, // health, emergency, must-see
+  { value: "purple", label: "Purple" }, // arts, culture, museums
+  { value: "pink", label: "Pink" }, // shopping, cafes, sweets
+  { value: "teal", label: "Teal" }, // water, transport
+  { value: "yellow", label: "Yellow" }, // entertainment, nightlife
+  { value: "brown", label: "Brown" }, // heritage, markets
+  { value: "indigo", label: "Indigo" }, // lodging
+  { value: "lime", label: "Lime" }, // sports, recreation
+  { value: "slate", label: "Slate" }, // services, government, utilities
 ];
 
 /** Blue is the brand primary. What a null color reads as, per decision #7. */

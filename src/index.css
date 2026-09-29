@@ -52,6 +52,8 @@
     --category-purple: 280 55% 44%;
     --category-pink: 330 70% 42%;
     --category-brown: 25 50% 32%;
+    --category-yellow: 45 95% 28%;
+    --category-lime: 84 70% 27%;
     --category-slate: 211 25% 38%;
     --category-foreground: 60 40% 98%;
 
@@ -101,6 +103,8 @@
     --category-purple: 280 80% 74%;
     --category-pink: 330 85% 70%;
     --category-brown: 25 55% 60%;
+    --category-yellow: 48 95% 62%;
+    --category-lime: 84 65% 55%;
     --category-slate: 211 25% 68%;
     --category-foreground: 211 85% 10%;
 
