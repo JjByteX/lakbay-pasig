@@ -75,7 +75,7 @@ export function createCategoryCrud<T extends CategoryRow>(
         .order("name", { ascending: true });
 
       if (error) throw error;
-      return (data ?? []) as T[];
+      return (data ?? []) as unknown as T[];
     },
 
     async fetchAllCategories(): Promise<T[]> {
@@ -85,7 +85,7 @@ export function createCategoryCrud<T extends CategoryRow>(
         .order("name", { ascending: true });
 
       if (error) throw error;
-      return (data ?? []) as T[];
+      return (data ?? []) as unknown as T[];
     },
 
     async createCategory(input: CategoryFormInput): Promise<void> {
