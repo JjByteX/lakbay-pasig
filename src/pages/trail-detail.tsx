@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Navigation, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, NavigationArrow, CheckCircle } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { fetchTrailDetail } from "@/lib/trail-query";
@@ -12,6 +12,7 @@ import { TrailStop } from "@/components/public/trail-stop";
 import { SaveRouteButton } from "@/components/public/save-route-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.4's same PostgrestError shape-check (trails.tsx, home.tsx,
@@ -171,7 +172,7 @@ function stopStateFor(index: number, highestUnlockedIndex: number, completed: bo
  * (3.2) relabels to "Earned: {name}" once completed, same accent
  * treatment reused rather than a new one. A completed trail with no
  * linked credential shows a plain "Trail completed" line instead
- * (CheckCircle2, matching trail-stop.tsx's own completed-state icon).
+ * (CheckCircle, matching trail-stop.tsx's own completed-state icon).
  * No leaderboard, no per-user rank, no personal-best framing anywhere,
  * per competitive-positioning.md and build-priorities.md's hard rule.
  * No cohort completion count either: trail-completion.ts has no query
@@ -510,7 +511,7 @@ export default function TrailDetailPage() {
     : -1;
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="wide">
       <div className="flex items-center justify-between">
         <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
@@ -527,102 +528,104 @@ export default function TrailDetailPage() {
       )}
 
       {!error && !loading && trail && (
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-xl font-semibold text-foreground">{trail.name}</h1>
-            {metaLine && <p className="text-sm text-muted-foreground">{metaLine}</p>}
-            {/* Phase 5.3: once completed, the badge reads "Earned" instead
-                of the aspirational "Earn," same accent treatment reused
-                rather than a new color/token per ux-ui-guidelines.md's
-                consistency rules -- only the label changes, not the
-                component. No route with no credential ever reaches this
-                branch since trail.credential is null in that case. */}
-            {/* Phase 6.5: 320px overflow check. Badge (badge.tsx) is
-                inline-flex with no width cap of its own; w-fit alone lets
-                a long credential_name (plain `text` column, migration
-                0007, no length cap, staff-authored via admin-trail-
-                builder.tsx) push the badge itself wider than this
-                max-w-md/px-6 container instead of wrapping inside it.
-                max-w-full constrains the badge to the container's width;
-                break-words lets a long name wrap inside that width rather
-                than overflow it. No new token invented, both are stock
-                Tailwind utilities already in use elsewhere in this
-                codebase for the same reason. */}
-            {trail.credential && (
-              <Badge variant="accent" className="w-fit max-w-full break-words">
-                {completed ? "Earned" : "Earn"}: {trail.credential.credential_name}
-              </Badge>
-            )}
-            {/* Phase 5.3: "show the credential earned" for a completed
-                trail with no linked credential (trail.credential null)
-                still needs *some* completion acknowledgment, per the
-                plan doc's own "shows the credential earned" instruction
-                reading as this page's confirmation that the walk itself
-                is done -- CheckCircle2 matches trail-stop.tsx's existing
-                completed-state icon (Phase 4.1), not a new concept.
-                Explicitly no leaderboard, no per-user rank, no personal-
-                best framing anywhere on this line or elsewhere on this
-                page, per competitive-positioning.md and build-
-                priorities.md's hard rule, restated verbatim in the plan
-                doc. No cohort completion count is shown either: no query
-                for one exists yet (trail-completion.ts is insert/exists-
-                check only), and the plan doc itself only requires this
-                "if a completion count is shown at all," it doesn't
-                require adding one now. */}
-            {completed && !trail.credential && (
-              <span className="flex w-fit items-center gap-1 text-sm font-semibold text-foreground">
-                <CheckCircle2 className="h-4 w-4 fill-primary text-primary-foreground" aria-hidden="true" />
-                Trail completed
-              </span>
-            )}
-            {/* Specific to the completion write failing, not a generic
-                message, matching every other direction-specific error
-                in this file (startError, save-route-button.tsx's own
-                error state). completing shows a brief "Saving…" line
-                while the write is in flight -- unlike 4.5's silent
-                background proximity retries (a check that keeps
-                retrying itself needs no progress text), completeTrail
-                is a one-shot write with a real end state to report,
-                and noUnusedLocals (tsconfig.app.json) requires this
-                state have a genuine consumer, not just a setter call,
-                same reasoning Phase 4.2's own routeProgress fix used. */}
-            {completing && <p className="text-xs text-muted-foreground">Saving your completion…</p>}
-            {completeError && <p className="text-xs text-destructive">{completeError}</p>}
-          </div>
+        <div className="flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] xl:items-start xl:gap-8">
+          <div className="flex flex-col gap-6 xl:sticky xl:top-6">
+            <div className="flex flex-col gap-2">
+              <h1 className="text-xl font-semibold text-foreground">{trail.name}</h1>
+              {metaLine && <p className="text-sm text-muted-foreground">{metaLine}</p>}
+              {/* Phase 5.3: once completed, the badge reads "Earned" instead
+                  of the aspirational "Earn," same accent treatment reused
+                  rather than a new color/token per ux-ui-guidelines.md's
+                  consistency rules -- only the label changes, not the
+                  component. No route with no credential ever reaches this
+                  branch since trail.credential is null in that case. */}
+              {/* Phase 6.5: 320px overflow check. Badge (badge.tsx) is
+                  inline-flex with no width cap of its own; w-fit alone lets
+                  a long credential_name (plain `text` column, migration
+                  0007, no length cap, staff-authored via admin-trail-
+                  builder.tsx) push the badge itself wider than this
+                  max-w-md/px-6 container instead of wrapping inside it.
+                  max-w-full constrains the badge to the container's width;
+                  break-words lets a long name wrap inside that width rather
+                  than overflow it. No new token invented, both are stock
+                  Tailwind utilities already in use elsewhere in this
+                  codebase for the same reason. */}
+              {trail.credential && (
+                <Badge variant="accent" className="w-fit max-w-full break-words">
+                  {completed ? "Earned" : "Earn"}: {trail.credential.credential_name}
+                </Badge>
+              )}
+              {/* Phase 5.3: "show the credential earned" for a completed
+                  trail with no linked credential (trail.credential null)
+                  still needs *some* completion acknowledgment, per the
+                  plan doc's own "shows the credential earned" instruction
+                  reading as this page's confirmation that the walk itself
+                  is done -- CheckCircle matches trail-stop.tsx's existing
+                  completed-state icon (Phase 4.1), not a new concept.
+                  Explicitly no leaderboard, no per-user rank, no personal-
+                  best framing anywhere on this line or elsewhere on this
+                  page, per competitive-positioning.md and build-
+                  priorities.md's hard rule, restated verbatim in the plan
+                  doc. No cohort completion count is shown either: no query
+                  for one exists yet (trail-completion.ts is insert/exists-
+                  check only), and the plan doc itself only requires this
+                  "if a completion count is shown at all," it doesn't
+                  require adding one now. */}
+              {completed && !trail.credential && (
+                <span className="flex w-fit items-center gap-1 text-sm font-semibold text-foreground">
+                  <CheckCircle weight="fill" className="h-4 w-4 text-primary" aria-hidden="true" />
+                  Trail completed
+                </span>
+              )}
+              {/* Specific to the completion write failing, not a generic
+                  message, matching every other direction-specific error
+                  in this file (startError, save-route-button.tsx's own
+                  error state). completing shows a brief "Saving…" line
+                  while the write is in flight -- unlike 4.5's silent
+                  background proximity retries (a check that keeps
+                  retrying itself needs no progress text), completeTrail
+                  is a one-shot write with a real end state to report,
+                  and noUnusedLocals (tsconfig.app.json) requires this
+                  state have a genuine consumer, not just a setter call,
+                  same reasoning Phase 4.2's own routeProgress fix used. */}
+              {completing && <p className="text-xs text-muted-foreground">Saving your completion…</p>}
+              {completeError && <p className="text-xs text-destructive">{completeError}</p>}
+            </div>
 
-          <div className="flex flex-col gap-1">
-            <Button type="button" onClick={handleStart} disabled={!hasStops || starting} className="w-full">
-              {startLabel}
-            </Button>
-            {/* Specific to the start/resume write failing, not a generic
-                message, matching save-button.tsx's error-message
-                convention (text-destructive, direction-specific copy). */}
-            {startError && <p className="text-xs text-destructive">{startError}</p>}
-            {/* Phase 5.4: "the route_progress row to be deleted or reset
-                ... restarts, on the same accessible entry point Start
-                already provides" -- placed directly beneath Start rather
-                than a separate control elsewhere on the page, only shown
-                once a trail is completed (restarting an in-progress,
-                unfinished trail isn't this phase's scope, the plan doc's
-                own wording is "if a user abandons a trail and restarts
-                it" in the context of a trail already finished). variant
-                outline keeps it visually secondary to the Start/Resume
-                button per ux-ui-guidelines.md's 60/30/10 color rule, the
-                accent (10%) stays reserved for the primary action above. */}
-            {completed && (
-              <div className="flex flex-col gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleRestart}
-                  disabled={resetting}
-                  className="w-full"
-                >
-                  Restart trail
-                </Button>
-                {resetError && <p className="text-xs text-destructive">{resetError}</p>}
-              </div>
-            )}
+            <div className="flex flex-col gap-1">
+              <Button type="button" onClick={handleStart} disabled={!hasStops || starting} className="w-full">
+                {startLabel}
+              </Button>
+              {/* Specific to the start/resume write failing, not a generic
+                  message, matching save-button.tsx's error-message
+                  convention (text-destructive, direction-specific copy). */}
+              {startError && <p className="text-xs text-destructive">{startError}</p>}
+              {/* Phase 5.4: "the route_progress row to be deleted or reset
+                  ... restarts, on the same accessible entry point Start
+                  already provides" -- placed directly beneath Start rather
+                  than a separate control elsewhere on the page, only shown
+                  once a trail is completed (restarting an in-progress,
+                  unfinished trail isn't this phase's scope, the plan doc's
+                  own wording is "if a user abandons a trail and restarts
+                  it" in the context of a trail already finished). variant
+                  outline keeps it visually secondary to the Start/Resume
+                  button per ux-ui-guidelines.md's 60/30/10 color rule, the
+                  accent (10%) stays reserved for the primary action above. */}
+              {completed && (
+                <div className="flex flex-col gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRestart}
+                    disabled={resetting}
+                    className="w-full"
+                  >
+                    Restart trail
+                  </Button>
+                  {resetError && <p className="text-xs text-destructive">{resetError}</p>}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 3.3/4.3: stop list. Numbered sequence, not an unordered
@@ -645,14 +648,14 @@ export default function TrailDetailPage() {
                   (Phase 4.5). Only rendered once a reading has actually
                   come back, so a denied/unavailable permission (silent
                   no-op above) shows nothing here rather than a stuck
-                  "waiting" state. Navigation is lucide-react's existing
+                  "waiting" state. NavigationArrow is Phosphor's existing
                   location/compass concept, paired with a text label per
                   ux-ui-guidelines.md's icon rules, since "GPS active"
                   is not one of the universally-recognized icon-only
                   exceptions (home, search, close, back, play, pause). */}
               {watchedPosition && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Navigation className="h-3 w-3" aria-hidden="true" />
+                  <NavigationArrow className="h-3 w-3" aria-hidden="true" />
                   GPS active
                 </span>
               )}
@@ -674,6 +677,6 @@ export default function TrailDetailPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

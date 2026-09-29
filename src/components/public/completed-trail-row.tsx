@@ -49,7 +49,7 @@ export function CompletedTrailRow({ trail, onClick }: Readonly<CompletedTrailRow
 
   return (
     <div className="flex w-full flex-col gap-1">
-      <TrailCard trail={trail} onClick={onClick} />
+      <TrailCard inline trail={trail} onClick={onClick} />
       <div className="flex flex-wrap items-center gap-2 px-6 pb-4 -mt-2">
         {formattedDate && (
           <span className="text-sm text-muted-foreground">Completed {formattedDate}</span>

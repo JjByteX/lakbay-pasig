@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { List, Map as MapIcon } from "lucide-react";
+import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";

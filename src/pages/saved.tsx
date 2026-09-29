@@ -13,6 +13,7 @@ import type { TrailSummary } from "@/lib/trail-types";
 import { SavedPlaceRow } from "@/components/public/saved-place-row";
 import { SavedTrailRow } from "@/components/public/saved-trail-row";
 import { CompletedTrailRow } from "@/components/public/completed-trail-row";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 /**
@@ -68,13 +69,23 @@ function errorMessageFrom(err: unknown, fallback: string): string {
 // under-representing Saved Places' real row. Split into two skeletons
 // instead, one per real row shape, rather than padding every section to
 // three and over-representing Saved/Completed Trails' true two-line rows.
-function TwoLineSectionSkeleton() {
+// `inline` mirrors trails.tsx's TrailListSkeleton at md+ (one line, name left,
+// meta right) for Saved Trails, whose real row is TrailCard inline. Completed
+// Trails keeps its second line (date + credential) at md, so it stays stacked.
+function TwoLineSectionSkeleton({ inline = false }: Readonly<{ inline?: boolean }>) {
   return (
     <ul className="flex flex-col divide-y divide-border">
       {[0, 1, 2].map((i) => (
-        <li key={i} className="flex flex-col gap-1 px-6 py-4">
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-3 w-1/3" />
+        <li
+          key={i}
+          className={
+            inline
+              ? "flex flex-col gap-1 px-6 py-4 md:flex-row md:items-center md:justify-between"
+              : "flex flex-col gap-1 px-6 py-4"
+          }
+        >
+          <Skeleton className={inline ? "h-4 w-2/3 md:w-1/3" : "h-4 w-2/3"} />
+          <Skeleton className={inline ? "h-3 w-1/3 md:w-1/6" : "h-3 w-1/3"} />
         </li>
       ))}
     </ul>
@@ -85,9 +96,12 @@ function ThreeLineSectionSkeleton() {
   return (
     <ul className="flex flex-col divide-y divide-border">
       {[0, 1, 2].map((i) => (
-        <li key={i} className="flex flex-col gap-1 px-6 py-4">
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-3 w-1/3" />
+        <li
+          key={i}
+          className="flex flex-col gap-1 px-6 py-4 md:grid md:grid-cols-[1fr_12rem_auto] md:items-center md:gap-6"
+        >
+          <Skeleton className="h-4 w-2/3 md:w-1/2" />
+          <Skeleton className="h-3 w-1/3 md:w-1/2" />
           <Skeleton className="h-4 w-20" />
         </li>
       ))}
@@ -214,18 +228,18 @@ export default function SavedPage() {
 
   if (!session) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-start gap-4 px-6 py-10">
+      <PageContainer width="wide" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Saved</h1>
         <p className="text-base text-muted-foreground">
           Sign in to see your saved places, saved trails, and completed trails.
         </p>
         <Button onClick={() => openAuth("login")}>Sign in</Button>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="wide">
       <h1 className="text-xl font-semibold text-foreground">Saved</h1>
 
       <SavedSection
@@ -253,7 +267,7 @@ export default function SavedPage() {
         title="Saved Trails"
         error={trailsError}
         loading={trailsLoading}
-        skeleton={<TwoLineSectionSkeleton />}
+        skeleton={<TwoLineSectionSkeleton inline />}
         isEmpty={trails.length === 0}
         emptyText="No saved trails yet."
       >
@@ -286,6 +300,6 @@ export default function SavedPage() {
           ))}
         </ul>
       </SavedSection>
-    </div>
+    </PageContainer>
   );
 }

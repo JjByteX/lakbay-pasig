@@ -1,5 +1,5 @@
 import { useId, useRef } from "react";
-import { Copy, Plus, X } from "lucide-react";
+import { Copy, Plus, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { TimeSelect } from "@/components/ui/time-select";

@@ -11,13 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import {
-  User as UserIcon,
-  Settings as SettingsIcon,
-  LogOut,
-  ArrowLeftRight,
-  Home as HomeIcon,
-} from "lucide-react";
+import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon } from "@phosphor-icons/react";
 import { BottomNav } from "./bottom-nav";
 import { PublicSidebar } from "./public-sidebar";
 import { GlobalSearchBar } from "./global-search-bar";
@@ -705,7 +699,7 @@ function AccountMenu() {
               codebase's existing "hide what doesn't apply" rule. */}
           {profile?.staff_role && (
             <DropdownMenuItem onClick={() => navigate("/admin")}>
-              <ArrowLeftRight className="mr-2 h-4 w-4" />
+              <ArrowsLeftRight className="mr-2 h-4 w-4" />
               {profile.staff_role === "admin" ? "Admin" : "Staff"} View
             </DropdownMenuItem>
           )}
@@ -722,7 +716,7 @@ function AccountMenu() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
-            <LogOut className="mr-2 h-4 w-4" />
+            <SignOut className="mr-2 h-4 w-4" />
             Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -828,7 +822,11 @@ function MobileShell({
           filter area opens -- the header simply grows over top of
           this fixed layer (z-40 vs. this element's own stacking
           context). */}
-      <main className="fixed inset-x-0 top-14 bottom-16 overflow-y-auto">
+      {/* scrollbar-gutter: stable keeps the scrollbar's width reserved
+          whether or not the page scrolls, so a tab that is taller than the
+          screen (a Products grid) doesn't shrink the page and shift the
+          centred content sideways when it appears. */}
+      <main className="fixed inset-x-0 top-14 bottom-16 overflow-y-auto [scrollbar-gutter:stable]">
         <Outlet />
       </main>
       <BottomNav />
@@ -991,7 +989,8 @@ function DesktopShell({
             here solely to hold SidebarTrigger -- is removed outright.
             Main content starts flush at the top of SidebarInset; nothing
             else was rendered in this bar to preserve. */}
-        <div className="h-full overflow-y-auto">
+        {/* scrollbar-gutter: stable, same reason as MobileShell's main. */}
+        <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
           <Outlet />
         </div>
       </SidebarInset>

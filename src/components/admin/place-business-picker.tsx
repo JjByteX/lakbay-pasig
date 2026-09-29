@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Input } from "@/components/ui/input";
@@ -150,7 +150,7 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search verified places and businesses"
           value={query}

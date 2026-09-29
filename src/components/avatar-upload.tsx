@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from "react";
-import { Loader2, Pencil, X } from "lucide-react";
+import { CircleNotch, Pencil, X } from "@phosphor-icons/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AVATAR_SIZE, uploadAvatar, removeAvatarFile, validateAvatarFile } from "@/lib/avatar-storage";
@@ -81,7 +81,7 @@ export function AvatarUpload({ ownerId, displayName, currentUrl, onChange }: Rea
       <Avatar className={AVATAR_SIZE.lg}>
         {currentUrl && <AvatarImage src={currentUrl} alt="" />}
         <AvatarFallback className="text-2xl">
-          {status === "uploading" ? <Loader2 className="h-6 w-6 animate-spin" /> : initial}
+          {status === "uploading" ? <CircleNotch className="h-6 w-6 animate-spin" /> : initial}
         </AvatarFallback>
       </Avatar>
       <div className="flex flex-col gap-2">
@@ -109,7 +109,7 @@ export function AvatarUpload({ ownerId, displayName, currentUrl, onChange }: Rea
           {currentUrl && (
             <Button type="button" variant="ghost" size="sm" onClick={handleRemove} disabled={busy}>
               {status === "removing" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <CircleNotch className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <X className="h-3.5 w-3.5" />
               )}

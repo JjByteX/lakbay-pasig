@@ -186,77 +186,23 @@ Directions weighed, per rule 6: autocomplete-first (type an address, suggestions
 ---
 
 **#:** 22
-**Milestone:** Location gets its own step on the admin place form
+**Milestone:** Resident desktop layout, Home first (page-container.tsx)
 
-**Decision:** `admin-place-detail.tsx`'s New Place / Current Info form goes from two steps to three: step 1 is Place (identity + details on the left, Operating Hours on the right, two columns from `lg` up), step 2 is Location (the Address field and map pin, one column, full width), step 3 is Rules and history, unchanged. The location picker previously shared step 1's right column with Operating Hours (entry #21); it now gets a full page of its own, same reasoning entry #20 used to give Rules and history their own step rather than crowding step 1 further. `missingRequired` (the Save gate) is unchanged, but the per-step Next button now gates only on that step's own fields: step 1's Next checks Place Name and Category, step 2's Next checks Address and Map pin. Enter inside a step 2 field (other than the location picker's own search box) now advances to step 3 instead of submitting, matching step 1's existing Enter-means-Next behavior. No other form (admin business, vendor) changes; they were never step based.
+**Decision:** Home no longer sits in a 448px column at desktop widths. A shared `PageContainer` (`components/public/page-container.tsx`) is meant to replace the `mx-auto flex max-w-md flex-col gap-6 px-6 py-6` wrapper copy-pasted across the resident pages, with two widths: `narrow` (today's `max-w-md`, for forms and settings) and `wide` (`md:max-w-5xl`, for feeds and grids). Below `md` both are the same 448px column, so mobile is unchanged. Home and Trails use `wide` so far; the other pages migrate one at a time, each checked at desktop widths.
 
-**Standing rule:** Any future field added to the place form goes on the step that already owns its topic (identity/details/hours on step 1, location on step 2, history on step 3); a new topic big enough to want its own step follows this and entry #20's pattern rather than being folded into an existing step's column.
+The desktop shell pins `SidebarInset` at `--sidebar-width-icon` while an expanded rail (`--sidebar-width`) sits on top of it, so the left `--sidebar-width` minus `--sidebar-width-icon` (160px) of every page is covered. `wide` reserves twice that amount, read from the shell's own CSS variables, so content stays centered and clear of the rail. The clearance lives in the container rather than the shell, because Discover renders through the same Outlet as a full bleed map and must not be padded.
+
+Home changes: the announcement carousel picks 1 or 3 tiles per view from its measured width (odd counts only, so `filmstrip.ts`'s centered wrap flips tiles off screen) and becomes a static row with no autoplay and no dots when there are no more announcements than tiles. Category photo rows step from 144px to 176px cards at `md` and gain Lucide `ChevronLeft`/`ChevronRight` scroll buttons at `md+`, only while the row overflows. Verified listing rows become one line (name, category, badge) at `md`. Trails stays a list of rows, not a card grid (each row is two text fields, per the existing row shape in `trail-card.tsx`): `PageContainer` wide, rows bleed to the container edge (`-mx-6`) like Home's verified list, and each row is one line at `md` (name left, theme, duration and budget right) through an opt-in `inline` prop on `TrailCard`, because `saved-trail-row.tsx` and `completed-trail-row.tsx` wrap the same row in Saved's narrow column and rely on the stacked shape. `landing.tsx` renders the same `CategoryPhotoRow`, so it gets the larger cards and arrows too, per the same component looking the same everywhere.
+
+Directions weighed, per rule 6: announcements as a right hand column beside the showcase, versus one wide column. Chosen: one wide column. After the rail clearance, usable width at a 1280px window is about 900px, and a two column split leaves each side cramped.
+
+**Standing rule:** A new resident page uses `PageContainer`, `narrow` unless it is a feed or grid. Never hardcode a page width, and never pad the shell to clear the rail. Any new multi tile carousel keeps to odd tile counts or flips tiles off screen.
 
 ---
 
 **#:** 23
-**Milestone:** Details / History (or Story) tab control on the public detail pages
+**Milestone:** Icon library swap (Lucide to Phosphor)
 
-**Decision:** Both public detail pages (`discover-place-detail.tsx`, `discover-business-detail.tsx`) split their single long scroll into a segmented tab control, reusing the existing `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` primitive `discover.tsx` already uses for its map/list switch, rather than a new component. A place gets "Details" and "History"; a business gets "Details" and "Story", matching the field each table already uses (`historical_background` on places, `business_story` on businesses, both from data-model.md's own field lists). "Details" keeps every visit-info block each page already rendered (description, hours, entrance fee/contact, facilities, rules, and on a business the item list); the long-form background field moves to the second tab. Defaults to "Details" on load, since a user arriving from a marker or list row is most likely after visit info, not history.
+**Decision:** `lucide-react` is replaced by `@phosphor-icons/react` (^2.1.10) across `src/`, on direct instruction that Lucide reads as generic. This overrides the project's earlier use of Lucide (named in `hero-carousel.tsx`'s old comment and `location-field-plan.md`'s icon table, which is left as written). The strings stored in the `icon` columns (`place_categories`, `trail_categories`, `event_categories`, `business_categories`, `place_facilities`) keep their Lucide-style values ("landmark", "building-2", "square-parking"), so there is no migration; only the component each string resolves to changed, in the five `*-icons.ts` maps. Renames worth knowing: Chevron to Caret, Search to MagnifyingGlass, Settings to Gear, Home to House, Map to MapTrifold, Landmark to Bank, Castle to CastleTurret, Croissant to Bread, Loader2 to CircleNotch, ImagePlus to CameraPlus, and SquareParking to LetterCircleP because Phosphor has no parking icon. Filled states now use `weight="fill"` instead of Lucide's `fill-*` classes: the saved Heart, the completed CheckCircle, the radio-item Circle, and the map and location-picker pins (the pins lose the card-colored outline, which Phosphor has no stroke to set). The bottom nav stays outline-only, per its existing direct request.
 
-The place History tab also now surfaces `historical_significance`, `year_or_period`, and `source_reference` (all `places` columns since 0003, all already admin-editable on `admin-place-detail.tsx`), and the business Story tab surfaces `unique_specialty` (a `businesses` column since 0004, already vendor- and admin-editable on `business-fields.tsx` and `admin-business-detail.tsx`). None of these four had any public render before this change; they were staff/vendor-fillable with nowhere for a resident or guest to actually read them. data-model.md groups each with its page's respective long-form field under the same background note, so each joins that field's tab rather than staying unrendered. Both tabs carry their own empty state ("No details listed yet." / "No history has been added for this place yet." / "No story has been added for this business yet.") rather than hiding the tab itself, since the tab control is structural and a place or business with no history yet is still a valid record to browse.
-
-**Standing rule:** A new visit-info field takes the Details tab, in the same position rule entry #20 already set (after the last visit-info block, before long content). A new long-form or background field takes the History tab on a place or the Story tab on a business. Any admin- or vendor-editable field that reaches this point without a public render should be treated as a gap to close, not left as staff-only content.
-
----
-
-**#:** 24
-**Milestone:** Item photos (0040, item-photos-plan.md)
-
-**Decision:** `business_items` (0004) gains optional photos through a new child table, `business_item_photos`, rows not an array, same shape as `business_photos` (0008) one level deeper (`item_id` references `business_items`, not `business_id` directly). Owner-plus-staff RLS, matching `business_items`/`business_photos` exactly: a vendor writes their own items' photos, staff with `review_businesses` or admin can view but never upload, since item review is read only per `admin-panel-spec.md`. Public select checks the parent business is `verified` or `pending`, matching migration 0016's widen of `business_items_select_public`, checked directly rather than assumed narrower.
-
-Reused the existing `content-photos` bucket (0031) with a `businesses/<business_id>/items/<item_id>/...` path. No new storage policy: `content_photos_write_own_business` (0031) already checks only that the business id appears somewhere in the object path, so this path shape is already covered.
-
-No `log_activity` trigger. Checked `0037_activity_log.sql` directly rather than assuming every new staff-writable table needs one per entry #19's standing rule: `business_items` and `business_photos` are both explicitly named in that migration's own "Not attached" list, since neither has a staff write screen. `business_item_photos` follows its two closest relatives, not entry #19's general rule, since that rule's own reasoning (a staff action worth logging) doesn't apply to a table staff can only read.
-
-Upload UI lives in `vendor-items.tsx`'s existing edit-row state only, not the add-item form: a photo needs an `item_id` to upload against, which doesn't exist until the item is first saved. Add-then-edit is the path to give a new item its first photo. `avatar-upload.tsx` was not reused directly, its single-photo overwrite shape doesn't fit a multi-photo add/remove list; a new small `ItemPhotos` component reuses its upload/remove mechanics and label-wrapping-hidden-input pattern instead of copying the whole component.
-
-**Standing rule:** Any future per-item or per-row photo set (not per-parent-record) follows this same shape: a child table one level under the record's own photo table if one exists, owner-plus-staff RLS matching the parent's own split, reusing `content-photos` with a path that keeps the top-level owning record's id in it rather than a new bucket or new storage policy. Before attaching a `log_activity` trigger to a new table, check whether its closest existing relative already has one; a table with no staff write screen gets no trigger, regardless of entry #19's general rule.
-
----
-
-**#:** 25
-**Milestone:** Item list menu card layout (item-menu-card-plan.md)
-
-**Decision:** The item list on `discover-business-detail.tsx` and `vendor-items.tsx` changed from a text row list to a card grid: photo on top, name and price below, matching a familiar menu-picker shape (checked real references, food delivery apps' own item cards, per ux-ui-guidelines.md's Inspiration Rules, before building). `grid grid-cols-2 gap-3` at 2 or more items; exactly 1 item renders as a single half-width card with no grid wrapper, since Component Sizing Rules bars a grid for one item.
-
-A Products/Services segmented control was raised alongside this and turned down. `business_type` (Product, Service, or Both) is set once for the whole business at listing creation, per vendor-mode-spec.md's Business Listing Type and Items section. The Item List under it is documented as one flat list with no per-item type field, in that section or in data-model.md's field list. Adding a per-item type column isn't asked for in either doc, so it wasn't built. Seed data also has no business typed "Both" yet, so a split would often show one empty side with nothing in it.
-
-`vendor-items.tsx`'s previous single outer card (wrapping the whole list) was removed once each item became its own card, per Card and Table Rules, a card inside a card. The empty-photo state on a card is a plain muted square, no invented icon, per Icon Rules (no established icon exists for "no photo yet"). The admin review list (`admin-business-detail.tsx`'s `ItemList`) was left as a row list on purpose, staff there scan many businesses for accuracy, a photo grid is browse density, not audit density, and nothing about that screen was described as menu-like.
-
-The edit-row state in `vendor-items.tsx` (name, price, `ItemPhotos`) stays a full-width `col-span-2` cell while a card is open for editing, a form doesn't fit inside a small grid card, then returns to a normal card on save or cancel.
-
-**Standing rule:** Before proposing a new segmented control or filter, check whether the field it would split on is documented as per-item or per-parent-record. A control that needs a field the docs only define one level up is a schema change, not a UI change, and needs its own decision, not a default add. Before any new visual layout, check ux-ui-guidelines.md's Inspiration Rules and pull 2-3 real references first; this codebase already has established card, list, and icon precedent (`line-clamp-2`, `aspect-square`, the file-input-as-label pattern) that should be reused before inventing a new one.
-
----
-
-**#:** 26
-**Milestone:** Items own tab, tab label from business_type (discover-business-detail.tsx)
-
-**Decision:** The item card grid moved out of the Details tab into its own third tab on the public business page, `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`, the same primitive Details/Story already use. Reason: Details' own empty state check used to fold in `items.length === 0`, so a genuine items fetch failure and a business that legitimately has zero items looked identical, both silently showed nothing extra inside Details. Its own tab makes that gap visible on its own, and keeps Details' empty check to the fields that actually belong to Details.
-
-The tab only renders when `items.length > 0`. A service-only or items-less business does not get an always-empty third tab, same reasoning that already made the items block itself conditional.
-
-Tab label reads `business_type` (Product, Service, or Both, vendor-mode-spec.md's Business Listing Type) rather than the business's category text: Products for Product, Services for Service, Products & Services for Both. Category (`business_categories`, migration 0027) is an open, admin-managed list with no fixed values, not safe to pattern match for a label; `business_type` is the one stable, structured field that already exists for exactly this distinction, and the label uses the same words the spec already uses for the field.
-
-`business_type` is now selected on this page's `businesses` query, it had no public render anywhere before this. `itemsLoaded` state added alongside the existing `loading` state, so the tab strip (2 columns vs 3) does not render before the items fetch settles and does not shift column count after first paint.
-
-**Standing rule:** A label for something the vendor self-classifies (business_type, category, or similar) should read from the structured field meant for that classification, not be inferred from free text elsewhere. When a UI element's presence depends on data that loads separately from the page's main record, gate that element's first render on both fetches settling, not just the main one, so its layout doesn't shift after paint.
-
----
-
-**#:** 27
-**Milestone:** Admin/staff sub page breadcrumb heading (admin-page-header.tsx)
-
-**Decision:** Admin/staff sub pages now open with a clickable "Previous Page > Current Page" heading, copied from Amkor IMS's `PageHeader` (inline mode): one compact row, small muted ancestors that underline on hover, chevron separators, and the current page at full heading size as the page's `<h1>`. It lives in one shared component, `components/admin/admin-page-header.tsx`, and is not defined per page. Ancestors are react-router `<Link>`s (real anchors) rather than Amkor's `router.visit` buttons, since `<Link>` is this app's own navigation primitive.
-
-Applied to every admin sub page: `admin-place-detail.tsx` (new and edit, parent Places), `admin-discovery-content-review.tsx` (parent Places, since the route lives under `/admin/places/discovery` and is reached from the Places queue), `admin-business-detail.tsx` (parent Businesses), and `admin-trail-builder.tsx` (new and edit, parent Trails). Each page's status badges and action buttons pass through the component's `badges` and `actions` slots unchanged, so no behavior moved. Top-level list pages (Places, Businesses, Trails, and so on) keep their plain `<h1>`, they have no parent to link back to. `/admin/events/:id` is a redirect into the Announcements modal, not a page, so it has no heading to convert.
-
-Parent labels reuse admin-sidebar.tsx's own nav labels word for word (Places, Businesses, Trails), per ux-ui-guidelines.md's rule against synonyms for the same concept.
-
-**Standing rule:** A new admin sub page uses `AdminPageHeader` with its parent list as the one `breadcrumb` entry, it does not hand-roll an `<h1>`. The current page is always `title`, never a `breadcrumb` entry. If a sub page is ever reached from a different parent than its route implies, set `breadcrumb` to the real entry point, as the discovery review page does.
+**Standing rule:** New icons come from `@phosphor-icons/react` only, `regular` weight by default and `fill` only for a selected, saved or completed state. No second icon library.

@@ -6,11 +6,9 @@ import { AdminSearchBar } from "@/components/admin/admin-search-bar";
 import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
 import { cn } from "@/lib/utils";
 
-// Exact-match list routes only — each one's own AdminDataTable measures
-// this outlet region to auto-size its page (see admin-data-table.tsx's
-// VIEWPORT FIT comment). Their /new and /:id children (detail pages,
-// the trail builder) are deliberately excluded: those rely on normal
-// page scroll, same as admin-dashboard.tsx, and have no table to fit.
+// Exact-match list routes — each one's own AdminDataTable measures this
+// outlet region to auto-size its page (see admin-data-table.tsx's
+// VIEWPORT FIT comment).
 const BOUNDED_LIST_ROUTES = new Set([
   "/admin/places",
   "/admin/businesses",
@@ -21,10 +19,16 @@ const BOUNDED_LIST_ROUTES = new Set([
   "/admin/activity",
 ]);
 
+// Sub pages (place new/edit, discovery review, business detail, trail
+// builder) are bounded too, like amkor's forms: the page fits the viewport
+// and the card inside it scrolls when its content is taller (see
+// admin-form-card.tsx). Only admin-dashboard.tsx keeps a scrolling page.
+const BOUNDED_SUB_PAGE = /^\/admin\/(places|businesses|trails)\/[^/]+(\/[^/]+)?$/;
+
 export default function AdminPage() {
   const { profile, loading } = useAuth();
   const { pathname } = useLocation();
-  const isBoundedListRoute = BOUNDED_LIST_ROUTES.has(pathname);
+  const isBoundedRoute = BOUNDED_LIST_ROUTES.has(pathname) || BOUNDED_SUB_PAGE.test(pathname);
 
   // Session loading state, distinct from the happy path per plan 3.4.
   if (loading) {
@@ -92,7 +96,7 @@ export default function AdminPage() {
         <div
           className={cn(
             "flex-1 p-6",
-            isBoundedListRoute ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto"
+            isBoundedRoute ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto"
           )}
         >
           <Outlet />

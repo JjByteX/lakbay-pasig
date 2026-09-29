@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { TimeField } from "@/components/ui/time-field";

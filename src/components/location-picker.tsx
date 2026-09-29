@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
-import { LocateFixed, MapPin, Search } from "lucide-react";
+import { GpsFix, MapPin, MagnifyingGlass } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +68,10 @@ interface LocationPickerProps {
   // The business forms show a help tooltip on the label, the place form
   // does not. Present renders FieldLabel, absent renders a plain Label.
   help?: string;
+  // Stretch the map down to fill the space its parent has left, instead of
+  // the fixed 256px. Only for a picker that is the main content of a card
+  // (admin place form, step 2); the default keeps every other form's height.
+  fill?: boolean;
 }
 
 type SearchStatus = "idle" | "searching" | "done" | "error";
@@ -85,6 +89,7 @@ export function LocationPicker({
   placeholder,
   requiredMarker = false,
   help,
+  fill = false,
 }: Readonly<LocationPickerProps>) {
   const listId = useId();
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -215,7 +220,7 @@ export function LocationPicker({
     if (markerRef.current) {
       markerRef.current.setLngLat(lngLat);
     } else {
-      // Same approach as discover-map.tsx's markerElement: a Lucide icon
+      // Same approach as discover-map.tsx's markerElement: a Phosphor icon
       // rendered to a static SVG string on a plain DOM element. `block`
       // stops the inline SVG adding a baseline gap under the tip.
       const el = document.createElement("div");
@@ -223,7 +228,7 @@ export function LocationPicker({
       el.setAttribute("role", "img");
       el.setAttribute("aria-label", "Map pin");
       el.innerHTML = renderToStaticMarkup(
-        <MapPin className="block h-10 w-10 fill-primary stroke-card" aria-hidden="true" />,
+        <MapPin weight="fill" className="block h-10 w-10 text-primary" aria-hidden="true" />,
       );
       // The icon's tip sits about 3px above its box bottom, so nudge the
       // box down and the tip lands exactly on the coordinate.
@@ -326,7 +331,7 @@ export function LocationPicker({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", fill && "min-h-0 grow")}>
       {help ? (
         <FieldLabel htmlFor="address" help={help} requiredMarker={requiredMarker}>
           {label}
@@ -372,7 +377,7 @@ export function LocationPicker({
           onClick={() => void runSearch()}
           disabled={searchStatus === "searching" || !address.trim()}
         >
-          <Search className="h-4 w-4" />
+          <MagnifyingGlass className="h-4 w-4" />
         </Button>
 
         {/* Plain absolutely positioned list, same pattern as
@@ -434,10 +439,23 @@ export function LocationPicker({
       {lookupFailed && <p className="text-sm text-destructive">{LOOKUP_FAILED}</p>}
 
       {/* Fixed height (h-64, 256px) so the form never jumps as the map
-          loads. Find my location sits top right, clear of the attribution
-          at the bottom, with its error line beneath it. */}
-      <div className="relative h-64 overflow-hidden rounded-lg border border-border">
-        <div ref={mapContainerRef} className="h-full w-full" />
+          loads, or with fill, at least that tall and growing into the
+          remaining space. The wrapper is what stretches. With fill the map
+          sits in an absolutely positioned layer that covers the wrapper, so
+          its height comes from the wrapper and not from a percentage of a
+          flex item; the map element itself stays h-full w-full because
+          maplibre gives its own container position: relative, which would
+          undo an absolute class put on it. Find my location sits top right,
+          clear of the attribution at the bottom, with its error line beneath
+          it. */}
+      <div className={cn("relative overflow-hidden rounded-lg border border-border", fill ? "min-h-[16rem] grow" : "h-64")}>
+        {fill ? (
+          <div className="absolute inset-0">
+            <div ref={mapContainerRef} className="h-full w-full" />
+          </div>
+        ) : (
+          <div ref={mapContainerRef} className="h-full w-full" />
+        )}
         <Button
           type="button"
           variant="outline"
@@ -445,7 +463,7 @@ export function LocationPicker({
           onClick={locate}
           disabled={locateStatus === "loading"}
         >
-          <LocateFixed className={cn("h-4 w-4", locateStatus === "loading" && "animate-spin text-muted-foreground")} />
+          <GpsFix className={cn("h-4 w-4", locateStatus === "loading" && "animate-spin text-muted-foreground")} />
           Find my location
         </Button>
         {locateStatus === "error" && locateError && (

@@ -35,13 +35,22 @@ const TabsTrigger = React.forwardRef<
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
+// Radix keeps an inactive tab's panel in the page as an empty element with the
+// hidden attribute. Any display class a caller puts on it (flex, grid) beats
+// the browser's own [hidden] rule, so the empty panel would stay laid out and,
+// with grow, take a share of the free space next to the active one.
+// data-[state=inactive]:hidden is more specific than those classes, so an
+// inactive panel is always display: none, whatever the caller styles it as.
 const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Content
     ref={ref}
-    className={cn("mt-4 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring", className)}
+    className={cn(
+      "mt-4 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=inactive]:hidden",
+      className
+    )}
     {...props}
   />
 ));

@@ -1,5 +1,5 @@
 import { useMemo, useReducer, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { CaretLeft, CaretRight, CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
 import {
   Table,
   TableBody,
@@ -43,9 +43,10 @@ import { useAutoPageSize } from "@/hooks/use-auto-page-size";
  * five list routes a bounded, non-scrolling region (flex-1 min-h-0
  * overflow-hidden, mirroring amkor's AppShell mode="table" <main>)
  * specifically so this measurement has a real, fixed height to measure
- * against — every other admin route (dashboard, detail pages, the trail
- * builder) keeps the plain scrolling outlet, since those pages have no
- * table to fit and rely on normal page scroll. Each of the five list
+ * against — the sub pages (place, business, trail builder, discovery
+ * review) get the same bounded region so their card scrolls instead of the
+ * page (see admin-form-card.tsx); only the dashboard keeps the plain
+ * scrolling outlet, since it has no table or card to fit. Each of the five list
  * pages' own root div also needs flex-1 min-h-0 (not the default block
  * flow) so that bounded height actually reaches this component instead of
  * stopping at the page's own wrapper — see each admin-*.tsx page.
@@ -127,9 +128,9 @@ function sortReducer(
 function SortIcon({ active, dir }: Readonly<{ active: boolean; dir: "asc" | "desc" }>) {
   const className = cn("h-3 w-3 shrink-0", active ? "text-foreground" : "text-muted-foreground");
   if (active) {
-    return dir === "asc" ? <ChevronUp className={className} /> : <ChevronDown className={className} />;
+    return dir === "asc" ? <CaretUp className={className} /> : <CaretDown className={className} />;
   }
-  return <ChevronsUpDown className={className} />;
+  return <CaretUpDown className={className} />;
 }
 
 function isActionsColumn<T>(col: AdminColumn<T>) {
@@ -394,7 +395,7 @@ export default function AdminDataTable<T>({
               onClick={() => setPage(currentPage - 1)}
               aria-label="Previous page"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <CaretLeft className="h-4 w-4" />
             </Button>
             <span className="px-1 text-sm text-muted-foreground">
               Page <span className="font-semibold text-foreground">{currentPage}</span> of{" "}
@@ -408,7 +409,7 @@ export default function AdminDataTable<T>({
               onClick={() => setPage(currentPage + 1)}
               aria-label="Next page"
             >
-              <ChevronRight className="h-4 w-4" />
+              <CaretRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { Heart } from "lucide-react";
+import { Heart } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { isRouteSaved, toggleSavedRoute } from "@/lib/saved-routes";
 import { useSavedToggle } from "@/hooks/use-saved-toggle";
@@ -64,7 +64,7 @@ export function SaveRouteButton({ routeId, onToggle }: Readonly<SaveRouteButtonP
         aria-label={saved ? "Remove from saved trails" : "Save this trail"}
         aria-pressed={saved}
       >
-        <Heart className={cn("h-5 w-5", saved && "fill-primary text-primary")} />
+        <Heart weight={saved ? "fill" : "regular"} className={cn("h-5 w-5", saved && "text-primary")} />
       </Button>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

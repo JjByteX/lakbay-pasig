@@ -41,13 +41,14 @@ const SPRING_STIFFNESS = 100;
 const SPRING_DAMPING = 19;
 const SPRING_MASS = 1;
 
-// Single-tile-per-view: this carousel is one card wide inside a max-w-md
-// feed, not a wide portfolio strip peeking at neighbors. Qula's own mobile
-// breakpoint already uses 1 tile in viewport for the same reason (narrow
-// viewport, one legible tile beats several slivers) -- this reuses that
-// same value for every width, not just mobile, since Announcements never
-// gets wide enough to justify peeking neighbors.
-const TILES_IN_VIEWPORT = 1;
+// Tiles per view, by measured container width: 1 on phones and narrow
+// windows, 3 once there is room (Home's wide desktop container). Odd
+// counts only: wrappedSlot centers the tile at `index`, and with 3 the
+// wrap point (count / 2 >= 2 slots out) lands just past the strip's edge,
+// so a tile flips sides off-screen instead of popping. Even counts would
+// flip while half visible.
+const MULTI_TILES = 3;
+const MULTI_TILE_MIN_WIDTH_PX = 840;
 const TILE_GAP_PX = 12; // same gap Qula's work.tsx bakes into its position math
 
 /**
@@ -125,6 +126,7 @@ interface AnnouncementTileProps {
   announcement: Announcement;
   slotOffset: number;
   containerWidthPx: number;
+  tilesInViewport: number;
   onClick: () => void;
 }
 
@@ -133,7 +135,7 @@ interface AnnouncementTileProps {
 // Announcement fields), so this keeps announcement-card.tsx's existing
 // text-only row content, laid out as a filmstrip tile instead of a list
 // row.
-function AnnouncementTile({ announcement, slotOffset, containerWidthPx, onClick }: Readonly<AnnouncementTileProps>) {
+function AnnouncementTile({ announcement, slotOffset, containerWidthPx, tilesInViewport, onClick }: Readonly<AnnouncementTileProps>) {
   const formattedDate = formatDateTime(announcement.date_time);
 
   return (
@@ -142,9 +144,9 @@ function AnnouncementTile({ announcement, slotOffset, containerWidthPx, onClick 
       onClick={onClick}
       className="group absolute top-0 flex h-full w-full flex-col items-start justify-center gap-1 overflow-hidden rounded-lg border border-border bg-card px-6 py-4 text-left transition-colors hover:bg-muted"
       style={{
-        width: tileWidthPx(containerWidthPx, TILES_IN_VIEWPORT, TILE_GAP_PX),
+        width: tileWidthPx(containerWidthPx, tilesInViewport, TILE_GAP_PX),
         left: 0,
-        x: tileOffsetPx(slotOffset, containerWidthPx, TILES_IN_VIEWPORT, TILE_GAP_PX),
+        x: tileOffsetPx(slotOffset, containerWidthPx, tilesInViewport, TILE_GAP_PX),
       }}
     >
       <span className="w-full truncate text-base font-semibold text-foreground">{announcement.title}</span>
@@ -167,11 +169,13 @@ function AnnouncementFilmstripInner({
   announcements,
   offset,
   containerWidthPx,
+  tilesInViewport,
   onOpen,
 }: Readonly<{
   announcements: Announcement[];
   offset: MotionValue<number>;
   containerWidthPx: number;
+  tilesInViewport: number;
   onOpen: (id: string) => void;
 }>) {
   const [liveOffset, setLiveOffset] = useState(() => offset.get());
@@ -182,19 +186,22 @@ function AnnouncementFilmstripInner({
   return (
     <>
       {announcements.map((announcement, i) => {
-        const slot = wrappedSlot(i, count, liveOffset);
+        // Shifting by (tiles - 1) / 2 makes the tile at `index` the
+        // leftmost visible one (identical to before at 1 tile), so a
+        // 3-tile strip opens on the newest announcement, not centered
+        // with the oldest to its left.
+        const slot = wrappedSlot(i, count, liveOffset + (tilesInViewport - 1) / 2);
         // Cull anything past the visible range, small buffer so a tile
-        // animating into place doesn't pop in abruptly. Same >1.5 cull
-        // Qula's work.tsx uses for its 1.8-tile desktop viewport; with a
-        // 1-tile viewport here the buffer still gives the incoming tile a
-        // frame to be mounted before it needs to be visible.
-        if (Math.abs(slot) > 1.5) return null;
+        // animating into place doesn't pop in abruptly: 1.5 at 1 tile
+        // (Qula's own value), 2.5 at 3.
+        if (Math.abs(slot) > (tilesInViewport + 2) / 2) return null;
         return (
           <AnnouncementTile
             key={announcement.id}
             announcement={announcement}
             slotOffset={slot}
             containerWidthPx={containerWidthPx}
+            tilesInViewport={tilesInViewport}
             onClick={() => onOpen(announcement.id)}
           />
         );
@@ -243,6 +250,13 @@ export function AnnouncementCarousel({ announcements, onOpen }: Readonly<Announc
   const containerRef = useRef<HTMLDivElement | null>(null);
   const containerWidthPx = useContainerWidth(containerRef);
 
+  // Nothing to loop when everything fits: lay the tiles out side by side,
+  // each sized to fill the row (1 announcement = one full-width tile), no
+  // autoplay motion and no dots.
+  const tiles = containerWidthPx >= MULTI_TILE_MIN_WIDTH_PX ? MULTI_TILES : 1;
+  const isStatic = count <= tiles;
+  const tilesInViewport = isStatic ? count : tiles;
+
   return (
     <div>
       <div
@@ -251,21 +265,33 @@ export function AnnouncementCarousel({ announcements, onOpen }: Readonly<Announc
         className="relative h-32 w-full overflow-hidden"
         ref={containerRef}
       >
-        {containerWidthPx > 0 && (
-          <AnnouncementFilmstripInner
-            announcements={announcements}
-            offset={track.offset}
-            containerWidthPx={containerWidthPx}
-            onOpen={onOpen}
-          />
-        )}
+        {containerWidthPx > 0 &&
+          (isStatic ? (
+            announcements.map((announcement, i) => (
+              <AnnouncementTile
+                key={announcement.id}
+                announcement={announcement}
+                slotOffset={i - (count - 1) / 2}
+                containerWidthPx={containerWidthPx}
+                tilesInViewport={count}
+                onClick={() => onOpen(announcement.id)}
+              />
+            ))
+          ) : (
+            <AnnouncementFilmstripInner
+              announcements={announcements}
+              offset={track.offset}
+              containerWidthPx={containerWidthPx}
+              tilesInViewport={tilesInViewport}
+              onOpen={onOpen}
+            />
+          ))}
       </div>
 
       {/* Progress dots, same animated-fill-tied-to-SLIDE_DURATION pattern
-          as Qula's ClientPhotoStrip. Only rendered past a single item --
-          one announcement needs no progress indicator for a carousel of
-          one. */}
-      {count > 1 && (
+          as Qula's ClientPhotoStrip. Only rendered while looping: a static
+          row (everything fits) has nothing to indicate. */}
+      {!isStatic && (
         <div className="mt-3 flex items-center justify-center gap-2">
           {announcements.map((a, i) => (
             <button

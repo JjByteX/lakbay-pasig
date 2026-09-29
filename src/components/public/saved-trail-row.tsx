@@ -25,7 +25,7 @@ export function SavedTrailRow({ trail, onClick, onUnsave }: Readonly<SavedTrailR
   return (
     <div className="flex w-full items-center gap-2">
       <div className="min-w-0 flex-1">
-        <TrailCard trail={trail} onClick={onClick} />
+        <TrailCard inline trail={trail} onClick={onClick} />
       </div>
       <div className="pr-4">
         <SaveRouteButton routeId={trail.id} onToggle={(saved) => !saved && onUnsave()} />

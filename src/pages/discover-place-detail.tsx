@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
@@ -11,7 +11,9 @@ import { SaveButton } from "@/components/public/save-button";
 import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
+import { cn } from "@/lib/utils";
 
 // Phase 6.3 (step-5-phases.md): full record fields from places (migration
 // 0003), scoped through places_select_public, unchanged this step (verified
@@ -176,8 +178,11 @@ export default function DiscoverPlaceDetailPage() {
     ? allFacilities.filter((facility) => place.facility_ids.includes(facility.id))
     : [];
 
+  // xl+: photos left (sticky), info right. No photos -> single narrow column.
+  const hasPhotos = photos.length > 0;
+
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width={hasPhotos ? "wide" : "narrow"}>
       <div className="flex items-center justify-between">
         <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
@@ -192,8 +197,8 @@ export default function DiscoverPlaceDetailPage() {
       )}
 
       {!loading && place && (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-2 xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
+          <div className="flex flex-col gap-2 xl:col-start-2 xl:row-start-1">
             <h1 className="text-xl font-semibold text-foreground">{place.name}</h1>
             <p className="text-sm text-muted-foreground">{place.category}</p>
             {/* Location field, phase 6.1 (location-field-plan.md): address
@@ -217,7 +222,7 @@ export default function DiscoverPlaceDetailPage() {
               this place has no photos yet (PhotoGallery's own empty-list
               return), so a photo-less place's layout is unchanged from
               before this phase. */}
-          <PhotoGallery photoUrls={photos} />
+          <PhotoGallery photoUrls={photos} className="xl:sticky xl:top-6 xl:col-start-1 xl:row-span-2 xl:row-start-1" />
 
           {/* History tab phase: segmented Details / History control, same
               Tabs primitive discover.tsx already uses for map/list. Details
@@ -227,7 +232,7 @@ export default function DiscoverPlaceDetailPage() {
               public render (historical_significance, year_or_period,
               source_reference). Defaults to Details, the visit-info tab a
               user coming from a marker or list row is most likely after. */}
-          <Tabs defaultValue="details">
+          <Tabs defaultValue="details" className="xl:col-start-2 xl:row-start-2">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
@@ -328,6 +333,6 @@ export default function DiscoverPlaceDetailPage() {
           </Tabs>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -1,4 +1,4 @@
-import { Footprints, Utensils, Palette, MapPin, type LucideIcon } from "lucide-react";
+import { Footprints, ForkKnife, Palette, MapPin, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 /**
  * Category Directory, Phase 1.6. Fixed picker list for trail_categories
@@ -15,25 +15,25 @@ import { Footprints, Utensils, Palette, MapPin, type LucideIcon } from "lucide-r
 export interface IconOption {
   value: string;
   label: string;
-  component: LucideIcon;
+  component: PhosphorIcon;
 }
 
 export const TRAIL_CATEGORY_ICONS: IconOption[] = [
   { value: "footprints", label: "Heritage Walk", component: Footprints },
-  { value: "utensils", label: "Food Crawl", component: Utensils },
+  { value: "utensils", label: "Food Crawl", component: ForkKnife },
   { value: "palette", label: "Cultural Tour", component: Palette },
 ];
 
-const ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
+const ICON_MAP: Record<string, PhosphorIcon> = Object.fromEntries(
   TRAIL_CATEGORY_ICONS.map((option) => [option.value, option.component])
 );
 
 /**
- * Looks up a stored icon name (trail_categories.icon) back to its Lucide
+ * Looks up a stored icon name (trail_categories.icon) back to its Phosphor
  * component. Falls back to MapPin, same neutral default migration 0023
  * seeded every row with, if a stored value doesn't match the current
  * shortlist.
  */
-export function getTrailCategoryIcon(iconName: string): LucideIcon {
+export function getTrailCategoryIcon(iconName: string): PhosphorIcon {
   return ICON_MAP[iconName] ?? MapPin;
 }

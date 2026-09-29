@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { LucideIcon } from "lucide-react";
+import { type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +55,7 @@ export interface CategoryFormValue {
 interface IconOption {
   value: string;
   label: string;
-  component: LucideIcon;
+  component: PhosphorIcon;
 }
 
 export interface CategoryFormConfig {

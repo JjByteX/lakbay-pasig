@@ -1,4 +1,4 @@
-import { Heart } from "lucide-react";
+import { Heart } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { isPlaceSaved, toggleSavedPlace } from "@/lib/saved-places";
 import { useSavedToggle } from "@/hooks/use-saved-toggle";
@@ -31,7 +31,7 @@ interface SaveButtonProps {
  * at the database layer independent of this UI check, saved_places has no
  * policy allowing an unauthenticated insert.
  *
- * Heart is one of lucide-react's standard icons for this exact concept
+ * Heart is one of Phosphor's standard icons for this exact concept
  * (save/favorite), per ux-ui-guidelines.md's icon rules; paired with an
  * aria-label rather than a visible text label since a heart-toggle inside
  * a detail page header is a common enough pattern to read on its own, and
@@ -66,7 +66,7 @@ export function SaveButton({ placeId, onToggle }: Readonly<SaveButtonProps>) {
         aria-label={saved ? "Remove from saved places" : "Save this place"}
         aria-pressed={saved}
       >
-        <Heart className={cn("h-5 w-5", saved && "fill-primary text-primary")} />
+        <Heart weight={saved ? "fill" : "regular"} className={cn("h-5 w-5", saved && "text-primary")} />
       </Button>
       {/* Phase 8.3: specific to which direction failed (save vs remove),
           not "something went wrong," per ux-ui-guidelines.md's State

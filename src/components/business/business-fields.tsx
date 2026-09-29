@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Info } from "lucide-react";
+import { Info } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -262,6 +263,15 @@ interface BusinessFieldsProps {
    */
   categories: BusinessCategory[];
   categoriesError?: string | null;
+  /** Extra classes for the card root. Admin passes its scroll-inside-the-card
+   *  classes here; the vendor side passes nothing and is unchanged. */
+  className?: string;
+  /** A second column on the right of the same card, split from the fields by
+   *  a vertical divider (same layout as admin-place-detail.tsx's step 1).
+   *  Admin puts the read-only Items section here. Omitted (the vendor side),
+   *  the card is the single column it always was. Below lg it stacks under
+   *  the fields. */
+  sideColumn?: ReactNode;
 }
 
 export function BusinessFields({
@@ -273,6 +283,8 @@ export function BusinessFields({
   showRegisteredOrInformal = false,
   categories,
   categoriesError = null,
+  className,
+  sideColumn,
 }: Readonly<BusinessFieldsProps>) {
   const pin =
     form.latitude !== null && form.longitude !== null
@@ -319,8 +331,8 @@ export function BusinessFields({
     </div>
   );
 
-  return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+  const fields = (
+    <>
       {nameAndTypeInRow ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {nameField}
@@ -507,6 +519,26 @@ export function BusinessFields({
           </Select>
         </div>
       )}
+    </>
+  );
+
+  if (!sideColumn) {
+    return (
+      <div className={cn("flex flex-col gap-4 rounded-lg border border-border bg-card p-4", className)}>
+        {fields}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border",
+        className
+      )}
+    >
+      <div className="flex flex-col gap-4 lg:pr-4">{fields}</div>
+      <div className="flex flex-col gap-4 lg:pl-4">{sideColumn}</div>
     </div>
   );
 }

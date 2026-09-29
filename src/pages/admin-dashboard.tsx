@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Landmark, Store } from "lucide-react";
+import { Bank, Storefront } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { usePageTitle } from "@/lib/page-title";
@@ -187,7 +187,7 @@ export default function AdminDashboardPage() {
       <div className="flex flex-wrap gap-4">
         {canPlaces && (
           <div className="flex min-w-50 flex-1 items-center gap-3 rounded-lg border border-border bg-card p-4">
-            <Landmark className="h-5 w-5 shrink-0 text-primary" />
+            <Bank className="h-5 w-5 shrink-0 text-primary" />
             <div>
               <p className="text-2xl font-semibold text-foreground">
                 {placesPending ?? "…"}
@@ -200,7 +200,7 @@ export default function AdminDashboardPage() {
         )}
         {canBusinesses && (
           <div className="flex min-w-50 flex-1 items-center gap-3 rounded-lg border border-border bg-card p-4">
-            <Store className="h-5 w-5 shrink-0 text-primary" />
+            <Storefront className="h-5 w-5 shrink-0 text-primary" />
             <div>
               <p className="text-2xl font-semibold text-foreground">
                 {businessesPending ?? "…"}

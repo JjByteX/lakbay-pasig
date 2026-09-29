@@ -96,6 +96,12 @@ function demo() {
   assertEqual(tileWidthPx(300, 1, 12), 300, "tileWidthPx(300, 1, 12)");
   assertEqual(tileOffsetPx(0, 300, 1, 12), 0, "tileOffsetPx(0, 300, 1, 12)");
 
+  // Static row (announcement-carousel.tsx, fewer items than tiles): tile i
+  // sits at slot i - (n - 1) / 2, which lands at x = i * (tileWidth + gap),
+  // so 3 tiles in a 300px viewport with no gap start at 0, 100, 200.
+  assertEqual(tileOffsetPx(-1, 300, 3, 0), 0, "tileOffsetPx(-1, 300, 3, 0)");
+  assertEqual(tileOffsetPx(1, 300, 3, 0), 200, "tileOffsetPx(1, 300, 3, 0)");
+
   console.log("filmstrip.ts demo: all checks passed");
 }
 

@@ -43,11 +43,14 @@
 -- into Supabase Storage, swap these paths back to the bucket's public URL.
 --
 -- Routes/Trails (routes, route_stops, discovery_content, trail_credentials)
--- and the personal-record tables that depended on sample route/place ids
--- (completed_routes, user_credentials, saved_routes, saved_places) are
--- INTENTIONALLY EMPTY per open-questions.md #8 — no real Trail data has
--- been submitted yet. See the comment block at that section below for how
--- to resume once it is.
+-- are seeded from the real Places/Businesses above, using researched
+-- content (prototype-quality, pending CATO confirmation). See sections
+-- 11-14 below for the sources and the app rules that shaped them. The
+-- personal-record tables (completed_routes, user_credentials,
+-- saved_routes, saved_places, route_progress) stay INTENTIONALLY EMPTY:
+-- they are a resident's own history, and seeding them would be fake
+-- activity. This supersedes the earlier "empty" decision in
+-- open-questions.md #8.
 -- =============================================================================
 
 begin;
@@ -322,7 +325,7 @@ insert into public.places (
   id, name, category_id, description, historical_background, historical_significance,
   year_or_period, source_reference, address, latitude, longitude, operating_hours,
   entrance_fee, visit_duration, accessibility_info, facility_ids,
-  verification_status, reviewed_by, updated_at
+  verification_status, reviewed_by, verified_at, updated_at
 ) values
   ('a1e10001-0001-4c1a-9c1a-000000000001', 'Pasig City Museum (Concepcion Mansion)',
    (select id from public.place_categories where name = 'Museum'),
@@ -335,7 +338,7 @@ insert into public.places (
    'Tuesday to Sunday, 9:00 AM – 4:00 PM (Closed Mondays)', 0, '45 to 60 minutes',
    'Ground floor exhibits accessible via ramp; upper floors accessible primarily via stairs.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Info Desk', 'Parking')),
-   'pending', null, now() - interval '5 days'),
+   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days', now() - interval '5 days'),
 
   ('a1e10002-0002-4c1a-9c1a-000000000002', 'Immaculate Conception Cathedral',
    (select id from public.place_categories where name = 'Church'),
@@ -348,7 +351,7 @@ insert into public.places (
    'Open daily, 6:00 AM – 7:00 PM (Mass schedules vary)', 0, '30 to 45 minutes',
    'Ramp access available at side entry doors; main floor area is level and paved.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Waiting Area')),
-   'pending', null, now() - interval '5 days'),
+   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '5 days', now() - interval '5 days'),
 
   ('a1e10003-0003-4c1a-9c1a-000000000003', 'Bahay na Tisa (Don Cecilio Tech House)',
    (select id from public.place_categories where name = 'Heritage Site'),
@@ -362,7 +365,7 @@ insert into public.places (
    0, '15 to 30 minutes',
    'Street-level exterior viewing fully accessible; interior contains steep wooden stairways with limited access for visitors with reduced mobility.',
    '{}'::uuid[],
-   'pending', null, now() - interval '5 days'),
+   'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days', now() - interval '5 days'),
 
   ('a1e10004-0004-4c1a-9c1a-000000000004', 'Plaza Rizal & Bitukang Manok Area (Parian Creek)',
    (select id from public.place_categories where name = 'Monument'),
@@ -375,7 +378,7 @@ insert into public.places (
    'Open 24 Hours / 7 Days a week (Public Park)', 0, '20 to 30 minutes',
    'Open-air flat surface, fully wheelchair accessible with concrete paved walkways.',
    (select array_agg(id) from public.place_facilities where name in ('Waiting Area')),
-   'pending', null, now() - interval '5 days'),
+   'verified', 'ab395d2b-a446-4892-b43f-2170af876c8a', now() - interval '5 days', now() - interval '5 days'),
 
   -- Added per open-questions.md #7: not among the 4 originally submitted
   -- Places, but required as discovery_content's related_place_id target
@@ -394,7 +397,7 @@ insert into public.places (
    0, '30 to 45 minutes, program-dependent',
    'Ground floor accessible; specific accessibility features not yet documented.',
    (select array_agg(id) from public.place_facilities where name in ('Restrooms', 'Parking', 'Waiting Area')),
-   'pending', null, now() - interval '2 days');
+   'verified', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '2 days', now() - interval '2 days');
 
 -- -----------------------------------------------------------------------------
 -- 4. Place photos — real Pasig photography per storage-manifest.md.
@@ -616,42 +619,196 @@ commit;
 begin;
 
 -- -----------------------------------------------------------------------------
--- 11-15. Routes/Trails and dependent personal records — INTENTIONALLY EMPTY.
+-- 11-14. Routes/Trails (2), route_stops, discovery_content, trail_credentials.
 --
---     Resolved per open-questions.md #8 (resume-plan.md's blocking
---     question): no real Routes/Trails data has been submitted alongside
---     the real Places/Businesses/Events content above. The original
---     sample Routes (3), route_stops, discovery_content, and
---     trail_credentials all referenced sample Place/Business rows that
---     are now removed, and the sample personal-record rows
---     (completed_routes, user_credentials, saved_routes, saved_places)
---     referenced those same sample route/place IDs. All of it was fake
---     demo data with no real counterpart to replace it with, so per the
---     confirmed decision it is dropped entirely rather than either (a)
---     inventing placeholder trails over now-real Place/Business content,
---     or (b) leaving rows that reference deleted sample IDs.
+--     Replaces the earlier "intentionally empty" block (open-questions.md
+--     #8). That block said to resume once real Trail data existed; this is
+--     that resume, built ONLY from the real Places/Businesses already in
+--     sections 3 and 6, no new places or businesses invented. Following
+--     decision-log.md entry #17's standing rule ("research and cite real
+--     sources ... not fabricate plausible-looking values"), the trail
+--     shapes and every discovery fact below were researched, not made up,
+--     and this whole section is PROTOTYPE-QUALITY pending CATO's own
+--     confirmation, the same status entry #17 gives the business_items
+--     prices and the place coordinates.
 --
---     Tables left empty by this: routes, route_stops, discovery_content,
---     trail_credentials, completed_routes, user_credentials, saved_routes,
---     saved_places. All still exist per their migrations (0005, 0007) and
---     still enforce their RLS policies; they simply have no seed rows
---     until real Trail/Route data is submitted. The Trails feature area
---     of the app will show its genuine empty state against this seed,
---     which is accurate: there is no real Trail content yet, not a
---     seeding gap to paper over.
+--     What the research found: CATO already runs a real "Pasig City
+--     Heritage Tour" and "Heritage and Culinary Tour" through Poblacion.
+--     Its stops and order (pasigcity.gov.ph news releases; Manila
+--     Bulletin, Aug 2023; Daily Tribune, June 2026) centre on Plaza Rizal,
+--     the Immaculate Conception Cathedral, the Concepcion Mansion (Pasig
+--     City Museum) and Bahay na Tisa, with Panaderia Dimas-Alang and
+--     Ado's Panciteria as the food stops. Bahay na Tisa is the usual final
+--     stop. The two trails below follow that, using only the stops this
+--     seed actually has.
 --
---     To resume: once real Routes/Trails data arrives (stops in sequence,
---     theme, estimated duration/budget, run type, any Discovery content,
---     credential name/requirement per data-model.md's field list), add an
---     insert for public.routes here, following the same category_id
---     subquery pattern places/businesses/events use above, then
---     route_stops referencing the real place/business ids from sections 3
---     and 6, then discovery_content and trail_credentials as needed.
---     Personal-record rows (completed_routes, user_credentials,
---     saved_routes) only make sense once real routes exist to reference;
---     saved_places can be seeded independently against the real place ids
---     in section 3 whenever real save data exists to seed.
+--     Hard constraints from the app's own code, read before writing this
+--     (not preferences, each one would break a trail if ignored):
+--       * A stop only appears to the public if its place/business is
+--         'verified' (places_select_public, 0003), which is why section 3
+--         now seeds the 5 places as 'verified'. The admin stop picker and
+--         insertNewStops (admin-trail-builder.tsx) enforce the same bar.
+--       * trail-detail.tsx unlocks a stop by GPS only if that stop has a
+--         discovery_content row (its unlock_radius). Start unlocks stop 1
+--         with no discovery row needed. So every stop AFTER the first
+--         needs one, or the trail can never be finished.
+--       * migration 0012 forces needs_place_review = true on any
+--         discovery_content tied to a business, and a flagged row blocks
+--         publishing (admin-trails.tsx / publishBlockedReason). Reviewing
+--         it is log-only and cannot clear the flag. So discovery content
+--         is seeded on PLACE stops only, and a business can only be a
+--         trail's FIRST stop, or the trail could not be completed.
+--     That last rule is why Ado's Panciteria and Three Sisters' are NOT
+--     in a trail: mid-sequence business stops cannot unlock. This is a
+--     limitation of the current app rules, not an omission. Left for CATO
+--     to decide (allow business discovery content to publish, or an
+--     alternate unlock path) rather than worked around here.
+--
+--     needs_place_review is never set below: 0012's before-insert trigger
+--     computes it (false for every row here, since all are on verified
+--     places). Activity-log triggers (0037) no-op under this script,
+--     auth.uid() is null in the seed, so no activity_log rows appear.
+--
+--     Field formats match what the admin form itself writes, so a seeded
+--     trail opens in admin-trail-builder.tsx with every field populated
+--     natively rather than shown as "legacy" text:
+--       * estimated_duration: hours.ts formatDuration ("1 hr 30 min")
+--       * recommended_time: hours.ts's {"v":1,"days":[..],"from","to"}
+--       * estimated_budget: numeric pesos (0019)
+--     category_id resolves against trail_categories, seeded by 0023 with
+--     the lowercase names 'heritage walk' / 'food crawl' / 'cultural
+--     tour' (nothing later renames them).
+--
+--     Personal-record tables (completed_routes, user_credentials,
+--     saved_routes, saved_places, route_progress) stay EMPTY: they are a
+--     resident's own history, and inventing that would be fake activity
+--     for demo accounts. trail_credentials is content (public read), so
+--     it is seeded below.
 -- -----------------------------------------------------------------------------
+
+-- 11. Routes. Both published: this is CATO's own reviewed content, same
+--     reasoning sections 3 and 6 give for verified/published. created_by
+--     is admin1, the same account that reviewed the places.
+insert into public.routes (
+  id, name, category_id, estimated_duration, estimated_budget,
+  recommended_time, run_type, status, created_by, updated_at
+) values
+  ('d4e40001-0001-4c1a-9c1a-000000000001', 'Pasig Poblacion Heritage Walk',
+   (select id from public.trail_categories where name = 'heritage walk'),
+   '1 hr 30 min', 0,
+   '{"v":1,"days":["tue","wed","thu","fri","sat","sun"],"from":"09:00","to":"16:00"}',
+   'self guided', 'published', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '4 days'),
+
+  ('d4e40002-0002-4c1a-9c1a-000000000002', 'Pasig Heritage & Bakery Trail',
+   (select id from public.trail_categories where name = 'food crawl'),
+   '2 hr', 150,
+   '{"v":1,"days":["tue","wed","thu","fri","sat","sun"],"from":"09:00","to":"16:00"}',
+   'self guided', 'published', 'f25e552f-e90c-4fc4-884e-02f46c40a47f', now() - interval '4 days');
+
+-- 12. Route stops. Trail 1 is four places in walking order (~490 m
+--     end to end by the seed's own coordinates), ending at Bahay na Tisa
+--     like CATO's real tour. Trail 2 opens at Panaderia Dimas-Alang (a
+--     business, first stop only, per the rules above) then walks the same
+--     four places. The bakery leg is ~1.6 km by the seeded coordinates,
+--     which entry #21 already flags as approximate for this business;
+--     it is harmless to the unlock logic since Start, not GPS, unlocks
+--     stop 1. sequence_order is 0-based, matching the builder's own
+--     `nextStops.indexOf(s)` writes. Stop ids are fixed so the discovery
+--     rows below can reference them via related_route_stop_id.
+insert into public.route_stops (id, route_id, stop_type, stop_id, sequence_order) values
+  -- Trail 1: Pasig Poblacion Heritage Walk
+  ('e5f50001-0001-4c1a-9c1a-000000000001', 'd4e40001-0001-4c1a-9c1a-000000000001', 'place', 'a1e10001-0001-4c1a-9c1a-000000000001', 0), -- Pasig City Museum
+  ('e5f50001-0002-4c1a-9c1a-000000000002', 'd4e40001-0001-4c1a-9c1a-000000000001', 'place', 'a1e10004-0004-4c1a-9c1a-000000000004', 1), -- Plaza Rizal
+  ('e5f50001-0003-4c1a-9c1a-000000000003', 'd4e40001-0001-4c1a-9c1a-000000000001', 'place', 'a1e10002-0002-4c1a-9c1a-000000000002', 2), -- Immaculate Conception Cathedral
+  ('e5f50001-0004-4c1a-9c1a-000000000004', 'd4e40001-0001-4c1a-9c1a-000000000001', 'place', 'a1e10003-0003-4c1a-9c1a-000000000003', 3), -- Bahay na Tisa
+
+  -- Trail 2: Pasig Heritage & Bakery Trail
+  ('e5f50002-0001-4c1a-9c1a-000000000011', 'd4e40002-0002-4c1a-9c1a-000000000002', 'business', 'b2e20001-0001-4c1a-9c1a-000000000001', 0), -- Panaderia Dimas-Alang
+  ('e5f50002-0002-4c1a-9c1a-000000000012', 'd4e40002-0002-4c1a-9c1a-000000000002', 'place', 'a1e10001-0001-4c1a-9c1a-000000000001', 1), -- Pasig City Museum
+  ('e5f50002-0003-4c1a-9c1a-000000000013', 'd4e40002-0002-4c1a-9c1a-000000000002', 'place', 'a1e10004-0004-4c1a-9c1a-000000000004', 2), -- Plaza Rizal
+  ('e5f50002-0004-4c1a-9c1a-000000000014', 'd4e40002-0002-4c1a-9c1a-000000000002', 'place', 'a1e10002-0002-4c1a-9c1a-000000000002', 3), -- Immaculate Conception Cathedral
+  ('e5f50002-0005-4c1a-9c1a-000000000015', 'd4e40002-0002-4c1a-9c1a-000000000002', 'place', 'a1e10003-0003-4c1a-9c1a-000000000003', 4); -- Bahay na Tisa
+
+-- 13. Discovery content: proximity-unlocked story text, PLACE stops only
+--     (see the header for why). Only stops after the first need one to be
+--     reachable, but the first stop of Trail 1 gets one too, since a
+--     stop's story is what makes it worth visiting; it does not affect
+--     Start. Each entry stays a proximity secret per data-model.md's rule
+--     rather than repeating the place page's own description, and each
+--     one leans on a fact confirmed in at least one source, avoiding the
+--     contested Bahay na Tisa construction year (sources split between
+--     1846 and the early 1850s; the place row above says early 1850s, so
+--     no year is repeated here rather than risk contradicting it).
+--     unlock_radius is metres, within the builder's 1 to 500 range. 40 to
+--     60 m for stops that sit close together (Museum/Plaza/Cathedral are
+--     ~70 to 140 m apart, so a wider radius would unlock the next stop
+--     before the visitor left the last), 50 m for the standalone house.
+--     related_location_type/id match each stop, as the builder guarantees.
+--     sequence_order restarts at 1 per stop, matching the builder's own
+--     "next sequence within this stop's entries" default.
+insert into public.discovery_content (
+  id, route_id, title, content, related_location_type, related_location_id,
+  related_route_stop_id, sequence_order, unlock_radius, status
+) values
+  -- Trail 1
+  ('f6a60001-0001-4c1a-9c1a-000000000001', 'd4e40001-0001-4c1a-9c1a-000000000001',
+   'A gift for Doña Victoria',
+   'Look up at the tower. Former Pasig mayor Don Fortunato Concepcion built this mansion in 1937 as a gift for his wife, Doña Victoria. During World War II it was used as a Japanese headquarters and detention center, and on February 19, 1945 an American flag was raised from it, marking the end of the occupation of Pasig. After eight years of renovation it reopened to the public on March 26, 2025.',
+   'place', 'a1e10001-0001-4c1a-9c1a-000000000001', 'e5f50001-0001-4c1a-9c1a-000000000001', 1, 50, 'active'),
+
+  ('f6a60001-0002-4c1a-9c1a-000000000002', 'd4e40001-0001-4c1a-9c1a-000000000001',
+   'Where the town gathered',
+   'You are standing in the old heart of Pasig. This plaza was the center of the town under Spanish rule, and it is where the Katipunan''s Nagsabado of 1896 unfolded, when Pasig revolutionaries led by Valentin Cruz seized the local tribunal. Watch for the monument to Valentin Cruz near the cathedral. The Bitukang Manok creek that once ran nearby is part of this same story.',
+   'place', 'a1e10004-0004-4c1a-9c1a-000000000004', 'e5f50001-0002-4c1a-9c1a-000000000002', 1, 40, 'active'),
+
+  ('f6a60001-0003-4c1a-9c1a-000000000003', 'd4e40001-0001-4c1a-9c1a-000000000001',
+   'The first Marian parish',
+   'Augustinian missionaries founded this parish in 1572, and it is regarded as the first Marian parish in the Philippines. It first carried the title of the Visitation before being changed to the Immaculate Conception in 1587. The stone church you see was built in the 1700s, which makes it the oldest standing building in Pasig. Its high altar retablo and the Museo Diocesano inside are worth the extra minutes.',
+   'place', 'a1e10002-0002-4c1a-9c1a-000000000002', 'e5f50001-0003-4c1a-9c1a-000000000003', 1, 60, 'active'),
+
+  ('f6a60001-0004-4c1a-9c1a-000000000004', 'd4e40001-0001-4c1a-9c1a-000000000001',
+   'The house that stayed a home',
+   'Bahay na Tisa is the oldest surviving house in Pasig, and unlike many ancestral homes it is still lived in by the Tech family, now across seven generations. Notice the thick adobe blocks of the ground floor carrying the hardwood floor above, and the capiz shell windows. During Martial Law it was nicknamed the Freedom House because people from opposing political sides could meet here. In 2020 the National Museum declared it an Important Cultural Property.',
+   'place', 'a1e10003-0003-4c1a-9c1a-000000000003', 'e5f50001-0004-4c1a-9c1a-000000000004', 1, 50, 'active'),
+
+  -- Trail 2 (stop 0, the bakery, intentionally has none: business-tied
+  -- discovery content is always flagged and would block publishing)
+  ('f6a60002-0002-4c1a-9c1a-000000000012', 'd4e40002-0002-4c1a-9c1a-000000000002',
+   'A gift for Doña Victoria',
+   'Look up at the tower. Former Pasig mayor Don Fortunato Concepcion built this mansion in 1937 as a gift for his wife, Doña Victoria. During World War II it was used as a Japanese headquarters and detention center, and on February 19, 1945 an American flag was raised from it, marking the end of the occupation of Pasig. After eight years of renovation it reopened to the public on March 26, 2025.',
+   'place', 'a1e10001-0001-4c1a-9c1a-000000000001', 'e5f50002-0002-4c1a-9c1a-000000000012', 1, 50, 'active'),
+
+  ('f6a60002-0003-4c1a-9c1a-000000000013', 'd4e40002-0002-4c1a-9c1a-000000000002',
+   'Where the town gathered',
+   'You are standing in the old heart of Pasig. This plaza was the center of the town under Spanish rule, and it is where the Katipunan''s Nagsabado of 1896 unfolded, when Pasig revolutionaries led by Valentin Cruz seized the local tribunal. Watch for the monument to Valentin Cruz near the cathedral. The Bitukang Manok creek that once ran nearby is part of this same story.',
+   'place', 'a1e10004-0004-4c1a-9c1a-000000000004', 'e5f50002-0003-4c1a-9c1a-000000000013', 1, 40, 'active'),
+
+  ('f6a60002-0004-4c1a-9c1a-000000000014', 'd4e40002-0002-4c1a-9c1a-000000000002',
+   'The first Marian parish',
+   'Augustinian missionaries founded this parish in 1572, and it is regarded as the first Marian parish in the Philippines. It first carried the title of the Visitation before being changed to the Immaculate Conception in 1587. The stone church you see was built in the 1700s, which makes it the oldest standing building in Pasig. Its high altar retablo and the Museo Diocesano inside are worth the extra minutes.',
+   'place', 'a1e10002-0002-4c1a-9c1a-000000000002', 'e5f50002-0004-4c1a-9c1a-000000000014', 1, 60, 'active'),
+
+  ('f6a60002-0005-4c1a-9c1a-000000000015', 'd4e40002-0002-4c1a-9c1a-000000000002',
+   'The house that stayed a home',
+   'Bahay na Tisa is the oldest surviving house in Pasig, and unlike many ancestral homes it is still lived in by the Tech family, now across seven generations. Notice the thick adobe blocks of the ground floor carrying the hardwood floor above, and the capiz shell windows. During Martial Law it was nicknamed the Freedom House because people from opposing political sides could meet here. In 2020 the National Museum declared it an Important Cultural Property.',
+   'place', 'a1e10003-0003-4c1a-9c1a-000000000003', 'e5f50002-0005-4c1a-9c1a-000000000015', 1, 50, 'active');
+
+-- 14. Trail credentials: one per trail, public read (0007), linked_route_id
+--     required. Names are plain and factual, no ranking language, per
+--     competitive-positioning.md's rule that credentials are cohort
+--     records and never a per-user rank. requirement_to_earn describes
+--     what the app actually checks: unlocking the last stop.
+insert into public.trail_credentials (id, credential_name, linked_route_id, requirement_to_earn) values
+  ('a7b70001-0001-4c1a-9c1a-000000000001', 'Poblacion Heritage Walker',
+   'd4e40001-0001-4c1a-9c1a-000000000001',
+   'Visit all four stops of the Pasig Poblacion Heritage Walk, ending at Bahay na Tisa.'),
+  ('a7b70002-0002-4c1a-9c1a-000000000002', 'Pasig Heritage & Bakery Trailgoer',
+   'd4e40002-0002-4c1a-9c1a-000000000002',
+   'Visit all five stops of the Pasig Heritage & Bakery Trail, from Panaderia Dimas-Alang to Bahay na Tisa.');
+
+-- 15. Personal-record tables (completed_routes, user_credentials,
+--     saved_routes, saved_places, route_progress): intentionally empty,
+--     see the header. Not seeded on purpose.
 
 commit;
 

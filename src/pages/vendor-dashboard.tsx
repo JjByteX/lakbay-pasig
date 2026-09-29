@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Store } from "lucide-react";
+import { ArrowLeft, Storefront } from "@phosphor-icons/react";
 import type { Session } from "@supabase/supabase-js";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
@@ -22,6 +22,7 @@ import {
   EMPTY_BUSINESS_FORM,
   type BusinessFormState,
 } from "@/components/business/business-fields";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 /**
@@ -214,7 +215,7 @@ function BusinessDashboard({
   const showTrailList = !trailsLoading && !trailsError && trails.length > 0;
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="narrow">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="min-w-0 max-w-full break-words text-xl font-semibold text-foreground">
           {business.name}
@@ -277,7 +278,7 @@ function BusinessDashboard({
           <Link to="/vendor/items">Manage items</Link>
         </Button>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -417,13 +418,13 @@ export default function VendorDashboardPage() {
 
   if (!session) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-start gap-4 px-6 py-10">
+      <PageContainer width="narrow" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Vendor</h1>
         <p className="text-base text-muted-foreground">
           Sign in to list or manage your business.
         </p>
         <Button onClick={() => openAuth("login")}>Sign in</Button>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -522,19 +523,19 @@ export default function VendorDashboardPage() {
 
   if (checking) {
     return (
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+      <PageContainer width="narrow">
         <h1 className="text-xl font-semibold text-foreground">Vendor</h1>
         <p className="text-base text-muted-foreground">Loading…</p>
-      </div>
+      </PageContainer>
     );
   }
 
   if (checkError) {
     return (
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+      <PageContainer width="narrow">
         <h1 className="text-xl font-semibold text-foreground">Vendor</h1>
         <p className="text-base text-destructive">{checkError}</p>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -546,7 +547,7 @@ export default function VendorDashboardPage() {
     // just to hold the same fields a second way.
     if (editing) {
       return (
-        <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+        <PageContainer width="narrow">
           <h1 className="text-xl font-semibold text-foreground">Edit your listing</h1>
 
           <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
@@ -578,7 +579,7 @@ export default function VendorDashboardPage() {
               </Button>
             </div>
           </form>
-        </div>
+        </PageContainer>
       );
     }
 
@@ -597,7 +598,7 @@ export default function VendorDashboardPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="narrow">
       {/* Back button: this screen is reached from Profile's "List your
           business" row (profile.tsx), the same navigate(-1)/ArrowLeft/
           ghost-icon pattern every other detail page (discover-place-
@@ -613,7 +614,7 @@ export default function VendorDashboardPage() {
       </Button>
 
       <div className="flex items-center gap-2">
-        <Store className="h-5 w-5 shrink-0 text-foreground" />
+        <Storefront className="h-5 w-5 shrink-0 text-foreground" />
         <h1 className="text-xl font-semibold text-foreground">List your business</h1>
       </div>
 
@@ -636,6 +637,6 @@ export default function VendorDashboardPage() {
           {creating ? "Listing…" : "List my business"}
         </Button>
       </form>
-    </div>
+    </PageContainer>
   );
 }

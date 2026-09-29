@@ -1,4 +1,4 @@
-import { Bath, SquareParking, Info, Armchair, MapPin, type LucideIcon } from "lucide-react";
+import { Bathtub, LetterCircleP, Info, Armchair, MapPin, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 /**
  * Category Directory Expansion, Phase 1.2. Fixed picker list, not a
@@ -17,26 +17,26 @@ import { Bath, SquareParking, Info, Armchair, MapPin, type LucideIcon } from "lu
 export interface IconOption {
   value: string;
   label: string;
-  component: LucideIcon;
+  component: PhosphorIcon;
 }
 
 export const FACILITY_ICONS: IconOption[] = [
-  { value: "bath", label: "Restrooms", component: Bath },
-  { value: "square-parking", label: "Parking", component: SquareParking },
+  { value: "bath", label: "Restrooms", component: Bathtub },
+  { value: "square-parking", label: "Parking", component: LetterCircleP },
   { value: "info", label: "Info Desk", component: Info },
   { value: "armchair", label: "Waiting Area", component: Armchair },
 ];
 
-const ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
+const ICON_MAP: Record<string, PhosphorIcon> = Object.fromEntries(
   FACILITY_ICONS.map((option) => [option.value, option.component])
 );
 
 /**
- * Looks up a stored icon name (place_facilities.icon) back to its Lucide
+ * Looks up a stored icon name (place_facilities.icon) back to its Phosphor
  * component. Falls back to MapPin, a neutral generic marker, if a stored
  * value ever doesn't match the current shortlist, rather than throwing
  * and breaking whichever card or chip it renders inside.
  */
-export function getFacilityIcon(iconName: string): LucideIcon {
+export function getFacilityIcon(iconName: string): PhosphorIcon {
   return ICON_MAP[iconName] ?? MapPin;
 }

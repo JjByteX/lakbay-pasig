@@ -1,4 +1,5 @@
 import type { TrailSummary } from "@/lib/trail-types";
+import { cn } from "@/lib/utils";
 
 /**
  * Step 7, Phase 2.2: catalog row, name/theme/duration, same row-button
@@ -21,19 +22,27 @@ import type { TrailSummary } from "@/lib/trail-types";
 interface TrailCardProps {
   trail: TrailSummary;
   onClick: () => void;
+  // One line at md+ (name left, meta right). Opt-in: Trails catalog,
+  // saved-trail-row.tsx and completed-trail-row.tsx pass it; stacked below md.
+  inline?: boolean;
 }
 
-export function TrailCard({ trail, onClick }: Readonly<TrailCardProps>) {
+export function TrailCard({ trail, onClick, inline = false }: Readonly<TrailCardProps>) {
   const meta = [trail.theme, trail.estimated_duration, trail.estimated_budget].filter(Boolean).join(" · ");
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted"
+      className={cn(
+        "flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted",
+        inline && "md:flex-row md:items-center md:justify-between md:gap-6",
+      )}
     >
-      <span className="text-base font-semibold text-foreground">{trail.name}</span>
-      {meta && <span className="text-sm text-muted-foreground">{meta}</span>}
+      <span className={cn("text-base font-semibold text-foreground", inline && "md:min-w-0 md:truncate")}>
+        {trail.name}
+      </span>
+      {meta && <span className={cn("text-sm text-muted-foreground", inline && "md:shrink-0")}>{meta}</span>}
     </button>
   );
 }

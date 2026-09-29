@@ -1,6 +1,6 @@
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import { DurationField } from "@/components/ui/duration-field";
 import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AdminFormCard } from "@/components/admin/admin-form-card";
 
 // Trail builder: one screen, no stepper. The trail info form is the left
 // column, Stops the right, and per stop Discovery Content (5.1) is a centered
@@ -121,6 +122,12 @@ const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
   sequence_order: "",
   unlock_radius: "",
 };
+
+// A discovery entry written before its trail (or stop) is saved has an id of
+// the form draft-N instead of a database uuid. See persistDraftDiscovery.
+function isDraftEntry(entryId: string | null): boolean {
+  return entryId !== null && entryId.startsWith("draft-");
+}
 
 // Extracted from persistStops (4.5/5.4 comment above still applies): the
 // "renumber surviving stops" two-pass sequence (see the Phase 1/Phase 2
@@ -292,7 +299,7 @@ function DiscoveryContentModalBody({
                 disabled={discoverySaving}
                 onClick={() => onDelete(entry.id)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash className="h-4 w-4" />
                 <span className="sr-only">Delete</span>
               </Button>
             </div>
@@ -490,6 +497,9 @@ export default function AdminTrailBuilderPage() {
   // "content count" badge (below) and the per stop modal
   // share one source of truth instead of two independent fetches drifting.
   const [discoveryContent, setDiscoveryContent] = useState<DiscoveryContentRow[]>([]);
+  // Ids for discovery entries written before the trail exists, see
+  // isDraftEntry and persistDraftDiscovery.
+  const draftEntryCounter = useRef(0);
   const [discoveryLoading, setDiscoveryLoading] = useState(!isNew);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [discoverySaving, setDiscoverySaving] = useState(false);
@@ -705,6 +715,17 @@ export default function AdminTrailBuilderPage() {
         }
       }
 
+      // Discovery content written against those stops before the trail
+      // existed goes in last, once the stops have their real ids. A failure
+      // here is handled like a failed stops write: stay, routeId is set, and
+      // the next Save Changes retries.
+      const draftError = await persistDraftDiscovery(data.id);
+      if (draftError) {
+        setSaving(false);
+        setError(draftError);
+        return;
+      }
+
       setSaving(false);
       navigate(`/admin/trails/${data.id}`, { replace: true });
       return;
@@ -726,6 +747,14 @@ export default function AdminTrailBuilderPage() {
         setSaving(false);
         return;
       }
+    }
+
+    // Same for discovery content still waiting as a draft.
+    const draftError = await persistDraftDiscovery(routeId!);
+    if (draftError) {
+      setSaving(false);
+      setError(draftError);
+      return;
     }
 
     setSaving(false);
@@ -764,6 +793,9 @@ export default function AdminTrailBuilderPage() {
   async function persistStops(nextStops: StopRow[], forRouteId: string | null = routeId): Promise<boolean> {
     if (!forRouteId) {
       setStops(nextStops.map((s, index) => ({ ...s, sequence_order: index })));
+      // A removed stop takes its draft discovery content with it.
+      const keptStopIds = new Set(nextStops.map((s) => s.id));
+      setDiscoveryContent((prev) => prev.filter((d) => keptStopIds.has(d.route_stop_id)));
       return true;
     }
 
@@ -821,6 +853,15 @@ export default function AdminTrailBuilderPage() {
       stop_id: s.stop_id,
       sequence_order: nextStops.indexOf(s),
     }));
+
+    // Draft discovery content was keyed to its stop's temp id. Now that the
+    // stop has a real id, point the draft at it.
+    if (insertedRows.length > 0) {
+      const realIdByTempId = new Map(insertedRows.map((row) => [`temp-${row.stop_id}`, row.id]));
+      setDiscoveryContent((prev) =>
+        prev.map((d) => (realIdByTempId.has(d.route_stop_id) ? { ...d, route_stop_id: realIdByTempId.get(d.route_stop_id)! } : d))
+      );
+    }
 
     setStops(
       [...survivorRows, ...insertedRows]
@@ -903,6 +944,67 @@ export default function AdminTrailBuilderPage() {
     setEditingEntryId(entry.id);
   }
 
+  // Discovery content picked before the trail (or its stops) was saved.
+  // Written once there is a route and its stops have real ids, in a single
+  // insert, then swapped into state for the saved rows. Each draft is matched
+  // to its saved stop by stop_id, since that is what its temp stop id was
+  // built from (handlePick). related_location_type/id come from that saved
+  // stop row, same source as a normal insert. Returns an error message to
+  // show, or null when there was nothing to write or the write succeeded.
+  async function persistDraftDiscovery(forRouteId: string): Promise<string | null> {
+    const drafts = discoveryContent.filter((entry) => isDraftEntry(entry.id));
+    if (drafts.length === 0) return null;
+
+    const failure = (detail: string) =>
+      `The trail and its stops were saved, but discovery content was not: ${detail} Press Save Changes to retry.`;
+
+    const { data: stopRows, error: stopsError } = await supabase
+      .from("route_stops")
+      .select("id, stop_type, stop_id")
+      .eq("route_id", forRouteId);
+    if (stopsError || !stopRows) return failure(stopsError?.message ?? "could not read the saved stops.");
+
+    const rows = drafts.flatMap((draft) => {
+      const saved =
+        stopRows.find((row) => row.id === draft.route_stop_id) ??
+        stopRows.find((row) => row.stop_id === draft.route_stop_id.replace(/^temp-/, ""));
+      if (!saved) return [];
+      return [
+        {
+          route_id: forRouteId,
+          title: draft.title,
+          content: draft.content,
+          related_location_type: saved.stop_type as "place" | "business",
+          related_location_id: saved.stop_id,
+          related_route_stop_id: saved.id,
+          sequence_order: draft.sequence_order,
+          unlock_radius: draft.unlock_radius,
+        },
+      ];
+    });
+    if (rows.length === 0) return null;
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("discovery_content")
+      .insert(rows)
+      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review");
+    if (insertError || !inserted) return failure(insertError?.message ?? "could not save it.");
+
+    setDiscoveryContent((prev) => [
+      ...prev.filter((entry) => !isDraftEntry(entry.id)),
+      ...inserted.map((row) => ({
+        id: row.id,
+        route_stop_id: row.related_route_stop_id as string,
+        title: row.title,
+        content: row.content,
+        sequence_order: row.sequence_order,
+        unlock_radius: row.unlock_radius,
+        needs_place_review: row.needs_place_review,
+      })),
+    ]);
+    return null;
+  }
+
   const canSubmitDiscoveryEntry =
     discoveryForm.title.trim().length > 0 &&
     discoveryForm.content.trim().length > 0 &&
@@ -920,12 +1022,37 @@ export default function AdminTrailBuilderPage() {
   // side on every write, per phase-5-decisions.md Decision 1, this
   // function must never set it.
   async function handleSaveDiscoveryEntry(stop: StopRow) {
-    if (!canSubmitDiscoveryEntry || !routeId) return;
+    if (!canSubmitDiscoveryEntry) return;
 
     const sequenceOrder = Number(discoveryForm.sequence_order);
     const unlockRadius = Number(discoveryForm.unlock_radius);
     if (!Number.isFinite(sequenceOrder) || !Number.isFinite(unlockRadius)) {
       setDiscoveryError("Sequence order and unlock radius must be numbers.");
+      return;
+    }
+
+    // A trail and its stops are one thing, so discovery content can be written
+    // before either exists. Until then the entry is a draft held on this page
+    // and written by persistDraftDiscovery when the trail is created. Also a
+    // draft: anything on a stop that has not been saved yet, and any entry
+    // already a draft being edited.
+    if (!routeId || stop.id.startsWith("temp-") || isDraftEntry(editingEntryId)) {
+      const fields = {
+        title: discoveryForm.title.trim(),
+        content: discoveryForm.content.trim(),
+        sequence_order: sequenceOrder,
+        unlock_radius: unlockRadius,
+      };
+      if (editingEntryId === "new") {
+        draftEntryCounter.current += 1;
+        setDiscoveryContent((prev) => [
+          ...prev,
+          { id: `draft-${draftEntryCounter.current}`, route_stop_id: stop.id, ...fields, needs_place_review: false },
+        ]);
+      } else {
+        setDiscoveryContent((prev) => prev.map((entry) => (entry.id === editingEntryId ? { ...entry, ...fields } : entry)));
+      }
+      setEditingEntryId(null);
       return;
     }
 
@@ -1005,6 +1132,11 @@ export default function AdminTrailBuilderPage() {
   }
 
   async function handleDeleteDiscoveryEntry(entryId: string) {
+    if (isDraftEntry(entryId)) {
+      setDiscoveryContent((prev) => prev.filter((entry) => entry.id !== entryId));
+      return;
+    }
+
     setDiscoverySaving(true);
     setDiscoveryError(null);
 
@@ -1080,8 +1212,7 @@ export default function AdminTrailBuilderPage() {
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                disabled={savingStops || stop.id.startsWith("temp-")}
-                title={stop.id.startsWith("temp-") ? "Save the trail first to add discovery content" : undefined}
+                disabled={savingStops}
                 onClick={() => openDiscoveryModal(stop.id)}
               >
                 <BookOpen className="h-4 w-4" />
@@ -1119,7 +1250,7 @@ export default function AdminTrailBuilderPage() {
                 disabled={savingStops}
                 onClick={() => handleRemoveStop(stop.id)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash className="h-4 w-4" />
                 <span className="sr-only">Remove stop</span>
               </Button>
             </div>
@@ -1138,7 +1269,7 @@ export default function AdminTrailBuilderPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 grow flex-col gap-6">
       {/* Publish/Unpublish (the actions slot): top right, only once the trail
           exists. While it is unavailable the reason sits directly under it,
           never a silently disabled button. */}
@@ -1159,138 +1290,140 @@ export default function AdminTrailBuilderPage() {
         }
       />
 
-      <div className="flex flex-col gap-6">
+      <div className="flex min-h-0 grow flex-col gap-6">
         {/* Info fields and Stops share one card -- per ux-ui-guidelines.md's
             card fragmentation rule, this is one logical "edit this trail"
-            context, not two. Stops used to be a separate no-card right
-            column (a two-column split); it's now a section inside this
-            same card, split off with a divider rather than nesting a
-            second card. The error line and the Cancel/Save row stay
-            outside the card, same split as before. */}
-        <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Route Name</Label>
-              <Input
-                id="name"
-                value={info.name}
-                onChange={(e) => updateInfoField("name", e.target.value)}
-                required
-                maxLength={150}
-              />
-              <CharCount value={info.name} max={150} />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="category">Category</Label>
-              <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
-                <SelectTrigger id="category">
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
-            </div>
-          </div>
+            context, not two. Info is the left column and Stops the right,
+            split by a vertical divider (same layout as the place form's
+            step 1 and the business page), stacked below lg. The grid grows
+            with the card so the divider runs its full height. The error
+            line and the Cancel/Save row stay outside the card. */}
+        <AdminFormCard>
+          <div className="grid grow grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
+            <div className="flex flex-col gap-4 lg:pr-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="name">Route Name</Label>
+                  <Input
+                    id="name"
+                    value={info.name}
+                    onChange={(e) => updateInfoField("name", e.target.value)}
+                    required
+                    maxLength={150}
+                  />
+                  <CharCount value={info.name} max={150} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select value={info.category_id} onValueChange={(v) => updateInfoField("category_id", v)}>
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="estimated_duration">Estimated Duration</Label>
-              <DurationField
-                id="estimated_duration"
-                value={info.estimated_duration}
-                onChange={(next) => updateInfoField("estimated_duration", next)}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="estimated_budget">Estimated Budget</Label>
-              {/* estimated_budget is numeric (migration 0019): a single
-                  peso amount, not a range, per admin-form-fields-plan.md
-                  #4 -- drops the old "e.g. ₱300–500" range placeholder.
-                  The ₱ sign is a fixed label beside the field, never
-                  typed by the user; the number input's own up/down
-                  arrows step the value. Same pattern as
-                  admin-place-detail.tsx's entrance_fee field. */}
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                  ₱
-                </span>
-                <Input
-                  id="estimated_budget"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={100000}
-                  step={1}
-                  placeholder="e.g. 300"
-                  value={info.estimated_budget}
-                  onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
-                  className="pl-7"
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="estimated_duration">Estimated Duration</Label>
+                  <DurationField
+                    id="estimated_duration"
+                    value={info.estimated_duration}
+                    onChange={(next) => updateInfoField("estimated_duration", next)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="estimated_budget">Estimated Budget</Label>
+                  {/* estimated_budget is numeric (migration 0019): a single
+                      peso amount, not a range, per admin-form-fields-plan.md
+                      #4 -- drops the old "e.g. ₱300–500" range placeholder.
+                      The ₱ sign is a fixed label beside the field, never
+                      typed by the user; the number input's own up/down
+                      arrows step the value. Same pattern as
+                      admin-place-detail.tsx's entrance_fee field. */}
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      ₱
+                    </span>
+                    <Input
+                      id="estimated_budget"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={100000}
+                      step={1}
+                      placeholder="e.g. 300"
+                      value={info.estimated_budget}
+                      onChange={(e) => updateInfoField("estimated_budget", e.target.value)}
+                      className="pl-7"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Recommended time is day chips plus a time range, too wide for
+                  the row duration and budget share, so it gets its own row. */}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="recommended_time">Recommended Time</Label>
+                <RecommendedTimeField
+                  id="recommended_time"
+                  ariaLabel="Recommended time"
+                  value={info.recommended_time}
+                  onChange={(next) => updateInfoField("recommended_time", next)}
                 />
               </div>
-            </div>
-          </div>
 
-          {/* Recommended time is day chips plus a time range, too wide for
-              the three column row it used to share with duration and
-              budget, so it gets its own row. */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="recommended_time">Recommended Time</Label>
-            <RecommendedTimeField
-              id="recommended_time"
-              ariaLabel="Recommended time"
-              value={info.recommended_time}
-              onChange={(next) => updateInfoField("recommended_time", next)}
-            />
-          </div>
+              <div className="flex flex-col gap-2 sm:w-60">
+                <Label htmlFor="run_type">Run Type</Label>
+                <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
+                  <SelectTrigger id="run_type">
+                    <SelectValue placeholder="Select a run type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RUN_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="flex flex-col gap-2 sm:w-60">
-            <Label htmlFor="run_type">Run Type</Label>
-            <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
-              <SelectTrigger id="run_type">
-                <SelectValue placeholder="Select a run type" />
-              </SelectTrigger>
-              <SelectContent>
-                {RUN_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Stops: a section inside the same card, not a second card and not
-              a separate column. Available before the trail is created, stops
-              picked now are saved together with the trail. */}
-          <div className="flex flex-col gap-4 border-t border-border pt-4">
-            <h2 className="text-base font-semibold text-foreground">Stops</h2>
-            {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
-
-            {stopsListBody()}
-
-            {stops.some((s) => s.id.startsWith("temp-")) && (
-              <p className="text-xs text-muted-foreground">
-                {routeId
-                  ? "Some stops are not saved yet. Press Save Changes to save them."
-                  : "Stops are saved when you create the trail. Discovery content can be added after that."}
-              </p>
-            )}
-
-            <div>
-              <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
-                Add Stop
-              </Button>
             </div>
 
-            <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
+            {/* Stops: the right column of the same card. Available before the
+                trail is created, stops picked now are saved together with the
+                trail. */}
+            <div className="flex flex-col gap-4 lg:pl-4">
+              <h2 className="text-base font-semibold text-foreground">Stops</h2>
+              {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
+
+              {stopsListBody()}
+
+              {routeId && stops.some((s) => s.id.startsWith("temp-")) && (
+                <p className="text-xs text-muted-foreground">
+                  Some stops are not saved yet. Press Save Changes to save them.
+                </p>
+              )}
+
+              <div>
+                <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
+                  Add Stop
+                </Button>
+              </div>
+
+              <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
+            </div>
           </div>
-        </div>
+        </AdminFormCard>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

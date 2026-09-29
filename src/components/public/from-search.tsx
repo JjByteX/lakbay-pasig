@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { LocateFixed, MapPin, Search, X } from "lucide-react";
+import { GpsFix, MapPin, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
@@ -190,7 +190,7 @@ export function FromSearch({
             onClick={() => void runSearch()}
             disabled={searchStatus === "searching" || !query.trim()}
           >
-            <Search className="h-4 w-4" />
+            <MagnifyingGlass className="h-4 w-4" />
           </Button>
         </div>
         <button
@@ -213,7 +213,7 @@ export function FromSearch({
       <div className="max-h-[40vh] overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground">
         {hasCustomFrom && (
           <button type="button" className={ROW_CLASS} onClick={onUseMyLocation}>
-            <LocateFixed className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <GpsFix className="h-4 w-4 shrink-0 text-muted-foreground" />
             Your location
           </button>
         )}

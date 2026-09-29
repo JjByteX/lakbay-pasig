@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AdminFormCard, ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
 
 // Phase 5.3 (step-4-phases.md, step-4-plan.md's review exception): the
 // Places queue (admin-places.tsx) reuses "the same table and verify/reject
@@ -298,7 +299,7 @@ export default function AdminDiscoveryContentReviewPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 grow flex-col gap-6">
       {/* Reached from the Places review queue (this route lives under
           /admin/places/discovery), so Places is the parent crumb. */}
       <AdminPageHeader
@@ -320,7 +321,7 @@ export default function AdminDiscoveryContentReviewPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+      <AdminFormCard>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1">
             <Label>Trail</Label>
@@ -361,9 +362,9 @@ export default function AdminDiscoveryContentReviewPage() {
             ? "Flagged because Trail Content tied to a business has no place-verification concept of its own."
             : "Flagged because the related place is not yet verified."}
         </p>
-      </div>
+      </AdminFormCard>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex min-h-0 flex-col gap-2">
         <h2 className="text-sm font-semibold text-foreground">Review History</h2>
         <ReviewHistoryList reviews={reviews} />
       </div>
@@ -424,7 +425,7 @@ function ReviewHistoryList({ reviews }: Readonly<{ reviews: ReviewEntry[] | null
   }
 
   return (
-    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+    <ul className={`flex flex-col divide-y divide-border rounded-lg border border-border bg-card ${ADMIN_SCROLL_CLASS}`}>
       {reviews.map((r) => (
         <li key={r.id} className="flex flex-col gap-1 p-4">
           <div className="flex items-center gap-2">

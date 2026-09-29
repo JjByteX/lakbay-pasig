@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Star } from "lucide-react";
+import { Star } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
@@ -25,6 +25,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
+import { ReviewHistoryTable } from "@/components/admin/review-history-table";
 
 // 6.5: read only list of business_items for staff review, name and price
 // per item, missing price shown plainly, not hidden, per
@@ -504,7 +506,7 @@ export default function AdminBusinessDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 grow flex-col gap-6">
       <AdminPageHeader
         breadcrumb={[{ label: "Businesses", to: "/admin/businesses" }]}
         title={form.name || "Business"}
@@ -546,20 +548,27 @@ export default function AdminBusinessDetailPage() {
           ux-ui-guidelines.md's no-fragmentation rule — one card's worth of
           related content (form + items) stays together in one tab rather
           than splitting into two pages. */}
-      <Tabs defaultValue="info">
-        <TabsList>
+      <Tabs defaultValue="info" className="flex min-h-0 grow flex-col">
+        <TabsList className="shrink-0 self-start">
           <TabsTrigger value="info">Current Info</TabsTrigger>
           <TabsTrigger value="history">Review History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="info" className="flex flex-col gap-6">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <TabsContent value="info" className="flex min-h-0 grow flex-col">
+          <form onSubmit={handleSubmit} className="flex min-h-0 grow flex-col gap-6">
           <BusinessFields
             form={form}
             onChange={updateField}
             nameAndTypeInRow
             categories={categories}
             categoriesError={categoriesError}
+            className={ADMIN_SCROLL_CLASS}
+            sideColumn={
+              <div className="flex flex-col gap-3">
+                <h2 className="text-sm font-semibold text-foreground">Items</h2>
+                <ItemList items={items} />
+              </div>
+            }
           />
 
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -573,15 +582,10 @@ export default function AdminBusinessDetailPage() {
             </Button>
           </div>
           </form>
-
-          <div className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Items</h2>
-            <ItemList items={items} />
-          </div>
         </TabsContent>
 
-        <TabsContent value="history">
-          <ReviewHistoryList reviews={reviews} />
+        <TabsContent value="history" className="flex min-h-0 grow flex-col">
+          <ReviewHistoryTable reviews={reviews} />
         </TabsContent>
       </Tabs>
 
@@ -631,55 +635,6 @@ export default function AdminBusinessDetailPage() {
   );
 }
 
-// 6.8: full business_reviews history, staff id (via display name), action,
-// notes, timestamp. Lives in the Review History tab, separate from the
-// Current Info tab per plan 6.8's no-fragmentation instruction. Same
-// structure as admin-place-detail.tsx's ReviewHistoryList, with a third
-// action variant: 'feature' (6.7), styled with the same accent badge used
-// for the Featured badge/status elsewhere on this page and in
-// admin-businesses.tsx, per ux-ui-guidelines.md's "one label per concept,
-// same icon/style per concept everywhere" rule.
-const REVIEW_ACTION_LABEL: Record<BusinessReviewEntry["action"], string> = {
-  verify: "Verified",
-  reject: "Rejected",
-  feature: "Featured",
-};
-
-const REVIEW_ACTION_VARIANT: Record<BusinessReviewEntry["action"], "default" | "destructive" | "accent"> = {
-  verify: "default",
-  reject: "destructive",
-  feature: "accent",
-};
-
-function ReviewHistoryList({ reviews }: Readonly<{ reviews: BusinessReviewEntry[] | null }>) {
-  if (reviews === null) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
-  }
-
-  if (reviews.length === 0) {
-    return <p className="text-sm text-muted-foreground">No review history yet.</p>;
-  }
-
-  return (
-    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-      {reviews.map((entry) => (
-        <li key={entry.id} className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
-              {entry.staff_name ?? "Staff"}
-            </span>
-            <Badge variant={REVIEW_ACTION_VARIANT[entry.action]}>
-              {REVIEW_ACTION_LABEL[entry.action]}
-            </Badge>
-          </div>
-          {entry.notes && <p className="text-sm text-muted-foreground">{entry.notes}</p>}
-          <p className="text-xs text-muted-foreground">{new Date(entry.created_at).toLocaleString()}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 // 6.5: name and price per item, missing price shown plainly rather than
 // omitted from the row, per vendor-mode-spec.md's "Warning, Not a Block"
 // section: an item without a price still displays normally, it's only
@@ -697,9 +652,9 @@ function ItemList({ items }: Readonly<{ items: BusinessItem[] | null }>) {
   }
 
   return (
-    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+    <ul className="flex flex-col divide-y divide-border">
       {items.map((item) => (
-        <li key={item.id} className="flex items-center justify-between gap-4 p-4">
+        <li key={item.id} className="flex items-center justify-between gap-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             {/* Item photos plan: first photo only, read only, matching
                 vendor-items.tsx's and discover-business-detail.tsx's own

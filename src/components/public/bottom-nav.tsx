@@ -1,4 +1,4 @@
-import { Home, Map, Compass, Bookmark } from "lucide-react";
+import { House, MapTrifold, Compass, Bookmark } from "@phosphor-icons/react";
 import { NavLink } from "react-router-dom";
 
 // Fixed left-to-right order per navigation-and-access-control.md's Bottom Nav
@@ -7,12 +7,12 @@ import { NavLink } from "react-router-dom";
 // per direct instruction -- confirmed to remove it from here rather than
 // keep it in both places, so there's exactly one way to reach Profile, not
 // two competing entry points for the same destination (ux-ui-guidelines.md's
-// "one action, one trigger, one place"). Icons from lucide-react per
+// "one action, one trigger, one place"). Icons from Phosphor per
 // ux-ui-guidelines.md's icon rules, each paired with a visible text label
 // (not universally-iconic-enough to drop the label).
 const TABS = [
-  { to: "/", label: "Home", icon: Home, end: true },
-  { to: "/trails", label: "Trails", icon: Map, end: false },
+  { to: "/", label: "Home", icon: House, end: true },
+  { to: "/trails", label: "Trails", icon: MapTrifold, end: false },
   { to: "/discover", label: "Discover", icon: Compass, end: false },
   { to: "/saved", label: "Saved", icon: Bookmark, end: false },
 ] as const;
@@ -36,8 +36,8 @@ export function BottomNav() {
               <>
                 {/* Outline icon always, active vs. inactive communicated
                     solely by the text-primary/text-muted-foreground color
-                    change above -- the earlier active-tab fill (lucide's
-                    `fill` SVG prop set to currentColor) has been removed
+                    change above -- the earlier active-tab fill (an SVG `fill` set to currentColor; Phosphor's
+                    fill weight stays unused here too) has been removed
                     per direct request, so no tab icon ever renders filled
                     when switching between them. */}
                 <tab.icon className="h-5 w-5 shrink-0" />

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LucideIcon } from "lucide-react";
-import { MoreHorizontal } from "lucide-react";
+import { DotsThree, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
@@ -133,8 +132,8 @@ const TAB_CONFIG: Record<
     emptyNoun: string;
     permission: "manage_places" | "build_trails" | "publish_events" | "review_businesses";
     fetchAll: () => Promise<CategoryRow[]>;
-    getIcon: (iconName: string) => LucideIcon;
-    icons: { value: string; label: string; component: LucideIcon }[];
+    getIcon: (iconName: string) => PhosphorIcon;
+    icons: { value: string; label: string; component: PhosphorIcon }[];
     create: (input: { name: string; icon: string; active: boolean }) => Promise<void>;
     update: (id: string, input: { name: string; icon: string; active: boolean }) => Promise<void>;
   }
@@ -390,7 +389,7 @@ export default function AdminCategoriesPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
+              <DotsThree className="h-4 w-4" />
               <span className="sr-only">Open actions</span>
             </Button>
           </DropdownMenuTrigger>

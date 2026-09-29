@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
+import { cn } from "@/lib/utils";
 
 // Phase 6.4 (step-5-phases.md): full record fields from businesses and
 // business_items (migration 0004), scoped through the widened
@@ -156,8 +158,11 @@ export default function DiscoverBusinessDetailPage() {
       });
   }, [id]);
 
+  // xl+: photos left (sticky), info right. No photos -> single narrow column.
+  const hasPhotos = photos.length > 0;
+
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width={hasPhotos ? "wide" : "narrow"}>
       <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
         <ArrowLeft className="h-5 w-5" />
       </Button>
@@ -169,8 +174,8 @@ export default function DiscoverBusinessDetailPage() {
       )}
 
       {!loading && itemsLoaded && business && (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-2 xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
+          <div className="flex flex-col gap-2 xl:col-start-2 xl:row-start-1">
             <h1 className="text-xl font-semibold text-foreground">{business.name}</h1>
             {business.category && (
               <p className="text-sm text-muted-foreground">{business.category}</p>
@@ -202,7 +207,7 @@ export default function DiscoverBusinessDetailPage() {
               place detail page's own gallery -- right under the header/
               badge block, above the tabs. Renders nothing when this
               business has no photos yet. */}
-          <PhotoGallery photoUrls={photos} />
+          <PhotoGallery photoUrls={photos} className="xl:sticky xl:top-6 xl:col-start-1 xl:row-span-2 xl:row-start-1" />
 
           {/* Story tab phase: segmented Details / Story control, same
               Tabs primitive discover.tsx already uses for map/list.
@@ -220,7 +225,7 @@ export default function DiscoverBusinessDetailPage() {
               carry an always-empty third tab. Label keys off business_type
               (vendor-mode-spec.md's Business Listing Type), the stable
               field for this, not the open-ended category text. */}
-          <Tabs defaultValue="details">
+          <Tabs defaultValue="details" className="xl:col-start-2 xl:row-start-2">
             <TabsList
               className={
                 items.length > 0 ? "grid w-full grid-cols-3" : "grid w-full grid-cols-2"
@@ -345,6 +350,6 @@ export default function DiscoverBusinessDetailPage() {
           </Tabs>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

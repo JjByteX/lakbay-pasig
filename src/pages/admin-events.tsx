@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { MoreHorizontal } from "lucide-react";
+import { DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -248,7 +248,7 @@ export default function AdminEventsPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updatingId === event.id}>
-              <MoreHorizontal className="h-4 w-4" />
+              <DotsThree className="h-4 w-4" />
               <span className="sr-only">Open actions</span>
             </Button>
           </DropdownMenuTrigger>

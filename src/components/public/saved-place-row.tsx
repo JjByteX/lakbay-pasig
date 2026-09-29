@@ -42,10 +42,10 @@ export function SavedPlaceRow({ place, onClick, onUnsave }: Readonly<SavedPlaceR
       <button
         type="button"
         onClick={onClick}
-        className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left"
+        className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left md:grid md:grid-cols-[1fr_12rem_auto] md:items-center md:gap-6"
       >
-        <span className="truncate text-base font-semibold text-foreground">{place.name}</span>
-        <span className="text-sm text-muted-foreground">{place.category}</span>
+        <span className="truncate text-base font-semibold text-foreground md:min-w-0">{place.name}</span>
+        <span className="text-sm text-muted-foreground md:min-w-0 md:truncate">{place.category}</span>
         <VerificationBadge status={place.verification_status} />
       </button>
       <SaveButton placeId={place.id} onToggle={(saved) => !saved && onUnsave()} />

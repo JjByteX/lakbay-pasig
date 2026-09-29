@@ -25,10 +25,10 @@ export function VerifiedItemCard({ item, onClick }: Readonly<VerifiedItemCardPro
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted"
+      className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted md:grid md:grid-cols-[1fr_12rem_auto] md:items-center md:gap-6"
     >
-      <span className="text-base font-semibold text-foreground">{item.name}</span>
-      <span className="text-sm text-muted-foreground">{item.category}</span>
+      <span className="text-base font-semibold text-foreground md:min-w-0 md:truncate">{item.name}</span>
+      <span className="text-sm text-muted-foreground md:min-w-0 md:truncate">{item.category}</span>
       <VerificationBadge status={item.verification_status} />
     </button>
   );

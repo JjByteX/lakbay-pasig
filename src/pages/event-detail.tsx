@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1-4.2 (step-6-phases.md): full record fields from events
@@ -104,7 +105,7 @@ export default function EventDetailPage() {
   const relatedPlaceName = event?.places[0]?.name ?? null;
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="narrow">
       <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
         <ArrowLeft className="h-5 w-5" />
       </Button>
@@ -155,6 +156,6 @@ export default function EventDetailPage() {
           )}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

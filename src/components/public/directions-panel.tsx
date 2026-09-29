@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Car, Bike, Footprints, MapPin, X } from "lucide-react";
+import { Car, Bicycle, Footprints, MapPin, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { formatDistance, type DirectionsErrorReason, type TravelMode } from "@/lib/directions";
 import type { DiscoverResult } from "@/lib/discover-types";
@@ -21,7 +21,7 @@ import { FromSearch } from "./from-search";
 // without a new dependency.
 const MODES: { mode: TravelMode; label: string; icon: typeof Car }[] = [
   { mode: "car", label: "Car", icon: Car },
-  { mode: "bike", label: "Bike", icon: Bike },
+  { mode: "bike", label: "Bike", icon: Bicycle },
   { mode: "foot", label: "Walk", icon: Footprints },
 ];
 

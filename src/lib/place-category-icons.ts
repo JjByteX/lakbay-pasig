@@ -1,25 +1,4 @@
-import {
-  Landmark,
-  Scroll,
-  Building2,
-  Image,
-  Flag,
-  Shapes,
-  Church,
-  Flame,
-  Palette,
-  Users,
-  Home,
-  Castle,
-  BookOpen,
-  Trees,
-  Flower2,
-  Building,
-  Waves,
-  Mountain,
-  MapPin,
-  type LucideIcon,
-} from "lucide-react";
+import { Bank, Scroll, Buildings, Image, Flag, Shapes, Church, Flame, Palette, Users, House, CastleTurret, BookOpen, Tree, Flower, Building, Waves, Mountains, MapPin, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 /**
  * Place Category Directory, Phase 1.2. Fixed picker list, not a database
@@ -39,13 +18,13 @@ import {
 export interface IconOption {
   value: string;
   label: string;
-  component: LucideIcon;
+  component: PhosphorIcon;
 }
 
 export const CATEGORY_ICONS: IconOption[] = [
-  { value: "landmark", label: "Heritage Site", component: Landmark },
+  { value: "landmark", label: "Heritage Site", component: Bank },
   { value: "scroll", label: "Historical Place", component: Scroll },
-  { value: "building-2", label: "Museum", component: Building2 },
+  { value: "building-2", label: "Museum", component: Buildings },
   { value: "image", label: "Art Gallery", component: Image },
   { value: "flag", label: "Monument", component: Flag },
   { value: "shapes", label: "Sculpture / Public Art", component: Shapes },
@@ -53,28 +32,28 @@ export const CATEGORY_ICONS: IconOption[] = [
   { value: "flame", label: "Shrine / Temple", component: Flame },
   { value: "palette", label: "Cultural Site", component: Palette },
   { value: "users", label: "Cultural Center", component: Users },
-  { value: "home", label: "Ancestral House", component: Home },
-  { value: "castle", label: "Castle / Fort", component: Castle },
+  { value: "home", label: "Ancestral House", component: House },
+  { value: "castle", label: "Castle / Fort", component: CastleTurret },
   { value: "book-open", label: "Library", component: BookOpen },
-  { value: "trees", label: "Plaza / Park", component: Trees },
-  { value: "flower-2", label: "Garden", component: Flower2 },
+  { value: "trees", label: "Plaza / Park", component: Tree },
+  { value: "flower-2", label: "Garden", component: Flower },
   { value: "building", label: "Government / Civic", component: Building },
   { value: "waves", label: "Bridge", component: Waves },
-  { value: "mountain", label: "Scenic Spot", component: Mountain },
+  { value: "mountain", label: "Scenic Spot", component: Mountains },
   { value: "map-pin", label: "Historical Marker", component: MapPin },
 ];
 
-const ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
+const ICON_MAP: Record<string, PhosphorIcon> = Object.fromEntries(
   CATEGORY_ICONS.map((option) => [option.value, option.component])
 );
 
 /**
- * Looks up a stored icon name (place_categories.icon) back to its Lucide
+ * Looks up a stored icon name (place_categories.icon) back to its Phosphor
  * component. Falls back to MapPin, a neutral generic marker, if a stored
  * value ever doesn't match the current shortlist (e.g. the shortlist
  * dropped an entry after a category already used it), rather than
  * throwing and breaking the whole card it renders inside.
  */
-export function getCategoryIcon(iconName: string): LucideIcon {
+export function getCategoryIcon(iconName: string): PhosphorIcon {
   return ICON_MAP[iconName] ?? MapPin;
 }

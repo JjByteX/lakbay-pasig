@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight } from "lucide-react";
+import { CaretRight } from "@phosphor-icons/react";
 
 // Shared heading for admin/staff sub pages: "Previous Page > Current Page",
 // every ancestor clickable. Modeled on Amkor IMS's PageHeader (inline mode):
@@ -45,7 +45,7 @@ export function AdminPageHeader({ title, breadcrumb = [], badges, actions }: Adm
               >
                 {crumb.label}
               </Link>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <CaretRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             </span>
           ))}
           <h1 aria-current="page" className="min-w-0 truncate text-xl font-semibold text-foreground">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { VerificationBadge } from "./result-card";
 import { ResultGroup, ResultRow } from "./search-result-list";
@@ -99,7 +99,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}

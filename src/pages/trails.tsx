@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchPublishedTrails } from "@/lib/trail-query";
 import type { TrailSummary } from "@/lib/trail-types";
 import { TrailCard } from "@/components/public/trail-card";
+import { PageContainer } from "@/components/public/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -31,11 +32,11 @@ function errorMessageFrom(err: unknown, fallback: string): string {
 // count, and stays a placeholder not tied to the eventual result count.
 function TrailListSkeleton() {
   return (
-    <ul className="mx-auto flex max-w-md flex-col divide-y divide-border">
+    <ul className="-mx-6 flex flex-col divide-y divide-border">
       {[0, 1, 2].map((i) => (
-        <li key={i} className="flex flex-col gap-1 px-6 py-4">
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-3 w-1/3" />
+        <li key={i} className="flex flex-col gap-1 px-6 py-4 md:flex-row md:items-center md:justify-between">
+          <Skeleton className="h-4 w-2/3 md:w-1/3" />
+          <Skeleton className="h-3 w-1/3 md:w-1/6" />
         </li>
       ))}
     </ul>
@@ -84,7 +85,7 @@ export default function TrailsPage() {
   let body: ReactNode;
   if (error) {
     body = (
-      <div className="flex items-center justify-center px-6 py-10 text-center text-sm text-destructive">
+      <div className="flex items-center justify-center py-10 text-center text-sm text-destructive">
         {error}
       </div>
     );
@@ -92,16 +93,16 @@ export default function TrailsPage() {
     body = <TrailListSkeleton />;
   } else if (trails.length === 0) {
     body = (
-      <div className="flex items-center justify-center px-6 py-10 text-center text-sm text-muted-foreground">
+      <div className="flex items-center justify-center py-10 text-center text-sm text-muted-foreground">
         No published trails yet.
       </div>
     );
   } else {
     body = (
-      <ul className="mx-auto flex max-w-md flex-col divide-y divide-border">
+      <ul className="-mx-6 flex flex-col divide-y divide-border">
         {trails.map((trail) => (
           <li key={trail.id}>
-            <TrailCard trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
+            <TrailCard inline trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
           </li>
         ))}
       </ul>
@@ -109,10 +110,9 @@ export default function TrailsPage() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col py-6">
-      <h1 className="mx-auto w-full max-w-md px-6 text-xl font-semibold text-foreground">Trails</h1>
-
-      <div className="mt-4">{body}</div>
-    </div>
+    <PageContainer width="wide" className="gap-4">
+      <h1 className="text-xl font-semibold text-foreground">Trails</h1>
+      {body}
+    </PageContainer>
   );
 }

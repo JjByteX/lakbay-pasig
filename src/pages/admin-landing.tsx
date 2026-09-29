@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, ImagePlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, CameraPlus, DotsThree, Pencil, Trash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -136,7 +136,7 @@ export default function AdminLandingPage() {
 
       {!loading && slides.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-input py-16 text-center">
-          <ImagePlus className="h-8 w-8 text-muted-foreground" />
+          <CameraPlus className="h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">No slides yet.</p>
         </div>
       )}
@@ -180,7 +180,7 @@ export default function AdminLandingPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
+                    <DotsThree className="h-4 w-4" />
                     <span className="sr-only">Open actions</span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -193,7 +193,7 @@ export default function AdminLandingPage() {
                     className="text-destructive focus:text-destructive"
                     onClick={() => setDeleteTarget(slide)}
                   >
-                    <Trash2 className="mr-2 h-4 w-4" />
+                    <Trash className="mr-2 h-4 w-4" />
                     Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>

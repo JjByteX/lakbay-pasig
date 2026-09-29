@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ImagePlus, Loader2, X } from "lucide-react";
+import { CaretLeft, CaretRight, CameraPlus, CircleNotch, X } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { usePlaceReview, type PlaceReviewEntry } from "@/hooks/use-place-review";
@@ -34,6 +34,8 @@ import { DurationField } from "@/components/ui/duration-field";
 import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AdminFormCard } from "@/components/admin/admin-form-card";
+import { ReviewHistoryTable } from "@/components/admin/review-history-table";
 
 // Storage bucket for place photos. Not yet created by any migration in this
 // repo, per architecture-notes.md's "what must never be touched without
@@ -499,7 +501,7 @@ export default function AdminPlaceDetailPage() {
   if (step === 3) stepSection = "history";
 
   const placeForm = (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form onSubmit={handleSubmit} className="flex min-h-0 grow flex-col gap-6">
       <PlaceFormFields
         stepHeading={`Step ${step} of 3: ${stepLabel}`}
         form={form}
@@ -510,32 +512,34 @@ export default function AdminPlaceDetailPage() {
         facilities={facilities}
         facilitiesError={facilitiesError}
         section={stepSection}
+        historyFooter={
+          <>
+            {isNew && (
+              <p className="text-sm text-muted-foreground">
+                Save this place before adding historical or current photos.
+              </p>
+            )}
+            {!isNew && (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <PhotoUploadArea
+                  label="Historical Photos"
+                  photos={historicalPhotos}
+                  uploading={uploading === "historical"}
+                  onSelect={(e) => handlePhotoSelected(e, "historical")}
+                  onRemove={(photo) => handleRemovePhoto(photo, "historical")}
+                />
+                <PhotoUploadArea
+                  label="Current Photos"
+                  photos={currentPhotos}
+                  uploading={uploading === "current"}
+                  onSelect={(e) => handlePhotoSelected(e, "current")}
+                  onRemove={(photo) => handleRemovePhoto(photo, "current")}
+                />
+              </div>
+            )}
+          </>
+        }
       />
-
-      {step === 3 && isNew && (
-        <p className="text-sm text-muted-foreground">
-          Save this place before adding historical or current photos.
-        </p>
-      )}
-
-      {step === 3 && !isNew && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <PhotoUploadArea
-            label="Historical Photos"
-            photos={historicalPhotos}
-            uploading={uploading === "historical"}
-            onSelect={(e) => handlePhotoSelected(e, "historical")}
-            onRemove={(photo) => handleRemovePhoto(photo, "historical")}
-          />
-          <PhotoUploadArea
-            label="Current Photos"
-            photos={currentPhotos}
-            uploading={uploading === "current"}
-            onSelect={(e) => handlePhotoSelected(e, "current")}
-            onRemove={(photo) => handleRemovePhoto(photo, "current")}
-          />
-        </div>
-      )}
 
       {step === 1 && missingStep1.length > 0 && (
         <p className="text-sm text-muted-foreground">
@@ -566,20 +570,20 @@ export default function AdminPlaceDetailPage() {
             variant="outline"
             onClick={() => setStep(step === 3 ? 2 : 1)}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <CaretLeft className="h-4 w-4" />
             Back
           </Button>
         )}
         {step === 1 && (
           <Button key="next-1" type="button" disabled={missingStep1.length > 0} onClick={() => setStep(2)}>
             Next
-            <ChevronRight className="h-4 w-4" />
+            <CaretRight className="h-4 w-4" />
           </Button>
         )}
         {step === 2 && (
           <Button key="next-2" type="button" disabled={missingStep2.length > 0} onClick={() => setStep(3)}>
             Next
-            <ChevronRight className="h-4 w-4" />
+            <CaretRight className="h-4 w-4" />
           </Button>
         )}
         {step === 3 && (
@@ -592,7 +596,7 @@ export default function AdminPlaceDetailPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex min-h-0 grow flex-col gap-6">
       <AdminPageHeader
         breadcrumb={[{ label: "Places", to: "/admin/places" }]}
         title={isNew ? "New Place" : form.name || "Edit Place"}
@@ -612,16 +616,18 @@ export default function AdminPlaceDetailPage() {
       {isNew ? (
         placeForm
       ) : (
-        <Tabs defaultValue="info">
-          <TabsList>
+        <Tabs defaultValue="info" className="flex min-h-0 grow flex-col">
+          <TabsList className="shrink-0 self-start">
             <TabsTrigger value="info">Current Info</TabsTrigger>
             <TabsTrigger value="history">Review History</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="info">{placeForm}</TabsContent>
+          <TabsContent value="info" className="flex min-h-0 grow flex-col">
+            {placeForm}
+          </TabsContent>
 
-          <TabsContent value="history">
-            <ReviewHistoryList reviews={reviews} />
+          <TabsContent value="history" className="flex min-h-0 grow flex-col">
+            <ReviewHistoryTable reviews={reviews} />
           </TabsContent>
         </Tabs>
       )}
@@ -674,6 +680,7 @@ export default function AdminPlaceDetailPage() {
 
 function PlaceFormFields({
   stepHeading,
+  historyFooter,
   form,
   updateField,
   toggleFacility,
@@ -684,6 +691,9 @@ function PlaceFormFields({
   section,
 }: Readonly<{
   stepHeading: string;
+  /** Rendered at the end of the step 3 card, so the photo areas scroll with
+   * the rest of the card instead of sitting outside it. */
+  historyFooter?: ReactNode;
   form: PlaceFormState;
   updateField: <K extends keyof PlaceFormState>(key: K, value: PlaceFormState[K]) => void;
   toggleFacility: (facilityId: string) => void;
@@ -788,6 +798,7 @@ function PlaceFormFields({
     <LocationPicker
       label="Address"
       placeholder="Type an address and press Enter to search"
+      fill
       address={form.address}
       coordinates={
         form.latitude !== null && form.longitude !== null
@@ -935,19 +946,20 @@ function PlaceFormFields({
 
   if (section === "history") {
     return (
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+      <AdminFormCard>
         {heading}
         {history}
-      </div>
+        {historyFooter}
+      </AdminFormCard>
     );
   }
 
   if (section === "location") {
     return (
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+      <AdminFormCard>
         {heading}
         {locationPicker}
-      </div>
+      </AdminFormCard>
     );
   }
 
@@ -955,7 +967,7 @@ function PlaceFormFields({
   // heading sits above the columns, so the card is a column wrapper and
   // the grid (with its divider) moves one level down.
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+    <AdminFormCard>
       {heading}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
         <div className="flex flex-col gap-4 lg:pr-4">
@@ -966,39 +978,7 @@ function PlaceFormFields({
           {hours}
         </div>
       </div>
-    </div>
-  );
-}
-
-// 5.6: full place_reviews history, staff id (via display name), action,
-// notes, timestamp. Lives in the Review History tab, separate from the
-// Current Info tab per plan 5.6's no-fragmentation instruction.
-function ReviewHistoryList({ reviews }: Readonly<{ reviews: PlaceReviewEntry[] | null }>) {
-  if (reviews === null) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
-  }
-
-  if (reviews.length === 0) {
-    return <p className="text-sm text-muted-foreground">No review history yet.</p>;
-  }
-
-  return (
-    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-      {reviews.map((entry) => (
-        <li key={entry.id} className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
-              {entry.staff_name ?? "Staff"}
-            </span>
-            <Badge variant={entry.action === "verify" ? "default" : "destructive"}>
-              {entry.action === "verify" ? "Verified" : "Rejected"}
-            </Badge>
-          </div>
-          {entry.notes && <p className="text-sm text-muted-foreground">{entry.notes}</p>}
-          <p className="text-xs text-muted-foreground">{new Date(entry.created_at).toLocaleString()}</p>
-        </li>
-      ))}
-    </ul>
+    </AdminFormCard>
   );
 }
 
@@ -1038,7 +1018,7 @@ function PhotoUploadArea({
           htmlFor={inputId}
           className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input text-muted-foreground hover:bg-muted"
         >
-          {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+          {uploading ? <CircleNotch className="h-5 w-5 animate-spin" /> : <CameraPlus className="h-5 w-5" />}
           <span className="text-xs">{uploading ? "Uploading…" : "Add"}</span>
           <input
             id={inputId}

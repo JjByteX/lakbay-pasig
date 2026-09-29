@@ -9,6 +9,7 @@ import {
   CategoryPhotoRowSkeleton,
   type CategoryPhotoRowItem,
 } from "@/components/public/category-photo-row";
+import { PageContainer } from "@/components/public/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -229,13 +230,13 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="wide">
       <div className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-foreground">Announcements</h2>
         {announcementsBody}
       </div>
 
       {showcaseBody}
-    </div>
+    </PageContainer>
   );
 }

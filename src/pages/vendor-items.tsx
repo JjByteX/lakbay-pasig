@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { Loader2, Pencil, X } from "lucide-react";
+import { CircleNotch, Pencil, X } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 /**
@@ -226,7 +227,7 @@ function ItemPhotos({
               aria-label="Remove photo"
             >
               {removingId === photo.id ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <CircleNotch className="h-3 w-3 animate-spin" />
               ) : (
                 <X className="h-3 w-3" />
               )}
@@ -238,7 +239,7 @@ function ItemPhotos({
           className="flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input text-muted-foreground hover:bg-muted"
         >
           {uploading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <CircleNotch className="h-4 w-4 animate-spin" />
           ) : (
             <Pencil className="h-4 w-4" />
           )}
@@ -329,13 +330,13 @@ export default function VendorItemsPage() {
 
   if (!session) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-start gap-4 px-6 py-10">
+      <PageContainer width="narrow" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Items</h1>
         <p className="text-base text-muted-foreground">
           Sign in to manage your business's items.
         </p>
         <Button onClick={() => openAuth("login")}>Sign in</Button>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -343,19 +344,19 @@ export default function VendorItemsPage() {
   // below -- neither the redirect check nor the item list can render yet.
   if (!businessChecked) {
     return (
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+      <PageContainer width="narrow">
         <h1 className="text-xl font-semibold text-foreground">Items</h1>
         <p className="text-base text-muted-foreground">Loading…</p>
-      </div>
+      </PageContainer>
     );
   }
 
   if (checkError) {
     return (
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+      <PageContainer width="narrow">
         <h1 className="text-xl font-semibold text-foreground">Items</h1>
         <p className="text-base text-destructive">{checkError}</p>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -452,7 +453,7 @@ export default function VendorItemsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="narrow">
       <h1 className="min-w-0 max-w-full break-words text-xl font-semibold text-foreground">
         {business.name}
       </h1>
@@ -657,6 +658,6 @@ export default function VendorItemsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

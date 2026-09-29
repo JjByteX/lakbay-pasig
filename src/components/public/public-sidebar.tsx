@@ -1,4 +1,4 @@
-import { Home, Map, Compass, Bookmark, Search, User as UserIcon, Settings as SettingsIcon, LogOut, ArrowLeftRight, ChevronsUpDown, PanelLeftOpen } from "lucide-react";
+import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, SidebarSimple } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -46,8 +46,8 @@ import { SignOutDialog } from "@/components/sign-out-dialog";
 // `onToggleSearch` are controlled by the shell (not local state here)
 // since the shell also needs to know whether to render that panel.
 const NAV_ITEMS = [
-  { to: "/", label: "Home", icon: Home, end: true },
-  { to: "/trails", label: "Trails", icon: Map, end: false },
+  { to: "/", label: "Home", icon: House, end: true },
+  { to: "/trails", label: "Trails", icon: MapTrifold, end: false },
   { to: "/discover", label: "Discover", icon: Compass, end: false },
   { to: "/saved", label: "Saved", icon: Bookmark, end: false },
 ] as const;
@@ -101,7 +101,7 @@ function HeaderLogoRow() {
           <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
         </span>
         <span className="hidden h-8 w-8 items-center justify-center group-hover/logo-toggle:flex">
-          <PanelLeftOpen className="h-4 w-4" />
+          <SidebarSimple className="h-4 w-4" />
         </span>
       </button>
     );
@@ -121,7 +121,7 @@ function HeaderLogoRow() {
         aria-label="Collapse sidebar"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <PanelLeftOpen className="h-5 w-5 -scale-x-100" />
+        <SidebarSimple className="h-5 w-5 -scale-x-100" />
       </button>
     </div>
   );
@@ -188,7 +188,7 @@ export function PublicSidebar({
                   onClick={onToggleSearch}
                   aria-expanded={searchOpen}
                 >
-                  <Search className="h-4 w-4 shrink-0" />
+                  <MagnifyingGlass className="h-4 w-4 shrink-0" />
                   <span>Search</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -225,7 +225,7 @@ export function PublicSidebar({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={() => navigate("/welcome")} tooltip="Home Page">
-                <Home className="h-4 w-4 shrink-0" />
+                <House className="h-4 w-4 shrink-0" />
                 <span>Home Page</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -271,7 +271,7 @@ export function PublicSidebar({
                     {profile?.display_name ?? "Account"}
                   </span>
                 </div>
-                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                <CaretUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             {/* Bug fix: side="right" opened this menu out past the rail's
@@ -313,7 +313,7 @@ export function PublicSidebar({
                   tsx's own header comment). */}
               {profile?.staff_role && (
                 <DropdownMenuItem onClick={() => navigate("/admin")}>
-                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  <ArrowsLeftRight className="mr-2 h-4 w-4" />
                   {profile.staff_role === "admin" ? "Admin" : "Staff"} View
                 </DropdownMenuItem>
               )}
@@ -325,12 +325,12 @@ export function PublicSidebar({
                   never render side by side so there's no visual ambiguity
                   between them. */}
               <DropdownMenuItem onClick={() => navigate("/welcome")}>
-                <Home className="mr-2 h-4 w-4" />
+                <House className="mr-2 h-4 w-4" />
                 Home Page
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
-                <LogOut className="mr-2 h-4 w-4" />
+                <SignOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>

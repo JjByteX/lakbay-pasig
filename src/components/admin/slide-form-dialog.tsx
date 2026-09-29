@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import { CameraPlus, CircleNotch, X } from "@phosphor-icons/react";
 import {
   Dialog,
   DialogContent,
@@ -171,7 +171,7 @@ export default function SlideFormDialog({
                   htmlFor="slide-image-upload"
                   className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input text-muted-foreground hover:bg-muted"
                 >
-                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                  {uploading ? <CircleNotch className="h-5 w-5 animate-spin" /> : <CameraPlus className="h-5 w-5" />}
                   <span className="text-xs">{uploading ? "Uploading…" : "Add"}</span>
                   <input
                     id="slide-image-upload"

@@ -77,6 +77,9 @@
 
     --height-table-row: 56px;
     --height-table-header: 40px;
+
+    /* Scrollbar thickness, used by the global scrollbar styling below. */
+    --scrollbar-size: 0.625rem;
   }
 }
 
@@ -86,6 +89,52 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================================
+   SCROLLBARS
+   The browser default (a wide track with arrow buttons) looks out of
+   place next to the cards, so every scroll area in the app gets the same
+   quiet treatment, the one shadcn's ScrollArea has: thin, a rounded thumb,
+   no track. Colors come from --muted-foreground, so it follows light and
+   dark on its own. It is plain CSS rather than shadcn's ScrollArea
+   component on purpose: that component needs @radix-ui/react-scroll-area,
+   which this project does not depend on, and replacing every native
+   overflow container with it would also change how they size.
+
+   Two branches, because browsers disagree on how to style a scrollbar.
+   Chrome and Firefox take the standard properties; Safari has no
+   scrollbar-color yet, so it gets the ::-webkit-scrollbar pseudo
+   elements instead. The two are kept apart because Chrome ignores the
+   pseudo elements once the standard properties are set.
+   ============================================================ */
+@supports (scrollbar-color: auto) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+  }
+}
+
+@supports not (scrollbar-color: auto) {
+  *::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.35);
+    /* A transparent border with background-clip insets the thumb from the
+       edge, so it reads as a slim pill rather than a full-width bar. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.6);
   }
 }
 

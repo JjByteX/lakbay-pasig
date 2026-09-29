@@ -1,4 +1,4 @@
-import { LayoutDashboard, Landmark, Store, CalendarDays, Map, Tags, Image, Users, Activity, Settings as SettingsIcon, LogOut, Home, ArrowLeftRight, ChevronsUpDown } from "lucide-react";
+import { SquaresFour, Bank, Storefront, CalendarDots, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -54,15 +54,15 @@ import { SignOutDialog } from "@/components/sign-out-dialog";
 // Facilities needs no array change: manage_places already covers it, same
 // permission Places itself already uses.
 const NAV_ITEMS = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, permission: null, permissions: null, adminOnly: false },
-  { to: "/admin/places", label: "Places", icon: Landmark, permission: "manage_places" as const, permissions: null, adminOnly: false },
-  { to: "/admin/businesses", label: "Businesses", icon: Store, permission: "review_businesses" as const, permissions: null, adminOnly: false },
-  { to: "/admin/events", label: "Announcements", icon: CalendarDays, permission: "publish_events" as const, permissions: null, adminOnly: false },
-  { to: "/admin/trails", label: "Trails", icon: Map, permission: "build_trails" as const, permissions: null, adminOnly: false },
+  { to: "/admin", label: "Dashboard", icon: SquaresFour, permission: null, permissions: null, adminOnly: false },
+  { to: "/admin/places", label: "Places", icon: Bank, permission: "manage_places" as const, permissions: null, adminOnly: false },
+  { to: "/admin/businesses", label: "Businesses", icon: Storefront, permission: "review_businesses" as const, permissions: null, adminOnly: false },
+  { to: "/admin/events", label: "Announcements", icon: CalendarDots, permission: "publish_events" as const, permissions: null, adminOnly: false },
+  { to: "/admin/trails", label: "Trails", icon: MapTrifold, permission: "build_trails" as const, permissions: null, adminOnly: false },
   {
     to: "/admin/categories",
     label: "Categories",
-    icon: Tags,
+    icon: Tag,
     permission: null,
     permissions: ["manage_places", "build_trails", "publish_events", "review_businesses"] as const,
     adminOnly: false,
@@ -79,7 +79,7 @@ const NAV_ITEMS = [
   // admin actions (activity_log, migration 0037). adminOnly: true, same as
   // Staff above, RLS already returns zero rows to a non admin, so hiding
   // the item is the second layer, not the only one.
-  { to: "/admin/activity", label: "Activity", icon: Activity, permission: null, permissions: null, adminOnly: true },
+  { to: "/admin/activity", label: "Activity", icon: Pulse, permission: null, permissions: null, adminOnly: true },
 ];
 
 export function AdminSidebar() {
@@ -226,7 +226,7 @@ export function AdminSidebar() {
                   {profile?.position ?? (isAdmin ? "Admin" : "Staff")}
                 </span>
               </div>
-              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+              <CaretUpDown className="h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           {/* side="top"/align="start": same bug-fix reasoning as public-
@@ -247,16 +247,16 @@ export function AdminSidebar() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/")}>
-              <ArrowLeftRight className="mr-2 h-4 w-4" />
+              <ArrowsLeftRight className="mr-2 h-4 w-4" />
               Resident View
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/welcome")}>
-              <Home className="mr-2 h-4 w-4" />
+              <House className="mr-2 h-4 w-4" />
               Home Page
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
-              <LogOut className="mr-2 h-4 w-4" />
+              <SignOut className="mr-2 h-4 w-4" />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

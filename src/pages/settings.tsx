@@ -1,6 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Gear as SettingsIcon } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 // 8.6: same minimum this repo already enforces at signup (signup.tsx),
@@ -65,7 +66,7 @@ const MIN_PASSWORD_LENGTH = 8;
  * not render the guest message and then flash to the real content a
  * moment later.
  *
- * 2.5: gear icon (lucide-react's Settings, aliased to avoid colliding
+ * 2.5: gear icon (Phosphor's Gear, aliased to avoid colliding
  * with this component's own name) on the page heading, paired with a
  * visible "Settings" text label per the Icon Rules -- gear is not one of
  * the icons ux-ui-guidelines.md exempts from a label (home, search,
@@ -306,7 +307,7 @@ export default function SettingsPage() {
 
   if (!session) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-start gap-4 px-6 py-10">
+      <PageContainer width="narrow" className="items-start gap-4 py-10">
         <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
           <SettingsIcon className="h-5 w-5 shrink-0" />
           Settings
@@ -315,12 +316,12 @@ export default function SettingsPage() {
           Sign in to change your theme and font size.
         </p>
         <Button onClick={() => openAuth("login")}>Sign in</Button>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="narrow">
       <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
         <SettingsIcon className="h-5 w-5 shrink-0" />
         Settings
@@ -544,7 +545,7 @@ export default function SettingsPage() {
         {passwordError && <p className="text-base text-destructive">{passwordError}</p>}
         {passwordSuccess && <p className="text-base text-muted-foreground">Password updated.</p>}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

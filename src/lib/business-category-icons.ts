@@ -1,22 +1,4 @@
-import {
-  Utensils,
-  Coffee,
-  ShoppingBag,
-  Bed,
-  Gift,
-  Briefcase,
-  Scissors,
-  Croissant,
-  Martini,
-  ShoppingCart,
-  Car,
-  Wrench,
-  Cross,
-  Landmark,
-  Store,
-  MapPin,
-  type LucideIcon,
-} from "lucide-react";
+import { ForkKnife, Coffee, ShoppingBag, Bed, Gift, Briefcase, Scissors, Bread, Martini, ShoppingCart, Car, Wrench, Cross, Bank, Storefront, MapPin, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 /**
  * Category Directory Expansion, Phase 1.6. Fixed picker list, not a
@@ -48,37 +30,37 @@ import {
 export interface IconOption {
   value: string;
   label: string;
-  component: LucideIcon;
+  component: PhosphorIcon;
 }
 
 export const BUSINESS_CATEGORY_ICONS: IconOption[] = [
-  { value: "utensils", label: "Food and Beverage", component: Utensils },
+  { value: "utensils", label: "Food and Beverage", component: ForkKnife },
   { value: "coffee", label: "Cafe / Coffee Shop", component: Coffee },
   { value: "shopping-bag", label: "Retail / Shop", component: ShoppingBag },
   { value: "bed", label: "Accommodation", component: Bed },
   { value: "gift", label: "Souvenir / Craft", component: Gift },
   { value: "briefcase", label: "Service", component: Briefcase },
   { value: "scissors", label: "Salon / Wellness", component: Scissors },
-  { value: "croissant", label: "Bakery", component: Croissant },
+  { value: "croissant", label: "Bakery", component: Bread },
   { value: "martini", label: "Bar / Nightlife", component: Martini },
   { value: "shopping-cart", label: "Grocery / Market", component: ShoppingCart },
   { value: "car", label: "Transport / Rental", component: Car },
   { value: "wrench", label: "Repair / Trade", component: Wrench },
   { value: "cross", label: "Health / Pharmacy", component: Cross },
-  { value: "landmark", label: "Bank / Finance", component: Landmark },
-  { value: "store", label: "Other", component: Store },
+  { value: "landmark", label: "Bank / Finance", component: Bank },
+  { value: "store", label: "Other", component: Storefront },
 ];
 
-const ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
+const ICON_MAP: Record<string, PhosphorIcon> = Object.fromEntries(
   BUSINESS_CATEGORY_ICONS.map((option) => [option.value, option.component])
 );
 
 /**
  * Looks up a stored icon name (business_categories.icon) back to its
- * Lucide component. Falls back to MapPin, a neutral generic marker, if a
+ * Phosphor component. Falls back to MapPin, a neutral generic marker, if a
  * stored value ever doesn't match the current shortlist, rather than
  * throwing and breaking whichever card or badge it renders inside.
  */
-export function getBusinessCategoryIcon(iconName: string): LucideIcon {
+export function getBusinessCategoryIcon(iconName: string): PhosphorIcon {
   return ICON_MAP[iconName] ?? MapPin;
 }

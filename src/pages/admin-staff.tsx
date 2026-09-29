@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
@@ -222,7 +222,7 @@ export default function AdminStaffPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8" disabled={togglingId === row.id}>
-              <MoreHorizontal className="h-4 w-4" />
+              <DotsThree className="h-4 w-4" />
               <span className="sr-only">Open actions</span>
             </Button>
           </DropdownMenuTrigger>

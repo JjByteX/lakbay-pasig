@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
-import { LocateFixed, MapPin, Plus, Minus } from "lucide-react";
+import { GpsFix, MapPin, Plus, Minus } from "@phosphor-icons/react";
 import type { Coordinates } from "@/lib/discover-query";
 import { LATTE, MOCHA, buildStyle, PASIG_CENTER, DEFAULT_ZOOM } from "@/lib/map-style";
 import type { DiscoverResult } from "@/lib/discover-types";
@@ -74,7 +74,7 @@ const ROUTE_LAYER_ID = "directions-route-line";
 // the place or business's own category icon, same getCategoryIcon/
 // getBusinessCategoryIcon lookups LegendPanel already uses for the exact
 // same category value below, so a marker's glyph always matches its own
-// legend row. LucideIcon is a React component, and maplibregl.Marker takes
+// legend row. A Phosphor icon is a React component, and maplibregl.Marker takes
 // a raw DOM element, not JSX -- renderToStaticMarkup (react-dom/server,
 // safe to call client-side, no server round trip) turns the icon into an
 // SVG string once per marker build, then that markup is set directly on a
@@ -475,7 +475,7 @@ function MapCornerControls({
           onClick={handleLocate}
           disabled={locateStatus === "loading"}
         >
-          <LocateFixed
+          <GpsFix
             className={locateStatus === "loading" ? "h-4 w-4 animate-spin text-muted-foreground" : "h-4 w-4"}
           />
         </Button>
@@ -1144,7 +1144,7 @@ export function DiscoverMap({
     // z-index falls back to DOM order, and the pin is later in the DOM.
     el.className = "pointer-events-none";
     el.innerHTML = renderToStaticMarkup(
-      <MapPin className="block h-10 w-10 fill-primary stroke-card" aria-hidden="true" />,
+      <MapPin weight="fill" className="block h-10 w-10 text-primary" aria-hidden="true" />,
     );
     fromMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, 3] })
       .setLngLat(lngLat)

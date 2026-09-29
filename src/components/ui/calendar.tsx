@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +87,7 @@ export function Calendar({ selected, onSelect, disabled, className }: Readonly<C
           onClick={() => goToMonth(-1)}
           aria-label="Previous month"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <CaretLeft className="h-4 w-4" />
         </Button>
         <span className="text-sm font-semibold text-foreground">{MONTH_LABEL_FORMAT.format(viewMonth)}</span>
         <Button
@@ -98,7 +98,7 @@ export function Calendar({ selected, onSelect, disabled, className }: Readonly<C
           onClick={() => goToMonth(1)}
           aria-label="Next month"
         >
-          <ChevronRight className="h-4 w-4" />
+          <CaretRight className="h-4 w-4" />
         </Button>
       </div>
       <div className="grid grid-cols-7 gap-1 px-1">

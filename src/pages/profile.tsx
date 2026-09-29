@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Store, Settings as SettingsIcon } from "lucide-react";
+import { Storefront, Gear as SettingsIcon } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { supabase } from "@/lib/supabase";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { CharCount } from "@/components/business/business-fields";
+import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
@@ -111,13 +112,13 @@ export default function ProfilePage() {
 
   if (!session) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-start gap-4 px-6 py-10">
+      <PageContainer width="narrow" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Profile</h1>
         <p className="text-base text-muted-foreground">
           Sign in to view and edit your account.
         </p>
         <Button onClick={() => openAuth("login")}>Sign in</Button>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -193,7 +194,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-6">
+    <PageContainer width="narrow">
       <h1 className="text-xl font-semibold text-foreground">Profile</h1>
 
       {/* Phase 6.4-6.7: outside the form below since it saves immediately
@@ -297,7 +298,7 @@ export default function ProfilePage() {
           to="/vendor"
           className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
         >
-          <Store className="h-4 w-4 shrink-0" />
+          <Storefront className="h-4 w-4 shrink-0" />
           <span className="min-w-0 break-words">Managing {vendorBusiness.name}</span>
         </Link>
       )}
@@ -306,7 +307,7 @@ export default function ProfilePage() {
           to="/vendor"
           className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
         >
-          <Store className="h-4 w-4 shrink-0" />
+          <Storefront className="h-4 w-4 shrink-0" />
           <span>List your business</span>
         </Link>
       )}
@@ -336,6 +337,6 @@ export default function ProfilePage() {
       </Button>
 
       <SignOutDialog open={signOutOpen} onOpenChange={setSignOutOpen} />
-    </div>
+    </PageContainer>
   );
 }

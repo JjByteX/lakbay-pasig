@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Phone, MapPin, Facebook, ExternalLink } from "lucide-react";
+import { Envelope, Phone, MapPin, FacebookLogo, ArrowSquareOut } from "@phosphor-icons/react";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { Button } from "@/components/ui/button";
 import { fetchActiveSlides, type LandingSlide } from "@/lib/landing-slides";
@@ -617,7 +617,7 @@ export default function LandingPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <Envelope className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <a href={`mailto:${CATO_EMAIL}`} className="text-base text-foreground underline">
                   {CATO_EMAIL}
                 </a>
@@ -631,7 +631,7 @@ export default function LandingPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Facebook className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <FacebookLogo className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <a
                   href={CATO_FACEBOOK}
                   target="_blank"
@@ -661,7 +661,7 @@ export default function LandingPage() {
               className="flex items-center gap-1.5 self-start text-sm text-foreground underline"
             >
               Get directions
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              <ArrowSquareOut className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           </div>
         </div>

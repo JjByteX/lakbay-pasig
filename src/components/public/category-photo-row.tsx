@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from "react";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RecentlyVerifiedItem } from "@/lib/home-types";
 
@@ -31,15 +34,11 @@ interface CategoryPhotoRowProps {
   onSelect: (item: CategoryPhotoRowItem) => void;
 }
 
-// Phase 3.4: fixed card width, in sync with the skeleton's own width below
-// so a loading row and a loaded row occupy the same footprint (no layout
-// jump when data arrives). Named constants rather than a bare Tailwind
-// class repeated in two places, since SectionSkeleton-style row skeletons
-// (home.tsx) already establish "same shape as the loaded content" as this
-// codebase's own loading-state convention (Phase 3.5 below), which only
-// holds if both places agree on one width.
-const CARD_WIDTH_PX = 144;
-const CARD_HEIGHT_PX = 144;
+// Phase 3.4: fixed card size, shared by the card and the skeleton below so
+// a loading row and a loaded row occupy the same footprint (no layout jump
+// when data arrives). One class string rather than inline px so it can step
+// up at md (144px -> 176px) for desktop; both are on the 8px grid.
+const CARD_SIZE = "h-36 w-36 md:h-44 md:w-44";
 
 // Phase 3.2: one photo card -- cover photo as the background, name
 // overlaid at the bottom over a scrim. Same scrim recipe auth-layout.tsx
@@ -52,10 +51,8 @@ function PhotoCard({ item, onSelect }: Readonly<{ item: CategoryPhotoRowItem; on
     <button
       type="button"
       onClick={() => onSelect(item)}
-      className="group relative shrink-0 overflow-hidden rounded-lg border border-border bg-cover bg-center text-left transition-transform hover:-translate-y-0.5"
+      className={`group relative shrink-0 overflow-hidden rounded-lg border border-border bg-cover bg-center text-left transition-transform hover:-translate-y-0.5 ${CARD_SIZE}`}
       style={{
-        width: CARD_WIDTH_PX,
-        height: CARD_HEIGHT_PX,
         backgroundImage: item.coverPhotoUrl ? `url(${item.coverPhotoUrl})` : undefined,
       }}
     >
@@ -86,14 +83,12 @@ function PhotoCard({ item, onSelect }: Readonly<{ item: CategoryPhotoRowItem; on
 export function CategoryPhotoRowSkeleton() {
   return (
     <div className="flex flex-col gap-3">
-      <Skeleton className="h-5 w-32" />
+      <div className="flex items-center md:min-h-8">
+        <Skeleton className="h-5 w-32" />
+      </div>
       <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-1">
         {[0, 1, 2].map((i) => (
-          <Skeleton
-            key={i}
-            className="shrink-0 rounded-lg"
-            style={{ width: CARD_WIDTH_PX, height: CARD_HEIGHT_PX }}
-          />
+          <Skeleton key={i} className={`shrink-0 rounded-lg ${CARD_SIZE}`} />
         ))}
       </div>
     </div>
@@ -114,14 +109,73 @@ export function CategoryPhotoRowSkeleton() {
  *
  * -mx-6/px-6 matches SectionSkeleton's own convention in home.tsx: the
  * row bleeds to the page's full width so the strip can scroll edge-to-edge
- * inside the max-w-md page shell, while the heading above it stays within
+ * inside the page container (page-container.tsx), while the heading above it stays within
  * the page's normal padding.
  */
 export function CategoryPhotoRow({ categoryName, items, onSelect }: Readonly<CategoryPhotoRowProps>) {
+  // Desktop arrows: a mouse has no swipe, and the thin scrollbar is easy to
+  // miss. Shown at md+ only, and only while the strip actually overflows;
+  // each end disables itself at the edge. Native scrollBy, no library.
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ prev: false, next: false });
+
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const update = () =>
+      setEdges({
+        prev: el.scrollLeft > 0,
+        next: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+      });
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, [items.length]);
+
+  const scrollPage = (direction: -1 | 1) => {
+    const el = stripRef.current;
+    if (!el) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-semibold text-foreground">{categoryName}</h3>
-      <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-1">
+      {/* md:min-h-8 holds the heading row at the arrow buttons' height, so
+          a row that overflows and one that doesn't line up the same. */}
+      <div className="flex items-center justify-between md:min-h-8">
+        <h3 className="text-sm font-semibold text-foreground">{categoryName}</h3>
+        {(edges.prev || edges.next) && (
+          <div className="hidden gap-2 md:flex">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Scroll left"
+              disabled={!edges.prev}
+              onClick={() => scrollPage(-1)}
+            >
+              <CaretLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Scroll right"
+              disabled={!edges.next}
+              onClick={() => scrollPage(1)}
+            >
+              <CaretRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+      <div ref={stripRef} className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-1">
         {items.map((item) => (
           <PhotoCard key={`${item.kind}-${item.id}`} item={item} onSelect={onSelect} />
         ))}

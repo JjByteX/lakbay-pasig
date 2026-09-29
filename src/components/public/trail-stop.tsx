@@ -1,4 +1,4 @@
-import { Lock, CheckCircle2 } from "lucide-react";
+import { Lock, CheckCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { TrailStop as TrailStopData } from "@/lib/trail-types";
 
@@ -22,12 +22,12 @@ import type { TrailStop as TrailStopData } from "@/lib/trail-types";
  * swaps trail-detail.tsx's plain `<li>` for this component, out of scope
  * here.
  *
- * Icons: Lock and CheckCircle2 from lucide-react (already a project
+ * Icons: Lock and CheckCircle from @phosphor-icons/react (already a project
  * dependency, no new install), both universally recognized concepts per
  * ux-ui-guidelines.md's icon rules ("locked", "done") so no separate text
  * label is required alongside them, matching how bottom-nav.tsx pairs
  * icon-only universal concepts. Completed state uses the same accent
- * green implied by CheckCircle2's fill choice below rather than inventing
+ * green implied by CheckCircle's fill weight below rather than inventing
  * a new status color; locked uses text-muted-foreground, matching every
  * other "inactive/inert" treatment already in this codebase (e.g.
  * discover-list.tsx's empty-state copy).
@@ -68,7 +68,7 @@ export function TrailStop({ stop, index, state }: Readonly<TrailStopProps>) {
           </span>
           {isLocked && <Lock className="h-4 w-4 shrink-0 text-muted-foreground" aria-label="Locked" />}
           {isCompleted && (
-            <CheckCircle2 className="h-4 w-4 shrink-0 fill-primary text-primary-foreground" aria-label="Completed" />
+            <CheckCircle weight="fill" className="h-4 w-4 shrink-0 text-primary" aria-label="Completed" />
           )}
         </div>
 

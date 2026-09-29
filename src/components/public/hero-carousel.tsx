@@ -8,7 +8,7 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
-import { ImageOff } from "lucide-react";
+import { ImageBroken } from "@phosphor-icons/react";
 import type { LandingSlide } from "@/lib/landing-slides";
 import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from "@/lib/filmstrip";
 
@@ -69,7 +69,7 @@ import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from 
  * - Progress fill is bg-primary. --accent in index.css already carries
  *   its own alpha ("356 90% 45% / 0.1"), so bg-accent renders as a faint
  *   tint and bg-accent/NN produces invalid CSS.
- * - Icons are lucide-react, the project's library, not Phosphor.
+ * - Icons are Phosphor (@phosphor-icons/react), the project's library.
  * - Weights and radius follow ux-ui-guidelines.md (400/600 only, the
  *   rounded-lg token, not Qula's font-bold and rounded-[12px]).
  */
@@ -354,7 +354,7 @@ function HeroTile({
       <div className="relative h-full w-full overflow-hidden bg-muted">
         {imageFailed ? (
           <div className="flex h-full w-full items-center justify-center">
-            <ImageOff className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+            <ImageBroken className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
           </div>
         ) : (
           <img
@@ -434,7 +434,7 @@ function StaticSlide({ slide }: Readonly<{ slide: LandingSlide }>) {
       <div className="relative h-full w-full overflow-hidden bg-muted">
         {imageFailed ? (
           <div className="flex h-full w-full items-center justify-center">
-            <ImageOff className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+            <ImageBroken className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
           </div>
         ) : (
           <img

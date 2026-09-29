@@ -72,48 +72,52 @@ export function RecommendedTimeField({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {DAYS.map((day) => {
-          const active = current.days.includes(day.key);
-          return (
-            <Button
-              key={day.key}
-              type="button"
-              variant={active ? "default" : "outline"}
-              size="sm"
-              aria-pressed={active}
-              aria-label={day.label}
-              onClick={() => toggleDay(day.key)}
-            >
-              {day.short}
-            </Button>
-          );
-        })}
-      </div>
+      {/* Days and the time range share one row, and only wrap onto a second
+          when the column is too narrow for both. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex flex-wrap gap-2">
+          {DAYS.map((day) => {
+            const active = current.days.includes(day.key);
+            return (
+              <Button
+                key={day.key}
+                type="button"
+                variant={active ? "default" : "outline"}
+                size="sm"
+                aria-pressed={active}
+                aria-label={day.label}
+                onClick={() => toggleDay(day.key)}
+              >
+                {day.short}
+              </Button>
+            );
+          })}
+        </div>
 
-      <div className="flex items-center gap-2 sm:max-w-sm">
-        <TimeSelect
-          ariaLabel="Recommended from"
-          value={current.from}
-          min="00:00"
-          max="23:45"
-          emptyLabel="Any time"
-          onChange={changeFrom}
-        />
-        {current.from !== "" && (
-          <>
-            <span className="text-sm text-muted-foreground" aria-hidden="true">
-              –
-            </span>
-            <TimeSelect
-              ariaLabel="Recommended until"
-              value={current.to}
-              min={minutesToTime(timeToMinutes(current.from) + TIME_STEP_MINUTES)}
-              max="24:00"
-              onChange={(to) => commit({ ...current, to })}
-            />
-          </>
-        )}
+        <div className="flex w-72 max-w-full items-center gap-2">
+          <TimeSelect
+            ariaLabel="Recommended from"
+            value={current.from}
+            min="00:00"
+            max="23:45"
+            emptyLabel="Any time"
+            onChange={changeFrom}
+          />
+          {current.from !== "" && (
+            <>
+              <span className="text-sm text-muted-foreground" aria-hidden="true">
+                –
+              </span>
+              <TimeSelect
+                ariaLabel="Recommended until"
+                value={current.to}
+                min={minutesToTime(timeToMinutes(current.from) + TIME_STEP_MINUTES)}
+                max="24:00"
+                onChange={(to) => commit({ ...current, to })}
+              />
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
