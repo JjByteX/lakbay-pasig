@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { readEmbeddedName, readEmbeddedIcon } from "./place-categories";
+import { readEmbeddedName, readEmbeddedIcon, readEmbeddedColor } from "./place-categories";
 import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverPlace } from "./discover-types";
 
@@ -86,7 +86,7 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
   const { data: places, error: placesError } = await supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon), facility_ids"
+      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon, color), facility_ids"
     )
     .in("id", placeIds);
 
@@ -128,6 +128,8 @@ export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]>
     name: row.name,
     category: readEmbeddedName(row.place_categories) ?? "",
     categoryIcon: readEmbeddedIcon(row.place_categories),
+    // Category Colors: same embed, third field read off it.
+    categoryColor: readEmbeddedColor(row.place_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,

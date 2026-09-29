@@ -9,6 +9,7 @@ import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categorie
 import { getCategoryIcon } from "@/lib/place-category-icons";
 import { fetchActiveCategories as fetchActiveBusinessCategories, type BusinessCategory } from "@/lib/business-categories";
 import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
+import { categoryColor } from "@/lib/category-colors";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -70,40 +71,27 @@ const MARKER_LABEL_MIN_ZOOM_PENDING = 16;
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
 
-// Map-marker-icons phase: replaces the old plain verified/pending dot with
-// the place or business's own category icon, same getCategoryIcon/
-// getBusinessCategoryIcon lookups LegendPanel already uses for the exact
-// same category value below, so a marker's glyph always matches its own
-// legend row. A Phosphor icon is a React component, and maplibregl.Marker takes
-// a raw DOM element, not JSX -- renderToStaticMarkup (react-dom/server,
-// safe to call client-side, no server round trip) turns the icon into an
-// SVG string once per marker build, then that markup is set directly on a
-// plain div, keeping this function's own signature (HTMLElement in,
-// nothing React-render-tree-aware needed by the caller) unchanged.
-//
-// Verification status still needs to read at a glance without a tap, per
-// the original two-dot marker's whole purpose, so it moves to the ring
-// around the icon instead of being the marker's only signal: a solid
-// primary-token ring for verified, a dashed muted-foreground ring for
-// pending, the same two tokens (bg-primary / bg-muted-foreground) the old
-// dot used, now as border-color rather than fill.
-//
-// Name label: the icon ring alone only identified a result's category, not
-// which specific place/business it was, without a tap or hover -- a
-// direct request asked for the name to sit right next to the icon,
-// always visible on the map like a standard map-pin label, not only on
-// hover (the existing HoverPreview is desktop-only and already covers the
-// richer on-hover case; this label is the always-on name, both surfaces
-// can coexist). Returns a wrapper span (icon ring + text) instead of just
-// the ring so the whole row is one marker element/click+hover target, per
-// maplibregl.Marker's one-DOM-element-per-marker API -- nothing below this
-// function needs to change since callers only ever read the returned
-// element, never its internal shape.
+// Ring border for verification status, shared by markerElement and the
+// legend's Status swatches so the two cannot drift. Verified is a solid
+// card-token ring, pending a dashed muted-foreground ring. The circle's own
+// fill is the category color, so status has to live on the ring.
+const RING_VERIFIED = "border-2 border-card";
+const RING_PENDING = "border-2 border-dashed border-muted-foreground";
+
+// Marker: a filled circle in the category's color (Category Colors, like
+// Apple Maps), the category icon as a glyph in --category-foreground, the
+// ring showing verification status, and the name label in the category
+// color with the existing halo from index.css. A Phosphor icon is a React
+// component and maplibregl.Marker takes a raw DOM element, so the icon goes
+// through renderToStaticMarkup (client-side safe), which needs
+// weight="bold" passed itself (decision #25). Returns one wrapper span
+// (circle + label) so the whole row is one click and hover target.
 function markerElement(result: DiscoverResult): HTMLElement {
   const Icon =
     result.kind === "place"
       ? getCategoryIcon(result.categoryIcon ?? "")
       : getBusinessCategoryIcon(result.categoryIcon ?? "");
+  const color = categoryColor(result.categoryColor);
   const wrapper = document.createElement("span");
   // Bug fix / direct instruction: gap-1.5 (6px) read as "too far" between
   // the icon ring and its name label -- tightened to gap-1 (4px), the
@@ -113,11 +101,13 @@ function markerElement(result: DiscoverResult): HTMLElement {
   wrapper.className = "flex cursor-pointer items-center gap-1";
 
   const ring = document.createElement("span");
-  ring.className =
-    result.verification_status === "pending"
-      ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground bg-card shadow"
-      : "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-card shadow";
-  ring.innerHTML = renderToStaticMarkup(<Icon weight="bold" className="h-4 w-4 text-foreground" aria-hidden="true" />);
+  ring.className = `flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow ${
+    result.verification_status === "pending" ? RING_PENDING : RING_VERIFIED
+  }`;
+  ring.style.backgroundColor = color;
+  // The glyph inherits this through currentColor.
+  ring.style.color = "hsl(var(--category-foreground))";
+  ring.innerHTML = renderToStaticMarkup(<Icon weight="bold" className="h-4 w-4" aria-hidden="true" />);
   wrapper.appendChild(ring);
 
   const label = document.createElement("span");
@@ -133,7 +123,8 @@ function markerElement(result: DiscoverResult): HTMLElement {
   // washed out on Latte's light ones; see that CSS block's own comment
   // for why the color has to flip with the theme, not just tune darker
   // or lighter.
-  label.className = "marker-name-label whitespace-nowrap text-xs font-medium text-foreground";
+  label.className = "marker-name-label whitespace-nowrap text-xs font-medium";
+  label.style.color = color;
   // Read by the zoom-gated visibility effect below to apply the right
   // per-tier minimum zoom (verified vs. pending) to this specific label,
   // without needing a second lookup back into `results` at visibility-
@@ -245,9 +236,9 @@ interface DiscoverMapProps {
 //
 // Map-marker-icons phase: markers no longer draw a plain verified/pending
 // dot -- markerElement above now draws the place or business's own
-// category icon inside a ring, solid-primary for verified, dashed-muted-
-// foreground for pending. The Status swatches below were updated to match
-// (a small ring, not a filled dot), so 1.4's own rule still holds: no
+// category icon in a filled circle, with a solid card ring for verified and
+// a dashed muted-foreground ring for pending (Category Colors). The Status
+// swatches below use the same two ring constants on a filled circle, so 1.4's own rule still holds: no
 // marker style should exist without an entry a user can look up, and that
 // entry should look like what's actually on the map. Category rows
 // underneath were already icon+label pairs before this phase (1.1's reuse
@@ -310,11 +301,17 @@ function LegendPanel({
             Status
           </p>
           <div className="flex items-center gap-2">
-            <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-primary bg-card shadow" />
+            <span
+              className={`block h-4 w-4 shrink-0 rounded-full shadow ${RING_VERIFIED}`}
+              style={{ backgroundColor: categoryColor(null) }}
+            />
             <span className="text-sm text-foreground">Verified</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="block h-4 w-4 shrink-0 rounded-full border-2 border-dashed border-muted-foreground bg-card shadow" />
+            <span
+              className={`block h-4 w-4 shrink-0 rounded-full shadow ${RING_PENDING}`}
+              style={{ backgroundColor: categoryColor(null) }}
+            />
             <span className="text-sm text-foreground">Pending Verification</span>
           </div>
         </div>
@@ -328,7 +325,7 @@ function LegendPanel({
               const Icon = getCategoryIcon(c.icon);
               return (
                 <div key={c.id} className="flex items-center gap-2">
-                  <Icon className="h-4 w-4 shrink-0 text-foreground" />
+                  <Icon className="h-4 w-4 shrink-0" style={{ color: categoryColor(c.color) }} />
                   <span className="text-sm text-foreground">{c.name}</span>
                 </div>
               );
@@ -345,7 +342,7 @@ function LegendPanel({
               const Icon = getBusinessCategoryIcon(c.icon);
               return (
                 <div key={c.id} className="flex items-center gap-2">
-                  <Icon className="h-4 w-4 shrink-0 text-foreground" />
+                  <Icon className="h-4 w-4 shrink-0" style={{ color: categoryColor(c.color) }} />
                   <span className="text-sm text-foreground">{c.name}</span>
                 </div>
               );

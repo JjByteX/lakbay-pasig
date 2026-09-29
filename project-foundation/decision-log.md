@@ -240,3 +240,14 @@ CI fix in the same pass: `supabase db lint --linked=false` connected to the remo
 
 **Standing rule:** Any sidebar header row uses `SidebarLogoRow`. Do not copy the logo/collapse markup into a new sidebar.
 
+---
+
+**#:** 27
+**Milestone:** Category colors (category-colors-plan.md, category-colors-phases.md)
+
+**Decision:** `place_categories` and `business_categories`, the two lists shown on the map, each gained one nullable `color` text column (0041), no default, no check, per entry #7. It stores a palette key, not a color value, and the palette lives in code: ten fixed keys (red, orange, green, teal, blue, indigo, purple, pink, brown, slate) in `src/lib/category-colors.ts`, each with a `--category-<key>` token in `:root` and `.dark` plus one `--category-foreground` for the glyph. `categoryColor(key)` returns `hsl(var(--category-<key>))` and falls back to blue (`DEFAULT_CATEGORY_COLOR`) for null or an unknown key, so old rows keep working with no backfill. The Discover marker is now a filled circle in the category color with a `--category-foreground` glyph, and the label takes the category color over the existing halo. The ring now shows status: verified is a solid `--card` ring, pending is a dashed `--muted-foreground` ring. The old primary ring is gone, so status needed its own signal. Color is applied with inline `style`, since the keys are dynamic (Tailwind classes would need a safelist) and markers are built outside React. `createCategoryCrud(table, { color: true })` selects and writes `color` only for the two map lists, since the other three tables have no such column. The admin dialog shows a swatch row only when `config.colors` is set, and the admin table icon renders in its color. No RLS or `log_activity` change: policies are row based and the log diffs whole rows (#19). `seed.sql` stays as is, categories are inserted without a color.
+
+Directions weighed, per rule 6: color on all five category tables (no flag in the crud, dialog or admin, but three unused columns, since Trails, Announcements and Facilities never appear on the map), a free hex picker (cannot promise contrast for the glyph and label in both themes), and a light and dark pair per category (the ten palette values already handle both themes). Chosen instead: two tables, ten fixed keys. Every palette value passes 4.5:1 for glyph and label in both themes (4.9 to 9.2 measured for the glyph, against the fill). Discover filter chips stay uncolored, because chips filter a list and color there adds noise.
+
+**Standing rule:** A new color is a token in both themes plus one `CATEGORY_COLORS` row, and it must pass 4.5:1 for glyph and label in both themes. A new category list that shows on the map gets the `color` column and `colors: true`. Deploy order: the migration runs before the app build goes live, since the app selects `color`.
+

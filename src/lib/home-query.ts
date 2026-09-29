@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import {
   readEmbeddedName,
   readEmbeddedIcon,
+  readEmbeddedColor,
   fetchActiveCategories as fetchActivePlaceCategories,
 } from "./place-categories";
 import { fetchActiveCategories as fetchActiveBusinessCategories } from "./business-categories";
@@ -114,7 +115,7 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
   const { data, error } = await supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name, icon), facility_ids"
+      "id, name, description, latitude, longitude, verification_status, verified_at, place_categories(name, icon, color), facility_ids"
     )
     .not("verified_at", "is", null)
     .order("verified_at", { ascending: false });
@@ -148,6 +149,8 @@ async function fetchRecentlyVerifiedPlaces(): Promise<RecentlyVerifiedPlace[]> {
     name: row.name,
     category: readEmbeddedName(row.place_categories) ?? "",
     categoryIcon: readEmbeddedIcon(row.place_categories),
+    // Category Colors: same embed, third field read off it.
+    categoryColor: readEmbeddedColor(row.place_categories),
     description: row.description,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -175,7 +178,7 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, business_categories(name, icon), description, latitude, longitude, verification_status, verified_at, business_items(price)"
+      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, verified_at, business_items(price)"
     )
     .eq("verification_status", "verified")
     .not("verified_at", "is", null)
@@ -193,7 +196,10 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
 
   return (data ?? []).map((row) => {
     const { business_categories, ...rest } = row as typeof row & {
-      business_categories: { name: string; icon: string } | { name: string; icon: string }[] | null;
+      business_categories:
+        | { name: string; icon: string; color: string | null }
+        | { name: string; icon: string; color: string | null }[]
+        | null;
     };
     return {
       kind: "business" as const,
@@ -203,6 +209,7 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
       // Map-marker-icons phase: same embed, second field read off it, same
       // fix as discover-query.ts's fetchBusinesses and saved-places.ts.
       categoryIcon: readEmbeddedIcon(business_categories),
+      categoryColor: readEmbeddedColor(business_categories),
       description: rest.description,
       latitude: rest.latitude,
       longitude: rest.longitude,

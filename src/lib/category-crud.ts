@@ -19,6 +19,12 @@ import { supabase } from "./supabase";
  * that same four-field shape today -- each file still exports its own
  * named interface (callers keep importing PlaceCategory, TrailCategory,
  * etc.), this factory just doesn't need to know those names.
+ *
+ * Category Colors: the five tables are still identical except for one
+ * option. `{ color: true }` adds the `color` column to both selects, for
+ * place_categories and business_categories only (migration 0041). The
+ * other three tables have no such column, so selecting it there would
+ * fail.
  */
 
 export interface CategoryRow {
@@ -26,12 +32,16 @@ export interface CategoryRow {
   name: string;
   icon: string;
   active: boolean;
+  // Only present on tables created with { color: true }.
+  color?: string | null;
 }
 
 export interface CategoryFormInput {
   name: string;
   icon: string;
   active: boolean;
+  // Only sent for tables created with { color: true }.
+  color?: string | null;
 }
 
 export interface CategoryCrud<T extends CategoryRow> {
@@ -50,12 +60,17 @@ export interface CategoryCrud<T extends CategoryRow> {
  * here would duplicate what each caller's own file already gets for
  * free from the `supabase.from("exact_table_name")` call it makes.
  */
-export function createCategoryCrud<T extends CategoryRow>(table: string): CategoryCrud<T> {
+export function createCategoryCrud<T extends CategoryRow>(
+  table: string,
+  options: { color?: boolean } = {}
+): CategoryCrud<T> {
+  const columns = options.color ? "id, name, icon, active, color" : "id, name, icon, active";
+
   return {
     async fetchActiveCategories(): Promise<T[]> {
       const { data, error } = await supabase
         .from(table)
-        .select("id, name, icon, active")
+        .select(columns)
         .eq("active", true)
         .order("name", { ascending: true });
 
@@ -66,7 +81,7 @@ export function createCategoryCrud<T extends CategoryRow>(table: string): Catego
     async fetchAllCategories(): Promise<T[]> {
       const { data, error } = await supabase
         .from(table)
-        .select("id, name, icon, active")
+        .select(columns)
         .order("name", { ascending: true });
 
       if (error) throw error;

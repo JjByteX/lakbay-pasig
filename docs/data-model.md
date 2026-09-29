@@ -17,6 +17,7 @@
 
 - Place Name -Jonald
 - Category (Heritage Site, Museum, Monument, Church, Cultural Site) -Matthew
+- Category Color (one of ten palette keys, blue when unset)
 - Description (one line, what visitors can see or do there) -Jonald
 - Historical Background (the longer origin and development story) -Jonald
 - Historical Significance -Jonald
@@ -80,6 +81,7 @@ Rule: only proximity triggered secrets go here, radius and sequence required. Ge
 
 - Business Name -Jonald
 - Category -Jonald
+- Category Color (one of ten palette keys, blue when unset)
 - Description (one line, what the business sells or offers) -Jonald
 - Pictures -JJ
 - Item List, each item optionally carries its own photos, one list per item, same optional shape as the business's own Pictures

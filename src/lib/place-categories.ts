@@ -45,11 +45,30 @@ export function readEmbeddedIcon(
   return embed.icon;
 }
 
+/**
+ * Category Colors: sibling to readEmbeddedIcon above, same to-one embed-
+ * shape uncertainty, reading `color` off place_categories/
+ * business_categories. Null when the category has no color set, which the
+ * app reads as blue (category-colors.ts's categoryColor).
+ *
+ * ponytail: collapse readEmbeddedIcon and readEmbeddedColor into one field
+ * reader if a third field appears.
+ */
+export function readEmbeddedColor(
+  embed: { color: string | null } | { color: string | null }[] | null | undefined
+): string | null {
+  if (embed === null || embed === undefined) return null;
+  if (Array.isArray(embed)) return embed[0]?.color ?? null;
+  return embed.color;
+}
+
 export interface PlaceCategory {
   id: string;
   name: string;
   icon: string;
   active: boolean;
+  // Category Colors: palette key (category-colors.ts), null when unset.
+  color: string | null;
 }
 
 export type { CategoryFormInput } from "./category-crud";
@@ -78,7 +97,7 @@ export type { CategoryFormInput } from "./category-crud";
  * an ordered append point -- a new row is simply inserted with whatever
  * default the column already provides.
  */
-const crud = createCategoryCrud<PlaceCategory>("place_categories");
+const crud = createCategoryCrud<PlaceCategory>("place_categories", { color: true });
 
 export const fetchActiveCategories = crud.fetchActiveCategories;
 export const fetchAllCategories = crud.fetchAllCategories;

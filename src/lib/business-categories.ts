@@ -22,6 +22,8 @@ export interface BusinessCategory {
   name: string;
   icon: string;
   active: boolean;
+  // Category Colors: palette key (category-colors.ts), null when unset.
+  color: string | null;
 }
 
 export type { CategoryFormInput } from "./category-crud";
@@ -43,7 +45,7 @@ export type { CategoryFormInput } from "./category-crud";
  * maintained by the app layer as an ordered append point, same as the
  * other category tables.
  */
-const crud = createCategoryCrud<BusinessCategory>("business_categories");
+const crud = createCategoryCrud<BusinessCategory>("business_categories", { color: true });
 
 export const fetchActiveCategories = crud.fetchActiveCategories;
 export const fetchAllCategories = crud.fetchAllCategories;

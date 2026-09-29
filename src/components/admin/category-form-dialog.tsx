@@ -3,6 +3,7 @@ import { type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR, categoryColor } from "@/lib/category-colors";
 import {
   Dialog,
   DialogContent,
@@ -44,12 +45,19 @@ import {
  * Submit gated with a visible reason per ux-ui-guidelines.md's
  * Disabled/gated rule. 3.5's dialogTarget state lives in the caller
  * (admin-categories.tsx), same null/"new"/id shape admin-staff.tsx uses.
+ *
+ * Category Colors: `config.colors` (Places and Business tabs only) adds a
+ * row of round swatches after the icon grid and sends `color` with the
+ * payload. Off for the other three tables, which have no `color` column,
+ * so the payload never carries the key there.
  */
 
 export interface CategoryFormValue {
   name: string;
   icon: string;
   active: boolean;
+  // Palette key (category-colors.ts). Only used when config.colors.
+  color?: string | null;
 }
 
 interface IconOption {
@@ -62,6 +70,8 @@ export interface CategoryFormConfig {
   /** Shown in the dialog title, e.g. "Place Category". */
   label: string;
   icons: IconOption[];
+  /** Show the color swatch row and send `color`. Places and Business only. */
+  colors?: boolean;
   create: (input: CategoryFormValue) => Promise<void>;
   update: (id: string, input: CategoryFormValue) => Promise<void>;
 }
@@ -87,7 +97,14 @@ interface CategoryFormDialogProps {
   onSaved: () => void;
 }
 
-const EMPTY_FORM: CategoryFormValue = { name: "", icon: "", active: true };
+const EMPTY_FORM: CategoryFormValue = { name: "", icon: "", active: true, color: DEFAULT_CATEGORY_COLOR };
+
+// Swatch states: selected gets a full ring, the rest a hover ring. Focus
+// ring is always on for keyboard users.
+const SWATCH_BASE =
+  "h-10 w-10 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const SWATCH_SELECTED = "ring-2 ring-ring";
+const SWATCH_IDLE = "hover:ring-2 hover:ring-muted-foreground";
 
 export default function CategoryFormDialog({
   open,
@@ -111,8 +128,12 @@ export default function CategoryFormDialog({
     // component instance is reused across New and every Edit invocation,
     // same reasoning staff-form-dialog.tsx's own reset effect uses.
     setError(null);
-    setForm(isNew || !initialValue ? EMPTY_FORM : initialValue);
-  }, [open, isNew, initialValue]);
+    const base = isNew || !initialValue ? EMPTY_FORM : initialValue;
+    // A null color on an existing row reads as blue in the app, so blue is
+    // what shows selected here. Depends on config.colors, not config:
+    // admin-categories.tsx builds a new config object every render.
+    setForm(config.colors ? { ...base, color: base.color ?? DEFAULT_CATEGORY_COLOR } : base);
+  }, [open, isNew, initialValue, config.colors]);
 
   function updateField<K extends keyof CategoryFormValue>(key: K, value: CategoryFormValue[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -146,7 +167,13 @@ export default function CategoryFormDialog({
     setError(null);
 
     try {
-      const payload: CategoryFormValue = { ...form, name: trimmedName };
+      // Send color only when this table has the column.
+      const { color, ...rest } = form;
+      const payload: CategoryFormValue = {
+        ...rest,
+        name: trimmedName,
+        ...(config.colors ? { color } : {}),
+      };
       if (isNew) {
         await config.create(payload);
       } else if (categoryId) {
@@ -216,6 +243,29 @@ export default function CategoryFormDialog({
                 })}
               </div>
             </div>
+
+            {config.colors && (
+              <div className="flex flex-col gap-2">
+                <Label>Color</Label>
+                <div role="group" aria-label="Color" className="grid w-fit grid-cols-5 gap-2">
+                  {CATEGORY_COLORS.map((option) => {
+                    const selected = form.color === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-label={option.label}
+                        title={option.label}
+                        aria-pressed={selected}
+                        className={`${SWATCH_BASE} ${selected ? SWATCH_SELECTED : SWATCH_IDLE}`}
+                        style={{ backgroundColor: categoryColor(option.value) }}
+                        onClick={() => updateField("color", option.value)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <label htmlFor="category_active" className="flex w-fit items-center gap-2 text-sm text-foreground">
               <input

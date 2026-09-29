@@ -21,6 +21,10 @@ export interface DiscoverPlace {
   // this place was tagged with it (same null-safety readEmbeddedIcon
   // already gives category itself).
   categoryIcon: string | null;
+  // Category Colors: place_categories.color, joined in the same embed as
+  // categoryIcon. A palette key (category-colors.ts), null when the
+  // category has no color set, which the map reads as blue.
+  categoryColor: string | null;
   description: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -52,6 +56,9 @@ export interface DiscoverBusiness {
   // DiscoverPlace.categoryIcon above, via business-category-icons.ts's
   // getBusinessCategoryIcon.
   categoryIcon: string | null;
+  // Category Colors: business_categories.color, same reasoning as
+  // DiscoverPlace.categoryColor above.
+  categoryColor: string | null;
   description: string | null;
   latitude: number | null;
   longitude: number | null;

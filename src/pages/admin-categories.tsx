@@ -30,6 +30,7 @@ import { getTrailCategoryIcon, TRAIL_CATEGORY_ICONS } from "@/lib/trail-category
 import { getEventCategoryIcon, EVENT_CATEGORY_ICONS } from "@/lib/event-category-icons";
 import { getFacilityIcon, FACILITY_ICONS } from "@/lib/place-facility-icons";
 import { getBusinessCategoryIcon, BUSINESS_CATEGORY_ICONS } from "@/lib/business-category-icons";
+import { categoryColor } from "@/lib/category-colors";
 import { usePageTitle } from "@/lib/page-title";
 
 /**
@@ -90,6 +91,11 @@ import { usePageTitle } from "@/lib/page-title";
  * page-level state (activeTab) instead of Tabs' own internal
  * defaultValue, since a single shared table needs to read it directly to
  * pick its config, fetch, and columns.
+ *
+ * Category Colors: `colors: true` on the Places and Business tabs (the two
+ * lists that show on the map) turns on the dialog's swatch row and draws
+ * the Icon column in the category's color. The other three tabs have no
+ * `color` column and are unchanged.
  */
 
 type TabKey = "places" | "facilities" | "business_categories" | "trails" | "events";
@@ -99,6 +105,8 @@ interface CategoryRow {
   name: string;
   icon: string;
   active: boolean;
+  // Only present on the Places and Business tabs (migration 0041).
+  color?: string | null;
 }
 
 // One small config object per tab instead of three near-duplicate blocks
@@ -134,8 +142,13 @@ const TAB_CONFIG: Record<
     fetchAll: () => Promise<CategoryRow[]>;
     getIcon: (iconName: string) => PhosphorIcon;
     icons: { value: string; label: string; component: PhosphorIcon }[];
-    create: (input: { name: string; icon: string; active: boolean }) => Promise<void>;
-    update: (id: string, input: { name: string; icon: string; active: boolean }) => Promise<void>;
+    // Category Colors: true on the two tabs whose table has a color column.
+    colors?: boolean;
+    create: (input: { name: string; icon: string; active: boolean; color?: string | null }) => Promise<void>;
+    update: (
+      id: string,
+      input: { name: string; icon: string; active: boolean; color?: string | null }
+    ) => Promise<void>;
   }
 > = {
   places: {
@@ -146,6 +159,7 @@ const TAB_CONFIG: Record<
     fetchAll: placeCategories.fetchAllCategories,
     getIcon: getCategoryIcon,
     icons: CATEGORY_ICONS,
+    colors: true,
     create: placeCategories.createCategory,
     update: placeCategories.updateCategory,
   },
@@ -186,6 +200,7 @@ const TAB_CONFIG: Record<
     fetchAll: businessCategories.fetchAllCategories,
     getIcon: getBusinessCategoryIcon,
     icons: BUSINESS_CATEGORY_ICONS,
+    colors: true,
     create: businessCategories.createCategory,
     update: businessCategories.updateCategory,
   },
@@ -339,6 +354,7 @@ export default function AdminCategoriesPage() {
   const dialogConfig: CategoryFormConfig = {
     label: config.dialogLabel,
     icons: config.icons,
+    colors: config.colors,
     create: config.create,
     update: config.update,
   };
@@ -368,7 +384,13 @@ export default function AdminCategoriesPage() {
       width: "64px",
       render: (row) => {
         const Icon = config.getIcon(row.icon);
-        return <Icon className="h-4 w-4 text-foreground" />;
+        // Category Colors: the two map lists draw the icon in the color the
+        // map uses for it (blue when unset). The rest stay foreground.
+        return config.colors ? (
+          <Icon className="h-4 w-4" style={{ color: categoryColor(row.color) }} />
+        ) : (
+          <Icon className="h-4 w-4 text-foreground" />
+        );
       },
     },
     {
