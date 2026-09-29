@@ -4,6 +4,7 @@ import { CaretLeft, CaretRight, CameraPlus, CircleNotch, X } from "@phosphor-ico
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { usePlaceReview, type PlaceReviewEntry } from "@/hooks/use-place-review";
+import { usePlacePhotos, type PlacePhoto } from "@/hooks/use-place-photos";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
 import { getFacilityIcon } from "@/lib/place-facility-icons";
@@ -36,25 +37,6 @@ import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminFormCard } from "@/components/admin/admin-form-card";
 import { ReviewHistoryTable } from "@/components/admin/review-history-table";
-
-// Storage bucket for place photos. Not yet created by any migration in this
-// repo, per architecture-notes.md's "what must never be touched without
-// approval" (schema changes) — bucket creation is a Supabase dashboard/
-// migration step outside this phase's file scope. Flagging here rather than
-// silently inventing infra: create a public bucket named "place-photos"
-// before this upload flow can succeed end to end.
-const PHOTO_BUCKET = "content-photos";
-
-// Supabase public URLs look like
-// ".../storage/v1/object/public/<bucket>/<path>". place_photos only stores
-// the public URL (see handlePhotoSelected), not the raw path, so deleting
-// the file requires recovering <path> from it.
-function getStoragePathFromPublicUrl(publicUrl: string): string | null {
-  const marker = `/object/public/${PHOTO_BUCKET}/`;
-  const index = publicUrl.indexOf(marker);
-  if (index === -1) return null;
-  return decodeURIComponent(publicUrl.slice(index + marker.length));
-}
 
 interface PlaceFormState {
   name: string;
@@ -96,13 +78,6 @@ const EMPTY_FORM: PlaceFormState = {
   rules: "",
   facility_ids: [],
 };
-
-interface PlacePhoto {
-  id: string;
-  photo_url: string;
-  photo_type: "historical" | "current";
-  sort_order: number;
-}
 
 // Raw shape returned by the place_reviews select below, before mapping into
 // PlaceReviewEntry. Supabase types a select(...profiles(display_name)) join
@@ -153,9 +128,11 @@ export default function AdminPlaceDetailPage() {
   // an existing place (placeForm below is the same stepped form either way).
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  const [historicalPhotos, setHistoricalPhotos] = useState<PlacePhoto[]>([]);
-  const [currentPhotos, setCurrentPhotos] = useState<PlacePhoto[]>([]);
-  const [uploading, setUploading] = useState<"historical" | "current" | null>(null);
+  // Photo lists, upload state, and the upload/remove handlers live in
+  // usePlacePhotos (use-place-photos.ts), extracted to keep this
+  // component's cognitive complexity under Sonar's limit.
+  const { historicalPhotos, currentPhotos, uploading, handlePhotoSelected, handleRemovePhoto } =
+    usePlacePhotos({ id, isNew, onError: setError });
 
   const [reviews, setReviews] = useState<PlaceReviewEntry[] | null>(null);
 
@@ -260,16 +237,6 @@ export default function AdminPlaceDetailPage() {
         });
         setStatus(data.verification_status);
         setLoading(false);
-      });
-
-    supabase
-      .from("place_photos")
-      .select("id, photo_url, photo_type, sort_order")
-      .eq("place_id", id)
-      .order("sort_order", { ascending: true })
-      .then(({ data }) => {
-        setHistoricalPhotos((data ?? []).filter((p) => p.photo_type === "historical"));
-        setCurrentPhotos((data ?? []).filter((p) => p.photo_type === "current"));
       });
 
     // 5.6: full review history, staff id, action, notes, timestamp, newest
@@ -397,79 +364,6 @@ export default function AdminPlaceDetailPage() {
       return;
     }
     navigate("/admin/places");
-  }
-
-  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>, photoType: "historical" | "current") {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !id) return;
-
-    setUploading(photoType);
-    setError(null);
-
-    const path = `${id}/${photoType}/${crypto.randomUUID()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file);
-
-    if (uploadError) {
-      setUploading(null);
-      setError(`Photo upload failed: ${uploadError.message}`);
-      return;
-    }
-
-    const { data: publicUrlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
-    const list = photoType === "historical" ? historicalPhotos : currentPhotos;
-
-    const { data: inserted, error: insertError } = await supabase
-      .from("place_photos")
-      .insert({
-        place_id: id,
-        photo_url: publicUrlData.publicUrl,
-        photo_type: photoType,
-        sort_order: list.length,
-      })
-      .select("id, photo_url, photo_type, sort_order")
-      .single();
-
-    setUploading(null);
-
-    if (insertError || !inserted) {
-      setError(insertError?.message ?? "Could not save the uploaded photo.");
-      return;
-    }
-
-    if (photoType === "historical") {
-      setHistoricalPhotos((prev) => [...prev, inserted]);
-    } else {
-      setCurrentPhotos((prev) => [...prev, inserted]);
-    }
-  }
-
-  async function handleRemovePhoto(photo: PlacePhoto, photoType: "historical" | "current") {
-    const { error: deleteError } = await supabase.from("place_photos").delete().eq("id", photo.id);
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
-    }
-
-    // Remove the underlying file too, not just the place_photos row, or the
-    // object is orphaned in the bucket. photo_url is the public URL from
-    // handlePhotoSelected's getPublicUrl call above; the storage-relative
-    // path is everything after the bucket name segment in that URL. A
-    // failure here is logged, not surfaced, since the DB row (the part the
-    // rest of the app reads) is already gone and correct either way.
-    const storagePath = getStoragePathFromPublicUrl(photo.photo_url);
-    if (storagePath) {
-      const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([storagePath]);
-      if (storageError) {
-        console.error("Failed to remove photo from storage:", storageError.message);
-      }
-    }
-
-    if (photoType === "historical") {
-      setHistoricalPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-    } else {
-      setCurrentPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-    }
   }
 
   if (loading) {

@@ -39,7 +39,7 @@ export function AdminNotificationBell() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchNotificationQueues(profile).then((next) => {
+    void fetchNotificationQueues(profile).then((next) => {
       if (!cancelled) setQueues(next);
     });
     return () => {

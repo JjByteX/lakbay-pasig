@@ -61,7 +61,7 @@ function useAverageColor(src: string | undefined) {
   useEffect(() => {
     if (!src) return;
     let live = true;
-    averageColor(src).then((c) => live && setColor(c));
+    void averageColor(src).then((c) => live && setColor(c));
     return () => {
       live = false;
     };

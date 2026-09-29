@@ -173,17 +173,17 @@ function DirectionsFromRow({
 }>) {
   if (pickingOnMap) {
     // Phase 4 stub, completed in Phase 5.3: the prompt takes the From
-    // field's place while pick mode is on. role="status" so a screen
-    // reader announces it, same reason the picker's result lines are
-    // <output>. The X only ends pick mode and keeps the previous From,
+    // field's place while pick mode is on. <output> (implicit status
+    // role) so a screen reader announces it, same reason the picker's
+    // result lines are <output>. The X only ends pick mode and keeps the previous From,
     // and is labeled differently from the panel's Cancel (which ends the
     // whole session) so the two are never confused.
     return (
       <div className="flex min-h-10 items-center gap-2">
         <MapPin className="h-4 w-4 shrink-0 text-primary" />
-        <p role="status" className="flex-1 text-sm text-foreground">
+        <output className="flex-1 text-sm text-foreground">
           Tap the map to set the start.
-        </p>
+        </output>
         <button
           type="button"
           aria-label="Stop choosing on map"

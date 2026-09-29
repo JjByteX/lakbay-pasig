@@ -306,7 +306,7 @@ export default function LandingPage() {
         if (!cancelled) setHeroSlides([]);
       }
     }
-    load();
+    void load();
     return () => {
       cancelled = true;
     };
@@ -346,7 +346,7 @@ export default function LandingPage() {
         if (!cancelled) setShowcaseLoading(false);
       }
     }
-    load();
+    void load();
     return () => {
       cancelled = true;
     };

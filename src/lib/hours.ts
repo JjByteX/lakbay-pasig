@@ -277,17 +277,27 @@ function buildDurationMinutes(): number[] {
 export const DURATION_MINUTES: readonly number[] = buildDurationMinutes();
 export const DURATION_OPTIONS: readonly string[] = DURATION_MINUTES.map((minutes) => formatDuration(minutes));
 
+const HOURS_PREFIX = /^(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?/;
+const MINUTES_SUFFIX = /^(?:\s*(?:and\s*)?(\d+)\s*m(?:ins?|inutes?)?)?$/;
+
 // Reads simple free text back into minutes ("2 hours", "45 minutes",
 // "1h30m"). Anything else, such as a range like "45 to 60 minutes", is null.
 export function parseDurationMinutes(text: string): number | null {
   const value = text.trim().toLowerCase();
 
-  const hoursAndMinutes =
-    /^(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)(?:\s*(?:and\s*)?(\d+)\s*(?:m|min|mins|minute|minutes))?$/.exec(value);
-  if (hoursAndMinutes) {
-    const hours = Number(hoursAndMinutes[1]);
-    const minutes = hoursAndMinutes[2] ? Number(hoursAndMinutes[2]) : 0;
-    return Math.round(hours * 60 + minutes);
+  // Two small patterns instead of one long one (SonarCloud regex-complexity
+  // finding, 26 against a 20 limit). The hours prefix matches "2", "hours"
+  // and the like; whatever follows it is either nothing or an optional
+  // "and" plus a minutes count. Same inputs accepted as the single pattern
+  // this replaced: h, hr, hrs, hour, hours and m, min, mins, minute, minutes.
+  const hoursPrefix = HOURS_PREFIX.exec(value);
+  if (hoursPrefix) {
+    const minutesSuffix = MINUTES_SUFFIX.exec(value.slice(hoursPrefix[0].length));
+    if (minutesSuffix) {
+      const hours = Number(hoursPrefix[1]);
+      const minutes = minutesSuffix[1] ? Number(minutesSuffix[1]) : 0;
+      return Math.round(hours * 60 + minutes);
+    }
   }
 
   const minutesOnly = /^(\d+)\s*(?:m|min|mins|minute|minutes)$/.exec(value);

@@ -219,7 +219,7 @@ function useLiveSwipe({
   track: Track;
   setPaused: (v: boolean) => void;
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
   const startX = useRef(0);
   const lastX = useRef(0);
   const lastT = useRef(0);
@@ -498,7 +498,7 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
 
   // Measured on the strip itself, so tile count follows the panel's real
   // width (a half-screen column on desktop), not the viewport.
-  const stripRef = useRef<HTMLDivElement | null>(null);
+  const stripRef = useRef<HTMLElement | null>(null);
   const [panelWidthPx, setPanelWidthPx] = useState(0);
   const measuredWidthPx = useContainerWidth(stripRef);
   useEffect(() => setPanelWidthPx(measuredWidthPx), [measuredWidthPx]);
@@ -521,7 +521,7 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
   // useLiveSwipe owns the strip's container ref (it needs the width for
   // drag math); the ResizeObserver above reads the same element.
   const setStripRef = useCallback(
-    (el: HTMLDivElement | null) => {
+    (el: HTMLElement | null) => {
       stripRef.current = el;
       swipe.containerRef.current = el;
     },
@@ -580,7 +580,10 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
 
   return (
     <div className="flex h-full w-full flex-col gap-3 p-3 sm:p-4">
-      <div
+      {/* <section> with an accessible name is the native "region" landmark,
+          which the carousel pattern allows for its container. It replaces
+          a div with role="group" (SonarCloud: prefer the native element). */}
+      <section
         ref={setStripRef}
         onPointerEnter={(e) => {
           if (e.pointerType === "mouse") setPaused(true);
@@ -590,7 +593,6 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
         }}
         {...swipe.handlers}
         className="relative min-h-0 w-full flex-1 touch-pan-y overflow-hidden rounded-lg"
-        role="group"
         aria-roledescription="carousel"
         aria-label="Featured Pasig places"
       >
@@ -603,7 +605,7 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
             onSelect={handleTileSelect}
           />
         )}
-      </div>
+      </section>
 
       {/* Progress dots, Qula's ClientPhotoStrip pattern: the active dot
           widens and fills over SLIDE_DURATION; the key restarts the fill

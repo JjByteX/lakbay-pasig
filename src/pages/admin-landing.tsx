@@ -67,7 +67,7 @@ export default function AdminLandingPage() {
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   function openNew() {

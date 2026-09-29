@@ -60,7 +60,7 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
     // a joined business_categories.name (migration 0027, category_id
     // replaces the old plain text column), flattened the same way, same
     // pattern the places query above already uses for place_categories.
-    Promise.all([
+    void Promise.all([
       supabase
         .from("places")
         .select("id, name, place_categories(name)")

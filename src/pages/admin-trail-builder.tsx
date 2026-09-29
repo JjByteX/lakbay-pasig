@@ -123,6 +123,31 @@ const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
   unlock_radius: "",
 };
 
+// Builds the routes row payload from the Details step's form state. Pulled
+// out of handleSaveInfo (SonarCloud cognitive-complexity finding, 18 against
+// a 15 limit): the blank-to-null fallbacks and the budget parse were a run
+// of branches with no reads or writes outside the payload itself.
+//
+// estimated_budget is numeric (migration 0019): the form holds it as a
+// string for the number input, same reasoning as admin-place-detail.tsx's
+// entrance_fee -- an empty string fails Postgres's numeric cast, so it
+// must become a real number or null before it reaches the payload.
+function buildTrailInfoPayload(info: TrailInfoFormState) {
+  return {
+    name: info.name.trim(),
+    // Category Directory Phase 6.1: writes category_id (migration
+    // 0023), nullable, matching theme's own prior optionality -- not
+    // forced required, same reasoning 0023's own comment gives for why
+    // category_id stays nullable on routes.
+    category_id: info.category_id || null,
+    estimated_duration: info.estimated_duration || null,
+    estimated_budget: info.estimated_budget.trim() ? Number(info.estimated_budget) : null,
+    recommended_time: info.recommended_time || null,
+    run_type: info.run_type || null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 // A discovery entry written before its trail (or stop) is saved has an id of
 // the form draft-N instead of a database uuid. See persistDraftDiscovery.
 function isDraftEntry(entryId: string | null): boolean {
@@ -668,23 +693,7 @@ export default function AdminTrailBuilderPage() {
     setSaving(true);
     setError(null);
 
-    // estimated_budget is numeric (migration 0019): the form holds it as a
-    // string for the number input, same reasoning as admin-place-detail.tsx's
-    // entrance_fee -- an empty string fails Postgres's numeric cast, so it
-    // must become a real number or null before it reaches the payload.
-    const payload = {
-      name: info.name.trim(),
-      // Category Directory Phase 6.1: writes category_id (migration
-      // 0023), nullable, matching theme's own prior optionality -- not
-      // forced required, same reasoning 0023's own comment gives for why
-      // category_id stays nullable on routes.
-      category_id: info.category_id || null,
-      estimated_duration: info.estimated_duration || null,
-      estimated_budget: info.estimated_budget.trim() ? Number(info.estimated_budget) : null,
-      recommended_time: info.recommended_time || null,
-      run_type: info.run_type || null,
-      updated_at: new Date().toISOString(),
-    };
+    const payload = buildTrailInfoPayload(info);
 
     if (isNew && !routeId) {
       const { data, error: insertError } = await supabase

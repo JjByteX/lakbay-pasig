@@ -379,10 +379,10 @@ const LINE_OPACITY = 0.35;
 // The left-edge-starting group described above -- lines 0-10 (the
 // top-edge S-bend group) and the already-hidden RIGHT_SIDE_LINE_INDICES
 // are both deliberately excluded, see this file's comment above.
-const LEFT_EDGE_LINE_INDICES = [
+const LEFT_EDGE_LINE_INDICES = new Set([
   20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 40,
   41, 42, 43, 44, 45, 46, 47,
-];
+]);
 
 function extendPathStart(pathEl: SVGPathElement) {
   const d = pathEl.getAttribute("d");
@@ -474,7 +474,7 @@ export function HeroLinesBackground() {
     // after it.
     const isLeftEdgePath = (el: Element): el is SVGPathElement =>
       el instanceof SVGPathElement &&
-      LEFT_EDGE_LINE_INDICES.includes(Number(el.dataset.i));
+      LEFT_EDGE_LINE_INDICES.has(Number(el.dataset.i));
 
     const observer = new MutationObserver((records) => {
       observer.disconnect();

@@ -72,7 +72,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
 
     setLoading(true);
     const timeout = setTimeout(() => {
-      searchEverything(trimmed).then((next) => {
+      void searchEverything(trimmed).then((next) => {
         setResults(next);
         setLoading(false);
       });
