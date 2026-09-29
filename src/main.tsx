@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { IconContext } from "@phosphor-icons/react";
 import App from "./App";
 import "./index.css";
 // Pre-step-7 cleanup: map-vector-restyle-plan.md's Open Item ("removing
@@ -22,8 +23,14 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    {/* Bold is the default weight for every Phosphor icon (regular read
+        too thin, duotone was dropped). Icons that pass their own weight
+        (fill for selected or saved states) still win over this context
+        value. */}
+    <IconContext.Provider value={{ weight: "bold" }}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </IconContext.Provider>
   </StrictMode>
 );

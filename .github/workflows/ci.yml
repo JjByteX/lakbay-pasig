@@ -70,8 +70,8 @@ jobs:
     env:
       # The CLI checks for an access token on startup even for commands that
       # never touch a real project, per supabase/cli#1872. This token is
-      # never used to link or push here, --linked=false below keeps this
-      # job entirely local to the throwaway Postgres in Docker.
+      # never used to link or push here, --local below keeps this job
+      # entirely on the throwaway Postgres in Docker.
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v5
@@ -87,8 +87,11 @@ jobs:
       - name: Start local Supabase stack
         run: supabase start
 
+      # --local, not --linked=false: the CLI treats a passed --linked flag
+      # as "changed" whatever its value and connects to the linked remote
+      # project (auth_query timeout in CI). --local pins the Docker DB.
       - name: Lint schema for errors
-        run: supabase db lint --linked=false
+        run: supabase db lint --local
 
   deploy-migrations:
     name: Push migrations to Supabase

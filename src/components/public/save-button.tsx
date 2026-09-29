@@ -66,7 +66,7 @@ export function SaveButton({ placeId, onToggle }: Readonly<SaveButtonProps>) {
         aria-label={saved ? "Remove from saved places" : "Save this place"}
         aria-pressed={saved}
       >
-        <Heart weight={saved ? "fill" : "regular"} className={cn("h-5 w-5", saved && "text-primary")} />
+        <Heart weight={saved ? "fill" : "bold"} className={cn("h-5 w-5", saved && "text-primary")} />
       </Button>
       {/* Phase 8.3: specific to which direction failed (save vs remove),
           not "something went wrong," per ux-ui-guidelines.md's State

@@ -1,10 +1,9 @@
-import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, SidebarSimple } from "@phosphor-icons/react";
+import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { cn } from "@/lib/utils";
-import logo from "@/assets/lakbay-pasig-logo.svg";
 import {
   Sidebar,
   SidebarContent,
@@ -15,7 +14,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -27,6 +25,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import { SignOutDialog } from "@/components/sign-out-dialog";
+import { SidebarLogoRow } from "@/components/sidebar-logo-row";
 
 // Desktop-only counterpart to bottom-nav.tsx: same four destinations, same
 // left-to-right/top-to-bottom order (Home, Trails, Discover, Saved), same
@@ -52,81 +51,6 @@ const NAV_ITEMS = [
   { to: "/saved", label: "Saved", icon: Bookmark, end: false },
 ] as const;
 
-// Amkor-style header row (Sidebar.jsx): the collapse control lives here,
-// not in a separate top bar over the main content (public-shell.tsx's
-// DesktopShell used to render one solely to hold SidebarTrigger -- removed
-// entirely now that this row is the one place to expand/collapse).
-//
-// Expanded: logo + wordmark stay a Home link exactly as before, plus a
-// dedicated collapse button on the right (PanelLeftOpen, mirrored via
-// scaleX(-1) so it visually points "in" -- same icon/flip Amkor uses for
-// its own collapse button, not a new glyph).
-// Collapsed: one button fills the same slot the logo alone used to, and
-// is now the expand control too, since there's no room for a second
-// target on an icon-only rail -- hovering it swaps the brand mark for a
-// plain PanelLeftOpen via Tailwind's group-hover: variant (bug fix: was
-// a separate plain-CSS block keyed on hand-written class names, see this
-// button's own comment below), no component state for the hover itself,
-// only the click still calls toggleSidebar().
-function HeaderLogoRow() {
-  const { state, toggleSidebar } = useSidebar();
-  const collapsed = state === "collapsed";
-
-  if (collapsed) {
-    return (
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label="Expand sidebar"
-        // Bug fix: hover-swap previously depended entirely on a separate
-        // plain-CSS block (index.css's .sidebar-logo-toggle rules) toggling
-        // display on two sibling spans by class name alone, with no
-        // Tailwind group state class on this button to anchor to and no
-        // explicit base `display` on .sidebar-logo-expand in the JSX
-        // itself -- fragile by construction, and the symptom reported
-        // (hovering the collapsed brand icon shows nothing) matches that:
-        // any mismatch between this file's class names and index.css's
-        // selectors, or between the two build pipelines, silently drops
-        // the swap with no visible error. Rebuilt with Tailwind's own
-        // `group`/`group-hover:` state variants instead -- the same
-        // mechanism this codebase's own sidebar.tsx already relies on for
-        // every other collapsed/expanded swap (group-data-[collapsible=
-        // icon]:hidden, etc per constraints.md's Inventory Before
-        // Suggesting rule) -- so the hover state lives in one place (this
-        // button's own class list) with an explicit `flex`/`hidden` pair
-        // on each span, not a class-name contract with a second file.
-        className="group/logo-toggle flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <span className="flex h-8 w-8 items-center justify-center group-hover/logo-toggle:hidden">
-          <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
-        </span>
-        <span className="hidden h-8 w-8 items-center justify-center group-hover/logo-toggle:flex">
-          <SidebarSimple className="h-4 w-4" />
-        </span>
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex w-full items-center gap-2">
-      <NavLink to="/" className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1">
-        <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
-        <span className="truncate text-base font-semibold text-foreground">
-          Lakbay Pasig
-        </span>
-      </NavLink>
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label="Collapse sidebar"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <SidebarSimple className="h-5 w-5 -scale-x-100" />
-      </button>
-    </div>
-  );
-}
-
 export function PublicSidebar({
   searchOpen,
   onToggleSearch,
@@ -150,23 +74,11 @@ export function PublicSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        {/* Amkor-style header: expanded shows the logo (still a Home link,
-            unchanged from before) plus a dedicated collapse button on the
-            right; collapsed shows a single button that is both the brand
-            mark and the expand control, matching Amkor's own Sidebar.jsx
-            header exactly (PanelLeftOpen, mirrored via scaleX(-1) when
-            expanded, plain when collapsed) rather than reusing this
-            project's generic SidebarTrigger, which the shell previously
-            placed in a separate top bar in SidebarInset (public-shell.tsx)
-            -- that whole bar is now gone; this row is the only collapse
-            control on desktop.
-            Collapsed hover swap (logo -> expand icon in the same slot) is
-            Tailwind's own group-hover: variant (bug fix: see HeaderLogoRow's
-            own button for why this replaced a separate plain-CSS block),
-            not reimplemented with component state, since it's a decoration
-            on a single already-interactive button, not new application
-            state. */}
-        <HeaderLogoRow />
+        {/* Shared header row (sidebar-logo-row.tsx), same one the admin
+            sidebar uses: logo + wordmark link Home and a collapse button
+            when expanded; one logo button that turns into the expand
+            icon on hover when collapsed. */}
+        <SidebarLogoRow to="/" />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -188,26 +100,25 @@ export function PublicSidebar({
                   onClick={onToggleSearch}
                   aria-expanded={searchOpen}
                 >
-                  <MagnifyingGlass className="h-4 w-4 shrink-0" />
+                  <MagnifyingGlass weight={searchOpen ? "fill" : "bold"} className="h-4 w-4 shrink-0" />
                   <span>Search</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {NAV_ITEMS.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      item.end ? currentPath === item.to : currentPath === item.to || currentPath.startsWith(`${item.to}/`)
-                    }
-                    tooltip={item.label}
-                  >
-                    <NavLink to={item.to} end={item.end}>
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {NAV_ITEMS.map((item) => {
+                const active = item.end
+                  ? currentPath === item.to
+                  : currentPath === item.to || currentPath.startsWith(`${item.to}/`);
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <NavLink to={item.to} end={item.end}>
+                        <item.icon weight={active ? "fill" : "bold"} className="h-4 w-4 shrink-0" />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

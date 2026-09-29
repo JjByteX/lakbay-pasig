@@ -117,7 +117,7 @@ function markerElement(result: DiscoverResult): HTMLElement {
     result.verification_status === "pending"
       ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground bg-card shadow"
       : "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-card shadow";
-  ring.innerHTML = renderToStaticMarkup(<Icon className="h-4 w-4 text-foreground" aria-hidden="true" />);
+  ring.innerHTML = renderToStaticMarkup(<Icon weight="bold" className="h-4 w-4 text-foreground" aria-hidden="true" />);
   wrapper.appendChild(ring);
 
   const label = document.createElement("span");

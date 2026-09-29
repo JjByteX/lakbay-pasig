@@ -64,7 +64,7 @@ export function SaveRouteButton({ routeId, onToggle }: Readonly<SaveRouteButtonP
         aria-label={saved ? "Remove from saved trails" : "Save this trail"}
         aria-pressed={saved}
       >
-        <Heart weight={saved ? "fill" : "regular"} className={cn("h-5 w-5", saved && "text-primary")} />
+        <Heart weight={saved ? "fill" : "bold"} className={cn("h-5 w-5", saved && "text-primary")} />
       </Button>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

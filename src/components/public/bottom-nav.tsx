@@ -32,15 +32,12 @@ export function BottomNav() {
               }`
             }
           >
-            {() => (
+            {({ isActive }) => (
               <>
-                {/* Outline icon always, active vs. inactive communicated
-                    solely by the text-primary/text-muted-foreground color
-                    change above -- the earlier active-tab fill (an SVG `fill` set to currentColor; Phosphor's
-                    fill weight stays unused here too) has been removed
-                    per direct request, so no tab icon ever renders filled
-                    when switching between them. */}
-                <tab.icon className="h-5 w-5 shrink-0" />
+                {/* Bold at rest (global default), filled when the tab
+                    is active, per direct request (reverses the earlier
+                    outline-only rule, decision-log.md #24). */}
+                <tab.icon weight={isActive ? "fill" : "bold"} className="h-5 w-5 shrink-0" />
                 <span>{tab.label}</span>
               </>
             )}

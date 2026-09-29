@@ -60,7 +60,12 @@ export default function AdminPage() {
       <AdminSidebar />
       <SidebarInset className="h-svh overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-6">
-          <SidebarTrigger />
+          {/* Desktop hides this trigger: the sidebar's own header row
+              (sidebar-logo-row.tsx) already collapses and expands it, so a
+              second button here would duplicate it. Below md the sidebar
+              is an offcanvas sheet with no header row on screen, so this
+              stays the only way to open it there. */}
+          <SidebarTrigger className="md:hidden" />
           {/* Phase 3.4/4.3: search and notifications land here together,
               both new to this header, which previously held only the
               trigger (confirmed directly before adding anything, per

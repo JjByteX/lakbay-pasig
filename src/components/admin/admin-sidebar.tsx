@@ -3,7 +3,6 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
-import logo from "@/assets/lakbay-pasig-logo.svg";
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +24,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import { SignOutDialog } from "@/components/sign-out-dialog";
+import { SidebarLogoRow } from "@/components/sidebar-logo-row";
 
 // Sidebar Sections per admin-panel-spec.md. Dashboard always visible.
 // Places needs manage_places or admin, Businesses needs review_businesses or
@@ -112,66 +112,32 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        {/* Logo: always visible, collapsed or expanded, same persistence
-            pattern the footer's Avatar already establishes below (no
-            group-data-[collapsible=icon]:hidden on the icon itself, only
-            the text beside it hides). The logo asset (lakbay-pasig-
-            logo.svg, already used by auth-layout.tsx) is a square
-            512x512 squircle mark, so it survives the collapsed rail
-            without cropping in principle -- the earlier version still
-            clipped in practice because this row's own px-2 py-1 stacked
-            on top of SidebarHeader's own p-2, leaving only 16px of the
-            collapsed 3rem rail for a 32px (h-8 w-8) image, and neither
-            padding value changed between expanded/collapsed states, so
-            the image visibly fought the shrinking container during the
-            200ms width transition (sidebar.tsx) instead of settling
-            into it. Fixed by following the same collapse-state-aware
-            sizing sidebarMenuButtonVariants already uses for nav buttons
-            (group-data-[collapsible=icon]:!size-8 group-data-
-            [collapsible=icon]:!p-2 there): the row itself drops to !p-0
-            when collapsed so SidebarHeader's own p-2 is the only inset
-            left (matching the nav buttons' own collapsed math, size-8
-            inside p-2 of a 48px rail), and the image is sized smaller
-            (h-6 w-6, 24px) so it fits that collapsed space with room to
-            spare rather than exactly filling it. justify-center
-            re-centers the row once the label hides, matching the
-            footer's own group-data-[collapsible=icon]:justify-center.
-            Bumped "CATO Admin" from text-sm to text-base, one step up
-            the existing type scale (text-base is already an established
-            token across the public surface, just newly reused here in
-            admin) rather than a new arbitrary size, per ux-ui-
-            guidelines.md's Consistency Rules ("if a value is used once,
-            it must be reused everywhere that context applies. Never
-            invent a new value for the same purpose."). */}
-        <div className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0">
-          <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
-          <span className="text-base font-semibold text-foreground group-data-[collapsible=icon]:hidden">
-            CATO Admin
-          </span>
-        </div>
+        {/* Same shared header row as the resident sidebar
+            (sidebar-logo-row.tsx): logo + "Lakbay Pasig" linking to the
+            admin dashboard, collapse button when expanded, logo that
+            becomes the expand icon on hover when collapsed. */}
+        <SidebarLogoRow to="/admin" />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {visibleItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      item.to === "/admin"
-                        ? currentPath === item.to
-                        : currentPath === item.to || currentPath.startsWith(`${item.to}/`)
-                    }
-                    tooltip={item.label}
-                  >
-                    <NavLink to={item.to} end={item.to === "/admin"}>
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {visibleItems.map((item) => {
+                const active =
+                  item.to === "/admin"
+                    ? currentPath === item.to
+                    : currentPath === item.to || currentPath.startsWith(`${item.to}/`);
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <NavLink to={item.to} end={item.to === "/admin"}>
+                        <item.icon weight={active ? "fill" : "bold"} className="h-4 w-4 shrink-0" />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -210,19 +176,13 @@ export function AdminSidebar() {
                   one-shared-scale requirement. */}
               <Avatar className={cn(AVATAR_SIZE.sm, "shrink-0")}>
                 {profile?.profile_picture && <AvatarImage src={profile.profile_picture} alt="" />}
-                <AvatarFallback>{initial}</AvatarFallback>
+                <AvatarFallback className="leading-none">{initial}</AvatarFallback>
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:hidden">
-                {/* Bumped one step up the type scale, matching the header's
-                    CATO Admin label above (text-sm -> text-base, text-xs ->
-                    text-sm), keeping the same relative primary/secondary
-                    two-size relationship this block already had, just
-                    shifted up one rung, per the same Consistency Rules
-                    reasoning as the header. */}
-                <span className="truncate text-base font-semibold text-foreground">
+                <span className="truncate text-sm font-semibold text-foreground">
                   {profile?.display_name ?? "Staff"}
                 </span>
-                <span className="truncate text-sm text-muted-foreground">
+                <span className="truncate text-xs text-muted-foreground">
                   {profile?.position ?? (isAdmin ? "Admin" : "Staff")}
                 </span>
               </div>

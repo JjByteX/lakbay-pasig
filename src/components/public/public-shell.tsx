@@ -907,7 +907,7 @@ function DesktopShell({
           Positioned flush against the sidebar's own right edge via the
           same peer-data-[state] selectors SidebarInset already keys off
           of (peer is set on Sidebar's own root, sidebar.tsx line ~159),
-          so the panel tracks the rail's real width (13rem expanded, 3rem
+          so the panel tracks the rail's real width (13.5rem expanded, 3rem
           collapsed via --sidebar-width-icon) without re-measuring it in
           JS -- it just reads the same CSS custom properties/data-state
           the rail itself renders with.

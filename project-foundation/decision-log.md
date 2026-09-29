@@ -206,3 +206,37 @@ Directions weighed, per rule 6: announcements as a right hand column beside the 
 **Decision:** `lucide-react` is replaced by `@phosphor-icons/react` (^2.1.10) across `src/`, on direct instruction that Lucide reads as generic. This overrides the project's earlier use of Lucide (named in `hero-carousel.tsx`'s old comment and `location-field-plan.md`'s icon table, which is left as written). The strings stored in the `icon` columns (`place_categories`, `trail_categories`, `event_categories`, `business_categories`, `place_facilities`) keep their Lucide-style values ("landmark", "building-2", "square-parking"), so there is no migration; only the component each string resolves to changed, in the five `*-icons.ts` maps. Renames worth knowing: Chevron to Caret, Search to MagnifyingGlass, Settings to Gear, Home to House, Map to MapTrifold, Landmark to Bank, Castle to CastleTurret, Croissant to Bread, Loader2 to CircleNotch, ImagePlus to CameraPlus, and SquareParking to LetterCircleP because Phosphor has no parking icon. Filled states now use `weight="fill"` instead of Lucide's `fill-*` classes: the saved Heart, the completed CheckCircle, the radio-item Circle, and the map and location-picker pins (the pins lose the card-colored outline, which Phosphor has no stroke to set). The bottom nav stays outline-only, per its existing direct request.
 
 **Standing rule:** New icons come from `@phosphor-icons/react` only, `regular` weight by default and `fill` only for a selected, saved or completed state. No second icon library.
+
+(Amended by #24: duotone is now the default weight and the bottom nav fills when active. Weight amended again by #25: bold.)
+
+---
+
+**#:** 24
+**Milestone:** Icon weight, duotone default and filled active nav (amends #23)
+
+**Decision:** Regular weight read too thin, so duotone is now the default for every Phosphor icon, set once through `IconContext.Provider` in `main.tsx` instead of a `weight` prop on each icon. The nav icons (`bottom-nav.tsx`, `public-sidebar.tsx`, `admin-sidebar.tsx`, plus the public sidebar's Search row) switch to `fill` while their item is active. The bottom nav's earlier outline-only rule is reversed on direct request. Two spots outside the provider's reach set the weight themselves: the unsaved Heart in `save-button.tsx` and `save-route-button.tsx` (was an explicit `regular`, which would have overridden the default) and the category icon in `discover-map.tsx`'s `markerElement` (rendered with `renderToStaticMarkup`, outside the React tree).
+
+CI fix in the same pass: `supabase db lint --linked=false` connected to the remote project because the CLI treats a passed `--linked` flag as set whatever its value, so the job timed out on the pooler. It is now `--local`. `supabase/.temp` is listed in `.gitignore` but is tracked in the repo, which is how CI found a linked project.
+
+**Standing rule:** New icons come from `@phosphor-icons/react` only, and take the duotone default from `IconContext` with no `weight` prop. `fill` marks a selected, active, saved or completed state. No second icon library. Any icon rendered through `renderToStaticMarkup` passes `weight` itself.
+
+(Weight amended by #25: duotone is dropped, bold is the default.)
+
+---
+
+**#:** 25
+**Milestone:** Icon weight, bold default replaces duotone (amends #24)
+
+**Decision:** Duotone is dropped on direct request and bold is the default for every Phosphor icon, still set once through `IconContext.Provider` in `main.tsx`. Filled active and saved states are unchanged. The places that set their own weight now pass `bold` for the resting state: the nav icons in `bottom-nav.tsx`, `public-sidebar.tsx` (including its Search row) and `admin-sidebar.tsx`, the unsaved Heart in `save-button.tsx` and `save-route-button.tsx`, and the category icon in `discover-map.tsx`'s `markerElement`. Nothing else in `src/` referenced duotone. The CI fix recorded under #24 is untouched.
+
+**Standing rule:** New icons come from `@phosphor-icons/react` only, and take the bold default from `IconContext` with no `weight` prop. `fill` marks a selected, active, saved or completed state. No second icon library. Any icon rendered through `renderToStaticMarkup`, and any icon with a conditional `fill`, passes its resting `weight` itself as `bold`.
+
+---
+
+**#:** 26
+**Milestone:** Admin sidebar header matches resident view
+
+**Decision:** The admin sidebar header now uses the same row as the resident sidebar. Expanded: logo and "Lakbay Pasig" wordmark (replacing "CATO Admin"), linking to `/admin`, with a collapse button on the right. Collapsed: one logo button that becomes the expand icon on hover. The row was moved out of `public-sidebar.tsx` into `src/components/sidebar-logo-row.tsx` (`SidebarLogoRow`, takes the link target as `to`) so both sidebars share one component instead of two copies. `public-sidebar.tsx` passes `to="/"`, `admin-sidebar.tsx` passes `to="/admin"`. Other "CATO" references (landing page contact details, staff copy) are the tourism office's name, not the admin label, and are unchanged.
+
+**Standing rule:** Any sidebar header row uses `SidebarLogoRow`. Do not copy the logo/collapse markup into a new sidebar.
+
