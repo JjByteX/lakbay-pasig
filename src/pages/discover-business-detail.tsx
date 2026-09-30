@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Info, BookOpen } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
@@ -79,6 +79,7 @@ function itemsTabLabel(businessType: BusinessDetail["business_type"]): string {
 export default function DiscoverBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [business, setBusiness] = useState<BusinessDetail | null>(null);
   usePageTitle(business?.name ?? "Discover");
   const [items, setItems] = useState<BusinessItem[]>([]);
@@ -226,7 +227,11 @@ export default function DiscoverBusinessDetailPage() {
               carry an always-empty third tab. Label keys off business_type
               (vendor-mode-spec.md's Business Listing Type), the stable
               field for this, not the open-ended category text. */}
-          <Tabs defaultValue="details" className="xl:col-start-2 xl:row-start-2">
+          {/* ?tab=items (item search rows) opens the items tab, only when it exists. Tabs mount after items load. */}
+          <Tabs
+            defaultValue={searchParams.get("tab") === "items" && items.length > 0 ? "items" : "details"}
+            className="xl:col-start-2 xl:row-start-2"
+          >
             <TabsList
               className={
                 items.length > 0 ? "grid w-full grid-cols-3" : "grid w-full grid-cols-2"

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { formatItemPrice } from "@/lib/item-match";
 
 /**
  * Step 8 cleanup: ResultGroup and ResultRow were byte-identical between
@@ -49,6 +50,48 @@ export function ResultRow({
             {badge}
           </span>
         )}
+      </button>
+    </li>
+  );
+}
+
+// Item hit: thumbnail, name + price, store, badge. Separate from ResultRow,
+// which the admin search bar shares and has no image or price slot.
+export function ItemRow({
+  name,
+  price,
+  photoUrl,
+  businessName,
+  badge,
+  onClick,
+}: Readonly<{
+  name: string;
+  price: number | null;
+  photoUrl: string | null;
+  businessName: string;
+  badge: ReactNode;
+  onClick: () => void;
+}>) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex w-full items-start gap-3 px-4 py-2 text-left transition-colors hover:bg-muted"
+      >
+        {photoUrl ? (
+          <img src={photoUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+        ) : (
+          <div className="h-12 w-12 shrink-0 rounded-lg bg-muted" />
+        )}
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
+            <span className="shrink-0 text-sm text-foreground">{formatItemPrice(price)}</span>
+          </span>
+          <span className="truncate text-xs text-muted-foreground">{businessName}</span>
+          {badge}
+        </span>
       </button>
     </li>
   );

@@ -33,7 +33,7 @@ export interface DiscoverPlace {
   // Local Historical Place records today, confirmed against
   // data-model.md and places.facility_ids (migration 0026/0028) before
   // scoping this field to DiscoverPlace only -- DiscoverBusiness has no
-  // equivalent, same reasoning itemPrices below is place-absent for the
+  // equivalent, same reasoning items below is place-absent for the
   // opposite case. A place always has an array here (possibly empty),
   // never null, matching facility_ids' own not-null default ('{}').
   facility_ids: string[];
@@ -63,14 +63,9 @@ export interface DiscoverBusiness {
   latitude: number | null;
   longitude: number | null;
   verification_status: "verified" | "pending";
-  // Phase 7.1 (step-5-phases.md): item prices only, not full business_items
-  // rows (name, id), since the price filter is the only thing that needs
-  // this data at the Discover-list level; the full item list with names
-  // stays a detail-page concern (Phase 6.4, discover-business-detail.tsx's
-  // own separate business_items query). A place never carries this field,
-  // per data-model.md places have no item/price concept, so the price
-  // filter naturally excludes every place result without a special case.
-  itemPrices: (number | null)[];
+  // Items carry name and price for the price filter and the search match
+  // (item-match.ts). Places never carry them.
+  items: { name: string; price: number | null }[];
   // Map hover/full-details photos phase: same reasoning as
   // DiscoverPlace.coverPhotoUrl above, sourced from business_photos
   // instead of place_photos via the same fetchCoverPhotoUrls helper.

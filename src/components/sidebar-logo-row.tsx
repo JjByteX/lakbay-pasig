@@ -12,6 +12,10 @@ import { useSidebar } from "@/components/ui/sidebar";
 // since an icon-only rail has no room for a second target. Hovering it
 // swaps the logo for the expand icon via Tailwind's group-hover: variant
 // (no component state for the hover, only the click calls toggleSidebar).
+//
+// Both states are h-8 rows and the expanded link has pl-1, so the logo sits
+// at the same x (header p-2 + 4px) and y in both. Keep them equal, or the
+// logo jumps when the rail toggles.
 export function SidebarLogoRow({ to }: Readonly<{ to: string }>) {
   const { state, toggleSidebar } = useSidebar();
 
@@ -34,8 +38,8 @@ export function SidebarLogoRow({ to }: Readonly<{ to: string }>) {
   }
 
   return (
-    <div className="flex w-full items-center gap-2">
-      <NavLink to={to} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1">
+    <div className="flex h-8 w-full items-center gap-2">
+      <NavLink to={to} className="flex h-8 min-w-0 flex-1 items-center gap-2 pl-1">
         <img src={logo} alt="Lakbay Pasig" className="h-6 w-6 shrink-0" />
         <span className="truncate text-base font-semibold text-foreground">Lakbay Pasig</span>
       </NavLink>
@@ -43,9 +47,9 @@ export function SidebarLogoRow({ to }: Readonly<{ to: string }>) {
         type="button"
         onClick={toggleSidebar}
         aria-label="Collapse sidebar"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <SidebarSimple className="h-5 w-5 -scale-x-100" />
+        <SidebarSimple className="h-4 w-4 -scale-x-100" />
       </button>
     </div>
   );

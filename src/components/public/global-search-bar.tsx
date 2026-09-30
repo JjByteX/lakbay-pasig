@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { VerificationBadge } from "./result-card";
-import { ResultGroup, ResultRow } from "./search-result-list";
+import { ItemRow, ResultGroup, ResultRow } from "./search-result-list";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import {
   EMPTY_SEARCH_RESULTS,
   hasAnyResults,
+  ITEM_SHOW_LIMIT,
   searchEverything,
   type GlobalSearchResults,
 } from "@/lib/global-search";
@@ -22,7 +23,7 @@ const DEBOUNCE_MS = 300;
 /**
  * Global search: one bar, shell-owned (rendered by public-shell.tsx on
  * every tab except Profile, per the resolved spec), fanning out to
- * Places, Businesses, Trails, and Events on every keystroke and showing
+ * Places, Businesses, Items, Trails, and Events on every keystroke and showing
  * only the non-empty groups underneath. Query state and results live here,
  * not lifted further up, since no other component needs to read the
  * in-progress query text -- Discover's own list/map filtering reads this
@@ -145,6 +146,33 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                   onClick={() => goTo(`/discover/business/${business.id}`)}
                 />
               ))}
+            </ResultGroup>
+          )}
+
+          {!loading && results.items.length > 0 && (
+            <ResultGroup label="Items">
+              {results.items.slice(0, ITEM_SHOW_LIMIT).map((item) => (
+                <ItemRow
+                  key={item.id}
+                  name={item.name}
+                  price={item.price}
+                  photoUrl={item.photoUrl}
+                  businessName={item.businessName}
+                  badge={<VerificationBadge status={item.verification_status} />}
+                  onClick={() => goTo(`/discover/business/${item.businessId}?tab=items`)}
+                />
+              ))}
+              {results.items.length > ITEM_SHOW_LIMIT && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => goTo("/discover")}
+                    className="flex min-h-12 w-full items-center px-4 text-left text-sm font-semibold hover:bg-muted"
+                  >
+                    View all
+                  </button>
+                </li>
+              )}
             </ResultGroup>
           )}
 

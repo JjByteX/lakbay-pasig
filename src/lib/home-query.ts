@@ -178,7 +178,7 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, verified_at, business_items(price)"
+      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, verified_at, business_items(name, price)"
     )
     .eq("verification_status", "verified")
     .not("verified_at", "is", null)
@@ -214,7 +214,7 @@ async function fetchRecentlyVerifiedBusinesses(): Promise<RecentlyVerifiedBusine
       latitude: rest.latitude,
       longitude: rest.longitude,
       verification_status: "verified" as const,
-      itemPrices: (rest.business_items ?? []).map((item: { price: number | null }) => item.price),
+      items: rest.business_items ?? [],
       verified_at: rest.verified_at as string,
       coverPhotoUrl: coverPhotos.get(rest.id) ?? null,
     };

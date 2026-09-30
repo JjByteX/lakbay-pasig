@@ -507,6 +507,7 @@ export default function DiscoverPage() {
       ) : (
         <DiscoverList
           results={filtered}
+          query={query}
           userLocation={userLocation}
           origin={origin}
           resultsLoading={resultsLoading}

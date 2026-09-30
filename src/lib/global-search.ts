@@ -3,11 +3,13 @@ import { readEmbeddedName } from "./place-categories";
 
 // Global search, per the resolved spec: a search bar visible on every tab
 // except Profile (navigation-and-access-control.md's tab list minus
-// Profile, confirmed directly), reaching into exactly the four tables that
-// are name-searchable and public per data-model.md/architecture-notes.md's
-// schema table -- Places, Businesses, Trails (routes), Events. Saved and
-// Profile carry no independent content of their own to search, only
-// personal records of content that already lives in one of these four.
+// Profile, confirmed directly), reaching into five sources that are
+// name-searchable and public per data-model.md/architecture-notes.md's
+// schema table -- Places, Businesses, Trails (routes), Events, and Items
+// (business_items_select_public 0016, business_item_photos_select_public
+// 0040). Saved and Profile carry no independent content of their own to
+// search, only personal records of content that already lives in one of
+// these.
 //
 // Each group reuses the exact RLS-scoped select an existing query file
 // already runs (discover-query.ts's fetchPlaces/fetchBusinesses,
@@ -49,11 +51,28 @@ export interface SearchEventHit {
   category: string | null;
 }
 
+export interface SearchItemHit {
+  kind: "item";
+  id: string;
+  name: string;
+  price: number | null;
+  photoUrl: string | null;
+  businessId: string;
+  businessName: string;
+  verification_status: "verified" | "pending";
+}
+
+// Fetch one more than the panel shows: the extra row only proves there is
+// more, which is what the View all row keys off.
+export const ITEM_FETCH_LIMIT = 4;
+export const ITEM_SHOW_LIMIT = 3;
+
 export interface GlobalSearchResults {
   places: SearchPlaceHit[];
   businesses: SearchBusinessHit[];
   trails: SearchTrailHit[];
   events: SearchEventHit[];
+  items: SearchItemHit[];
 }
 
 export const EMPTY_SEARCH_RESULTS: GlobalSearchResults = {
@@ -61,6 +80,7 @@ export const EMPTY_SEARCH_RESULTS: GlobalSearchResults = {
   businesses: [],
   trails: [],
   events: [],
+  items: [],
 };
 
 export function hasAnyResults(results: GlobalSearchResults): boolean {
@@ -68,7 +88,8 @@ export function hasAnyResults(results: GlobalSearchResults): boolean {
     results.places.length > 0 ||
     results.businesses.length > 0 ||
     results.trails.length > 0 ||
-    results.events.length > 0
+    results.events.length > 0 ||
+    results.items.length > 0
   );
 }
 
@@ -161,11 +182,45 @@ async function searchEvents(q: string): Promise<SearchEventHit[]> {
   }));
 }
 
+async function searchItems(q: string): Promise<SearchItemHit[]> {
+  // business_items_select_own and business_items_write_staff (0004) let an
+  // owner or staff read an unverified store's items, so the status filter is
+  // repeated here, same as searchEvents repeats published = true.
+  const { data, error } = await supabase
+    .from("business_items")
+    .select(
+      "id, name, price, business_id, businesses!inner(name, verification_status), business_item_photos(photo_url)"
+    )
+    .ilike("name", `%${q}%`)
+    .in("businesses.verification_status", ["verified", "pending"])
+    .order("name")
+    .order("price", { ascending: true, nullsFirst: false })
+    .order("sort_order", { referencedTable: "business_item_photos" })
+    .limit(1, { referencedTable: "business_item_photos" })
+    .limit(ITEM_FETCH_LIMIT);
+
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    // The !inner embed can come back as an object or a one item array.
+    const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
+    return {
+      kind: "item" as const,
+      id: row.id,
+      name: row.name,
+      price: row.price,
+      photoUrl: row.business_item_photos?.[0]?.photo_url ?? null,
+      businessId: row.business_id,
+      businessName: business.name,
+      verification_status: business.verification_status as "verified" | "pending",
+    };
+  });
+}
+
 /**
- * One call, four independent queries in parallel, grouped result. A
+ * One call, five independent queries in parallel, grouped result. A
  * failure in one group does not blank the others -- each group is caught
  * independently and simply comes back empty, since a partial result set
- * (e.g. trails failed, places/businesses/events still show) is more useful
+ * (e.g. trails failed, places/businesses/events/items still show) is more useful
  * to someone mid-search than a single error wiping every group. Empty
  * query returns EMPTY_SEARCH_RESULTS without a network call, same
  * no-op-on-empty-input shape filterDiscoverResults already uses.
@@ -174,12 +229,13 @@ export async function searchEverything(query: string): Promise<GlobalSearchResul
   const q = query.trim();
   if (!q) return EMPTY_SEARCH_RESULTS;
 
-  const [places, businesses, trails, events] = await Promise.all([
+  const [places, businesses, trails, events, items] = await Promise.all([
     searchPlaces(q).catch(() => []),
     searchBusinesses(q).catch(() => []),
     searchTrails(q).catch(() => []),
     searchEvents(q).catch(() => []),
+    searchItems(q).catch(() => []),
   ]);
 
-  return { places, businesses, trails, events };
+  return { places, businesses, trails, events, items };
 }

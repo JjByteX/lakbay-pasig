@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Coordinates } from "@/lib/discover-query";
 import { sortDiscoverResults } from "@/lib/discover-query";
+import { formatItemPrice, matchingItem } from "@/lib/item-match";
 import type { DiscoverResult } from "@/lib/discover-types";
 import type { RouteGeometry } from "@/lib/directions";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +11,8 @@ import { ResultCard, VerificationBadge } from "./result-card";
 
 interface DiscoverListProps {
   results: DiscoverResult[];
+  // The search text, so a business row can show the item that matched it.
+  query: string;
   // The live GPS fix. Used only for the straight-line distance sort below
   // (sortDiscoverResults), which stays on the live position even when a
   // custom From is set -- directions-distance-and-from-plan.md, "Not
@@ -65,6 +68,7 @@ interface DiscoverListProps {
  */
 export function DiscoverList({
   results,
+  query,
   userLocation,
   origin,
   resultsLoading,
@@ -123,19 +127,29 @@ export function DiscoverList({
   return (
     <>
       <ul className="mx-auto flex max-w-md flex-col divide-y divide-border">
-        {sorted.map((result) => (
-          <li key={`${result.kind}-${result.id}`}>
-            <button
-              type="button"
-              onClick={() => setSelected(result)}
-              className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted"
-            >
-              <span className="text-base font-semibold text-foreground">{result.name}</span>
-              <span className="text-sm text-muted-foreground">{result.category}</span>
-              <VerificationBadge status={result.verification_status} />
-            </button>
-          </li>
-        ))}
+        {sorted.map((result) => {
+          // Shows why a store matched when the query hit an item name.
+          const item = result.kind === "business" ? matchingItem(result, query) : null;
+          return (
+            <li key={`${result.kind}-${result.id}`}>
+              <button
+                type="button"
+                onClick={() => setSelected(result)}
+                className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted"
+              >
+                <span className="text-base font-semibold text-foreground">{result.name}</span>
+                <span className="text-sm text-muted-foreground">{result.category}</span>
+                {item && (
+                  <span className="text-sm">
+                    <span className="text-foreground">{item.name}</span>{" "}
+                    <span className="text-muted-foreground">{formatItemPrice(item.price)}</span>
+                  </span>
+                )}
+                <VerificationBadge status={result.verification_status} />
+              </button>
+            </li>
+          );
+        })}
       </ul>
       <ResultCard
         result={selected}

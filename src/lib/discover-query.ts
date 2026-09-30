@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { readEmbeddedName, readEmbeddedIcon, readEmbeddedColor } from "./place-categories";
 import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover-types";
+import { matchingItem } from "./item-match";
 
 // Phase 3.1: places (places_select_public, migration 0003, verified only,
 // unchanged this step) and businesses (businesses_select_public, migration
@@ -84,7 +85,7 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
   const { data, error } = await supabase
     .from("businesses")
     .select(
-      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, business_items(price)"
+      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, business_items(name, price)"
     );
 
   if (error) throw error;
@@ -108,7 +109,7 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
     latitude: row.latitude,
     longitude: row.longitude,
     verification_status: row.verification_status as "verified" | "pending",
-    itemPrices: (row.business_items ?? []).map((item: { price: number | null }) => item.price),
+    items: row.business_items ?? [],
     coverPhotoUrl: coverPhotos.get(row.id) ?? null,
   }));
 }
@@ -200,14 +201,14 @@ export function sortDiscoverResults(
 /**
  * Phase 5.3-5.4, 7.1-7.2 (step-5-phases.md): narrows the combined result
  * set by name search (in place, no separate search page per step-5-plan.md
- * section 1), by category (place_categories, via Discover's own
+ * section 1, name or a business's item name), by category (place_categories, via Discover's own
  * fetchActiveCategories call -- Category Directory Phase 5.3, replacing
  * the removed DISCOVER_CATEGORIES constant), by
  * price range (businesses only), and by facility (Phase 2, feature-
  * request-phases.md, places only). All four apply to the same set that
  * feeds the map markers and the list together, per step-5-plan.md's Shape
- * section. Search matches on name only, case-insensitive substring, per
- * step-5-plan.md's "filters both map markers and the list by name." Empty
+ * section. Search is a case-insensitive substring on the name, or on any item
+ * name for a business (item-search-plan.md). Empty
  * query, empty category array, empty facilities array, and null priceRange
  * are all no-ops so the base list still shows everything, matching vendor-
  * mode-spec.md's Filter Behavior line that a filter narrows, it never
@@ -222,7 +223,7 @@ export function sortDiscoverResults(
  * selecting every category rather than filtering down to zero results.
  *
  * Price range (Phase 7.1): narrows to businesses with at least one item
- * priced inside [min, max] inclusive; a place never has itemPrices to
+ * priced inside [min, max] inclusive; a place never has items to
  * match, so it's excluded whenever the price filter is active, per
  * step-5-plan.md section 3 scoping this filter to businesses. Phase 7.2:
  * an item with a null price is skipped by this specific check only, it
@@ -252,7 +253,10 @@ export function filterDiscoverResults(
   const q = query.trim().toLowerCase();
 
   return results.filter((result) => {
-    if (q && !result.name.toLowerCase().includes(q)) return false;
+    // Name, or an item name for businesses (places carry no items).
+    if (q && !result.name.toLowerCase().includes(q)) {
+      if (result.kind !== "business" || matchingItem(result, q) == null) return false;
+    }
     if (categories.length > 0 && !categories.includes(result.category ?? ""))
       return false;
 
@@ -260,8 +264,8 @@ export function filterDiscoverResults(
       if (result.kind !== "business") return false;
       const min = priceRange.min ?? -Infinity;
       const max = priceRange.max ?? Infinity;
-      const hasMatchingItem = result.itemPrices.some(
-        (price) => price != null && price >= min && price <= max
+      const hasMatchingItem = result.items.some(
+        (i) => i.price != null && i.price >= min && i.price <= max
       );
       if (!hasMatchingItem) return false;
     }

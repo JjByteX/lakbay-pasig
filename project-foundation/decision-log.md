@@ -272,3 +272,17 @@ Known ceilings, accepted: `maxBounds` takes a rectangle, so parts of neighboring
 
 **Standing rule:** Bounds numbers live only in `map-style.ts`. Any camera move that could land outside the base box calls `growIfNeeded` first, or it clamps. The pin picker map stays unlocked. Add a polygon check only if the city border starts to matter, `minZoom: 10` only if a screen shows the bounds floor not binding, and growth for a route wider than 10.8 km only if it shows up.
 
+---
+
+**#:** 29
+**Milestone:** Item search (item-search-plan.md, item-search-phases.md)
+
+**Decision:** Global search gained a fifth source, Items, extending #9. `searchItems` in `global-search.ts` follows the same per-table-function-plus-`Promise.all` shape and reads `business_items` (public select 0016) with their first photo (`business_item_photos_select_public`, 0040). The panel shows an "Items" group after Businesses through the existing `ResultGroup`, using a new `ItemRow` (thumbnail, name, price, store, `VerificationBadge`). It fetches 4 and shows 3. The fourth row only proves there are more, and then a "View all" row closes the panel and goes to `/discover`, where the shared query text survives. Rows sort by name, then price low to high, unpriced last. A row opens the store's business page on its items tab (`?tab=items`, which `discover-business-detail.tsx` honors only when the store has items).
+
+`searchItems` filters store status itself (`businesses!inner` plus `.in(verified, pending)`), because `business_items_select_own` and `business_items_write_staff` (0004) let an owner or staff read an unverified store's items. This is the same reason `searchEvents` repeats `published = true`. `searchBusinesses` and Discover's `fetchBusinesses` have the same gap and were left alone, as their own fix.
+
+Discover now matches item names too. `DiscoverBusiness.itemPrices` became `items: { name, price }[]`, built in `fetchBusinesses` and `fetchRecentlyVerifiedBusinesses`. `src/lib/item-match.ts` holds `matchingItem` (lowest priced item whose name contains the query, unpriced only if nothing else matches) and `formatItemPrice`, with a `demo()` that runs under `npx tsx`. The filter and the list card both call `matchingItem`, so the rule lives in one place. The list card adds one line (item name and price) only when an item matched. The map only narrows, with no new UI. No migration, RLS or `seed.sql` change.
+
+Directions weighed, per rule 6: a modal over the map, a separate results screen, a `brand` column, merging the same item across stores, and a sort control. A modal covers the map, which is the point of the search. A results screen was already rejected in #9. A brand column needs a schema change and search on item name already finds a brand typed in it. Merging needs a canonical product, but item names are free text. A sort control is a results screen feature. Chosen instead: one more group in the panel, plus the existing Discover filter.
+
+**Standing rule:** A new searchable type follows the per-table-function-plus-`Promise.all` shape and repeats any status or published filter that the public policy alone does not guarantee for signed in users. The Items group shows 3 of 4 fetched, and its cap stays lower than the other groups because its rows are taller. Add a `pg_trgm` index if the `ilike` scan gets slow at about 300 vendors.

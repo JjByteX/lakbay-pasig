@@ -164,7 +164,7 @@ export function AdminSidebar() {
             <SidebarMenuButton
               size="lg"
               tooltip={profile?.display_name ?? "Account"}
-              className="h-auto py-1"
+              className="h-10 py-0 pl-0 pr-2 group-data-[collapsible=icon]:mb-1 group-data-[collapsible=icon]:!p-0"
               aria-label="Account menu"
             >
               {/* Phase 6.5/6.6/6.8: AvatarImage renders profile.profile_picture
