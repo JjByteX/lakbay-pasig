@@ -266,12 +266,18 @@ interface BusinessFieldsProps {
   /** Extra classes for the card root. Admin passes its scroll-inside-the-card
    *  classes here; the vendor side passes nothing and is unchanged. */
   className?: string;
-  /** A second column on the right of the same card, split from the fields by
-   *  a vertical divider (same layout as admin-place-detail.tsx's step 1).
-   *  Admin puts the read-only Items section here. Omitted (the vendor side),
-   *  the card is the single column it always was. Below lg it stacks under
-   *  the fields. */
-  sideColumn?: ReactNode;
+  /** Admin review only: renders one page of the three step form (same
+   *  steps as admin-place-detail.tsx) instead of every field at once.
+   *  "business" is the main fields with Opening Hours in a right column,
+   *  "location" is the address and a full height map, "story" is rules,
+   *  story, and specialty. Omitted (the vendor side), every field renders
+   *  in one card exactly as before. */
+  section?: "business" | "location" | "story";
+  /** The "Step N of 3" row at the top of the card, section mode only. */
+  stepHeading?: string;
+  /** Rendered at the end of the "story" card (admin puts the read-only
+   *  Items here), so it scrolls with the card. */
+  storyFooter?: ReactNode;
 }
 
 export function BusinessFields({
@@ -284,7 +290,9 @@ export function BusinessFields({
   categories,
   categoriesError = null,
   className,
-  sideColumn,
+  section,
+  stepHeading,
+  storyFooter,
 }: Readonly<BusinessFieldsProps>) {
   const pin =
     form.latitude !== null && form.longitude !== null
@@ -331,69 +339,262 @@ export function BusinessFields({
     </div>
   );
 
-  const fields = (
+  const nameAndType = nameAndTypeInRow ? (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {nameField}
+      {typeField}
+    </div>
+  ) : (
     <>
-      {nameAndTypeInRow ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {nameField}
-          {typeField}
+      {nameField}
+      {typeField}
+    </>
+  );
+
+  const categoryField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="category" help={FIELD_HELP.category}>
+        Category
+      </FieldLabel>
+      <Select value={form.category_id} onValueChange={(v) => onChange("category_id", v)}>
+        <SelectTrigger id="category">
+          <SelectValue placeholder="Select a category" />
+        </SelectTrigger>
+        <SelectContent>
+          {categories.map((c) => (
+            <SelectItem key={c.id} value={c.id}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
+    </div>
+  );
+
+  const descriptionField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="description" help={FIELD_HELP.description}>
+        Description
+      </FieldLabel>
+      <Textarea
+        id="description"
+        placeholder="One line, what the business sells or offers"
+        value={form.description}
+        onChange={(e) => onChange("description", e.target.value)}
+        maxLength={300}
+      />
+      <CharCount value={form.description} max={300} />
+    </div>
+  );
+
+  const locationPicker = (
+    <LocationPicker
+      label="Address"
+      help={FIELD_HELP.address}
+      requiredMarker={requiredMarkers}
+      placeholder={addressPlaceholder}
+      fill={section === "location"}
+      address={form.address}
+      coordinates={pin}
+      onChange={({ address, coordinates }) => {
+        // Three calls, one render: React 18 batches them, so the form
+        // never holds a half updated address and pin pair.
+        onChange("address", address);
+        onChange("latitude", coordinates?.latitude ?? null);
+        onChange("longitude", coordinates?.longitude ?? null);
+      }}
+    />
+  );
+
+  const contactField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="contact" help={FIELD_HELP.contact}>
+        Contact
+      </FieldLabel>
+      <Input
+        id="contact"
+        value={form.contact}
+        onChange={(e) => onChange("contact", e.target.value)}
+        maxLength={150}
+      />
+    </div>
+  );
+
+  // Opening hours is a weekly schedule editor, too tall to sit beside
+  // Contact in a two column row, so it gets its own row (default) or its
+  // own column (section "business").
+  const hoursField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="opening_hours" help={FIELD_HELP.opening_hours}>
+        Opening Hours
+      </FieldLabel>
+      <WeeklyHoursField
+        id="opening_hours"
+        ariaLabel="Opening hours"
+        value={form.opening_hours}
+        onChange={(next) => onChange("opening_hours", next)}
+      />
+    </div>
+  );
+
+  const rulesField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="rules" help={FIELD_HELP.rules}>
+        Rules
+      </FieldLabel>
+      <Textarea
+        id="rules"
+        placeholder="One rule per line"
+        value={form.rules}
+        onChange={(e) => onChange("rules", e.target.value)}
+        maxLength={500}
+      />
+      <CharCount value={form.rules} max={500} />
+    </div>
+  );
+
+  const storyField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="business_story" help={FIELD_HELP.business_story}>
+        Business Story
+      </FieldLabel>
+      <Textarea
+        id="business_story"
+        placeholder="The longer background, why it exists, how it started"
+        value={form.business_story}
+        onChange={(e) => onChange("business_story", e.target.value)}
+        className="min-h-30"
+        maxLength={5000}
+      />
+      <CharCount value={form.business_story} max={5000} />
+    </div>
+  );
+
+  const specialtyField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="unique_specialty" help={FIELD_HELP.unique_specialty}>
+        Unique Specialty
+      </FieldLabel>
+      <Textarea
+        id="unique_specialty"
+        value={form.unique_specialty}
+        onChange={(e) => onChange("unique_specialty", e.target.value)}
+        maxLength={300}
+      />
+      <CharCount value={form.unique_specialty} max={300} />
+    </div>
+  );
+
+  const accessibilityField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="accessibility_info" help={FIELD_HELP.accessibility_info}>
+        Accessibility Info
+      </FieldLabel>
+      <Textarea
+        id="accessibility_info"
+        placeholder="Parking, wheelchair access, nearby transport"
+        value={form.accessibility_info}
+        onChange={(e) => onChange("accessibility_info", e.target.value)}
+        maxLength={300}
+      />
+      <CharCount value={form.accessibility_info} max={300} />
+    </div>
+  );
+
+  const socialField = (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="social_media_links" help={FIELD_HELP.social_media_links}>
+        Social Media Links
+      </FieldLabel>
+      <Input
+        id="social_media_links"
+        placeholder="Comma separated"
+        value={form.social_media_links}
+        onChange={(e) => onChange("social_media_links", e.target.value)}
+        maxLength={500}
+      />
+    </div>
+  );
+
+  const registeredField = showRegisteredOrInformal && (
+    <div className="flex flex-col gap-2">
+      <FieldLabel htmlFor="registered_or_informal" help={FIELD_HELP.registered_or_informal}>
+        Registered or Informal
+      </FieldLabel>
+      <Select
+        value={form.registered_or_informal ?? ""}
+        onValueChange={(v) => onChange("registered_or_informal", v)}
+      >
+        <SelectTrigger id="registered_or_informal">
+          <SelectValue placeholder="Has a DTI or permit?" />
+        </SelectTrigger>
+        <SelectContent>
+          {REGISTERED_OR_INFORMAL.map((r) => (
+            <SelectItem key={r} value={r}>
+              {r === "registered" ? "Registered (has DTI/permit)" : "Informal"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const cardClass = cn("flex flex-col gap-4 rounded-lg border border-border bg-card p-4", className);
+  const heading = <p className="text-sm font-semibold text-foreground">{stepHeading}</p>;
+
+  // Step 2: the map is the page. The "Map pin required" note is left to the
+  // caller's "Required to continue" line, so it is never said twice.
+  if (section === "location") {
+    return (
+      <div className={cardClass}>
+        {heading}
+        {locationPicker}
+      </div>
+    );
+  }
+
+  if (section === "story") {
+    return (
+      <div className={cardClass}>
+        {heading}
+        {rulesField}
+        {storyField}
+        {specialtyField}
+        {storyFooter}
+      </div>
+    );
+  }
+
+  // Two columns from lg up, one column below it, divider between, same as
+  // admin-place-detail.tsx's step 1.
+  if (section === "business") {
+    return (
+      <div className={cardClass}>
+        {heading}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
+          <div className="flex flex-col gap-4 lg:pr-4">
+            {nameAndType}
+            {categoryField}
+            {descriptionField}
+            {contactField}
+            {socialField}
+            {accessibilityField}
+            {registeredField}
+          </div>
+          <div className="flex flex-col gap-4 lg:pl-4">{hoursField}</div>
         </div>
-      ) : (
-        <>
-          {nameField}
-          {typeField}
-        </>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="category" help={FIELD_HELP.category}>
-          Category
-        </FieldLabel>
-        <Select value={form.category_id} onValueChange={(v) => onChange("category_id", v)}>
-          <SelectTrigger id="category">
-            <SelectValue placeholder="Select a category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
       </div>
+    );
+  }
 
+  return (
+    <div className={cardClass}>
+      {nameAndType}
+      {categoryField}
+      {descriptionField}
       <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="description" help={FIELD_HELP.description}>
-          Description
-        </FieldLabel>
-        <Textarea
-          id="description"
-          placeholder="One line, what the business sells or offers"
-          value={form.description}
-          onChange={(e) => onChange("description", e.target.value)}
-          maxLength={300}
-        />
-        <CharCount value={form.description} max={300} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <LocationPicker
-          label="Address"
-          help={FIELD_HELP.address}
-          requiredMarker={requiredMarkers}
-          placeholder={addressPlaceholder}
-          address={form.address}
-          coordinates={pin}
-          onChange={({ address, coordinates }) => {
-            // Three calls, one render: React 18 batches them, so the form
-            // never holds a half updated address and pin pair.
-            onChange("address", address);
-            onChange("latitude", coordinates?.latitude ?? null);
-            onChange("longitude", coordinates?.longitude ?? null);
-          }}
-        />
+        {locationPicker}
         {/* All three callers disable Save without a pin, so this says why.
             Shown only while it is missing, so it is never a second message
             beside a placed pin. */}
@@ -401,144 +602,14 @@ export function BusinessFields({
           <p className="text-sm text-muted-foreground">Map pin required. Tap the map to place it.</p>
         )}
       </div>
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="contact" help={FIELD_HELP.contact}>
-          Contact
-        </FieldLabel>
-        <Input
-          id="contact"
-          value={form.contact}
-          onChange={(e) => onChange("contact", e.target.value)}
-          maxLength={150}
-        />
-      </div>
-
-      {/* Opening hours is a weekly schedule editor, too tall to sit beside
-          Contact in a two column row, so each gets its own full width row. */}
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="opening_hours" help={FIELD_HELP.opening_hours}>
-          Opening Hours
-        </FieldLabel>
-        <WeeklyHoursField
-          id="opening_hours"
-          ariaLabel="Opening hours"
-          value={form.opening_hours}
-          onChange={(next) => onChange("opening_hours", next)}
-        />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="rules" help={FIELD_HELP.rules}>
-          Rules
-        </FieldLabel>
-        <Textarea
-          id="rules"
-          placeholder="One rule per line"
-          value={form.rules}
-          onChange={(e) => onChange("rules", e.target.value)}
-          maxLength={500}
-        />
-        <CharCount value={form.rules} max={500} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="business_story" help={FIELD_HELP.business_story}>
-          Business Story
-        </FieldLabel>
-        <Textarea
-          id="business_story"
-          placeholder="The longer background, why it exists, how it started"
-          value={form.business_story}
-          onChange={(e) => onChange("business_story", e.target.value)}
-          className="min-h-30"
-          maxLength={5000}
-        />
-        <CharCount value={form.business_story} max={5000} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="unique_specialty" help={FIELD_HELP.unique_specialty}>
-          Unique Specialty
-        </FieldLabel>
-        <Textarea
-          id="unique_specialty"
-          value={form.unique_specialty}
-          onChange={(e) => onChange("unique_specialty", e.target.value)}
-          maxLength={300}
-        />
-        <CharCount value={form.unique_specialty} max={300} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="accessibility_info" help={FIELD_HELP.accessibility_info}>
-          Accessibility Info
-        </FieldLabel>
-        <Textarea
-          id="accessibility_info"
-          placeholder="Parking, wheelchair access, nearby transport"
-          value={form.accessibility_info}
-          onChange={(e) => onChange("accessibility_info", e.target.value)}
-          maxLength={300}
-        />
-        <CharCount value={form.accessibility_info} max={300} />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <FieldLabel htmlFor="social_media_links" help={FIELD_HELP.social_media_links}>
-          Social Media Links
-        </FieldLabel>
-        <Input
-          id="social_media_links"
-          placeholder="Comma separated"
-          value={form.social_media_links}
-          onChange={(e) => onChange("social_media_links", e.target.value)}
-          maxLength={500}
-        />
-      </div>
-
-      {showRegisteredOrInformal && (
-        <div className="flex flex-col gap-2">
-          <FieldLabel htmlFor="registered_or_informal" help={FIELD_HELP.registered_or_informal}>
-            Registered or Informal
-          </FieldLabel>
-          <Select
-            value={form.registered_or_informal ?? ""}
-            onValueChange={(v) => onChange("registered_or_informal", v)}
-          >
-            <SelectTrigger id="registered_or_informal">
-              <SelectValue placeholder="Has a DTI or permit?" />
-            </SelectTrigger>
-            <SelectContent>
-              {REGISTERED_OR_INFORMAL.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r === "registered" ? "Registered (has DTI/permit)" : "Informal"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-    </>
-  );
-
-  if (!sideColumn) {
-    return (
-      <div className={cn("flex flex-col gap-4 rounded-lg border border-border bg-card p-4", className)}>
-        {fields}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border",
-        className
-      )}
-    >
-      <div className="flex flex-col gap-4 lg:pr-4">{fields}</div>
-      <div className="flex flex-col gap-4 lg:pl-4">{sideColumn}</div>
+      {contactField}
+      {hoursField}
+      {rulesField}
+      {storyField}
+      {specialtyField}
+      {accessibilityField}
+      {socialField}
+      {registeredField}
     </div>
   );
 }

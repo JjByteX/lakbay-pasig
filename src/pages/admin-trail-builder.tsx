@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash, MapPin } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -1198,9 +1198,9 @@ export default function AdminTrailBuilderPage() {
     if (stopsLoading) {
       return <p className="text-sm text-muted-foreground">Loading…</p>;
     }
-    if (stops.length === 0) {
-      return <EmptyState icon={MapPin}>Stops will appear here.</EmptyState>;
-    }
+    // No empty state: zero stops renders nothing above the Add Stop button
+    // (a bordered empty list would read as a broken box).
+    if (stops.length === 0) return null;
     return (
       <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
         {stops.map((stop, index) => (

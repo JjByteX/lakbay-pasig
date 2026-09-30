@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Star, ShoppingBag } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, Star, ShoppingBag } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
@@ -137,6 +137,10 @@ export default function AdminBusinessDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  // Same three steps as admin-place-detail.tsx, so a reviewer reads a
+  // business in the order it was entered: 1 = the business, 2 = the map pin
+  // and address, 3 = rules and story (plus the read-only items).
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [items, setItems] = useState<BusinessItem[] | null>(null);
   const [reviews, setReviews] = useState<BusinessReviewEntry[] | null>(null);
@@ -285,18 +289,29 @@ export default function AdminBusinessDetailPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  // The map pin is required (location-field-plan.md). BusinessFields shows
-  // "Map pin required" beside the map while it is missing, so a disabled
+  // The map pin is required (location-field-plan.md). Split by the step
+  // that collects each field; step 3 has no required fields of its own.
+  // "Required to continue" names what is missing, so a disabled Next or
   // Save never goes unexplained.
-  const canSubmit =
-    form.name.trim().length > 0 &&
-    form.address.trim().length > 0 &&
-    form.latitude !== null &&
-    form.longitude !== null &&
-    !saving;
+  const missingStep1 = form.name.trim() ? [] : ["Business Name"];
+  const missingStep2 = [
+    !form.address.trim() && "Address",
+    (form.latitude === null || form.longitude === null) && "Map pin",
+  ].filter(Boolean) as string[];
+  const canSubmit = missingStep1.length === 0 && missingStep2.length === 0 && !saving;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    // Enter inside a step 1 or 2 field means "Next", not save, or a later
+    // step would be skipped.
+    if (step === 1) {
+      if (missingStep1.length === 0) setStep(2);
+      return;
+    }
+    if (step === 2) {
+      if (missingStep2.length === 0) setStep(3);
+      return;
+    }
     if (!canSubmit || !id) return;
 
     setSaving(true);
@@ -506,6 +521,14 @@ export default function AdminBusinessDetailPage() {
     reviewSubmitLabel = "Verify";
   }
 
+  let stepLabel = "Business";
+  if (step === 2) stepLabel = "Location";
+  if (step === 3) stepLabel = "Rules and story";
+
+  let stepSection: "business" | "location" | "story" = "business";
+  if (step === 2) stepSection = "location";
+  if (step === 3) stepSection = "story";
+
   return (
     <div className="flex min-h-0 grow flex-col gap-6">
       <AdminPageHeader
@@ -557,31 +580,65 @@ export default function AdminBusinessDetailPage() {
 
         <TabsContent value="info" className="flex min-h-0 grow flex-col">
           <form onSubmit={handleSubmit} className="flex min-h-0 grow flex-col gap-6">
-          <BusinessFields
-            form={form}
-            onChange={updateField}
-            nameAndTypeInRow
-            categories={categories}
-            categoriesError={categoriesError}
-            className={ADMIN_SCROLL_CLASS}
-            sideColumn={
-              <div className="flex flex-col gap-3">
-                <h2 className="text-sm font-semibold text-foreground">Items</h2>
-                <ItemList items={items} />
-              </div>
-            }
-          />
+            <BusinessFields
+              form={form}
+              onChange={updateField}
+              nameAndTypeInRow
+              categories={categories}
+              categoriesError={categoriesError}
+              className={ADMIN_SCROLL_CLASS}
+              section={stepSection}
+              stepHeading={`Step ${step} of 3: ${stepLabel}`}
+              storyFooter={
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-sm font-semibold text-foreground">Items</h2>
+                  <ItemList items={items} />
+                </div>
+              }
+            />
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+            {step === 1 && missingStep1.length > 0 && (
+              <p className="text-sm text-muted-foreground">Required to continue: {missingStep1.join(", ")}.</p>
+            )}
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => navigate("/admin/businesses")}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {saving ? "Saving…" : "Save Changes"}
-            </Button>
-          </div>
+            {step === 2 && missingStep2.length > 0 && (
+              <p className="text-sm text-muted-foreground">Required to continue: {missingStep2.join(", ")}.</p>
+            )}
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            {/* The keys are load-bearing: Next (type="button") and the submit
+                button share a slot, and without keys React reuses the one DOM
+                button and flips its type mid-click, submitting the form. */}
+            <div className="flex justify-between gap-2">
+              {step === 1 ? (
+                <Button key="cancel" type="button" variant="outline" onClick={() => navigate("/admin/businesses")}>
+                  Cancel
+                </Button>
+              ) : (
+                <Button key="back" type="button" variant="outline" onClick={() => setStep(step === 3 ? 2 : 1)}>
+                  <CaretLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              )}
+              {step === 1 && (
+                <Button key="next-1" type="button" disabled={missingStep1.length > 0} onClick={() => setStep(2)}>
+                  Next
+                  <CaretRight className="h-4 w-4" />
+                </Button>
+              )}
+              {step === 2 && (
+                <Button key="next-2" type="button" disabled={missingStep2.length > 0} onClick={() => setStep(3)}>
+                  Next
+                  <CaretRight className="h-4 w-4" />
+                </Button>
+              )}
+              {step === 3 && (
+                <Button key="save" type="submit" disabled={!canSubmit}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </Button>
+              )}
+            </div>
           </form>
         </TabsContent>
 

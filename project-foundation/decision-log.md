@@ -286,3 +286,14 @@ Discover now matches item names too. `DiscoverBusiness.itemPrices` became `items
 Directions weighed, per rule 6: a modal over the map, a separate results screen, a `brand` column, merging the same item across stores, and a sort control. A modal covers the map, which is the point of the search. A results screen was already rejected in #9. A brand column needs a schema change and search on item name already finds a brand typed in it. Merging needs a canonical product, but item names are free text. A sort control is a results screen feature. Chosen instead: one more group in the panel, plus the existing Discover filter.
 
 **Standing rule:** A new searchable type follows the per-table-function-plus-`Promise.all` shape and repeats any status or published filter that the public policy alone does not guarantee for signed in users. The Items group shows 3 of 4 fetched, and its cap stays lower than the other groups because its rows are taller. Add a `pg_trgm` index if the `ilike` scan gets slow at about 300 vendors.
+
+---
+
+**#:** 30
+**Milestone:** Verified badge style
+
+**Decision:** `VerificationBadge` (`result-card.tsx`) shows Verified as a Phosphor `CheckCircle` in `text-primary` plus the label "Verified by Pasig Tourism Office" in `text-foreground`, with no filled pill, border or padding. Pending keeps the outline `Badge` and the label "Pending Verification", so the two states still differ at a glance and an unreviewed store never borrows the look of the verified mark. The check is the verified sign users already know from other apps (ux-ui-guidelines.md, Familiarity), and the icon is decorative (`aria-hidden`) because the text carries the meaning. The label text is unchanged, per the v1 scope in navigation-and-access-control.md. The change is in the one shared component, so every surface that shows the badge (map card and hover, Discover list, search panel, Home, Saved) changes together.
+
+Directions weighed: a filled seal icon (heavier, and the default icon weight is bold per #25) and a check only with no text (drops the required label). Chosen: a plain check plus the label.
+
+**Standing rule:** Verified never gets a fill again. Any new surface imports `VerificationBadge` and does not restyle it.

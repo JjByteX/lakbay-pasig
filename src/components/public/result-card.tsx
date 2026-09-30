@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
+import { ArrowBendUpRight, ArrowUpRight, SealCheck, SealQuestion } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/directions";
@@ -22,21 +23,26 @@ import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/direction
 //
 // Verification label per navigation-and-access-control.md's v1 scope:
 // "Verified by Pasig Tourism Office" only, no named contributor credit.
-// Pending business gets a visually distinct "Pending Verification" badge,
+// Pending business gets a visually distinct "Pending Verification" label,
 // per vendor-mode-spec.md, so an unreviewed listing never borrows the look
-// of institutional trust it has not earned yet. Badge variant mapping
-// reuses admin-places.tsx's STATUS_VARIANT convention (verified: default,
-// pending: outline) for the same visual meaning across staff and public
-// surfaces, rather than inventing a new pair of tokens.
+// of institutional trust it has not earned yet. Both states share one
+// inline icon + text layout; pending uses a muted question seal.
 // Exported since Phase 5.2: list rows need the identical badge treatment
 // per step-5-plan.md's "every result card shows a verification label,"
 // reused here rather than a second copy of the same status-to-label
 // mapping, per constraints.md's Inventory Before Suggesting rule.
 export function VerificationBadge({ status }: Readonly<{ status: DiscoverResult["verification_status"] }>) {
-  if (status === "pending") {
-    return <Badge variant="outline">Pending Verification</Badge>;
-  }
-  return <Badge variant="default">Verified by Pasig Tourism Office</Badge>;
+  // Same inline layout for both states. Pending stays distinct through the
+  // question seal and muted icon color instead of a pill, so an unreviewed
+  // listing still never borrows the primary-colored look of a verified one.
+  const pending = status === "pending";
+  const Icon = pending ? SealQuestion : SealCheck;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground">
+      <Icon className={cn("h-4 w-4 shrink-0", pending ? "text-muted-foreground" : "text-primary")} aria-hidden="true" />
+      {pending ? "Pending Verification" : "Verified by Pasig Tourism Office"}
+    </span>
+  );
 }
 
 interface ResultCardProps {
@@ -76,7 +82,8 @@ interface ResultCardProps {
  * rule: a focused preview that fits comfortably in a single viewport, not
  * a side panel.
  *
- * Phase 6.2 closes the loop this card left open: "View full details" links
+ * Phase 6.2 closes the loop this card left open: "View" (with a diagonal
+ * arrow, the familiar hyperlink cue) links
  * to the dedicated detail route (discover-place-detail.tsx / discover-
  * business-detail.tsx, App.tsx's discover/place/:id and discover/
  * business/:id), branching on the same `kind` discriminator Phase 3.2
@@ -88,7 +95,7 @@ interface ResultCardProps {
  * navigation action inside a preview, not the modal's primary action.
  *
  * locate-me-and-directions-phases.md Phase 3: adds a Directions button
- * beside "View full details." Disabled with a visible reason when
+ * beside "View." Disabled with a visible reason when
  * userLocation is null -- which, since directions-distance-and-from-
  * phases.md Phase 3, means "no route origin" (no GPS fix *and* no custom
  * From), see the prop's own comment above (admin-event-detail.tsx's
@@ -143,48 +150,73 @@ export function ResultCard({ result, onOpenChange, userLocation, onRouteFound }:
     onRouteFound(geometry, result);
   };
 
+  const photoUrl = result?.coverPhotoUrl ?? null;
+
   return (
     <Dialog open={result !== null} onOpenChange={onOpenChange}>
-      <DialogContent>
+      {/* Big cover photo on the left at sm+, stacked on top on mobile (no
+          side-by-side squeeze at 343px). No photo: the old compact modal,
+          not an empty gray panel. The [&>button] classes back the close X
+          so it stays readable over the mobile photo. */}
+      <DialogContent
+        className={cn(
+          "gap-0 overflow-hidden p-0 [&>button]:bg-card [&>button]:p-1",
+          photoUrl && "max-w-3xl",
+        )}
+      >
         {result && (
-          <>
-            <DialogHeader>
-              <DialogTitle>{result.name}</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground">{result.category}</p>
-              {result.description && (
-                <p className="text-base text-foreground">{result.description}</p>
-              )}
-              <VerificationBadge status={result.verification_status} />
-            </div>
-            <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <Button asChild variant="link" className="px-0">
-                <Link to={`/discover/${result.kind}/${result.id}`} onClick={() => onOpenChange(false)}>
-                  View full details
-                </Link>
-              </Button>
-              <div className="flex flex-col items-end gap-1">
-                {/* 3.2: visible reason, not a silently dead button, per
-                    ux-ui-guidelines.md's Disabled/gated rule. */}
-                {!userLocation && (
-                  <p className="text-xs text-muted-foreground">Turn on location to get directions</p>
-                )}
-                {directionsStatus === "error" && directionsError && (
-                  <p className="text-xs text-destructive">{directionsError}</p>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={!userLocation || directionsStatus === "loading"}
-                  onClick={handleDirections}
-                >
-                  {directionsStatus === "loading" ? "Getting directions…" : "Directions"}
-                </Button>
+          <div className="flex flex-col sm:flex-row">
+            {photoUrl && (
+              <div className="relative h-48 shrink-0 sm:h-auto sm:min-h-72 sm:w-1/2">
+                <img src={photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
               </div>
-            </DialogFooter>
-          </>
+            )}
+            <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
+              <DialogHeader>
+                <DialogTitle>{result.name}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted-foreground">{result.category}</p>
+                {result.description && (
+                  <p className="text-base text-foreground">{result.description}</p>
+                )}
+                <VerificationBadge status={result.verification_status} />
+              </div>
+              <DialogFooter className="flex-row items-center justify-between gap-2 sm:justify-between">
+                <Button asChild variant="link" className="gap-1 px-0">
+                  <Link to={`/discover/${result.kind}/${result.id}`} onClick={() => onOpenChange(false)}>
+                    View
+                    <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </Button>
+                <div className="flex flex-col items-end gap-1">
+                  {/* No origin: the hint replaces the button entirely (one
+                      row, no dead control), per the Disabled/gated rule's
+                      "clearly communicate what the user must do". */}
+                  {userLocation ? (
+                    <>
+                      {directionsStatus === "error" && directionsError && (
+                        <p className="text-xs text-destructive">{directionsError}</p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={directionsStatus === "loading"}
+                        onClick={handleDirections}
+                      >
+                        {directionsStatus === "loading" ? "Getting directions…" : "Directions"}
+                        <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-right text-xs text-muted-foreground">Turn on location to get directions</p>
+                  )}
+                </div>
+              </DialogFooter>
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>
