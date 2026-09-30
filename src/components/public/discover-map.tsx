@@ -47,24 +47,333 @@ import type { CustomFrom } from "./public-shell";
 // changes behavior, the note above is now historical context for why
 // maplibre-gl was chosen, not a live scoping boundary.
 
-// Marker name labels (markerElement below) are priority-gated by zoom
-// rather than an all-or-nothing cutoff, since this city is dense enough
-// that labeling every result at once can overlap regardless of zoom.
-// True per-pixel collision detection (hide/show individual labels based
-// on their live on-screen bounding boxes against every other visible
-// label) is how map products like Google/Apple Maps actually solve this,
-// but this app's markers are plain DOM elements (maplibregl.Marker with a
-// custom HTMLElement, not a MapLibre symbol layer), which has no built-in
-// collision engine to lean on -- building that from scratch is real scope
-// (re-run on every pan/zoom, read every marker's live screen rect, resolve
-// overlaps), not a safe drop-in for this pass.
-// Priority instead: verified results (the ones a user is meant to trust
-// and actually visit) get labeled first, pending ones only once zoomed in
-// enough that they're naturally spread apart. Both tiers still respect an
-// overall minimum zoom -- zoomed all the way out over the whole metro,
-// even verified-only labels would be too dense to read.
-const MARKER_LABEL_MIN_ZOOM_VERIFIED = 14;
-const MARKER_LABEL_MIN_ZOOM_PENDING = 16;
+// Marker decluttering (markerElement below): priority-based collision
+// detection, the same idea Google Maps (collisionBehavior + zIndex) and
+// Apple Maps (displayPriority + collisionMode) use, plus the tiered pins
+// Airbnb describes (full pin vs. smaller mini-pin). Pins are placed in
+// priority order (verified before pending, then result order), and each
+// gets the first tier that fits without overlapping anything already
+// placed:
+//   full   the 28px icon circle
+//   dot    a small category-colored dot, no glyph, no label
+//   hidden nothing (zoomed in past HIDE_DISABLED_ZOOM this becomes a dot
+//          instead, so pins are never unreachable up close)
+// Name labels are then placed for the pins that kept their full circle.
+// Label placements are tried in order: beside the icon on one line (right,
+// then left), beside it wrapped onto two lines, then below and above the
+// icon the same way. A label that fits nowhere is hidden while its icon
+// stays.
+// Markers are still plain DOM elements, so this is one pass over the
+// projected screen positions (layoutMarkers below), re-run on
+// pan/zoom/resize, not a MapLibre symbol layer.
+const MARKER_SIZE = 28; // the circle's h-7 w-7, in px
+// These two gaps must match the margins in index.css's
+// `.marker-name-label[data-side=...]` rules.
+// Collision box half-sizes. The full icon's box is a little smaller than
+// its 28px circle (a circle doesn't fill its bounding box's corners), and
+// this inset is also what lets a label sit 2px above/below its own icon
+// without colliding with it. DOT_COLLISION_HALF is sized for the 0.43
+// scale (a 12px dot) in index.css's `.marker-pin[data-tier="dot"]
+// .marker-ring` rule.
+const ICON_COLLISION_HALF = 11;
+const DOT_COLLISION_HALF = 7;
+// At or above this zoom nothing is hidden, so two businesses with
+// identical coordinates (e.g. units in the same mall) stay tappable.
+const HIDE_DISABLED_ZOOM = 17;
+type MarkerTier = "full" | "dot" | "hidden";
+const LABEL_GAP_SIDE = 4;
+const LABEL_GAP_VERTICAL = 2;
+// Breathing room around a label's collision box, so the text halo
+// (text-shadow reaches ~4px) never touches a neighbor.
+const LABEL_COLLISION_PADDING = 3;
+// Markers this far outside the viewport are skipped, so offscreen pins
+// neither cost time nor block labels that are actually visible.
+const LABEL_VIEWPORT_PADDING = 320;
+const COLLISION_CELL_SIZE = 128;
+type LabelSide = "right" | "left" | "bottom" | "top";
+type LabelLines = 1 | 2;
+interface LabelPlacement {
+  side: LabelSide;
+  lines: LabelLines;
+}
+// Tried in this order. One line beside the icon keeps the design as-is;
+// two lines beside it is next, then above/below.
+const LABEL_PLACEMENTS: readonly LabelPlacement[] = [
+  { side: "right", lines: 1 },
+  { side: "left", lines: 1 },
+  { side: "right", lines: 2 },
+  { side: "left", lines: 2 },
+  { side: "bottom", lines: 1 },
+  { side: "top", lines: 1 },
+  { side: "bottom", lines: 2 },
+  { side: "top", lines: 2 },
+];
+
+// Splits a name at the word boundary that makes the two lines closest in
+// length. Returns null for a single word, which cannot wrap.
+function splitLabelName(name: string): [string, string] | null {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return null;
+  let bestIndex = 1;
+  let bestDiff = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < words.length; i++) {
+    const diff = Math.abs(
+      words.slice(0, i).join(" ").length - words.slice(i).join(" ").length,
+    );
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIndex = i;
+    }
+  }
+  return [words.slice(0, bestIndex).join(" "), words.slice(bestIndex).join(" ")];
+}
+
+// Natural size of a label on one line, and (when the name has more than
+// one word) on two lines. Measured once per label and cached, because it
+// only changes with the font.
+interface LabelDims {
+  width1: number;
+  height1: number;
+  width2: number | null;
+  height2: number | null;
+}
+
+function measureLabel(label: HTMLElement, cache: Map<HTMLElement, LabelDims>): LabelDims {
+  const cached = cache.get(label);
+  if (cached) return cached;
+  // Measure in one-line mode, then put the label back how it was.
+  const previousLines = label.dataset.lines;
+  if (previousLines === "2") label.dataset.lines = "1";
+  const width1 = label.offsetWidth;
+  const height1 = label.offsetHeight;
+  const lines = label.querySelectorAll<HTMLElement>(".marker-name-line");
+  const twoLines = lines.length === 2;
+  const dims: LabelDims = {
+    width1,
+    height1,
+    width2: twoLines ? Math.max(lines[0].offsetWidth, lines[1].offsetWidth) : null,
+    height2: twoLines ? height1 * 2 : null,
+  };
+  if (previousLines === "2") label.dataset.lines = "2";
+  // A zero width means the label was not laid out yet; measure again later.
+  if (width1 > 0) cache.set(label, dims);
+  return dims;
+}
+
+interface CollisionRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function rectsOverlap(a: CollisionRect, b: CollisionRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+// A small uniform grid so each label is only compared against rects in
+// nearby cells instead of every placed rect (keeps the per-frame pass
+// cheap as the pin count grows).
+class CollisionGrid {
+  private cells = new Map<number, CollisionRect[]>();
+
+  private static key(cx: number, cy: number): number {
+    return (cx + 4096) * 8192 + (cy + 4096);
+  }
+
+  private static range(rect: CollisionRect) {
+    return {
+      x0: Math.floor(rect.left / COLLISION_CELL_SIZE),
+      x1: Math.floor(rect.right / COLLISION_CELL_SIZE),
+      y0: Math.floor(rect.top / COLLISION_CELL_SIZE),
+      y1: Math.floor(rect.bottom / COLLISION_CELL_SIZE),
+    };
+  }
+
+  insert(rect: CollisionRect) {
+    const { x0, x1, y0, y1 } = CollisionGrid.range(rect);
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cy = y0; cy <= y1; cy++) {
+        const key = CollisionGrid.key(cx, cy);
+        const bucket = this.cells.get(key);
+        if (bucket) bucket.push(rect);
+        else this.cells.set(key, [rect]);
+      }
+    }
+  }
+
+  intersects(rect: CollisionRect): boolean {
+    const { x0, x1, y0, y1 } = CollisionGrid.range(rect);
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cy = y0; cy <= y1; cy++) {
+        const bucket = this.cells.get(CollisionGrid.key(cx, cy));
+        if (bucket?.some((other) => rectsOverlap(rect, other))) return true;
+      }
+    }
+    return false;
+  }
+}
+
+function labelRectFor(
+  side: LabelSide,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): CollisionRect {
+  const half = MARKER_SIZE / 2;
+  let left: number;
+  let top: number;
+  if (side === "right") {
+    left = x + half + LABEL_GAP_SIDE;
+    top = y - height / 2;
+  } else if (side === "left") {
+    left = x - half - LABEL_GAP_SIDE - width;
+    top = y - height / 2;
+  } else if (side === "bottom") {
+    left = x - width / 2;
+    top = y + half + LABEL_GAP_VERTICAL;
+  } else {
+    left = x - width / 2;
+    top = y - half - LABEL_GAP_VERTICAL - height;
+  }
+  return {
+    left: left - LABEL_COLLISION_PADDING,
+    top: top - LABEL_COLLISION_PADDING,
+    right: left + width + LABEL_COLLISION_PADDING,
+    bottom: top + height + LABEL_COLLISION_PADDING,
+  };
+}
+
+function squareAround(x: number, y: number, half: number): CollisionRect {
+  return { left: x - half, top: y - half, right: x + half, bottom: y + half };
+}
+
+// One declutter pass: reads every measurement first, decides each pin's
+// tier and each label's placement, then writes data attributes (CSS in
+// index.css does the fades, the dot scaling and the label positioning),
+// so the browser never re-lays-out mid-loop.
+function layoutMarkers(
+  map: maplibregl.Map,
+  markers: maplibregl.Marker[],
+  cache: Map<HTMLElement, LabelDims>,
+) {
+  const container = map.getContainer();
+  const minX = -LABEL_VIEWPORT_PADDING;
+  const minY = -LABEL_VIEWPORT_PADDING;
+  const maxX = container.clientWidth + LABEL_VIEWPORT_PADDING;
+  const maxY = container.clientHeight + LABEL_VIEWPORT_PADDING;
+  const allowHiding = map.getZoom() < HIDE_DISABLED_ZOOM;
+
+  interface Item {
+    element: HTMLElement;
+    label: HTMLElement;
+    x: number;
+    y: number;
+    dims: LabelDims;
+    priority: number;
+    index: number;
+  }
+  const visible: Item[] = [];
+  const offscreen: HTMLElement[] = [];
+
+  // Read phase.
+  markers.forEach((marker, index) => {
+    const element = marker.getElement();
+    const label = element.querySelector<HTMLElement>(".marker-name-label");
+    if (!label) return;
+    const point = map.project(marker.getLngLat());
+    if (point.x < minX || point.x > maxX || point.y < minY || point.y > maxY) {
+      offscreen.push(label);
+      return;
+    }
+    visible.push({
+      element,
+      label,
+      x: point.x,
+      y: point.y,
+      dims: measureLabel(label, cache),
+      priority: Number(element.dataset.labelPriority ?? 0),
+      index,
+    });
+  });
+
+  // Higher priority first; ties keep result order so pins and labels
+  // don't swap places while panning.
+  const ordered = [...visible].sort((a, b) => b.priority - a.priority || a.index - b.index);
+
+  // Pass 1: pin tiers. Each pin takes the first tier that fits.
+  const grid = new CollisionGrid();
+  const tiers = new Map<HTMLElement, MarkerTier>();
+  ordered.forEach((item) => {
+    const full = squareAround(item.x, item.y, ICON_COLLISION_HALF);
+    if (!grid.intersects(full)) {
+      grid.insert(full);
+      tiers.set(item.element, "full");
+      return;
+    }
+    const dot = squareAround(item.x, item.y, DOT_COLLISION_HALF);
+    if (!allowHiding || !grid.intersects(dot)) {
+      grid.insert(dot);
+      tiers.set(item.element, "dot");
+      return;
+    }
+    tiers.set(item.element, "hidden");
+  });
+
+  // Pass 2: labels, only for pins that kept their full circle. Every
+  // placed pin (full or dot) is already an obstacle in the grid.
+  const decisions = new Map<HTMLElement, LabelPlacement | null>();
+  ordered.forEach((item) => {
+    if (tiers.get(item.element) !== "full") {
+      decisions.set(item.label, null);
+      return;
+    }
+    // Try the placement the label already has first, so labels don't jump
+    // between sides or line counts when a nearby label changes.
+    const currentSide = item.label.dataset.side as LabelSide | undefined;
+    const currentLines: LabelLines = item.label.dataset.lines === "2" ? 2 : 1;
+    const placements =
+      currentSide && item.label.dataset.shown === "true"
+        ? [
+            { side: currentSide, lines: currentLines },
+            ...LABEL_PLACEMENTS.filter(
+              (candidate) => !(candidate.side === currentSide && candidate.lines === currentLines),
+            ),
+          ]
+        : LABEL_PLACEMENTS;
+    for (const placement of placements) {
+      const width = placement.lines === 2 ? item.dims.width2 : item.dims.width1;
+      const height = placement.lines === 2 ? item.dims.height2 : item.dims.height1;
+      if (width == null || height == null) continue;
+      const rect = labelRectFor(placement.side, item.x, item.y, width, height);
+      if (!grid.intersects(rect)) {
+        grid.insert(rect);
+        decisions.set(item.label, placement);
+        return;
+      }
+    }
+    decisions.set(item.label, null);
+  });
+
+  // Write phase.
+  tiers.forEach((tier, element) => {
+    if (element.dataset.tier !== tier) element.dataset.tier = tier;
+  });
+  decisions.forEach((placement, label) => {
+    if (placement) {
+      if (label.dataset.side !== placement.side) label.dataset.side = placement.side;
+      const lines = String(placement.lines);
+      if (label.dataset.lines !== lines) label.dataset.lines = lines;
+      if (label.dataset.shown !== "true") label.dataset.shown = "true";
+    } else if (label.dataset.shown !== "false") {
+      label.dataset.shown = "false";
+    }
+  });
+  offscreen.forEach((label) => {
+    if (label.dataset.shown !== "false") label.dataset.shown = "false";
+  });
+}
 // locate-me-and-directions-phases.md Phase 3.5: one GeoJSON source/line
 // layer pair, added and removed imperatively, the same shape buildStyle
 // already uses for the waterway layer -- no new rendering library.
@@ -93,21 +402,30 @@ function markerElement(result: DiscoverResult): HTMLElement {
       : getBusinessCategoryIcon(result.categoryIcon ?? "");
   const color = categoryColor(result.categoryColor);
   const wrapper = document.createElement("span");
-  // Bug fix / direct instruction: gap-1.5 (6px) read as "too far" between
-  // the icon ring and its name label -- tightened to gap-1 (4px), the
-  // smallest step on this codebase's 8px-grid-derived spacing scale still
-  // available as a plain gap utility, so the label reads as attached to
-  // its own icon rather than floating near it.
-  wrapper.className = "flex cursor-pointer items-center gap-1";
+  // The wrapper is exactly the circle's size, so MapLibre's default center
+  // anchor puts the circle's center on the coordinate no matter whether
+  // the name label is showing. The label is absolutely positioned around
+  // it (side chosen by layoutMarkers, styled in index.css), which
+  // keeps the pin from shifting when labels appear and disappear.
+  // No `relative` here on purpose: maplibregl.Marker already gives this
+  // element `position: absolute`, which is itself the positioning context
+  // for the label, and a `relative` utility would override it.
+  wrapper.className = "marker-pin h-7 w-7 cursor-pointer";
+  // Starts as the full circle; layoutMarkers may shrink it to a dot or
+  // hide it when neighbors with higher priority need the space.
+  wrapper.dataset.tier = "full";
+  // Higher shows first when labels compete for space: verified pins
+  // (the ones a user is meant to trust and visit) outrank pending ones.
+  wrapper.dataset.labelPriority = result.verification_status === "pending" ? "0" : "1";
 
   const ring = document.createElement("span");
-  ring.className = `flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow ${
+  ring.className = `marker-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow ${
     result.verification_status === "pending" ? RING_PENDING : RING_VERIFIED
   }`;
   ring.style.backgroundColor = color;
   // The glyph inherits this through currentColor.
   ring.style.color = "hsl(var(--category-foreground))";
-  ring.innerHTML = renderToStaticMarkup(<Icon weight="bold" className="h-4 w-4" aria-hidden="true" />);
+  ring.innerHTML = renderToStaticMarkup(<Icon weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />);
   wrapper.appendChild(ring);
 
   const label = document.createElement("span");
@@ -125,12 +443,25 @@ function markerElement(result: DiscoverResult): HTMLElement {
   // or lighter.
   label.className = "marker-name-label whitespace-nowrap text-xs font-bold";
   label.style.color = color;
-  // Read by the zoom-gated visibility effect below to apply the right
-  // per-tier minimum zoom (verified vs. pending) to this specific label,
-  // without needing a second lookup back into `results` at visibility-
-  // check time.
-  label.dataset.verificationStatus = result.verification_status;
-  label.textContent = result.name;
+  // Hidden until layoutMarkers finds room for it.
+  label.dataset.shown = "false";
+  label.dataset.side = "right";
+  label.dataset.lines = "1";
+  // Multi-word names are stored as two line spans (joined by a space, so
+  // they read as one line normally). layoutMarkers switches the label
+  // to data-lines="2" to stack them when one line would overlap a neighbor.
+  const split = splitLabelName(result.name);
+  if (split) {
+    const first = document.createElement("span");
+    first.className = "marker-name-line";
+    first.textContent = split[0];
+    const second = document.createElement("span");
+    second.className = "marker-name-line marker-name-line-2";
+    second.textContent = split[1];
+    label.append(first, " ", second);
+  } else {
+    label.textContent = result.name;
+  }
   wrapper.appendChild(label);
 
   return wrapper;
@@ -1382,41 +1713,41 @@ export function DiscoverMap({
     };
   }, [results, isMobile]);
 
-  // Priority-gated label visibility (see MARKER_LABEL_MIN_ZOOM_VERIFIED/
-  // _PENDING above): a separate effect from the marker-build one above
-  // because this needs to re-run on every zoom change, not only when
-  // results/isMobile change, and rebuilding every marker element on every
-  // zoom tick would be far more work than just toggling a CSS property
-  // already sitting in the DOM. Reads live off markersRef (populated by
-  // the effect above) rather than holding its own copy of the marker
-  // list, so it always applies to whatever markers currently exist --
-  // runs once immediately on mount/results-change for the initial zoom,
-  // then again on every "zoom" event for live updates while the user
-  // pinches/scrolls. Each label's own data-verification-status (set in
-  // markerElement above) picks which threshold applies to it, so verified
-  // and pending results can turn their labels on at different zooms in
-  // the same pass, no second data lookup needed here.
+  // Declutter pass (see layoutMarkers above): a separate effect
+  // from the marker-build one because it must re-run on every pan, zoom
+  // and resize, not only when results/isMobile change. Reads live off
+  // markersRef (populated by the effect above). Runs at most once per
+  // animation frame, so a fast pinch does not queue redundant passes, and
+  // once more (with fresh measurements) when web fonts finish loading,
+  // since label widths depend on the font.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const applyLabelVisibility = () => {
-      const zoom = map.getZoom();
-      markersRef.current.forEach((marker) => {
-        const label = marker.getElement().querySelector<HTMLElement>(".marker-name-label");
-        if (!label) return;
-        const minZoom =
-          label.dataset.verificationStatus === "pending"
-            ? MARKER_LABEL_MIN_ZOOM_PENDING
-            : MARKER_LABEL_MIN_ZOOM_VERIFIED;
-        label.style.display = zoom >= minZoom ? "" : "none";
+    const dimsCache = new Map<HTMLElement, LabelDims>();
+    let frame = 0;
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        layoutMarkers(map, markersRef.current, dimsCache);
       });
     };
 
-    applyLabelVisibility();
-    map.on("zoom", applyLabelVisibility);
+    schedule();
+    map.on("move", schedule);
+    map.on("moveend", schedule);
+    map.on("resize", schedule);
+    void document.fonts?.ready.then(() => {
+      // Label sizes depend on the font, so re-measure once it has loaded.
+      dimsCache.clear();
+      schedule();
+    });
     return () => {
-      map.off("zoom", applyLabelVisibility);
+      if (frame) cancelAnimationFrame(frame);
+      map.off("move", schedule);
+      map.off("moveend", schedule);
+      map.off("resize", schedule);
     };
   }, [results, isMobile]);
 

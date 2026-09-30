@@ -224,6 +224,109 @@
     0 0 4px rgba(0, 0, 0, 0.6);
 }
 
+/* Positioning and fade for the label collision pass in discover-map.tsx
+   (layoutMarkers). The label is absolutely positioned around its
+   28px circle; JS only sets data-side (which side has room) and
+   data-shown (whether any side has room). The 4px / 2px gaps here must
+   match LABEL_GAP_SIDE / LABEL_GAP_VERTICAL in that file. */
+.marker-name-label {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.marker-name-label[data-shown="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.marker-name-label[data-side="right"] {
+  left: 100%;
+  top: 50%;
+  margin-left: 4px;
+  transform: translateY(-50%);
+}
+
+.marker-name-label[data-side="left"] {
+  right: 100%;
+  top: 50%;
+  margin-right: 4px;
+  transform: translateY(-50%);
+}
+
+.marker-name-label[data-side="bottom"] {
+  top: 100%;
+  left: 50%;
+  margin-top: 2px;
+  transform: translateX(-50%);
+}
+
+.marker-name-label[data-side="top"] {
+  bottom: 100%;
+  left: 50%;
+  margin-bottom: 2px;
+  transform: translateX(-50%);
+}
+
+/* Pin tiers set by layoutMarkers in discover-map.tsx (data-tier on
+   .marker-pin): "full" is the normal 28px circle; "dot" scales the circle
+   down to a small category-colored dot and fades the glyph; "hidden"
+   fades it out entirely. The wrapper itself keeps its 28px size so the
+   marker stays anchored on its coordinate, so pointer events are turned
+   off on the wrapper for dot/hidden and only the (scaled) circle keeps
+   them, which keeps the tap target the size of what you can see. Scale is
+   12/28 = 0.43; DOT_COLLISION_HALF in that file is sized for it. */
+.marker-ring {
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+.marker-ring svg {
+  transition: opacity 150ms ease;
+}
+
+.marker-pin[data-tier="dot"],
+.marker-pin[data-tier="hidden"] {
+  pointer-events: none;
+}
+
+.marker-pin[data-tier="dot"] .marker-ring {
+  transform: scale(0.43);
+  pointer-events: auto;
+}
+
+.marker-pin[data-tier="dot"] .marker-ring svg {
+  opacity: 0;
+}
+
+.marker-pin[data-tier="hidden"] .marker-ring {
+  transform: scale(0.43);
+  opacity: 0;
+}
+
+/* Two-line mode: the name's second half drops onto its own line. Text
+   aligns toward the icon (left of it: right-aligned; right of it:
+   left-aligned; above/below: centered). Line height is unchanged, so two
+   lines are exactly twice the one-line height that JS measures. */
+.marker-name-label[data-lines="2"] .marker-name-line-2 {
+  display: block;
+}
+
+.marker-name-label[data-lines="2"][data-side="right"] {
+  text-align: left;
+}
+
+.marker-name-label[data-lines="2"][data-side="left"] {
+  text-align: right;
+}
+
+.marker-name-label[data-lines="2"][data-side="top"],
+.marker-name-label[data-lines="2"][data-side="bottom"] {
+  text-align: center;
+}
+
 /* ============================================================
    GOOGLE-STYLE LOCATION HEADING INDICATOR (discover-map.tsx "you are
    here" marker)
