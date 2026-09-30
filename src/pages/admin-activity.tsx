@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Pulse } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -256,7 +257,8 @@ export default function AdminActivityPage() {
         loading={rows === null}
         keyField="id"
         autoPageSize
-        empty={rows && rows.length > 0 ? "No activity matches your filters." : "No activity yet."}
+        emptyIcon={Pulse}
+        empty={rows && rows.length > 0 ? "Matching activity will appear here." : "Activity will appear here."}
         toolbar={
           <AdminFilterBar>
             <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by user or target…" />

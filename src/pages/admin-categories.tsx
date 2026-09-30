@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { DotsThree, type Icon as PhosphorIcon } from "@phosphor-icons/react";
+import { Tag, DotsThree, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
@@ -130,9 +130,9 @@ const TAB_CONFIG: Record<
     // and costs nothing since every tab already has its own config entry.
     dialogLabel: string;
     // Category Directory Expansion, Phase 2.3: explicit noun for the
-    // empty-state message ("No {emptyNoun} categories..."), since
-    // config.label.toLowerCase() alone would read "No business category
-    // categories yet." for the new Business Category tab -- its label
+    // empty-state message ("{emptyNoun} categories will appear here."), since
+    // config.label.toLowerCase() alone would read "business category
+    // categories will appear here." for the new Business Category tab -- its label
     // already ends in the word "Category," so appending "categories"
     // again doubles it. The other four tabs' emptyNoun matches their
     // existing label.toLowerCase() output exactly, no wording change for
@@ -436,10 +436,11 @@ export default function AdminCategoriesPage() {
         loading={rows === null}
         keyField="id"
         autoPageSize
+        emptyIcon={Tag}
         empty={
           rows && rows.length > 0
-            ? `No ${config.emptyNoun} categories match your search and filters.`
-            : `No ${config.emptyNoun} categories yet.`
+            ? `Matching ${config.emptyNoun} categories will appear here.`
+            : `${config.emptyNoun.charAt(0).toUpperCase()}${config.emptyNoun.slice(1)} categories will appear here.`
         }
         toolbar={
           <AdminFilterBar>

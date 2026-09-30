@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
-import { CircleNotch, Pencil, X } from "@phosphor-icons/react";
+import { CircleNotch, Pencil, X, ShoppingBag } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
@@ -17,6 +17,7 @@ import {
 import type { ItemPhoto, VendorItem } from "@/lib/vendor-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FieldLabel } from "@/components/business/business-fields";
 import {
   Dialog,
@@ -470,7 +471,7 @@ export default function VendorItemsPage() {
         )}
 
         {!itemsLoading && !itemsError && items.length === 0 && (
-          <p className="text-sm text-muted-foreground">No items yet.</p>
+          <EmptyState icon={ShoppingBag}>Your items will appear here.</EmptyState>
         )}
 
         {!itemsLoading && !itemsError && items.length > 0 && (

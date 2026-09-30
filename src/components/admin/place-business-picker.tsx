@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // Phase 4.4 (step-4-phases.md): one shared component, used by the Stop
 // sequence step (4.5) and, in Phase 5, the Discovery content modal (5.1),
@@ -121,7 +122,7 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
   if (loading) {
     pickerBody = <p className="text-sm text-muted-foreground">Loading…</p>;
   } else if (isEmpty) {
-    pickerBody = <p className="text-sm text-muted-foreground">No verified places or businesses match.</p>;
+    pickerBody = <EmptyState icon={MagnifyingGlass}>Matching verified places and businesses will appear here.</EmptyState>;
   } else {
     pickerBody = (
       <div className="flex max-h-80 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card">

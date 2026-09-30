@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, CameraPlus, DotsThree, Pencil, Trash } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, DotsThree, Pencil, Slideshow, Trash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -135,9 +136,8 @@ export default function AdminLandingPage() {
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {!loading && slides.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-input py-16 text-center">
-          <CameraPlus className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No slides yet.</p>
+        <div className="rounded-lg border border-dashed border-input">
+          <EmptyState icon={Slideshow} className="py-16">Slides will appear here.</EmptyState>
         </div>
       )}
 

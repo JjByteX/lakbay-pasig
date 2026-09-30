@@ -4,6 +4,8 @@ import { sortDiscoverResults } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import type { RouteGeometry } from "@/lib/directions";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MagnifyingGlass } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ResultCard, VerificationBadge } from "./result-card";
 
 interface DiscoverListProps {
@@ -114,9 +116,7 @@ export function DiscoverList({
     // guidelines.md's Label Rules require. Wording matches discover-map.tsx's
     // own empty-state pill verbatim (same filtered set feeds both surfaces).
     return (
-      <div className="flex h-full items-center justify-center px-6 py-10 text-center text-sm text-muted-foreground">
-        No results match your search and filters.
-      </div>
+      <EmptyState icon={MagnifyingGlass} className="h-full px-6">Matching places and businesses will appear here.</EmptyState>
     );
   }
 

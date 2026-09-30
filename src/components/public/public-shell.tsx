@@ -603,7 +603,7 @@ function isSearchVisible(pathname: string): boolean {
 // point, not a shortcut alongside a still-existing tab, per ux-ui-
 // guidelines.md's "one action, one trigger, one place." Guest still gets
 // the trigger (a plain UserIcon, no initial to show), opening a menu with
-// a single "Sign in" item -- Profile/Settings/Sign out are session-gated
+// Home Page and Sign in -- Profile/Settings/Sign out are session-gated
 // concepts and are hidden entirely rather than shown disabled, matching
 // admin-panel-spec.md's Access Rule pattern of hiding what doesn't apply
 // rather than greying it out. Signed-in shows the same circle with the
@@ -648,11 +648,19 @@ function AccountMenu() {
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {/* Home Page: same /welcome destination as the signed-in
+              branch below and public-sidebar.tsx's guest footer, so a
+              guest inside the app can get back to the landing page. */}
+          <DropdownMenuItem onClick={() => navigate("/welcome")}>
+            <HomeIcon className="mr-2 h-4 w-4" />
+            Home Page
+          </DropdownMenuItem>
           {/* landing-hero-phases.md Phase 7.1: opens the shared auth
               popup in place instead of navigating away to /login, so
               whatever the guest was looking at (a Discover result, an
               open filter panel) is still there once they're signed in. */}
           <DropdownMenuItem onClick={() => openAuth("login")}>
+            <UserIcon className="mr-2 h-4 w-4" />
             Sign in
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -758,43 +766,23 @@ function MobileShell({
           there is exactly the search row's own height. */}
       <header className="fixed inset-x-0 top-0 z-40 flex flex-col bg-background px-4">
         <div className="mx-auto flex h-14 w-full max-w-md shrink-0 items-center gap-2">
-          {/* Logo: always visible top-left, beside search, on every tab
-              including Profile (unlike the search bar itself, which is
-              gated per SEARCH_VISIBLE_PATHS) -- this is shell chrome, not
-              a search-adjacent control, per ux-ui-guidelines.md's Layout
-              Shell Rules (persistent elements have fixed position on
-              every page). Circle backdrop (bg-card + border-input) is
-              the exact same two tokens the search Input itself uses
-              (components/ui/input.tsx's own "border border-input
-              bg-card"), so the logo's circle and the search bar read as
-              one consistent surface color in the header, not a
-              mismatched pairing, plus shadow-sm (the same token
-              Input's own shadow-sm) so the circle lifts slightly off
-              the header the same way the search bar already does.
-              Image is scaled up past the circle's own bounds (h-12 w-12
-              inside an h-9 w-9 parent) and the parent's overflow-hidden
-              crops it back to a circle -- the source asset
-              (lakbay-pasig-logo.svg) is a squircle clipped onto a
-              512x512 canvas with visible corner padding baked into the
-              image itself, so sizing the image to match the circle
-              exactly left that padding visible as backdrop around a
-              small mark; scaling past the frame and cropping is how
-              "zoom in" on a pre-clipped source image works without a
-              new, differently-cropped asset. Links home (/, the shell's
-              own index route per App.tsx), matching bottom-nav.tsx's
-              own Home tab destination -- same convention as any app's
-              top-left logo-to-home pattern, per ux-ui-guidelines.md's
-              Familiarity principle. shrink-0 keeps it a fixed size
-              regardless of how wide the search bar grows next to it. */}
+          {/* Logo: always visible top-left on every tab including
+              Profile (shell chrome, not search-gated), links home (/)
+              like bottom-nav.tsx's Home tab. Rendered bare, same as the
+              desktop SidebarLogoRow: lakbay-pasig-logo.svg is already
+              clipped to a squircle with transparent corners, so no
+              circle wrapper or crop. drop-shadow-sm (not shadow-sm) so
+              the lift follows the squircle edge instead of a box. h-9
+              w-9 matches the account circle on the right. */}
           <Link
             to="/"
-            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-input bg-card shadow-sm"
+            className="flex h-9 w-9 shrink-0"
             aria-label="Go to home"
           >
             <img
               src={logo}
               alt="Lakbay Pasig"
-              className="h-11 w-11 max-w-none rounded-full object-cover"
+              className="h-9 w-9 drop-shadow-sm"
             />
           </Link>
           {/* min-w-0 so the search bar (an absolutely-positioned-dropdown

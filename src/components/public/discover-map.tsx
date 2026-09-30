@@ -1887,7 +1887,7 @@ export function DiscoverMap({
           {isEmpty && (
             <div className="pointer-events-none absolute inset-x-0 top-6 z-[1000] flex justify-center px-6">
               <span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-center text-xs text-muted-foreground shadow">
-                No results match your search and filters.
+                Matching places and businesses will appear here.
               </span>
             </div>
           )}

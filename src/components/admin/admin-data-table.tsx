@@ -1,5 +1,5 @@
 import { useMemo, useReducer, type ReactNode } from "react";
-import { CaretLeft, CaretRight, CaretUp, CaretDown, CaretUpDown } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, CaretUp, CaretDown, CaretUpDown, Tray, type Icon } from "@phosphor-icons/react";
 import {
   Table,
   TableBody,
@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAutoPageSize } from "@/hooks/use-auto-page-size";
@@ -96,6 +97,8 @@ interface AdminDataTableProps<T> {
   /** Explicit loading flag — pages already track this via `rows === null`. */
   loading?: boolean;
   empty?: ReactNode;
+  /** Icon shown above a string `empty` message. Pass the page's sidebar icon. */
+  emptyIcon?: Icon;
   /** 0 disables pagination. Default 10, matching ux-ui-guidelines.md's
    * "do not use a data table for fewer than 5 rows" floor by keeping pages
    * small enough that pagination controls earn their place. Ignored while
@@ -249,7 +252,8 @@ export default function AdminDataTable<T>({
   columns,
   rows,
   loading = false,
-  empty = "No records found.",
+  empty = "Records will appear here.",
+  emptyIcon = Tray,
   pageSize = 10,
   autoPageSize = false,
   keyField = "id" as keyof T & string,
@@ -353,7 +357,7 @@ export default function AdminDataTable<T>({
           </div>
         )}
 
-        <div className={cn(autoPageSize ? "flex-1 min-h-0 overflow-auto" : "max-h-[70dvh] overflow-auto")}>
+        <div className={cn(autoPageSize ? "flex-1 min-h-0 overflow-auto" : "max-h-[70dvh] overflow-auto", isEmpty && "flex flex-col")}>
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
@@ -367,12 +371,8 @@ export default function AdminDataTable<T>({
           </Table>
 
           {isEmpty && (
-            <div className="flex items-center justify-center px-4 py-10 text-center">
-              {typeof empty === "string" ? (
-                <p className="text-sm text-muted-foreground">{empty}</p>
-              ) : (
-                empty
-              )}
+            <div className="flex flex-1 items-center justify-center px-4">
+              {typeof empty === "string" ? <EmptyState icon={emptyIcon}>{empty}</EmptyState> : empty}
             </div>
           )}
         </div>

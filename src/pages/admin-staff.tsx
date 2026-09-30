@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { DotsThree } from "@phosphor-icons/react";
+import { Users, DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
@@ -252,7 +252,8 @@ export default function AdminStaffPage() {
         loading={staff === null}
         keyField="id"
         autoPageSize
-        empty={staff && staff.length > 0 ? "No staff accounts match your search and filters." : "No staff accounts yet."}
+        emptyIcon={Users}
+        empty={staff && staff.length > 0 ? "Matching staff accounts will appear here." : "Staff accounts will appear here."}
         toolbar={
           <AdminFilterBar>
             <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name or position…" />

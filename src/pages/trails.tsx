@@ -5,6 +5,8 @@ import type { TrailSummary } from "@/lib/trail-types";
 import { TrailCard } from "@/components/public/trail-card";
 import { PageContainer } from "@/components/public/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MapTrifold } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.4: same PostgrestError shape-check home.tsx's errorMessageFrom
@@ -93,9 +95,7 @@ export default function TrailsPage() {
     body = <TrailListSkeleton />;
   } else if (trails.length === 0) {
     body = (
-      <div className="flex items-center justify-center py-10 text-center text-sm text-muted-foreground">
-        No published trails yet.
-      </div>
+      <EmptyState icon={MapTrifold} className="min-h-[60dvh]">Published trails will appear here.</EmptyState>
     );
   } else {
     body = (

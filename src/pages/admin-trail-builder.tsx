@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash, MapPin } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -297,7 +298,7 @@ function DiscoveryContentModalBody({
   if (discoveryLoading) {
     entriesListBody = <p className="text-sm text-muted-foreground">Loading…</p>;
   } else if (entriesForStop.length === 0) {
-    entriesListBody = <p className="text-sm text-muted-foreground">No discovery content yet.</p>;
+    entriesListBody = <EmptyState icon={BookOpen}>Discovery content will appear here.</EmptyState>;
   } else {
     entriesListBody = (
       <ul className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
@@ -1198,7 +1199,7 @@ export default function AdminTrailBuilderPage() {
       return <p className="text-sm text-muted-foreground">Loading…</p>;
     }
     if (stops.length === 0) {
-      return <p className="text-sm text-muted-foreground">No stops yet.</p>;
+      return <EmptyState icon={MapPin}>Stops will appear here.</EmptyState>;
     }
     return (
       <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">

@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Bookmark, CheckCircle, MapTrifold, type Icon } from "@phosphor-icons/react";
 import { fetchSavedPlaces } from "@/lib/saved-places";
 import { fetchSavedRoutes } from "@/lib/saved-routes";
 import { fetchCompletedRoutes } from "@/lib/trail-completion";
@@ -130,6 +132,7 @@ function SavedSection({
   loading,
   skeleton,
   isEmpty,
+  emptyIcon,
   emptyText,
   children,
 }: Readonly<{
@@ -138,6 +141,7 @@ function SavedSection({
   loading: boolean;
   skeleton: ReactNode;
   isEmpty: boolean;
+  emptyIcon: Icon;
   emptyText: string;
   children: ReactNode;
 }>) {
@@ -147,7 +151,7 @@ function SavedSection({
   } else if (loading) {
     body = skeleton;
   } else if (isEmpty) {
-    body = <p className="text-sm text-muted-foreground">{emptyText}</p>;
+    body = <EmptyState icon={emptyIcon}>{emptyText}</EmptyState>;
   } else {
     body = children;
   }
@@ -248,7 +252,8 @@ export default function SavedPage() {
         loading={placesLoading}
         skeleton={<ThreeLineSectionSkeleton />}
         isEmpty={places.length === 0}
-        emptyText="No saved places yet."
+        emptyIcon={Bookmark}
+        emptyText="Saved places will appear here."
       >
         <ul className="-mx-6 flex flex-col divide-y divide-border">
           {places.map((place) => (
@@ -269,7 +274,8 @@ export default function SavedPage() {
         loading={trailsLoading}
         skeleton={<TwoLineSectionSkeleton inline />}
         isEmpty={trails.length === 0}
-        emptyText="No saved trails yet."
+        emptyIcon={MapTrifold}
+        emptyText="Saved trails will appear here."
       >
         <ul className="-mx-6 flex flex-col divide-y divide-border">
           {trails.map((trail) => (
@@ -290,7 +296,8 @@ export default function SavedPage() {
         loading={completedLoading}
         skeleton={<TwoLineSectionSkeleton />}
         isEmpty={completed.length === 0}
-        emptyText="No completed trails yet."
+        emptyIcon={CheckCircle}
+        emptyText="Completed trails will appear here."
       >
         <ul className="-mx-6 flex flex-col divide-y divide-border">
           {completed.map((trail) => (

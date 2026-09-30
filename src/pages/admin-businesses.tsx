@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Flag, DotsThree } from "@phosphor-icons/react";
+import { Storefront, Flag, DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -246,7 +246,8 @@ export default function AdminBusinessesPage() {
         loading={businesses === null}
         keyField="id"
         autoPageSize
-        empty={businesses && businesses.length > 0 ? "No businesses match your search and filters." : "No businesses yet."}
+        emptyIcon={Storefront}
+        empty={businesses && businesses.length > 0 ? "Matching businesses will appear here." : "Businesses will appear here."}
         toolbar={
           <AdminFilterBar>
             <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name or business type…" />

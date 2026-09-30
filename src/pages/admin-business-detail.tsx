@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Star } from "@phosphor-icons/react";
+import { Star, ShoppingBag } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -648,7 +649,7 @@ function ItemList({ items }: Readonly<{ items: BusinessItem[] | null }>) {
   }
 
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">No items listed yet.</p>;
+    return <EmptyState icon={ShoppingBag}>Items will appear here.</EmptyState>;
   }
 
   return (

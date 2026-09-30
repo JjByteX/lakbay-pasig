@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft } from "@phosphor-icons/react";
+import { ArrowLeft, Info, BookOpen } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -273,7 +274,7 @@ export default function DiscoverBusinessDetailPage() {
                 !business.opening_hours &&
                 !business.contact &&
                 !business.rules && (
-                  <p className="text-base text-muted-foreground">No details listed yet.</p>
+                  <EmptyState icon={Info} className="text-base">Details will appear here.</EmptyState>
                 )}
             </TabsContent>
 
@@ -344,7 +345,7 @@ export default function DiscoverBusinessDetailPage() {
               )}
 
               {!business.business_story && !business.unique_specialty && (
-                <p className="text-base text-muted-foreground">No story has been added for this business yet.</p>
+                <EmptyState icon={BookOpen} className="text-base">The story of this business will appear here.</EmptyState>
               )}
             </TabsContent>
           </Tabs>

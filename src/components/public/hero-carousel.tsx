@@ -8,7 +8,8 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
-import { ImageBroken } from "@phosphor-icons/react";
+import { ImageBroken, Slideshow } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { LandingSlide } from "@/lib/landing-slides";
 import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from "@/lib/filmstrip";
 
@@ -474,7 +475,7 @@ export function HeroCarousel({ slides }: Readonly<HeroCarouselProps>) {
   if (count === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-card p-8">
-        <p className="text-center text-sm text-muted-foreground">No slides yet.</p>
+        <EmptyState icon={Slideshow}>Slides will appear here.</EmptyState>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, NavigationArrow, CheckCircle } from "@phosphor-icons/react";
+import { ArrowLeft, NavigationArrow, CheckCircle, MapPin } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { fetchTrailDetail } from "@/lib/trail-query";
@@ -12,6 +12,7 @@ import { TrailStop } from "@/components/public/trail-stop";
 import { SaveRouteButton } from "@/components/public/save-route-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -483,7 +484,7 @@ export default function TrailDetailPage() {
   // plan doc's resume-not-restart instruction. Disabled only for the
   // empty-trail case (ux-ui-guidelines.md's Disabled/gated rule: a
   // disabled action must communicate why, so it's paired with the
-  // already-existing "No stops added to this trail yet." message below,
+  // already-existing "Stops will appear here." message below,
   // not a bare disabled button with no explanation) or while the start
   // write is in flight. Never disabled for a signed-out guest, matching
   // save-button.tsx's pattern of always tappable, gate on tap not on
@@ -661,7 +662,7 @@ export default function TrailDetailPage() {
               )}
             </div>
             {trail.stops.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No stops added to this trail yet.</p>
+              <EmptyState icon={MapPin}>Stops will appear here.</EmptyState>
             ) : (
               <ol className="flex flex-col divide-y divide-border">
                 {trail.stops.map((stop, index) => (

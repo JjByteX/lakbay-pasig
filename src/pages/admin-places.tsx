@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DotsThree } from "@phosphor-icons/react";
+import { Bank, DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
@@ -301,7 +301,8 @@ export default function AdminPlacesPage() {
         loading={rows === null}
         keyField="id"
         autoPageSize
-        empty={rows && rows.length > 0 ? "No places match your search and filters." : "No places yet."}
+        emptyIcon={Bank}
+        empty={rows && rows.length > 0 ? "Matching places will appear here." : "Places will appear here."}
         toolbar={
           <AdminFilterBar>
             <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name…" />

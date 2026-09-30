@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bank, Storefront } from "@phosphor-icons/react";
+import { Bank, Storefront, ClipboardText } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { usePageTitle } from "@/lib/page-title";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface ActivityEntry {
   id: string;
@@ -159,7 +160,7 @@ export default function AdminDashboardPage() {
   if (activity === null) {
     activityBody = <p className="text-sm text-muted-foreground">Loading…</p>;
   } else if (activity.length === 0) {
-    activityBody = <p className="text-sm text-muted-foreground">No review actions yet.</p>;
+    activityBody = <EmptyState icon={ClipboardText}>Review actions will appear here.</EmptyState>;
   } else {
     activityBody = (
       <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">

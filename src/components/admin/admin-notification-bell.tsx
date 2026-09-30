@@ -84,7 +84,7 @@ export function AdminNotificationBell() {
           <p className="px-2 py-3 text-sm text-muted-foreground">All caught up, nothing pending.</p>
         )}
         {queues !== null && queues.length === 0 && (
-          <p className="px-2 py-3 text-sm text-muted-foreground">No queues assigned yet.</p>
+          <p className="px-2 py-3 text-sm text-muted-foreground">Queues will appear here.</p>
         )}
         {queues !== null &&
           pending > 0 &&

@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Envelope, Phone, MapPin, FacebookLogo, ArrowSquareOut } from "@phosphor-icons/react";
+import { Envelope, Phone, MapPin, FacebookLogo, ArrowSquareOut, SealCheck } from "@phosphor-icons/react";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { fetchActiveSlides, type LandingSlide } from "@/lib/landing-slides";
 import { fetchHomeShowcase } from "@/lib/home-query";
 import type { CategoryRow } from "@/lib/home-types";
@@ -372,7 +373,7 @@ export default function LandingPage() {
       </div>
     );
   } else if (showcaseIsEmpty) {
-    featuresBody = <p className="text-sm text-muted-foreground">No verified content yet.</p>;
+    featuresBody = <EmptyState icon={SealCheck}>Verified places and businesses will appear here.</EmptyState>;
   } else {
     featuresBody = (
       <div className="flex flex-col gap-8">
@@ -569,17 +570,12 @@ export default function LandingPage() {
           same visual rhythm those two already establish between
           themselves). Trails and Events named in a plain closing line
           rather than a third photo strip, per this file's own top comment
-          on why trail-card.tsx's row shape doesn't fit this strip. */}
+          on why trail-card.tsx's row shape doesn't fit this strip.
+          The section's "Features" title and its subtitle were removed per
+          direct instruction; the #features id stays so the header's
+          Features link still scrolls here. */}
       <section id="features" className="scroll-mt-20 px-6 py-16 lg:px-16">
         <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <h2 className="text-2xl font-semibold text-foreground">Features</h2>
-            <p className="text-base text-muted-foreground">
-              A look at what's already verified on the platform -- the same heritage places and local
-              businesses a signed-in resident sees on their own Home feed.
-            </p>
-          </div>
-
           {featuresBody}
 
           <p className="text-sm text-muted-foreground">

@@ -3,6 +3,8 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import { ClipboardText } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -421,7 +423,7 @@ function ReviewHistoryList({ reviews }: Readonly<{ reviews: ReviewEntry[] | null
   }
 
   if (reviews.length === 0) {
-    return <p className="text-sm text-muted-foreground">No review history yet.</p>;
+    return <EmptyState icon={ClipboardText}>Review history will appear here.</EmptyState>;
   }
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { DotsThree } from "@phosphor-icons/react";
+import { MapTrifold, DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
@@ -252,7 +252,8 @@ export default function AdminTrailsPage() {
         loading={trails === null}
         keyField="id"
         autoPageSize
-        empty={trails && trails.length > 0 ? "No trails match your search and filters." : "No trails yet."}
+        emptyIcon={MapTrifold}
+        empty={trails && trails.length > 0 ? "Matching trails will appear here." : "Trails will appear here."}
         toolbar={
           <AdminFilterBar>
             <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by name or theme…" />

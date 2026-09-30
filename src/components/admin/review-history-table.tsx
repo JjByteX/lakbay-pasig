@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ClipboardText } from "@phosphor-icons/react";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { Badge } from "@/components/ui/badge";
@@ -122,10 +123,11 @@ export function ReviewHistoryTable({ reviews }: Readonly<{ reviews: ReviewHistor
       loading={reviews === null}
       keyField="id"
       autoPageSize
+      emptyIcon={ClipboardText}
       empty={
         reviews && reviews.length > 0
-          ? "No review history matches your search and filters."
-          : "No review history yet."
+          ? "Matching review history will appear here."
+          : "Review history will appear here."
       }
       toolbar={
         <AdminFilterBar>

@@ -11,6 +11,8 @@ import {
 } from "@/components/public/category-photo-row";
 import { PageContainer } from "@/components/public/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Megaphone, SealCheck } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6 (step-6-phases.md): cross-cutting loading/empty/error pass across
@@ -123,7 +125,7 @@ export default function HomePage() {
   } else if (announcementsLoading) {
     announcementsBody = <SectionSkeleton />;
   } else if (announcements.length === 0) {
-    announcementsBody = <p className="text-sm text-muted-foreground">No announcements yet.</p>;
+    announcementsBody = <EmptyState icon={Megaphone}>Announcements will appear here.</EmptyState>;
   } else {
     announcementsBody = (
       <AnnouncementCarousel
@@ -170,7 +172,7 @@ export default function HomePage() {
       </div>
     );
   } else if (showcaseIsEmpty) {
-    showcaseBody = <p className="text-sm text-muted-foreground">No recently verified content yet.</p>;
+    showcaseBody = <EmptyState icon={SealCheck}>Recently verified places and businesses will appear here.</EmptyState>;
   } else {
     showcaseBody = (
       <div className="flex flex-col gap-6">

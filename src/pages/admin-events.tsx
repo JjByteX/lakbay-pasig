@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { DotsThree } from "@phosphor-icons/react";
+import { CalendarDots, DotsThree } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -293,7 +293,8 @@ export default function AdminEventsPage() {
         loading={events === null}
         keyField="id"
         autoPageSize
-        empty={events && events.length > 0 ? "No events match your search and filters." : "No events yet."}
+        emptyIcon={CalendarDots}
+        empty={events && events.length > 0 ? "Matching events will appear here." : "Events will appear here."}
         toolbar={
           <AdminFilterBar>
             <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by title or category…" />

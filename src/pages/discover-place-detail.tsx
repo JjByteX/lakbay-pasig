@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft } from "@phosphor-icons/react";
+import { ArrowLeft, Info, Scroll } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton } from "@/components/public/save-button";
 import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
@@ -290,7 +291,7 @@ export default function DiscoverPlaceDetailPage() {
                 !place.entrance_fee &&
                 placeFacilities.length === 0 &&
                 !place.rules && (
-                  <p className="text-base text-muted-foreground">No details listed yet.</p>
+                  <EmptyState icon={Info} className="text-base">Details will appear here.</EmptyState>
                 )}
             </TabsContent>
 
@@ -327,7 +328,7 @@ export default function DiscoverPlaceDetailPage() {
                 !place.historical_significance &&
                 !place.year_or_period &&
                 !place.source_reference && (
-                  <p className="text-base text-muted-foreground">No history has been added for this place yet.</p>
+                  <EmptyState icon={Scroll} className="text-base">The history of this place will appear here.</EmptyState>
                 )}
             </TabsContent>
           </Tabs>
