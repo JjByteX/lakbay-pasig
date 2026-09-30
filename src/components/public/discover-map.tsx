@@ -3,7 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
 import { GpsFix, MapPin, Plus, Minus } from "@phosphor-icons/react";
 import type { Coordinates } from "@/lib/discover-query";
-import { LATTE, MOCHA, buildStyle, PASIG_CENTER, DEFAULT_ZOOM } from "@/lib/map-style";
+import {
+  LATTE,
+  MOCHA,
+  buildStyle,
+  PASIG_CENTER,
+  DEFAULT_ZOOM,
+  BASE_BOUNDS,
+  GROW_LIMIT,
+  inBounds,
+  floorZoom,
+} from "@/lib/map-style";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
@@ -748,16 +758,25 @@ function MapCornerControls({
     setLocateError(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLocateStatus("idle");
+        const fix = { latitude: position.coords.latitude, longitude: position.coords.longitude };
         onLocationFound({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          ...fix,
           // google-style-location-heading-indicator: same field the
           // shell's own watchPosition now populates (public-shell.tsx),
           // so a locate-me tap doesn't regress the marker back to "no
           // heading" if the device happens to report one on this read.
           heading: position.coords.heading,
         });
+        // map-bounds-plan.md: outside GROW_LIMIT the camera would clamp to
+        // the nearest box edge, so it doesn't move, and a silent no-op
+        // would look broken. onLocationFound above still ran, so the dot
+        // and the distance sort keep the real position.
+        if (!inBounds(GROW_LIMIT, fix)) {
+          setLocateStatus("error");
+          setLocateError("You're outside the map area.");
+          return;
+        }
+        setLocateStatus("idle");
         // One-shot recenter: this tap, and only this tap, should move
         // the camera. Fired after the coordinate update above so the
         // recenter effect sees the fresh position on the same tick.
@@ -843,30 +862,50 @@ function MapCornerControls({
 // rest of this component already owns, since this is the one component
 // with direct access to the live map instance -- no separate map
 // reference is created for this control.
-function ZoomControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
+function ZoomControl({ map, grown }: Readonly<{ map: maplibregl.Map | null; grown: boolean }>) {
   const [zoom, setZoom] = useState<number | null>(null);
+  // map-bounds-plan.md: there is no minZoom on this map. maxBounds sets the
+  // floor on every screen (floorZoom in map-style.ts), so Zoom out disables
+  // against that instead of maplibre's own 0 default, which never binds now.
+  const [floor, setFloor] = useState(0);
 
   // Mirrors MapCornerControls' own MutationObserver-free, event-driven
   // pattern: reads the map's live zoom on "zoom" so the buttons can
-  // disable at MapLibre's own min/max bounds (buildStyle sets neither
-  // explicitly, so this falls back to maplibre-gl's own default 0-22
-  // range) instead of silently no-opping past either end, same "visibly
-  // disabled, not silently unresponsive" rule MapCornerControls' own
-  // legend toggle already follows for its own loading state.
+  // disable at the zoom floor / MapLibre's own max (default 22) instead of
+  // silently no-opping past either end, same "visibly disabled, not
+  // silently unresponsive" rule MapCornerControls' own legend toggle
+  // already follows for its own loading state. The floor depends on the
+  // container size and the current box, so it is recomputed on "resize" and
+  // when `grown` changes (growth moves the floor without a zoom event).
   useEffect(() => {
     if (!map) return;
-    const updateZoom = () => setZoom(map.getZoom());
-    updateZoom();
-    map.on("zoom", updateZoom);
-    return () => {
-      map.off("zoom", updateZoom);
+    const update = () => {
+      setZoom(map.getZoom());
+      const box = map.getMaxBounds();
+      const container = map.getContainer();
+      setFloor(
+        box
+          ? floorZoom(
+              [box.getWest(), box.getSouth(), box.getEast(), box.getNorth()],
+              container.clientWidth,
+              container.clientHeight,
+            )
+          : 0,
+      );
     };
-  }, [map]);
+    update();
+    map.on("zoom", update);
+    map.on("resize", update);
+    return () => {
+      map.off("zoom", update);
+      map.off("resize", update);
+    };
+  }, [map, grown]);
 
   const maxZoom = map?.getMaxZoom() ?? 22;
-  const minZoom = map?.getMinZoom() ?? 0;
   const atMax = zoom != null && zoom >= maxZoom;
-  const atMin = zoom != null && zoom <= minZoom;
+  // 0.01 of slack so float rounding at the floor still disables the button.
+  const atMin = zoom != null && zoom <= floor + 0.01;
 
   return (
     <div className="absolute bottom-6 right-3 z-[1000] hidden flex-col items-center rounded-2xl border border-input bg-card shadow md:flex">
@@ -1047,6 +1086,24 @@ export function DiscoverMap({
   // the bottom of this file's return.
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
+  // map-bounds-plan.md: one step growth. The box starts at BASE_BOUNDS. When
+  // the live location or a route corner is outside it but inside GROW_LIMIT,
+  // the box jumps once to GROW_LIMIT. Never shrinks: growth is one way for
+  // this mount, so the camera can't snap back. A point outside GROW_LIMIT is
+  // ignored, so a visitor far away can't lift the lock. A fresh mount starts
+  // at base and re-derives this from userLocation and route, which the shell
+  // holds, so nothing is stored. Callers run it BEFORE moving the camera, or
+  // the move clamps to the old box. `grown` is state (not a ref) because
+  // ZoomControl reads it: growth moves its zoom floor without a zoom event.
+  const [grown, setGrown] = useState(false);
+  const growIfNeeded = (points: Coordinates[]) => {
+    const map = mapRef.current;
+    if (!map || grown) return;
+    if (points.some((p) => !inBounds(BASE_BOUNDS, p) && inBounds(GROW_LIMIT, p))) {
+      map.setMaxBounds(GROW_LIMIT);
+      setGrown(true);
+    }
+  };
   // Bugfix (directions route not appearing): drawRoute below bails out
   // silently when map.isStyleLoaded() is false, which it reliably is for
   // a brief window right after `new maplibregl.Map(...)` -- the vector
@@ -1121,6 +1178,14 @@ export function DiscoverMap({
       style: buildStyle(isDark() ? MOCHA : LATTE),
       center: [PASIG_CENTER.longitude, PASIG_CENTER.latitude],
       zoom: DEFAULT_ZOOM,
+      // map-bounds-plan.md: Discover stays near Pasig. maxBounds keeps the
+      // whole screen inside the box, and grows once (growIfNeeded below).
+      // Rotate and tilt are off because maxBounds assumes north up: a
+      // rotated map shows outside the box at the corners.
+      maxBounds: BASE_BOUNDS,
+      dragRotate: false,
+      pitchWithRotate: false,
+      maxPitch: 0,
       attributionControl: {
         // locate-me-and-directions-phases.md Phase 3.8: OSRM/OSM ODbL credit
         // added as one more clause in this same string, not a second
@@ -1136,6 +1201,10 @@ export function DiscoverMap({
       },
     });
     mapRef.current = map;
+    // The constructor options above cover right-drag rotate and pitch;
+    // these two cover the two finger twist and the keyboard.
+    map.touchZoomRotate.disableRotation();
+    map.keyboard.disableRotation();
     // Zoom control: see mapInstance's own declaration comment above --
     // this is the one write that carries the map instance across a
     // render boundary so ZoomControl's prop actually receives it.
@@ -1308,11 +1377,22 @@ export function DiscoverMap({
     const map = mapRef.current;
     if (!userLocation || !map) return;
 
+    // map-bounds-plan.md: grow first, so the setCenter below isn't clamped
+    // to the old box. A fix outside GROW_LIMIT (someone in Cebu) never
+    // auto centers: the camera would clamp to the nearest box edge. The dot
+    // is still placed below, it just sits off screen.
+    growIfNeeded([userLocation]);
+
     const isFirstFix = !hasAutoCenteredRef.current;
     const isExplicitRecenter = recenterRequestId !== lastRecenterRequestIdRef.current;
     lastRecenterRequestIdRef.current = recenterRequestId;
 
-    if (!customFrom && !directionsPanelResult && (isFirstFix || isExplicitRecenter)) {
+    if (
+      !customFrom &&
+      !directionsPanelResult &&
+      (isFirstFix || isExplicitRecenter) &&
+      inBounds(GROW_LIMIT, userLocation)
+    ) {
       map.setCenter([userLocation.longitude, userLocation.latitude]);
       map.setZoom(DEFAULT_ZOOM);
     }
@@ -1423,6 +1503,9 @@ export function DiscoverMap({
     // a whole Directions session. userLocation stays a dependency so the
     // marker/cone code below it still updates on every tick; only the
     // setCenter/setZoom above is now gated on recenterRequestId instead.
+    // growIfNeeded is deliberately not a dependency: it is recreated every
+    // render, and it only ever grows once, so a stale copy is harmless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLocation, customFrom, directionsPanelResult, recenterRequestId]);
 
   useEffect(() => {
@@ -1589,6 +1672,14 @@ export function DiscoverMap({
       (b, coord) => b.extend(coord as [number, number]),
       new maplibregl.LngLatBounds(geometry.coordinates[0], geometry.coordinates[0]),
     );
+    // map-bounds-plan.md: grow before fitBounds, or fitBounds clamps to the
+    // old box and crops a route that starts outside it.
+    const southWest = bounds.getSouthWest();
+    const northEast = bounds.getNorthEast();
+    growIfNeeded([
+      { latitude: southWest.lat, longitude: southWest.lng },
+      { latitude: northEast.lat, longitude: northEast.lng },
+    ]);
     map.fitBounds(bounds, { padding: 48 });
   };
 
@@ -1822,7 +1913,7 @@ export function DiscoverMap({
           and reference screenshot -- see ZoomControl's own comment for why
           this is a separate small component fed the live map instance via
           mapInstance state rather than reading mapRef directly. */}
-      <ZoomControl map={mapInstance} />
+      <ZoomControl map={mapInstance} grown={grown} />
 
       {/* desktop-directions-panel-phases.md Phase 2.3: desktop-only
           (mobile renders its own fixed panel from discover.tsx directly,

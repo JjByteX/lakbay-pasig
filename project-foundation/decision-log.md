@@ -251,3 +251,24 @@ Directions weighed, per rule 6: color on all five category tables (no flag in th
 
 **Standing rule:** A new color is a token in both themes plus one `CATEGORY_COLORS` row, and it must pass 4.5:1 for glyph and label in both themes. A new category list that shows on the map gets the `color` column and `colors: true`. Deploy order: the migration runs before the app build goes live, since the app selects `color`.
 
+---
+
+**#:** 28
+**Milestone:** Discover map bounds (map-bounds-plan.md)
+
+**Decision:** Discover's map stays near Pasig automatically: no dropdown, no Settings change, no database column. `discover-map.tsx` sets `maxBounds` to a base box of 120.965, 14.455 to 121.195, 14.685 (Pasig's own box plus 0.065 degrees, about 7 km, each side, about 25 by 25 km). The base is sized for tall phones. `maxBounds` keeps the whole screen inside the box, not only the center, so box height decides how wide a route a phone can frame: a 390 by 700 phone frames a route up to 7.5 km wide at 0.03 and up to 10.8 km at 0.065. The base covers Makati, BGC, Ortigas, NAIA, Cubao, Marikina, Intramuros and Antipolo with no growth (checked with approximate coordinates).
+
+Growth is one step. When the live location or a route corner is outside the base and inside the limit box (Pasig's box plus 0.15 degrees, 120.88, 14.37 to 121.28, 14.77, about 43 by 44 km), `growIfNeeded` calls `setMaxBounds` once with the limit box, before the camera moves, and never shrinks for the rest of that mount. A point outside the limit is ignored, so a visitor in Cebu can't lift the lock: no growth, no auto center on the first fix, and Find my location shows "You're outside the map area." in the existing locate error slot with no camera move. Reload or a fresh mount starts at base and re-derives growth from `userLocation` and `route`, which the shell already holds, so nothing is stored.
+
+The numbers live in `map-style.ts` as `[west, south, east, north]` tuples (`PASIG_BOUNDS`, `BASE_BOUNDS`, `GROW_LIMIT`), with `inBounds` and `floorZoom` beside them. `PASIG_BBOX` in `geocode.ts` moved there as `PASIG_BOUNDS` with the same values and is now `PASIG_BOUNDS.join(",")`, so search and the map share one copy. `geocode.ts` imports it relatively, not through `@/`, so `npx tsx src/lib/geocode.ts` still resolves it.
+
+Rotate and tilt are off on Discover, because `maxBounds` assumes north up (a rotated map shows outside the box at the corners) and the heading cone ignores map rotation. There is no `minZoom`: the bounds set the floor on every screen, and an explicit 11 would cut phone routes wider than 10.8 km after growth. `ZoomControl` disables Zoom out at `floorZoom` of the map's current bounds and container size, recomputed on zoom, on resize and when growth happens.
+
+The pin picker map in the business and admin place forms stays unlocked. A vendor near the city edge must place their own pin, and an admin must reach old rows with odd coordinates. Its address search is already limited to Pasig (entry #21). Custom From needs no code: it only comes from the Pasig limited search, a tap on the bounded map, or the live fix, so it is already inside.
+
+Directions weighed, per rule 6: an area dropdown, an inside or outside Pasig rule, and growth by a padded union of the live location and route corners. A dropdown is rejected by constraints.md's Automation First rule (#2), since the step can be done without human input. Inside or outside detection is rejected because it needs a boundary polygon and GPS permission, and the bounds could jump near the border. A padded union follows the route's shape, and a wide, flat route leaves the height unchanged, so a phone still crops it. Chosen: a fixed box with one jump to a bigger one, with no union math and no padding to tune.
+
+Known ceilings, accepted: `maxBounds` takes a rectangle, so parts of neighboring cities stay reachable, and the base lets people wander about 7 km past Pasig's edge, not 3. A route fully inside the base but wider than 10.8 km on a 390 px phone is clipped, and only cross city routes get that wide.
+
+**Standing rule:** Bounds numbers live only in `map-style.ts`. Any camera move that could land outside the base box calls `growIfNeeded` first, or it clamps. The pin picker map stays unlocked. Add a polygon check only if the city border starts to matter, `minZoom: 10` only if a screen shows the bounds floor not binding, and growth for a route wider than 10.8 km only if it shows up.
+

@@ -3,7 +3,8 @@ import type { Coordinates } from "@/lib/discover-query";
 
 // Moved out of discover-map.tsx, location-field-phases.md Phase 1. Shared by
 // Discover and the location picker so every map in the app has one look.
-// Pure move, no value or logic edits.
+// The style code is a pure move, no value or logic edits. The bounds block
+// at the bottom is newer (map-bounds-plan.md): where Discover's map may pan.
 
 export const PASIG_CENTER: Coordinates = { latitude: 14.5764, longitude: 121.0851 };
 export const DEFAULT_ZOOM = 14;
@@ -236,4 +237,78 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
       },
     ],
   };
+}
+
+// West, South, East, North. The order maplibre's `maxBounds` and Photon's
+// `bbox` both take, so one tuple feeds either. Tuples only, no maplibre
+// import at runtime, so `npx tsx src/lib/map-style.ts` runs bare.
+export type Bounds = [number, number, number, number];
+
+// Pasig's own box. Covers all 8 seeded points. geocode.ts joins it into
+// Photon's bbox string, so search and the map share one copy.
+export const PASIG_BOUNDS: Bounds = [121.03, 14.52, 121.13, 14.62];
+
+// Discover's locked box: Pasig plus 0.065 degrees (about 7 km) each side.
+// `maxBounds` keeps the whole screen inside the box, not only the center,
+// and phones are tall, so this is sized for them: a 390x700 phone frames a
+// route up to 10.8 km wide here (7.5 km at 0.03). About 25 by 25 km.
+// Literals, not sums, so no float noise creeps into the edges.
+export const BASE_BOUNDS: Bounds = [120.965, 14.455, 121.195, 14.685];
+
+// The one step growth box: Pasig plus 0.15 degrees (about 16 km), about 43
+// by 44 km. Adds Alabang type origins. A point outside it never lifts the
+// lock, so a visitor in Cebu can't unlock the map.
+// ponytail: both boxes are rectangles, so parts of neighboring cities stay
+// reachable. Add a polygon check only if the city border starts to matter.
+export const GROW_LIMIT: Bounds = [120.88, 14.37, 121.28, 14.77];
+
+export function inBounds(box: Bounds, point: Coordinates): boolean {
+  const [west, south, east, north] = box;
+  return point.longitude >= west && point.longitude <= east && point.latitude >= south && point.latitude <= north;
+}
+
+// The lowest zoom where a width x height pixel screen still fits inside the
+// box: the larger of log2(screen width / box width) and log2(screen height /
+// box height), both in pixels at zoom 0 (Mercator, 512 px tiles). This is
+// what `maxBounds` enforces as a floor. It is not cameraForBounds, which
+// returns the zoom where the WHOLE box is visible, about 0.8 lower on a phone.
+export function floorZoom(box: Bounds, width: number, height: number): number {
+  const [west, south, east, north] = box;
+  const mercatorY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const boxWidth = ((east - west) / 360) * 512;
+  const boxHeight = ((mercatorY(north) - mercatorY(south)) / (2 * Math.PI)) * 512;
+  return Math.max(Math.log2(width / boxWidth), Math.log2(height / boxHeight));
+}
+
+// Ponytail's non-trivial-logic rule: floorZoom and inBounds get the smallest
+// runnable check, plain asserts, no framework. Same pattern as geocode.ts.
+// Run with: npx tsx src/lib/map-style.ts
+function demo() {
+  const assertEqual = (actual: unknown, expected: unknown, label: string) => {
+    if (actual !== expected) {
+      throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+  };
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  assertEqual(round2(floorZoom(BASE_BOUNDS, 390, 700)), 11.02, "base box, 390x700 phone");
+  assertEqual(round2(floorZoom(BASE_BOUNDS, 1400, 800)), 12.06, "base box, 1400x800 laptop");
+  assertEqual(round2(floorZoom(GROW_LIMIT, 390, 700)), 10.22, "limit box, 390x700 phone");
+
+  const makati = { latitude: 14.5547, longitude: 121.0244 };
+  const alabang = { latitude: 14.42, longitude: 121.04 };
+  const cebu = { latitude: 10.3157, longitude: 123.8854 };
+  assertEqual(inBounds(BASE_BOUNDS, PASIG_CENTER), true, "Pasig center is in the base box");
+  assertEqual(inBounds(BASE_BOUNDS, makati), true, "Makati is in the base box");
+  assertEqual(inBounds(BASE_BOUNDS, alabang), false, "Alabang is out of the base box");
+  assertEqual(inBounds(GROW_LIMIT, alabang), true, "Alabang is in the limit");
+  assertEqual(inBounds(GROW_LIMIT, cebu), false, "Cebu is out of the limit");
+
+  console.log("map-style.ts demo: all checks passed");
+}
+
+// Same Node-only guard as geocode.ts: `process` doesn't exist in the Vite
+// browser bundle, and this must never fire on import.
+if (typeof process !== "undefined" && import.meta.url === `file://${process.argv[1]}`) {
+  demo();
 }

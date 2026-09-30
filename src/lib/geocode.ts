@@ -1,4 +1,7 @@
 import type { Coordinates } from "@/lib/discover-query";
+// Relative, not "@/", so `npx tsx src/lib/geocode.ts` can resolve it. The
+// root tsconfig has no `paths`. Type imports above are erased, this one isn't.
+import { PASIG_BOUNDS } from "./map-style";
 
 // location-field-phases.md Phase 2: address search and reverse lookup for
 // the location picker. One provider, one base URL, same shape as
@@ -18,8 +21,10 @@ import type { Coordinates } from "@/lib/discover-query";
 // Check results). No `lang` parameter, it was not tested.
 const PHOTON_BASE_URL = "https://photon.komoot.io";
 
-// minLon,minLat,maxLon,maxLat. Covers all 8 seeded points.
-const PASIG_BBOX = "121.03,14.52,121.13,14.62";
+// minLon,minLat,maxLon,maxLat. Covers all 8 seeded points. Same values as
+// before, now one copy in map-style.ts (map-bounds-plan.md), so the search
+// box and the map's locked box can't drift apart.
+const PASIG_BBOX = PASIG_BOUNDS.join(",");
 const RESULT_LIMIT = 5;
 
 // Same shape as DirectionsError in directions.ts: callers branch on
