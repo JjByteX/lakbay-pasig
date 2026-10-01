@@ -3,8 +3,9 @@ import { readEmbeddedName } from "./place-categories";
 
 // Admin/Staff global search (feature-request-phases.md Phase 3). Mirrors
 // global-search.ts's exact shape (one function per content type, same
-// Promise.all fan-out, same RESULT_LIMIT/ilike/EMPTY pattern), per 3.1's
-// instruction to confirm that pattern before building a second one, and
+// Promise.all fan-out, same RESULT_LIMIT/EMPTY pattern, and the same
+// typo-tolerant search_* database functions from migration 0042 instead of
+// `ilike`), per 3.1's instruction to confirm that pattern before building a second one, and
 // per constraints.md's Inventory Before Suggesting rule -- this is a
 // staff-context sibling, not a replacement, since the two read through
 // different RLS policies and return different fields (verification_status,
@@ -105,10 +106,8 @@ async function searchPlaces(q: string): Promise<AdminSearchPlaceHit[]> {
   // searchPlaces, verification_status added since staff (unlike the
   // public bar) needs to see and distinguish pending/verified/rejected.
   const { data, error } = await supabase
-    .from("places")
-    .select("id, name, verification_status, place_categories(name)")
-    .ilike("name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_places", { q, lim: RESULT_LIMIT })
+    .select("id, name, verification_status, place_categories(name)");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -124,10 +123,8 @@ async function searchBusinesses(q: string): Promise<AdminSearchBusinessHit[]> {
   // businesses_select_staff (0004): review_businesses or admin. Same
   // fields admin-businesses.tsx's own load query selects.
   const { data, error } = await supabase
-    .from("businesses")
-    .select("id, name, business_categories(name), verification_status, featured_status")
-    .ilike("name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_businesses", { q, lim: RESULT_LIMIT })
+    .select("id, name, business_categories(name), verification_status, featured_status");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -144,10 +141,8 @@ async function searchTrails(q: string): Promise<AdminSearchTrailHit[]> {
   // routes_select_staff (0005): build_trails or admin. Same fields
   // admin-trails.tsx's own load query selects.
   const { data, error } = await supabase
-    .from("routes")
-    .select("id, name, trail_categories(name), status")
-    .ilike("name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_trails", { q, lim: RESULT_LIMIT })
+    .select("id, name, trail_categories(name), status");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -160,17 +155,15 @@ async function searchTrails(q: string): Promise<AdminSearchTrailHit[]> {
 }
 
 async function searchEvents(q: string): Promise<AdminSearchEventHit[]> {
-  // events_select_staff (0006): publish_events or admin. No .eq("published",
-  // true) filter here, unlike global-search.ts's searchEvents -- a staff
-  // member reviewing Announcements needs to find an unpublished draft by
-  // name too, the public bar's own extra filter exists specifically to
-  // keep drafts out of the public-facing result set, which doesn't apply
-  // to this staff-only search.
+  // events_select_staff (0006): publish_events or admin. only_published is
+  // false here, unlike global-search.ts's searchEvents (where the function's
+  // default of true applies) -- a staff member reviewing Announcements needs
+  // to find an unpublished draft by name too, the public bar's own filter
+  // exists specifically to keep drafts out of the public-facing result set,
+  // which doesn't apply to this staff-only search.
   const { data, error } = await supabase
-    .from("events")
-    .select("id, title, event_categories(name), published")
-    .ilike("title", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_events", { q, lim: RESULT_LIMIT, only_published: false })
+    .select("id, title, event_categories(name), published");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -190,12 +183,13 @@ async function searchStaff(q: string): Promise<AdminSearchStaffHit[]> {
   // needed here, RLS already enforces it. role = 'staff' scopes this to
   // CATO Staff accounts only, matching admin-staff.tsx's own list query,
   // not every profiles row (residents/vendors are not "Staff records").
+  // search_staff (0042) applies the same role check inside the function so
+  // the row cap counts only staff accounts; the filter is repeated here
+  // rather than relying on the function alone.
   const { data, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, position")
+    .rpc("search_staff", { q, lim: RESULT_LIMIT })
     .eq("role", "staff")
-    .ilike("display_name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .select("id, display_name, position");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({

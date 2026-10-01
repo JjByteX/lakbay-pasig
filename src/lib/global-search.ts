@@ -14,7 +14,8 @@ import { readEmbeddedName } from "./place-categories";
 // Each group reuses the exact RLS-scoped select an existing query file
 // already runs (discover-query.ts's fetchPlaces/fetchBusinesses,
 // trail-query.ts's fetchPublishedTrails, home-query.ts's
-// fetchAnnouncements), narrowed with `ilike` on the name/title column and
+// fetchAnnouncements), narrowed by migration 0042's typo-tolerant search_*
+// functions (one per table, SECURITY INVOKER, so the same RLS applies) and
 // capped at a small row count, since this is a live-typing dropdown, not a
 // full results page -- no separate results screen exists per the resolved
 // spec ("router to the right tab" was the alternative considered and
@@ -99,10 +100,8 @@ async function searchPlaces(q: string): Promise<SearchPlaceHit[]> {
   // (place-category-directory-phases.md): category is now a joined
   // place_categories.name (migration 0022), flattened below.
   const { data, error } = await supabase
-    .from("places")
-    .select("id, name, place_categories(name)")
-    .ilike("name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_places", { q, lim: RESULT_LIMIT })
+    .select("id, name, place_categories(name)");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -121,10 +120,8 @@ async function searchBusinesses(q: string): Promise<SearchBusinessHit[]> {
   // old plain text column), flattened below, same pattern searchPlaces
   // above already uses for place_categories.
   const { data, error } = await supabase
-    .from("businesses")
-    .select("id, name, business_categories(name), verification_status")
-    .ilike("name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_businesses", { q, lim: RESULT_LIMIT })
+    .select("id, name, business_categories(name), verification_status");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -142,10 +139,8 @@ async function searchTrails(q: string): Promise<SearchTrailHit[]> {
   // Category Directory Phase 1.7: theme is now a joined trail_categories.
   // name (migration 0023), flattened below.
   const { data, error } = await supabase
-    .from("routes")
-    .select("id, name, trail_categories(name)")
-    .ilike("name", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_trails", { q, lim: RESULT_LIMIT })
+    .select("id, name, trail_categories(name)");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -162,16 +157,14 @@ async function searchEvents(q: string): Promise<SearchEventHit[]> {
   // fetchAnnouncements reads through (that query also adds an explicit
   // .eq("published", true) on top of RLS, since events_select_staff has no
   // published check of its own and could otherwise leak drafts to a
-  // signed-in staff account browsing the public surface -- same reasoning
-  // applies here, so the same explicit filter is repeated rather than
-  // relying on RLS alone). Category Directory Phase 1.10: category is now
+  // signed-in staff account browsing the public surface). search_events
+  // (0042) takes only_published, default true, and applies it inside the
+  // function, so the same explicit filter still holds and the row cap only
+  // counts published rows. Category Directory Phase 1.10: category is now
   // a joined event_categories.name (migration 0024), flattened below.
   const { data, error } = await supabase
-    .from("events")
-    .select("id, title, event_categories(name)")
-    .eq("published", true)
-    .ilike("title", `%${q}%`)
-    .limit(RESULT_LIMIT);
+    .rpc("search_events", { q, lim: RESULT_LIMIT })
+    .select("id, title, event_categories(name)");
 
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -186,18 +179,17 @@ async function searchItems(q: string): Promise<SearchItemHit[]> {
   // business_items_select_own and business_items_write_staff (0004) let an
   // owner or staff read an unverified store's items, so the status filter is
   // repeated here, same as searchEvents repeats published = true.
+  // search_items (0042) applies the same two statuses inside the function so
+  // the row cap counts only shown rows, and returns rows already ordered:
+  // best match first, then name, then price low to high, unpriced last.
   const { data, error } = await supabase
-    .from("business_items")
+    .rpc("search_items", { q, lim: ITEM_FETCH_LIMIT })
+    .in("businesses.verification_status", ["verified", "pending"])
     .select(
       "id, name, price, business_id, businesses!inner(name, verification_status), business_item_photos(photo_url)"
     )
-    .ilike("name", `%${q}%`)
-    .in("businesses.verification_status", ["verified", "pending"])
-    .order("name")
-    .order("price", { ascending: true, nullsFirst: false })
     .order("sort_order", { referencedTable: "business_item_photos" })
-    .limit(1, { referencedTable: "business_item_photos" })
-    .limit(ITEM_FETCH_LIMIT);
+    .limit(1, { referencedTable: "business_item_photos" });
 
   if (error) throw error;
   return (data ?? []).map((row) => {
