@@ -1,4 +1,4 @@
-import { SquaresFour, Bank, Storefront, CalendarDots, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
+import { SquaresFour, ChartBar, Bank, Storefront, CalendarDots, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -9,6 +9,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -53,12 +54,25 @@ import { SidebarLogoRow } from "@/components/sidebar-logo-row";
 // has no tab to use on this page" no longer holds once this phase ships.
 // Facilities needs no array change: manage_places already covers it, same
 // permission Places itself already uses.
+//
+// Two groups, in this order: Main (no label, same spot the single group
+// always had, so nothing above or beside it moves) and Tools (labeled).
+// `group` only picks the block an item renders in; who sees it is still
+// decided by permission, permissions and adminOnly. Reports is not in this
+// list yet, see the placeholder row in the Tools group below.
 const NAV_ITEMS = [
-  { to: "/admin", label: "Dashboard", icon: SquaresFour, permission: null, permissions: null, adminOnly: false },
-  { to: "/admin/places", label: "Places", icon: Bank, permission: "manage_places" as const, permissions: null, adminOnly: false },
-  { to: "/admin/businesses", label: "Businesses", icon: Storefront, permission: "review_businesses" as const, permissions: null, adminOnly: false },
-  { to: "/admin/events", label: "Announcements", icon: CalendarDots, permission: "publish_events" as const, permissions: null, adminOnly: false },
-  { to: "/admin/trails", label: "Trails", icon: MapTrifold, permission: "build_trails" as const, permissions: null, adminOnly: false },
+  { to: "/admin", label: "Dashboard", icon: SquaresFour, permission: null, permissions: null, adminOnly: false, group: "main" },
+  { to: "/admin/events", label: "Announcements", icon: CalendarDots, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
+  { to: "/admin/places", label: "Places", icon: Bank, permission: "manage_places" as const, permissions: null, adminOnly: false, group: "main" },
+  { to: "/admin/businesses", label: "Businesses", icon: Storefront, permission: "review_businesses" as const, permissions: null, adminOnly: false, group: "main" },
+  { to: "/admin/trails", label: "Trails", icon: MapTrifold, permission: "build_trails" as const, permissions: null, adminOnly: false, group: "main" },
+  // Landing Page (landing-hero-phases.md Phase 3.1): the hero carousel
+  // shown to a signed-out visitor on /welcome, /login, and /signup. Own
+  // permission (manage_landing, migration 0033), not folded into
+  // manage_places or any existing value -- none of the four cover
+  // landing content, and reusing manage_places would hand every place
+  // editor control over the first screen a new visitor sees.
+  { to: "/admin/landing", label: "Landing Page", icon: Image, permission: "manage_landing" as const, permissions: null, adminOnly: false, group: "tools" },
   {
     to: "/admin/categories",
     label: "Categories",
@@ -66,20 +80,14 @@ const NAV_ITEMS = [
     permission: null,
     permissions: ["manage_places", "build_trails", "publish_events", "review_businesses"] as const,
     adminOnly: false,
+    group: "tools",
   },
-  // Landing Page (landing-hero-phases.md Phase 3.1): the hero carousel
-  // shown to a signed-out visitor on /welcome, /login, and /signup. Own
-  // permission (manage_landing, migration 0033), not folded into
-  // manage_places or any existing value -- none of the four cover
-  // landing content, and reusing manage_places would hand every place
-  // editor control over the first screen a new visitor sees.
-  { to: "/admin/landing", label: "Landing Page", icon: Image, permission: "manage_landing" as const, permissions: null, adminOnly: false },
-  { to: "/admin/staff", label: "Staff", icon: Users, permission: null, permissions: null, adminOnly: true },
+  { to: "/admin/staff", label: "Staff", icon: Users, permission: null, permissions: null, adminOnly: true, group: "tools" },
   // Activity (activity-log-phases.md Phase 4.1): read only table of staff and
   // admin actions (activity_log, migration 0037). adminOnly: true, same as
   // Staff above, RLS already returns zero rows to a non admin, so hiding
   // the item is the second layer, not the only one.
-  { to: "/admin/activity", label: "Activity", icon: Pulse, permission: null, permissions: null, adminOnly: true },
+  { to: "/admin/activity", label: "Activity", icon: Pulse, permission: null, permissions: null, adminOnly: true, group: "tools" },
 ];
 
 export function AdminSidebar() {
@@ -107,6 +115,26 @@ export function AdminSidebar() {
     return item.permission === null || isAdmin || profile?.system_permission?.includes(item.permission);
   });
 
+  const mainItems = visibleItems.filter((item) => item.group === "main");
+  const toolItems = visibleItems.filter((item) => item.group === "tools");
+
+  function renderItem(item: (typeof NAV_ITEMS)[number]) {
+    const active =
+      item.to === "/admin"
+        ? currentPath === item.to
+        : currentPath === item.to || currentPath.startsWith(`${item.to}/`);
+    return (
+      <SidebarMenuItem key={item.to}>
+        <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+          <NavLink to={item.to} end={item.to === "/admin"}>
+            <item.icon weight={active ? "fill" : "bold"} className="h-4 w-4 shrink-0" />
+            <span>{item.label}</span>
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
+
   const initial = profile?.display_name?.[0]?.toUpperCase() ?? "?";
 
   return (
@@ -121,23 +149,37 @@ export function AdminSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
+            <SidebarMenu>{mainItems.map(renderItem)}</SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Tools: the only labeled group. Sentence case, no uppercase (the
+            label's own style has none). pointer-events-none because when the
+            rail collapses the label fades out but keeps its box, which is
+            pulled up over the bottom edge of the last Main item and would
+            otherwise swallow clicks there. */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="pointer-events-none">Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
             <SidebarMenu>
-              {visibleItems.map((item) => {
-                const active =
-                  item.to === "/admin"
-                    ? currentPath === item.to
-                    : currentPath === item.to || currentPath.startsWith(`${item.to}/`);
-                return (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
-                      <NavLink to={item.to} end={item.to === "/admin"}>
-                        <item.icon weight={active ? "fill" : "bold"} className="h-4 w-4 shrink-0" />
-                        <span>{item.label}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {/* Reports: coming soon placeholder. Not a link and not in
+                  NAV_ITEMS, since there is no route or permission yet (no
+                  spec covers it). Admin only for now, so staff never see a
+                  greyed out section, per admin-panel-spec.md's Access Rule.
+                  When the page exists, move this into NAV_ITEMS as the
+                  first group: "tools" entry and delete this row. */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton disabled>
+                    <ChartBar weight="bold" className="h-4 w-4 shrink-0" />
+                    <span>Reports</span>
+                    <span className="ml-auto text-xs group-data-[collapsible=icon]:hidden">
+                      Coming soon
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+              {toolItems.map(renderItem)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
