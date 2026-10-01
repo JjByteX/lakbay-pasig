@@ -34,6 +34,10 @@ import { readEmbeddedName } from "./place-categories";
 // RLS-does-the-scoping reasoning as the four content tables above.
 const RESULT_LIMIT = 5;
 
+// .rpc().select() types its result as one row or an array of rows, so each
+// search below narrows with Array.isArray before mapping. A set-returning
+// function always sends an array at runtime; this only settles the type.
+
 export interface AdminSearchPlaceHit {
   kind: "place";
   id: string;
@@ -110,7 +114,7 @@ async function searchPlaces(q: string): Promise<AdminSearchPlaceHit[]> {
     .select("id, name, verification_status, place_categories(name)");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "place" as const,
     id: row.id,
     name: row.name,
@@ -127,7 +131,7 @@ async function searchBusinesses(q: string): Promise<AdminSearchBusinessHit[]> {
     .select("id, name, business_categories(name), verification_status, featured_status");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "business" as const,
     id: row.id,
     name: row.name,
@@ -145,7 +149,7 @@ async function searchTrails(q: string): Promise<AdminSearchTrailHit[]> {
     .select("id, name, trail_categories(name), status");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "trail" as const,
     id: row.id,
     name: row.name,
@@ -166,7 +170,7 @@ async function searchEvents(q: string): Promise<AdminSearchEventHit[]> {
     .select("id, title, event_categories(name), published");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "event" as const,
     id: row.id,
     title: row.title,
@@ -192,7 +196,7 @@ async function searchStaff(q: string): Promise<AdminSearchStaffHit[]> {
     .select("id, display_name, position");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "staff" as const,
     id: row.id,
     display_name: row.display_name,

@@ -23,6 +23,10 @@ import { readEmbeddedName } from "./place-categories";
 // session continues from).
 const RESULT_LIMIT = 5;
 
+// .rpc().select() types its result as one row or an array of rows, so each
+// search below narrows with Array.isArray before mapping. A set-returning
+// function always sends an array at runtime; this only settles the type.
+
 export interface SearchPlaceHit {
   kind: "place";
   id: string;
@@ -104,7 +108,7 @@ async function searchPlaces(q: string): Promise<SearchPlaceHit[]> {
     .select("id, name, place_categories(name)");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "place" as const,
     id: row.id,
     name: row.name,
@@ -124,7 +128,7 @@ async function searchBusinesses(q: string): Promise<SearchBusinessHit[]> {
     .select("id, name, business_categories(name), verification_status");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "business" as const,
     id: row.id,
     name: row.name,
@@ -143,7 +147,7 @@ async function searchTrails(q: string): Promise<SearchTrailHit[]> {
     .select("id, name, trail_categories(name)");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "trail" as const,
     id: row.id,
     name: row.name,
@@ -167,7 +171,7 @@ async function searchEvents(q: string): Promise<SearchEventHit[]> {
     .select("id, title, event_categories(name)");
 
   if (error) throw error;
-  return (data ?? []).map((row) => ({
+  return (Array.isArray(data) ? data : []).map((row) => ({
     kind: "event" as const,
     id: row.id,
     title: row.title,
@@ -192,7 +196,7 @@ async function searchItems(q: string): Promise<SearchItemHit[]> {
     .limit(1, { referencedTable: "business_item_photos" });
 
   if (error) throw error;
-  return (data ?? []).map((row) => {
+  return (Array.isArray(data) ? data : []).map((row) => {
     // The !inner embed can come back as an object or a one item array.
     const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
     return {
