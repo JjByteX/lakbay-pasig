@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { Announcement } from "@/lib/home-types";
+import { hasTimeOfDay } from "@/lib/datetime";
 
 /**
  * Phase 3.4 (step-6-phases.md): row, not a card wrapper, same
@@ -17,11 +18,12 @@ import type { Announcement } from "@/lib/home-types";
  */
 export function formatDateTime(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleString(undefined, {
+  const date = new Date(iso);
+  // Local midnight means the announcement has a date but no set time.
+  return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    ...(hasTimeOfDay(date) && { hour: "numeric", minute: "2-digit" }),
   });
 }
 

@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { DateTimeField } from "@/components/ui/datetime-field";
+import { DateField } from "@/components/ui/date-field";
+import { TimeSelect } from "@/components/ui/time-select";
 import {
   Select,
   SelectContent,
@@ -22,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { isoToDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/datetime";
+import { combineDateAndTime, splitDateAndTime } from "@/lib/datetime";
 import { CharCount } from "@/components/business/business-fields";
 
 // Announcements modal conversion: this dialog replaces the former
@@ -55,8 +56,12 @@ interface EventFormState {
   description: string;
   category_id: string;
   related_program: string;
-  date_time: string;
-  end_date_time: string;
+  // Date and time are separate: an event always has a date, not always a
+  // time ("" = no time set, stored as midnight, see lib/datetime.ts).
+  start_date: string;
+  start_time: string;
+  end_date: string;
+  end_time: string;
   location: string;
   related_place_id: string;
   enrollment_info: string;
@@ -67,8 +72,10 @@ const EMPTY_FORM: EventFormState = {
   description: "",
   category_id: "",
   related_program: "",
-  date_time: "",
-  end_date_time: "",
+  start_date: "",
+  start_time: "",
+  end_date: "",
+  end_time: "",
   location: "",
   related_place_id: "",
   enrollment_info: "",
@@ -87,7 +94,7 @@ function missingRequiredFieldsFor(form: EventFormState): string[] {
   if (form.title.trim().length === 0) missing.push("Event Title");
   if (form.description.trim().length === 0) missing.push("Description");
   if (form.category_id.trim().length === 0) missing.push("Category");
-  if (form.date_time.trim().length === 0) missing.push("Date and Time");
+  if (form.start_date.length === 0) missing.push("Date");
   return missing;
 }
 
@@ -109,7 +116,7 @@ export default function EventFormDialog({
   const { profile } = useAuth();
 
   const [form, setForm] = useState<EventFormState>(EMPTY_FORM);
-  const [hasEndDateTime, setHasEndDateTime] = useState(false);
+  const [hasEndDate, setHasEndDate] = useState(false);
   const [published, setPublished] = useState(false);
   const [lifecycleStatus, setLifecycleStatus] = useState<(typeof LIFECYCLE_STATUSES)[number]>("upcoming");
   const [loading, setLoading] = useState(!isNew);
@@ -142,7 +149,7 @@ export default function EventFormDialog({
 
     if (isNew) {
       setForm(EMPTY_FORM);
-      setHasEndDateTime(false);
+      setHasEndDate(false);
       setPublished(false);
       setLifecycleStatus("upcoming");
       setLoading(false);
@@ -168,13 +175,15 @@ export default function EventFormDialog({
           description: data.description ?? "",
           category_id: data.category_id ?? "",
           related_program: data.related_program ?? "",
-          date_time: isoToDateTimeLocalValue(data.date_time),
-          end_date_time: isoToDateTimeLocalValue(data.end_date_time),
+          start_date: splitDateAndTime(data.date_time).date,
+          start_time: splitDateAndTime(data.date_time).time,
+          end_date: splitDateAndTime(data.end_date_time).date,
+          end_time: splitDateAndTime(data.end_date_time).time,
           location: data.location ?? "",
           related_place_id: data.related_place_id ?? "",
           enrollment_info: data.enrollment_info ?? "",
         });
-        setHasEndDateTime(Boolean(data.end_date_time));
+        setHasEndDate(Boolean(data.end_date_time));
         setPublished(data.published);
         setLifecycleStatus(data.lifecycle_status);
         setLoading(false);
@@ -185,11 +194,16 @@ export default function EventFormDialog({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const endBeforeStart =
-    hasEndDateTime &&
-    form.date_time.length > 0 &&
-    form.end_date_time.length > 0 &&
-    new Date(form.end_date_time) <= new Date(form.date_time);
+  // With a time on both sides the end must be after the start. If either
+  // side has no time, only the days are compared, so an all-day event can
+  // end the same day it starts.
+  const endBeforeStart = (() => {
+    if (!hasEndDate || !form.start_date || !form.end_date) return false;
+    if (form.start_time && form.end_time) {
+      return new Date(`${form.end_date}T${form.end_time}`) <= new Date(`${form.start_date}T${form.start_time}`);
+    }
+    return form.end_date < form.start_date;
+  })();
 
   const canSubmit = form.title.trim().length > 0 && !saving && !endBeforeStart;
 
@@ -208,8 +222,8 @@ export default function EventFormDialog({
       description: form.description || null,
       category_id: form.category_id || null,
       related_program: form.related_program || null,
-      date_time: form.date_time ? new Date(form.date_time).toISOString() : null,
-      end_date_time: hasEndDateTime && form.end_date_time ? new Date(form.end_date_time).toISOString() : null,
+      date_time: combineDateAndTime(form.start_date, form.start_time),
+      end_date_time: hasEndDate ? combineDateAndTime(form.end_date, form.end_time) : null,
       location: form.location || null,
       related_place_id: form.related_place_id || null,
       enrollment_info: form.enrollment_info || null,
@@ -288,12 +302,14 @@ export default function EventFormDialog({
           more fields (title, category, description, program, two date/
           time fields, location, place, application info) than a slide's
           image+caption+toggle, and would cramp badly at max-w-lg. max-w-2xl
-          matches the two-column field grid the former page used. No card
+          matches the two-column field grid the former page used.
+          Now max-w-5xl with a left/right split (what / when and where) and a
+          vertical divider between the columns, direct instruction. No card
           wrapper around the fields (unlike the former page, which needed
           one to bound itself against the page background) -- DialogContent
           is already the bounded card surface here, so an inner card just
           nested one card inside another. */}
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <DialogTitle>{isNew ? "New Event" : form.title || "Edit Event"}</DialogTitle>
@@ -350,138 +366,175 @@ export default function EventFormDialog({
             )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-              <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="title">Event Title</Label>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_auto_1fr]">
+                {/* Left: what the announcement is. Right: when, where and how
+                    to join. The divider only shows from md up, where the two
+                    columns sit side by side; below that they stack. */}
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="title">Event Title</Label>
+                      <Input
+                        id="title"
+                        value={form.title}
+                        onChange={(e) => updateField("title", e.target.value)}
+                        required
+                        maxLength={150}
+                      />
+                      <CharCount value={form.title} max={150} />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="category">Category</Label>
+                      <Select value={form.category_id} onValueChange={(v) => updateField("category_id", v)}>
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
+                    </div>
+
+                <div className="flex flex-col gap-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      className="min-h-[160px]"
+                      value={form.description}
+                      onChange={(e) => updateField("description", e.target.value)}
+                      maxLength={2000}
+                    />
+                    <CharCount value={form.description} max={2000} />
+                  </div>
+
+                <div className="flex flex-col gap-2">
+                    <Label htmlFor="related_program">Related Program</Label>
                     <Input
-                      id="title"
-                      value={form.title}
-                      onChange={(e) => updateField("title", e.target.value)}
-                      required
+                      id="related_program"
+                      placeholder="e.g. Pasig Creative Arts Academy, if recurring"
+                      value={form.related_program}
+                      onChange={(e) => updateField("related_program", e.target.value)}
                       maxLength={150}
                     />
-                    <CharCount value={form.title} max={150} />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select value={form.category_id} onValueChange={(v) => updateField("category_id", v)}>
-                      <SelectTrigger id="category">
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={form.description}
-                    onChange={(e) => updateField("description", e.target.value)}
-                    maxLength={2000}
-                  />
-                  <CharCount value={form.description} max={2000} />
-                </div>
+                <div className="hidden w-px bg-border md:block" aria-hidden="true" />
 
+                <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="related_program">Related Program</Label>
-                  <Input
-                    id="related_program"
-                    placeholder="e.g. Pasig Creative Arts Academy, if recurring"
-                    value={form.related_program}
-                    onChange={(e) => updateField("related_program", e.target.value)}
-                    maxLength={150}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="has_end_date_time" className="flex w-fit items-center gap-2 text-sm text-foreground">
-                    <input
-                      id="has_end_date_time"
-                      type="checkbox"
-                      checked={hasEndDateTime}
-                      onChange={(e) => {
-                        setHasEndDateTime(e.target.checked);
-                        if (!e.target.checked) updateField("end_date_time", "");
-                      }}
-                      className="h-4 w-4 rounded border-input accent-primary"
-                    />
-                    <span>This event has an end date and time</span>
-                  </label>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="date_time">Date and Time</Label>
-                      <DateTimeField
-                        id="date_time"
-                        value={form.date_time}
-                        onChange={(v) => updateField("date_time", v)}
+                    <label htmlFor="has_end_date_time" className="flex w-fit items-center gap-2 text-sm text-foreground">
+                      <input
+                        id="has_end_date_time"
+                        type="checkbox"
+                        checked={hasEndDate}
+                        onChange={(e) => {
+                          setHasEndDate(e.target.checked);
+                          if (!e.target.checked) {
+                            updateField("end_date", "");
+                            updateField("end_time", "");
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-input accent-primary"
                       />
-                    </div>
-                    {hasEndDateTime && (
+                      <span>This event has an end date</span>
+                    </label>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="end_date_time">End Date and Time</Label>
-                        <DateTimeField
-                          id="end_date_time"
-                          value={form.end_date_time}
-                          onChange={(v) => updateField("end_date_time", v)}
-                          minDate={parseDateTimeLocalValue(form.date_time) ?? undefined}
-                          aria-invalid={endBeforeStart}
+                        <Label htmlFor="start_date">Date</Label>
+                        <DateField
+                          id="start_date"
+                          value={form.start_date}
+                          onChange={(v) => updateField("start_date", v)}
                         />
                       </div>
-                    )}
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="start_time">Time (optional)</Label>
+                        <TimeSelect
+                          id="start_time"
+                          ariaLabel="Start time"
+                          value={form.start_time}
+                          onChange={(v) => updateField("start_time", v)}
+                          min="00:15"
+                          max="23:45"
+                          emptyLabel="No time set"
+                        />
+                      </div>
+                      {hasEndDate && (
+                        <>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="end_date">End Date</Label>
+                            <DateField
+                              id="end_date"
+                              value={form.end_date}
+                              onChange={(v) => updateField("end_date", v)}
+                              minDate={form.start_date ? new Date(`${form.start_date}T00:00`) : undefined}
+                              aria-invalid={endBeforeStart}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="end_time">End Time (optional)</Label>
+                            <TimeSelect
+                              id="end_time"
+                              ariaLabel="End time"
+                              value={form.end_time}
+                              onChange={(v) => updateField("end_time", v)}
+                              min="00:15"
+                              max="23:45"
+                              emptyLabel="No time set"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="location">Location</Label>
-                    <Input
-                      id="location"
-                      value={form.location}
-                      onChange={(e) => updateField("location", e.target.value)}
-                      maxLength={300}
-                    />
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="location">Location</Label>
+                      <Input
+                        id="location"
+                        value={form.location}
+                        onChange={(e) => updateField("location", e.target.value)}
+                        maxLength={300}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="related_place_id">Related Place</Label>
+                      <Select value={form.related_place_id} onValueChange={(v) => updateField("related_place_id", v)}>
+                        <SelectTrigger id="related_place_id">
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {places.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="related_place_id">Related Place</Label>
-                    <Select value={form.related_place_id} onValueChange={(v) => updateField("related_place_id", v)}>
-                      <SelectTrigger id="related_place_id">
-                        <SelectValue placeholder="None" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {places.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="enrollment_info">Application Info</Label>
-                  <Textarea
-                    id="enrollment_info"
-                    placeholder="Slots available, how to join, if applicable"
-                    value={form.enrollment_info}
-                    onChange={(e) => updateField("enrollment_info", e.target.value)}
-                    maxLength={1000}
-                  />
-                  <CharCount value={form.enrollment_info} max={1000} />
+                    <Label htmlFor="enrollment_info">Application Info</Label>
+                    <Textarea
+                      id="enrollment_info"
+                      placeholder="Slots available, how to join, if applicable"
+                      value={form.enrollment_info}
+                      onChange={(e) => updateField("enrollment_info", e.target.value)}
+                      maxLength={1000}
+                    />
+                    <CharCount value={form.enrollment_info} max={1000} />
+                  </div>
                 </div>
-
-                {error && <p className="text-sm text-destructive">{error}</p>}
               </div>
+
+              {error && <p className="text-sm text-destructive">{error}</p>}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

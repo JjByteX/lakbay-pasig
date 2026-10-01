@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, DotsThree, Pencil, Slideshow, Trash } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, Pencil, Slideshow, Trash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Dialog,
   DialogContent,
@@ -177,27 +172,10 @@ export default function AdminLandingPage() {
                 <ArrowDown className="h-4 w-4" />
                 <span className="sr-only">Move down</span>
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <DotsThree className="h-4 w-4" />
-                    <span className="sr-only">Open actions</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => openEdit(slide)}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => setDeleteTarget(slide)}
-                  >
-                    <Trash className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <AdminIconActions>
+                <AdminIconAction icon={Pencil} label="Edit" onClick={() => openEdit(slide)} />
+                <AdminIconAction icon={Trash} label="Delete" destructive onClick={() => setDeleteTarget(slide)} />
+              </AdminIconActions>
             </li>
           ))}
         </ul>

@@ -3,6 +3,7 @@ import { Bank, Storefront, ClipboardText } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { usePageTitle } from "@/lib/page-title";
+import { formatDateTimeNoSeconds } from "@/lib/datetime";
 import { EmptyState } from "@/components/ui/empty-state";
 
 interface ActivityEntry {
@@ -173,7 +174,7 @@ export default function AdminDashboardPage() {
               <p className="text-sm text-muted-foreground">{entry.notes}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              {new Date(entry.created_at).toLocaleString()}
+              {formatDateTimeNoSeconds(entry.created_at)}
             </p>
           </li>
         ))}

@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Users, DotsThree } from "@phosphor-icons/react";
+import { Users, Pencil, UserCheck, UserMinus } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
   SelectContent,
@@ -219,20 +214,20 @@ export default function AdminStaffPage() {
       key: "actions",
       label: "",
       render: (row) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={togglingId === row.id}>
-              <DotsThree className="h-4 w-4" />
-              <span className="sr-only">Open actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setDialogTarget(row.id)}>Edit</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleToggleActive(row)}>
-              {row.active_status === "active" ? "Deactivate" : "Activate"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <AdminIconActions>
+          <AdminIconAction
+            icon={Pencil}
+            label="Edit"
+            onClick={() => setDialogTarget(row.id)}
+            disabled={togglingId === row.id}
+          />
+          <AdminIconAction
+            icon={row.active_status === "active" ? UserMinus : UserCheck}
+            label={row.active_status === "active" ? "Deactivate" : "Activate"}
+            onClick={() => handleToggleActive(row)}
+            disabled={togglingId === row.id}
+          />
+        </AdminIconActions>
       ),
     },
   ];

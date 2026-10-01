@@ -4,7 +4,7 @@ import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { toDateOnlyValue } from "@/lib/datetime";
+import { formatDateTimeNoSeconds, toDateOnlyValue } from "@/lib/datetime";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // The Review History tab on the place and business detail pages: who did what
@@ -81,7 +81,7 @@ const columns: AdminColumn<ReviewHistoryEntry>[] = [
     key: "created_at",
     label: "Date",
     width: "200px",
-    render: (row) => new Date(row.created_at).toLocaleString(),
+    render: (row) => formatDateTimeNoSeconds(row.created_at),
   },
 ];
 

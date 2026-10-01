@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Storefront, Flag, DotsThree } from "@phosphor-icons/react";
+import { Storefront, Flag, Eye, CheckCircle, XCircle, Star } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
   SelectContent,
@@ -204,32 +198,29 @@ export default function AdminBusinessesPage() {
       key: "actions",
       label: "",
       render: (business) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <DotsThree className="h-4 w-4" />
-              <span className="sr-only">Open actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/admin/businesses/${business.id}`)}>
-              View
-            </DropdownMenuItem>
-            {business.verificationStatus === "pending" && (
-              <>
-                <DropdownMenuItem onClick={() => navigate(`/admin/businesses/${business.id}?review=verify`)}>
-                  Verify
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate(`/admin/businesses/${business.id}?review=reject`)}>
-                  Reject
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuItem onClick={() => navigate(`/admin/businesses/${business.id}?toggle=featured`)}>
-              {business.featured_status === "featured" ? "Unfeature" : "Feature"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <AdminIconActions>
+          <AdminIconAction icon={Eye} label="View" onClick={() => navigate(`/admin/businesses/${business.id}`)} />
+          {business.verificationStatus === "pending" && (
+            <>
+              <AdminIconAction
+                icon={CheckCircle}
+                label="Verify"
+                onClick={() => navigate(`/admin/businesses/${business.id}?review=verify`)}
+              />
+              <AdminIconAction
+                icon={XCircle}
+                label="Reject"
+                onClick={() => navigate(`/admin/businesses/${business.id}?review=reject`)}
+              />
+            </>
+          )}
+          <AdminIconAction
+            icon={Star}
+            weight={business.featured_status === "featured" ? "fill" : "regular"}
+            label={business.featured_status === "featured" ? "Unfeature" : "Feature"}
+            onClick={() => navigate(`/admin/businesses/${business.id}?toggle=featured`)}
+          />
+        </AdminIconActions>
       ),
     },
   ];

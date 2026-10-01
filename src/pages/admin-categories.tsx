@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Tag, DotsThree, type Icon as PhosphorIcon } from "@phosphor-icons/react";
+import { Tag, Pencil, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
@@ -7,12 +7,7 @@ import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filte
 import CategoryFormDialog, { type CategoryFormConfig } from "@/components/admin/category-form-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
   SelectContent,
@@ -408,17 +403,9 @@ export default function AdminCategoriesPage() {
       label: "",
       sortable: false,
       render: (row) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <DotsThree className="h-4 w-4" />
-              <span className="sr-only">Open actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setDialogTarget(row.id)}>Edit</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <AdminIconActions>
+          <AdminIconAction icon={Pencil} label="Edit" onClick={() => setDialogTarget(row.id)} />
+        </AdminIconActions>
       ),
     },
   ];

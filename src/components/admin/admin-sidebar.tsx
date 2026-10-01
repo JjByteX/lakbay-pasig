@@ -146,7 +146,12 @@ export function AdminSidebar() {
             becomes the expand icon on hover when collapsed. */}
         <SidebarLogoRow to="/admin" />
       </SidebarHeader>
-      <SidebarContent>
+      {/* gap-0: SidebarContent's default gap-2 sat on top of each group's own
+          p-2, so the Tools label was about 34px under Announcements-and-friends
+          against 16px from the header to Dashboard. With no gap and no top
+          padding on the Tools group, the label sits 16px under the last Main
+          item, the same distance Dashboard sits under the header. */}
+      <SidebarContent className="gap-0">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>{mainItems.map(renderItem)}</SidebarMenu>
@@ -158,7 +163,7 @@ export function AdminSidebar() {
             rail collapses the label fades out but keeps its box, which is
             pulled up over the bottom edge of the last Main item and would
             otherwise swallow clicks there. */}
-        <SidebarGroup>
+        <SidebarGroup className="pt-0">
           <SidebarGroupLabel className="pointer-events-none">Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

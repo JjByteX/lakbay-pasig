@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
+import { hasTimeOfDay } from "@/lib/datetime";
 
 // Phase 4.1-4.2 (step-6-phases.md): full record fields from events
 // (migration 0006), scoped to published = true. No save action, events
@@ -44,12 +45,13 @@ interface EventDetail {
 
 function formatDateTime(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleString(undefined, {
+  const date = new Date(iso);
+  // Local midnight means the event has a date but no set time.
+  return date.toLocaleString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    ...(hasTimeOfDay(date) && { hour: "numeric", minute: "2-digit" }),
   });
 }
 

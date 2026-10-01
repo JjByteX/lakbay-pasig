@@ -13,7 +13,7 @@ import {
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { usePageTitle } from "@/lib/page-title";
-import { toDateOnlyValue } from "@/lib/datetime";
+import { formatDateTimeNoSeconds, toDateOnlyValue } from "@/lib/datetime";
 
 // Activity (activity-log-phases.md Phase 4): read only table of what staff
 // and admins did, backed by activity_log (migration 0037). Admin only, both
@@ -203,7 +203,7 @@ export default function AdminActivityPage() {
     {
       key: "created_at",
       label: "Time",
-      render: (row) => new Date(row.created_at).toLocaleString(),
+      render: (row) => formatDateTimeNoSeconds(row.created_at),
     },
     {
       key: "actor_name",

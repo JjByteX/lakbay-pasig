@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bank, DotsThree } from "@phosphor-icons/react";
+import { Bank, Eye, CheckCircle, XCircle } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
   SelectContent,
@@ -243,48 +238,24 @@ export default function AdminPlacesPage() {
     {
       key: "actions",
       label: "",
-      render: (row) =>
-        row.kind === "place" ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <DotsThree className="h-4 w-4" />
-                <span className="sr-only">Open actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}`)}>View</DropdownMenuItem>
-              {row.verification_status === "pending" && (
-                <>
-                  <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}?review=verify`)}>
-                    Verify
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(`/admin/places/${row.id}?review=reject`)}>
-                    Reject
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <DotsThree className="h-4 w-4" />
-                <span className="sr-only">Open actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}`)}>View</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}?review=verify`)}>
-                Verify
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate(`/admin/places/discovery/${row.id}?review=reject`)}>
-                Reject
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+      render: (row) => {
+        // Discovery (trail content) rows live under /admin/places/discovery
+        // and are always reviewable; place rows can only be reviewed while
+        // pending. Same split the three-dot menus had.
+        const base = row.kind === "place" ? `/admin/places/${row.id}` : `/admin/places/discovery/${row.id}`;
+        const reviewable = row.kind !== "place" || row.verification_status === "pending";
+        return (
+          <AdminIconActions>
+            <AdminIconAction icon={Eye} label="View" onClick={() => navigate(base)} />
+            {reviewable && (
+              <>
+                <AdminIconAction icon={CheckCircle} label="Verify" onClick={() => navigate(`${base}?review=verify`)} />
+                <AdminIconAction icon={XCircle} label="Reject" onClick={() => navigate(`${base}?review=reject`)} />
+              </>
+            )}
+          </AdminIconActions>
+        );
+      },
     },
   ];
 

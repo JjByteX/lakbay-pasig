@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { usePageTitle } from "@/lib/page-title";
+import { formatDateTimeNoSeconds } from "@/lib/datetime";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminFormCard, ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
 
@@ -437,7 +438,7 @@ function ReviewHistoryList({ reviews }: Readonly<{ reviews: ReviewEntry[] | null
             </Badge>
           </div>
           {r.notes && <p className="text-sm text-muted-foreground">{r.notes}</p>}
-          <p className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground">{formatDateTimeNoSeconds(r.created_at)}</p>
         </li>
       ))}
     </ul>

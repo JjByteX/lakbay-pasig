@@ -343,3 +343,97 @@ Known limits, accepted: Groq's free plan is shared by every user of the app. At 
 
 **Standing rule:** Any future server side secret goes in a plain `api/*.js` function with its key in a non-`VITE_` Vercel variable, never in the client. If voice search is added to the admin bar, it reuses `useVoiceSearch` and `/api/transcribe` rather than a second copy.
 
+
+---
+
+**#:** 34
+**Milestone:** Announcements, Calendar / List view
+
+**Decision:** The admin Announcements page (`admin-events.tsx`) has a segmented Calendar | List control in the toolbar, left of search, using the same `Tabs` primitive and toolbar slot `admin-categories.tsx` uses for its type selector. Calendar is the default. List is the existing `AdminDataTable`, unchanged. Calendar is a month grid (always six weeks, so it never changes height) over the same `filtered` array, so the search box and the lifecycle and published filters apply in both views. An event with an `end_date_time` shows on every day it spans (capped at 62 days). Each day shows up to three events, then "+N more" expands that day in place. Clicking an event opens the same edit modal as the table's Edit action, through the same `?event=` param. Chips use existing tokens only: published upcoming is primary tinted, ongoing is accent, past is muted, draft is a dashed outline. The query now also selects `end_date_time`.
+
+Directions weighed, per rule 6: reusing `src/components/ui/calendar.tsx` (a date picker with no event content or per-day rendering, so it would need its own rewrite), and a new dependency (ruled out, no installs). Chosen instead: a small hand-built grid inside `admin-events.tsx`, on the native Date object like `calendar.tsx`.
+
+Not changed: schema, RLS, the event form, row actions, or the public announcement carousel. New Event still opens an empty form (clicking an empty day does not prefill the date).
+
+**Standing rule:** If another admin list page later gets a calendar view, lift `EventsCalendar` into `src/components/admin/` instead of copying it.
+
+---
+
+**#:** 35
+**Milestone:** Announcements, separate date and optional time
+
+**Decision:** The event form no longer uses one combined date and time picker. It has Date (required) and Time (optional) side by side, and when "This event has an end date" is ticked, End Date and End Time (optional) below. Date is the new `src/components/ui/date-field.tsx` (native date input plus the existing `calendar.tsx` popup, popup `w-max` so the seven day columns no longer squeeze together). Time is the existing `TimeSelect` with a "No time set" choice. `datetime-field.tsx` is no longer used by anything and was left in place.
+
+"No time" is stored as local midnight in the existing `date_time` and `end_date_time` columns, with no schema change. `lib/datetime.ts` gains `combineDateAndTime`, `splitDateAndTime` and `hasTimeOfDay`. Everywhere an event date is shown (admin table, admin calendar chips, announcement card and carousel, event detail page) the time is hidden when it is midnight. The end must be after the start when both have a time, and is only compared by day when either side has none, so an all day event can end the same day it starts.
+
+Directions weighed, per rule 6: a `has_time` or `all_day` boolean column (exact, but needs a migration and a change to every query and type that reads these columns), and a toggle inside the old combined field (keeps the squeezed popup and the single value). Chosen: midnight convention. Known limit, accepted: an event cannot start at exactly 12:00 AM, so the time list starts at 12:15 AM.
+
+**Standing rule:** Any new place that shows `date_time` or `end_date_time` goes through `hasTimeOfDay` before showing a time. If the midnight limit ever matters, add the flag column in one migration and replace `hasTimeOfDay` in these call sites.
+
+---
+
+**#:** 36
+**Milestone:** Announcements, two column event form
+
+**Decision:** The event dialog (`event-form-dialog.tsx`) is widened from `max-w-2xl` to `max-w-5xl` and split into a left and a right column with a vertical divider between them (from `md` up; below that the columns stack and the divider is hidden). Left: Event Title, Category, Description (taller), Related Program. Right: the end date toggle with Date, Time, End Date and End Time, then Location, Related Place and Application Info. Every field, label, validation rule and the save payload are unchanged; fields only moved, and Title/Category and Location/Related Place now stack instead of sitting two across, since each column is half the dialog.
+
+Directions weighed, per rule 6: keeping `max-w-2xl` with the divider (each column about 280px, too tight for the date and time pair), and a wizard style step form like `CreateBusinessStepper` (more clicks for a form this short). Chosen: one wide dialog, two columns.
+
+**Standing rule:** A new field on this form goes in the column that matches its meaning (what the announcement is on the left, when/where/how to join on the right), not at the end.
+
+---
+
+**#:** 37
+**Milestone:** No seconds anywhere in the app
+
+**Decision:** Seconds are never shown or chosen. The time pickers already step in 15 minutes and `combineDateAndTime` saves seconds as zero, and every public date already asked for hour and minute only. The five admin spots that used a bare `toLocaleString()` (which prints seconds, "5:30:00 AM") now call one shared `formatDateTimeNoSeconds` in `lib/datetime.ts`: the review history table, the Activity page's Time column, the dashboard's recent activity line, the discovery content review notes, and the Announcements table's Date & Time column. Same short numeric look, minus the seconds.
+
+Not changed: stored values (`created_at` and the other timestamptz columns keep their full precision in the database; only what is displayed changed), and directions durations, which are already whole minutes.
+
+**Standing rule:** Never call `toLocaleString()` or `toLocaleTimeString()` without explicit `hour` and `minute` options. For a full date and time in admin, use `formatDateTimeNoSeconds`.
+
+---
+
+**#:** 38
+**Milestone:** Announcements table, row actions as icons
+
+**Decision:** The three-dot menu on each Announcements table row is replaced by icon buttons in the row: Edit (pencil), Publish or Unpublish (eye, or eye with a slash when already published), and Set status (flag). Each has a tooltip label on hover and the same text as its aria-label. Set status still opens a small dropdown of upcoming, ongoing and past from its icon, because it has three choices. The handlers (`openEdit`, `handleTogglePublished`, `handleLifecycleChange`) are unchanged. The actions cell wraps its buttons in its own `TooltipProvider`, since `sidebar.tsx`'s provider only covers the sidebar.
+
+Directions weighed, per rule 6: three separate icons for the three statuses (a fourth to sixth icon per row for one setting), and one cycling icon (a mis-click skips a status with no way to see which one is next). Chosen: one icon with a dropdown.
+
+Superseded by #39: every other admin table now uses the same icon actions.
+
+**Standing rule:** Row actions that are a single click get their own icon button with a tooltip; an action with several choices keeps one icon and a dropdown behind it.
+
+---
+
+**#:** 39
+**Milestone:** Icon row actions on every admin table
+
+**Decision:** The three-dot menu is gone from every admin table, using one shared `src/components/admin/admin-icon-action.tsx` (`AdminIconAction`, an icon button with a tooltip and matching aria-label, and `AdminIconActions`, which carries the `TooltipProvider`). Per page: Categories Edit; Staff Edit and Activate/Deactivate; Trails Edit and Publish/Unpublish; Businesses View, Verify and Reject (pending only) and Feature/Unfeature; Places View, plus Verify and Reject (pending places, and always for discovery content rows); Announcements Edit, Publish/Unpublish and Set status (still a dropdown behind one icon). The Landing page's slide list is not a table but had the same menu, so it got Edit and Delete icons too (Delete in the destructive color; it still opens the same confirm dialog). Handlers, disabled states and which actions show are unchanged.
+
+One icon per concept across pages: View is an eye, Edit a pencil, Verify a check circle, Reject an X circle, Feature a star (filled when already featured, as Unfeature), Publish an upload arrow and Unpublish a download arrow, Activate and Deactivate a user with a check or a minus, Delete a trash can, Set status an hourglass. Publish moved off the eye so View keeps it, and Set status moved off the flag because Businesses already uses a flag for its Flagged badge.
+
+**Standing rule:** A new admin table action uses `AdminIconAction` with the icon above for that concept, not a dropdown. A new concept picks one icon and adds it to this list.
+
+---
+
+**#:** 40
+**Milestone:** Admin sidebar, Tools group spacing
+
+**Decision:** In `admin-sidebar.tsx` the Tools label sat about 34px under the last Main item, against 16px from the header to Dashboard. Two defaults stacked: `SidebarContent`'s `gap-2` between groups, plus the Tools group's own `p-2` top padding, plus the label's 32px box. The admin `SidebarContent` now takes `gap-0` and the Tools `SidebarGroup` takes `pt-0`, which leaves the Main group's bottom padding (8px) plus the label box's centering (8px): 16px from the last Main item to the "Tools" text, the same as header to Dashboard. Collapsed rail: the Main to Reports gap shrinks from about 24px to 8px, since the label takes no room there.
+
+Not changed: `ui/sidebar.tsx` itself, so the resident sidebar (`public-sidebar.tsx`) keeps its spacing. Both use the shared gap-2 default and have no labeled group, so nothing there shifts.
+
+**Standing rule:** Spacing between sidebar groups is set on the sidebar that needs it (className on `SidebarContent` or `SidebarGroup`), not by editing the shared primitive.
+
+---
+
+**#:** 41
+**Milestone:** Date field, one calendar icon
+
+**Decision:** `date-field.tsx` hides the browser's built-in calendar icon inside its date input (`[&::-webkit-calendar-picker-indicator]:hidden`). It sat beside the field's own calendar button, so the form showed two calendar icons, one opening the native picker and one opening `calendar.tsx`. Typing a date still works; the one remaining icon opens the app's calendar.
+
+Known limit: the rule targets the WebKit/Blink indicator (Chrome, Edge, Safari). Firefox draws no indicator inside a date input by default, so nothing needs hiding there. `datetime-field.tsx` (unused since #35) still carries the same double icon and was left as is.
+
+**Standing rule:** A native `type="date"` input that has its own calendar button hides the browser indicator.
