@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { AvatarUpload } from "@/components/avatar-upload";
@@ -240,12 +241,7 @@ export default function ProfilePage() {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="date_of_birth">Date of Birth</Label>
-            <Input
-              id="date_of_birth"
-              type="date"
-              value={dateOfBirth}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-            />
+            <DateField id="date_of_birth" value={dateOfBirth} onChange={setDateOfBirth} />
           </div>
 
           <div className="flex flex-col gap-2">

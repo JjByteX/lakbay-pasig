@@ -63,6 +63,17 @@
        use-auto-page-size.ts can compute rows per page without measuring. */
     --height-table-row: 56px;
     --height-table-header: 40px;
+
+    /* Item focus (.item-focus below). The ring starts the offset away from
+       the card and settles onto it. Settle ease decelerates with no
+       overshoot, fade ease is the gentle ease-in-out for the exit. */
+    --item-focus-duration: 1400ms;
+    --item-focus-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --item-focus-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --item-focus-ring-width: 2px;
+    --item-focus-ring-offset: 8px;
+    --item-focus-ring-alpha: 0.55;
+    --item-focus-tint-alpha: 0.08;
   }
 
   .dark {
@@ -110,6 +121,14 @@
 
     --height-table-row: 56px;
     --height-table-header: 40px;
+
+    --item-focus-duration: 1400ms;
+    --item-focus-ease: cubic-bezier(0.32, 0.72, 0, 1);
+    --item-focus-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --item-focus-ring-width: 2px;
+    --item-focus-ring-offset: 8px;
+    --item-focus-ring-alpha: 0.65;
+    --item-focus-tint-alpha: 0.12;
 
     /* Scrollbar thickness, used by the global scrollbar styling below. */
     --scrollbar-size: 0.625rem;
@@ -355,6 +374,52 @@
 
 @media (prefers-reduced-motion: reduce) {
   .user-location-pulse {
+    animation: none;
+  }
+}
+
+/* Item focus. discover-business-detail.tsx adds .item-focus to the item
+   card a search result points at and removes it when the animation ends.
+   Modeled on the macOS focus ring: a soft ring starts just outside the
+   card, settles onto its edge while a faint tint comes in, holds for a
+   beat, then both fade out together. No bounce, no scale, one pass.
+   Fill mode keeps the last keyframe until JS removes the class, so the
+   static ring below never flashes back in. Reduced motion drops the
+   animation and keeps the static ring. */
+@keyframes item-focus {
+  0% {
+    outline-color: hsl(var(--primary) / 0);
+    outline-offset: var(--item-focus-ring-offset);
+    background-color: hsl(var(--card));
+    animation-timing-function: var(--item-focus-ease);
+  }
+  25%,
+  60% {
+    outline-color: hsl(var(--primary) / var(--item-focus-ring-alpha));
+    outline-offset: 0;
+    background-color: hsl(var(--primary) / var(--item-focus-tint-alpha));
+  }
+  25% {
+    animation-timing-function: linear;
+  }
+  60% {
+    animation-timing-function: var(--item-focus-ease-out);
+  }
+  100% {
+    outline-color: hsl(var(--primary) / 0);
+    outline-offset: 0;
+    background-color: hsl(var(--card));
+  }
+}
+
+.item-focus {
+  animation: item-focus var(--item-focus-duration) both;
+  outline: var(--item-focus-ring-width) solid
+    hsl(var(--primary) / var(--item-focus-ring-alpha));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-focus {
     animation: none;
   }
 }

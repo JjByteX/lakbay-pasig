@@ -7,6 +7,8 @@ import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } fr
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { VerificationBadge } from "@/components/public/result-card";
+import { PageDirectionsButton } from "@/components/public/page-directions-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton } from "@/components/public/save-button";
 import { HoursDisplay } from "@/components/public/hours-display";
@@ -49,6 +51,8 @@ interface PlaceDetail {
   name: string;
   category: string;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   description: string | null;
   historical_background: string | null;
   historical_significance: string | null;
@@ -108,7 +112,7 @@ export default function DiscoverPlaceDetailPage() {
     supabase
       .from("places")
       .select(
-        "id, name, address, description, historical_background, historical_significance, year_or_period, source_reference, operating_hours, entrance_fee, rules, verification_status, place_categories(name), facility_ids"
+        "id, name, address, latitude, longitude, description, historical_background, historical_significance, year_or_period, source_reference, operating_hours, entrance_fee, rules, verification_status, place_categories(name), facility_ids"
       )
       .eq("id", id)
       .maybeSingle()
@@ -210,9 +214,25 @@ export default function DiscoverPlaceDetailPage() {
             {place.address && (
               <p className="text-sm text-muted-foreground">{place.address}</p>
             )}
-            <Badge variant="default" className="w-fit">
-              Verified by Pasig Tourism Office
-            </Badge>
+            {/* Same seal-check badge as the map preview's modal. */}
+            <VerificationBadge status={place.verification_status} />
+            {/* Directions, same as the preview modal; the full page lost it. */}
+            <PageDirectionsButton
+              result={{
+                kind: "place",
+                id: place.id,
+                name: place.name,
+                category: place.category,
+                categoryIcon: null,
+                categoryColor: null,
+                description: place.description,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                verification_status: place.verification_status,
+                facility_ids: place.facility_ids,
+                coverPhotoUrl: photos[0] ?? null,
+              }}
+            />
           </div>
 
           {/* Map hover/full-details photos phase: every uploaded photo,

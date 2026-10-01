@@ -4,7 +4,8 @@ import { ArrowLeft, Info, BookOpen } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { VerificationBadge } from "@/components/public/result-card";
+import { PageDirectionsButton } from "@/components/public/page-directions-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
@@ -36,6 +37,8 @@ interface BusinessDetail {
   name: string;
   category: string | null;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   description: string | null;
   opening_hours: string | null;
   contact: string | null;
@@ -80,6 +83,7 @@ export default function DiscoverBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const itemId = searchParams.get("item");
   const [business, setBusiness] = useState<BusinessDetail | null>(null);
   usePageTitle(business?.name ?? "Discover");
   const [items, setItems] = useState<BusinessItem[]>([]);
@@ -101,7 +105,7 @@ export default function DiscoverBusinessDetailPage() {
     supabase
       .from("businesses")
       .select(
-        "id, name, address, description, opening_hours, contact, rules, business_story, unique_specialty, business_type, verification_status, business_categories(name)"
+        "id, name, address, latitude, longitude, description, opening_hours, contact, rules, business_story, unique_specialty, business_type, verification_status, business_categories(name)"
       )
       .eq("id", id)
       .maybeSingle()
@@ -160,6 +164,57 @@ export default function DiscoverBusinessDetailPage() {
       });
   }, [id]);
 
+  // Item search rows link here with ?item=<id> (global-search-bar.tsx). Once
+  // the business and its items have rendered, scroll that card to center,
+  // focus it, then play the .item-focus flash (index.css). No matching card
+  // (stale id, hidden store, no items tab, item without tab=items) is a
+  // silent no-op. The class goes on and off with classList, not state, so
+  // the card never re-renders for it.
+  useEffect(() => {
+    if (!itemId || loading || !itemsLoaded || !business) return;
+    const el = document.getElementById(`item-${itemId}`);
+    if (!el) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let started = false;
+    let timer: number | undefined;
+
+    const stop = () => el.classList.remove("item-focus");
+    const start = () => {
+      if (started) return;
+      started = true;
+      document.removeEventListener("scrollend", start, true);
+      window.clearTimeout(timer);
+      el.classList.add("item-focus");
+      el.addEventListener("animationend", stop, { once: true });
+    };
+
+    el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+    el.focus({ preventScroll: true });
+
+    if (reduceMotion) {
+      // No animation under reduced motion, so no animationend: a timer
+      // clears the static ring instead.
+      el.classList.add("item-focus");
+      timer = window.setTimeout(stop, 1500);
+    } else {
+      // scrollend does not bubble, so listen on document in the capture
+      // phase. The timer covers browsers without scrollend and a card that
+      // is already centered (no scroll, so no event). First of the two wins.
+      // ponytail: a very long smooth scroll can flash a little early. Drop
+      // the timer once scrollend is supported everywhere.
+      document.addEventListener("scrollend", start, { capture: true, once: true });
+      timer = window.setTimeout(start, 600);
+    }
+
+    return () => {
+      document.removeEventListener("scrollend", start, true);
+      window.clearTimeout(timer);
+      el.removeEventListener("animationend", stop);
+      el.classList.remove("item-focus");
+    };
+  }, [itemId, loading, itemsLoaded, business, items]);
+
   // xl+: photos left (sticky), info right. No photos -> single narrow column.
   const hasPhotos = photos.length > 0;
 
@@ -190,19 +245,27 @@ export default function DiscoverBusinessDetailPage() {
             {business.address && (
               <p className="text-sm text-muted-foreground">{business.address}</p>
             )}
-            {/* Same badge mapping as result-card.tsx's VerificationBadge:
-                verified gets the institutional label, pending gets a
-                visually distinct badge so it never borrows verified
-                content's look, per vendor-mode-spec.md. */}
-            {business.verification_status === "pending" ? (
-              <Badge variant="outline" className="w-fit">
-                Pending Verification
-              </Badge>
-            ) : (
-              <Badge variant="default" className="w-fit">
-                Verified by Pasig Tourism Office
-              </Badge>
-            )}
+            {/* Same seal-check badge as the map preview's modal: verified
+                and pending look related but never the same, per
+                vendor-mode-spec.md. */}
+            <VerificationBadge status={business.verification_status} />
+            {/* Directions, same as the preview modal; the full page lost it. */}
+            <PageDirectionsButton
+              result={{
+                kind: "business",
+                id: business.id,
+                name: business.name,
+                category: business.category,
+                categoryIcon: null,
+                categoryColor: null,
+                description: business.description,
+                latitude: business.latitude,
+                longitude: business.longitude,
+                verification_status: business.verification_status,
+                items: items.map((item) => ({ name: item.name, price: item.price })),
+                coverPhotoUrl: photos[0] ?? null,
+              }}
+            />
           </div>
 
           {/* Map hover/full-details photos phase: same placement as the
@@ -227,8 +290,9 @@ export default function DiscoverBusinessDetailPage() {
               carry an always-empty third tab. Label keys off business_type
               (vendor-mode-spec.md's Business Listing Type), the stable
               field for this, not the open-ended category text. */}
-          {/* ?tab=items (item search rows) opens the items tab, only when it exists. Tabs mount after items load. */}
+          {/* ?tab=items (item search rows) opens the items tab, only when it exists. Tabs mount after items load. Those rows also pass ?item=<id>, and the effect above scrolls to that card. Tabs reads defaultValue once, so key it on item: picking a second item of this same store remounts it, reopens Items and lets the effect find the card. */}
           <Tabs
+            key={itemId ?? "none"}
             defaultValue={searchParams.get("tab") === "items" && items.length > 0 ? "items" : "details"}
             className="xl:col-start-2 xl:row-start-2"
           >
@@ -299,10 +363,12 @@ export default function DiscoverBusinessDetailPage() {
                   {items.map((item) => (
                     <div
                       key={item.id}
+                      id={`item-${item.id}`}
+                      tabIndex={-1}
                       className={
                         items.length === 1
-                          ? "flex w-1/2 flex-col gap-2 rounded-lg border border-border bg-card p-3"
-                          : "flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                          ? "flex w-1/2 scroll-mt-24 flex-col gap-2 rounded-lg border border-border bg-card p-3"
+                          : "flex scroll-mt-24 flex-col gap-2 rounded-lg border border-border bg-card p-3"
                       }
                     >
                       {/* Empty-photo state is a plain muted square, no

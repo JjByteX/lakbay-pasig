@@ -227,7 +227,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                   photoUrl={item.photoUrl}
                   businessName={item.businessName}
                   badge={<VerificationBadge status={item.verification_status} />}
-                  onClick={() => goTo(`/discover/business/${item.businessId}?tab=items`)}
+                  onClick={() => goTo(`/discover/business/${item.businessId}?tab=items&item=${item.id}`)}
                 />
               ))}
               {results.items.length > ITEM_SHOW_LIMIT && (

@@ -3,8 +3,8 @@ import { ClipboardText } from "@phosphor-icons/react";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { formatDateTimeNoSeconds, toDateOnlyValue } from "@/lib/datetime";
+import { formatDateTimeNoSeconds, parseDateValue, toDateOnlyValue } from "@/lib/datetime";
+import { DateField } from "@/components/ui/date-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // The Review History tab on the place and business detail pages: who did what
@@ -145,21 +145,21 @@ export function ReviewHistoryTable({ reviews }: Readonly<{ reviews: ReviewHistor
               ))}
             </SelectContent>
           </Select>
-          <Input
-            type="date"
+          <DateField
             value={fromDate}
-            max={toDate || undefined}
-            onChange={(e) => setFromDate(e.target.value)}
+            maxDate={toDate ? parseDateValue(toDate) : undefined}
+            onChange={setFromDate}
             aria-label="From date"
-            className="w-[150px] [color-scheme:light] dark:[color-scheme:dark]"
+            align="right"
+            className="w-[190px]"
           />
-          <Input
-            type="date"
+          <DateField
             value={toDate}
-            min={fromDate || undefined}
-            onChange={(e) => setToDate(e.target.value)}
+            minDate={fromDate ? parseDateValue(fromDate) : undefined}
+            onChange={setToDate}
             aria-label="To date"
-            className="w-[150px] [color-scheme:light] dark:[color-scheme:dark]"
+            align="right"
+            className="w-[190px]"
           />
         </AdminFilterBar>
       }

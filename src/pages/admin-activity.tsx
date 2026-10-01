@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Pulse } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,7 +12,8 @@ import {
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { usePageTitle } from "@/lib/page-title";
-import { formatDateTimeNoSeconds, toDateOnlyValue } from "@/lib/datetime";
+import { formatDateTimeNoSeconds, parseDateValue, toDateOnlyValue } from "@/lib/datetime";
+import { DateField } from "@/components/ui/date-field";
 
 // Activity (activity-log-phases.md Phase 4): read only table of what staff
 // and admins did, backed by activity_log (migration 0037). Admin only, both
@@ -301,21 +301,21 @@ export default function AdminActivityPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Input
-              type="date"
+            <DateField
               value={fromDate}
-              max={toDate || undefined}
-              onChange={(e) => setFromDate(e.target.value)}
+              maxDate={toDate ? parseDateValue(toDate) : undefined}
+              onChange={setFromDate}
               aria-label="From date"
-              className="w-[150px] [color-scheme:light] dark:[color-scheme:dark]"
+              align="right"
+              className="w-[190px]"
             />
-            <Input
-              type="date"
+            <DateField
               value={toDate}
-              min={fromDate || undefined}
-              onChange={(e) => setToDate(e.target.value)}
+              minDate={fromDate ? parseDateValue(fromDate) : undefined}
+              onChange={setToDate}
               aria-label="To date"
-              className="w-[150px] [color-scheme:light] dark:[color-scheme:dark]"
+              align="right"
+              className="w-[190px]"
             />
           </AdminFilterBar>
         }

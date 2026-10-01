@@ -90,3 +90,13 @@ export function formatDateTimeNoSeconds(value: string | Date): string {
     minute: "2-digit",
   });
 }
+
+// "YYYY-MM-DD" -> local Date at midnight, or null when empty or malformed.
+// What DateField and the date range filters use to turn a field's value back
+// into a Date (for min/max, or for the popup calendar's selected day).
+export function parseDateValue(value: string): Date | null {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
