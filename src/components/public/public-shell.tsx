@@ -13,6 +13,7 @@ import {
 } from "react";
 import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon } from "@phosphor-icons/react";
 import { BottomNav } from "./bottom-nav";
+import { PagePager, pagerIndexFor } from "./page-pager";
 import { PublicSidebar } from "./public-sidebar";
 import { GlobalSearchBar } from "./global-search-bar";
 import { useAuth } from "@/lib/auth-context";
@@ -751,6 +752,10 @@ function MobileShell({
   discoverFilters: ReactNode | null;
 }>) {
   const location = useLocation();
+  // Home, Trails and Saved render through the swipe pager (page-pager.tsx),
+  // which gives each page its own scroller so scroll position is kept across
+  // swipes. Every other route keeps the single scrolling <main> + Outlet.
+  const pagerIndex = pagerIndexFor(location.pathname);
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -814,8 +819,13 @@ function MobileShell({
           whether or not the page scrolls, so a tab that is taller than the
           screen (a Products grid) doesn't shrink the page and shift the
           centred content sideways when it appears. */}
-      <main className="fixed inset-x-0 top-14 bottom-16 overflow-y-auto [scrollbar-gutter:stable]">
-        <Outlet />
+      <main
+        className={cn(
+          "fixed inset-x-0 top-14 bottom-16",
+          pagerIndex === -1 ? "overflow-y-auto [scrollbar-gutter:stable]" : "overflow-hidden",
+        )}
+      >
+        {pagerIndex === -1 ? <Outlet /> : <PagePager index={pagerIndex} />}
       </main>
       <BottomNav />
     </div>

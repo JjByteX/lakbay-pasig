@@ -16,9 +16,16 @@ import { useEffect } from "react";
 
 const APP_NAME = "Lakbay Pasig";
 
+// Pulled out of the hook so the mobile page pager (page-pager.tsx) can
+// re-apply a kept-alive page's title when it is swiped back into view:
+// that page's own usePageTitle effect only runs on mount, not on return.
+export function setPageTitle(page: string | null): void {
+  document.title = page ? `${page} | ${APP_NAME}` : APP_NAME;
+}
+
 export function usePageTitle(page: string | null): void {
   useEffect(() => {
-    document.title = page ? `${page} | ${APP_NAME}` : APP_NAME;
+    setPageTitle(page);
     // No cleanup/restore on unmount: the next page mounting sets its
     // own title in the same way, and React Router never leaves the
     // document titleless between routes, so there's nothing to revert
