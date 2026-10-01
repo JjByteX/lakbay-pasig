@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { CircleNotch, MagnifyingGlass, Microphone, Stop } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { VerificationBadge } from "./result-card";
 import { ItemRow, ResultGroup, ResultRow } from "./search-result-list";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
+import { isVoiceSearchSupported, useVoiceSearch } from "@/hooks/use-voice-search";
 import {
   EMPTY_SEARCH_RESULTS,
   hasAnyResults,
@@ -49,6 +51,14 @@ const DEBOUNCE_MS = 300;
  * and are now shared. Everything else stays separate -- see admin-
  * search-bar.tsx's own file comment for why (different data sources, an
  * extra Staff group, status badges, different route targets).
+ *
+ * Voice search: a mic button inside the input records a few seconds and
+ * fills the query with the transcript (use-voice-search.ts, which sends the
+ * audio to api/transcribe.js and Groq's hosted Whisper). The transcript goes
+ * through onQueryChange like typing, so the results panel, Discover's shared
+ * filtering and the fuzzy search all react to it with no further wiring. The
+ * button is hidden where the browser cannot record. This is the public bar
+ * only; the admin bar is unchanged.
  */
 interface GlobalSearchBarProps {
   query: string;
@@ -62,6 +72,12 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   const [results, setResults] = useState<GlobalSearchResults>(EMPTY_SEARCH_RESULTS);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+
+  const [voiceSupported] = useState(isVoiceSearchSupported);
+  const voice = useVoiceSearch((text) => {
+    onQueryChange(text);
+    setOpen(true);
+  });
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -98,17 +114,62 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   const trimmed = query.trim();
   const showPanel = open && trimmed.length > 0;
 
+  // One line under the bar while listening, uploading, or after a failure.
+  // Same panel style as the results, and never at the same time as them.
+  let voiceNote: string | null = voice.error;
+  if (voice.status === "recording") voiceNote = "Listening… tap the mic again to stop.";
+  if (voice.status === "transcribing") voiceNote = "Working out what you said…";
+  const showVoiceNote = voiceNote !== null && !showPanel;
+
+  function handleMicClick() {
+    if (voice.status === "recording") {
+      voice.stop();
+      return;
+    }
+    void voice.start();
+  }
+
   return (
     <div ref={containerRef} className="relative w-full">
       <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
+        onChange={(e) => {
+          voice.clearError();
+          onQueryChange(e.target.value);
+        }}
         onFocus={() => setOpen(true)}
         placeholder="Lakbay Pasig"
         aria-label="Search"
-        className="pl-9"
+        className={voiceSupported ? "pl-9 pr-11" : "pl-9"}
       />
+      {voiceSupported && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleMicClick}
+          disabled={voice.status === "transcribing"}
+          aria-label={voice.status === "recording" ? "Stop recording" : "Search by voice"}
+          title={voice.status === "recording" ? "Stop recording" : "Search by voice"}
+          className="absolute right-0 top-0 h-9 w-9 text-muted-foreground"
+        >
+          {voice.status === "idle" && <Microphone className="h-4 w-4" />}
+          {voice.status === "recording" && (
+            <Stop weight="fill" className="h-4 w-4 animate-pulse text-destructive" />
+          )}
+          {voice.status === "transcribing" && <CircleNotch className="h-4 w-4 animate-spin" />}
+        </Button>
+      )}
+
+      {showVoiceNote && (
+        <p
+          role="status"
+          className="absolute inset-x-0 top-full z-50 mt-1 rounded-md border border-border bg-popover px-4 py-3 text-sm text-muted-foreground shadow-md"
+        >
+          {voiceNote}
+        </p>
+      )}
 
       {showPanel && (
         <div className="absolute inset-x-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md">

@@ -328,3 +328,18 @@ Not changed: the edit form (still one page on both sizes), `createBusiness`, the
 
 **Standing rule:** If the edit form is later stepped too, it reuses `CreateBusinessStepper`'s shape (or lifts it into its own file) rather than a second copy.
 
+---
+
+**#:** 33
+**Milestone:** Voice search in the public search bar
+
+**Decision:** The public search bar (`global-search-bar.tsx`) has a mic button inside the input. Tap to record up to 8 seconds, tap again to stop; the transcript fills the query like typing, so results, Discover's shared filtering and the fuzzy search (#31) all react with no extra wiring. A short note under the bar says Listening, Working out what you said, or what went wrong (mic blocked, no mic, busy, not available). The button is hidden when the browser cannot record (no MediaRecorder, or the page is not on HTTPS). The admin bar is unchanged.
+
+Transcription is Groq's hosted Whisper (`whisper-large-v3`, free plan, no card) through one Vercel function, `api/transcribe.js`. The browser posts raw audio bytes (webm, ogg or mp4, whichever it records) and gets `{ text }` back. The function exists only to keep `GROQ_API_KEY` out of the app bundle. It checks the method, a same-site Origin, audio type, a 1 MB cap, and a best effort limit of 8 requests a minute per IP (serverless instances do not share memory, so that is a speed bump, not a wall). It sends a short vocabulary prompt (Pasig place names, a little Taglish) and drops segments Whisper itself scores as silence, since Whisper otherwise invents text on silence. `vercel.json`'s catch-all rewrite now skips `/api/`. Language is auto detected by default; setting `GROQ_STT_LANGUAGE` (for example `tl`) forces it if testing shows short clips being detected wrong. `GROQ_STT_MODEL` can switch to `whisper-large-v3-turbo`.
+
+Directions weighed, per rule 6: the browser's built-in SpeechRecognition (free, zero setup, but absent in Firefox, sends audio to Google, and cannot be given local names), Whisper running in the browser through Transformers.js or a model on Hugging Face (free forever, but every user downloads the model, slow on phones, small models weak at Filipino, and it needs a new package), Hugging Face hosted inference (the free account is $0.10 of credit a month, too small), Azure Speech F0 (5 free hours a month, but an Azure account and a more involved setup) and Google Cloud Speech (no standing free tier). Chosen: Groq, since it is the most accurate free option reachable from every browser, with the vocabulary prompt as a lever the others lack.
+
+Known limits, accepted: Groq's free plan is shared by every user of the app. At the time of writing it was about 2,000 transcription requests and 28,800 audio seconds a day, 20 requests a minute; these are third party figures and change, so recheck on Groq's pricing page. A busy day ends in "Voice search is busy right now" and the user types instead; there is no fallback to the browser's SpeechRecognition yet. Audio leaves the device (to Vercel, then Groq, which says it does not retain inference data by default). It works only on a deployed site or `vercel dev`; `npm run dev` has no `/api`. The function was written without running the app or the function, so the first deployed pass (the Vercel handler format, Groq's `verbose_json` fields, Safari's mp4 audio) is worth a real test with English, Tagalog and local names.
+
+**Standing rule:** Any future server side secret goes in a plain `api/*.js` function with its key in a non-`VITE_` Vercel variable, never in the client. If voice search is added to the admin bar, it reuses `useVoiceSearch` and `/api/transcribe` rather than a second copy.
+
