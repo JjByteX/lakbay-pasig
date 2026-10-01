@@ -6,6 +6,7 @@ import { useAuthModal } from "@/lib/auth-modal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Bookmark, CheckCircle, MapTrifold, type Icon } from "@phosphor-icons/react";
 import { fetchSavedPlaces } from "@/lib/saved-places";
 import { fetchSavedRoutes } from "@/lib/saved-routes";
@@ -118,6 +119,15 @@ function ThreeLineSectionSkeleton() {
  * query are unrelated causes). Section order top to bottom matches
  * step-8-plan.md's scope line exactly: Saved Places, Saved Trails,
  * Completed Trails.
+ *
+ * Segmented control: the three sections now sit behind one Places / Trails /
+ * Completed control (the same Tabs primitive discover-place-detail.tsx uses
+ * for Details / History) instead of stacking, so one list shows at a time.
+ * The segment label is each section's title, so the old h2 headings are
+ * gone (ux-ui-guidelines.md: one label per concept, and the page title
+ * already says Saved). The short labels also fit three across the 448px
+ * mobile column, where Completed Trails would not. Data still loads once
+ * per page, so switching segments never refetches.
  */
 // Phase 6-plus cleanup: the three sections below (Saved Places, Saved
 // Trails, Completed Trails) all follow the exact same error/loading/empty/
@@ -127,7 +137,6 @@ function ThreeLineSectionSkeleton() {
 // same output, same per-section skeleton and copy, just one place that
 // owns the branching order instead of three.
 function SavedSection({
-  title,
   error,
   loading,
   skeleton,
@@ -136,7 +145,6 @@ function SavedSection({
   emptyText,
   children,
 }: Readonly<{
-  title: string;
   error: string | null;
   loading: boolean;
   skeleton: ReactNode;
@@ -156,12 +164,7 @@ function SavedSection({
     body = children;
   }
 
-  return (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      {body}
-    </div>
-  );
+  return <>{body}</>;
 }
 
 export default function SavedPage() {
@@ -246,67 +249,78 @@ export default function SavedPage() {
     <PageContainer width="wide">
       <h1 className="text-xl font-semibold text-foreground">Saved</h1>
 
-      <SavedSection
-        title="Saved Places"
-        error={placesError}
-        loading={placesLoading}
-        skeleton={<ThreeLineSectionSkeleton />}
-        isEmpty={places.length === 0}
-        emptyIcon={Bookmark}
-        emptyText="Saved places will appear here."
-      >
-        <ul className="-mx-6 flex flex-col divide-y divide-border">
-          {places.map((place) => (
-            <li key={place.id}>
-              <SavedPlaceRow
-                place={place}
-                onClick={() => navigate(`/discover/place/${place.id}`)}
-                onUnsave={() => setPlaces((prev) => prev.filter((p) => p.id !== place.id))}
-              />
-            </li>
-          ))}
-        </ul>
-      </SavedSection>
+      <Tabs defaultValue="places">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="places">Places</TabsTrigger>
+          <TabsTrigger value="trails">Trails</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+        </TabsList>
 
-      <SavedSection
-        title="Saved Trails"
-        error={trailsError}
-        loading={trailsLoading}
-        skeleton={<TwoLineSectionSkeleton inline />}
-        isEmpty={trails.length === 0}
-        emptyIcon={MapTrifold}
-        emptyText="Saved trails will appear here."
-      >
-        <ul className="-mx-6 flex flex-col divide-y divide-border">
-          {trails.map((trail) => (
-            <li key={trail.id}>
-              <SavedTrailRow
-                trail={trail}
-                onClick={() => navigate(`/trails/${trail.id}`)}
-                onUnsave={() => setTrails((prev) => prev.filter((t) => t.id !== trail.id))}
-              />
-            </li>
-          ))}
-        </ul>
-      </SavedSection>
+        <TabsContent value="places">
+          <SavedSection
+            error={placesError}
+            loading={placesLoading}
+            skeleton={<ThreeLineSectionSkeleton />}
+            isEmpty={places.length === 0}
+            emptyIcon={Bookmark}
+            emptyText="Saved places will appear here."
+          >
+            <ul className="-mx-6 flex flex-col divide-y divide-border">
+              {places.map((place) => (
+                <li key={place.id}>
+                  <SavedPlaceRow
+                    place={place}
+                    onClick={() => navigate(`/discover/place/${place.id}`)}
+                    onUnsave={() => setPlaces((prev) => prev.filter((p) => p.id !== place.id))}
+                  />
+                </li>
+              ))}
+            </ul>
+          </SavedSection>
+        </TabsContent>
 
-      <SavedSection
-        title="Completed Trails"
-        error={completedError}
-        loading={completedLoading}
-        skeleton={<TwoLineSectionSkeleton />}
-        isEmpty={completed.length === 0}
-        emptyIcon={CheckCircle}
-        emptyText="Completed trails will appear here."
-      >
-        <ul className="-mx-6 flex flex-col divide-y divide-border">
-          {completed.map((trail) => (
-            <li key={trail.id}>
-              <CompletedTrailRow trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
-            </li>
-          ))}
-        </ul>
-      </SavedSection>
+        <TabsContent value="trails">
+          <SavedSection
+            error={trailsError}
+            loading={trailsLoading}
+            skeleton={<TwoLineSectionSkeleton inline />}
+            isEmpty={trails.length === 0}
+            emptyIcon={MapTrifold}
+            emptyText="Saved trails will appear here."
+          >
+            <ul className="-mx-6 flex flex-col divide-y divide-border">
+              {trails.map((trail) => (
+                <li key={trail.id}>
+                  <SavedTrailRow
+                    trail={trail}
+                    onClick={() => navigate(`/trails/${trail.id}`)}
+                    onUnsave={() => setTrails((prev) => prev.filter((t) => t.id !== trail.id))}
+                  />
+                </li>
+              ))}
+            </ul>
+          </SavedSection>
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <SavedSection
+            error={completedError}
+            loading={completedLoading}
+            skeleton={<TwoLineSectionSkeleton />}
+            isEmpty={completed.length === 0}
+            emptyIcon={CheckCircle}
+            emptyText="Completed trails will appear here."
+          >
+            <ul className="-mx-6 flex flex-col divide-y divide-border">
+              {completed.map((trail) => (
+                <li key={trail.id}>
+                  <CompletedTrailRow trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
+                </li>
+              ))}
+            </ul>
+          </SavedSection>
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   );
 }
