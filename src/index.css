@@ -393,16 +393,16 @@
     background-color: hsl(var(--card));
     animation-timing-function: var(--item-focus-ease);
   }
-  25%,
+  25% {
+    outline-color: hsl(var(--primary) / var(--item-focus-ring-alpha));
+    outline-offset: 0;
+    background-color: hsl(var(--primary) / var(--item-focus-tint-alpha));
+    animation-timing-function: linear;
+  }
   60% {
     outline-color: hsl(var(--primary) / var(--item-focus-ring-alpha));
     outline-offset: 0;
     background-color: hsl(var(--primary) / var(--item-focus-tint-alpha));
-  }
-  25% {
-    animation-timing-function: linear;
-  }
-  60% {
     animation-timing-function: var(--item-focus-ease-out);
   }
   100% {

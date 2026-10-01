@@ -303,7 +303,7 @@ export default function AdminActivityPage() {
             </Select>
             <DateField
               value={fromDate}
-              maxDate={toDate ? parseDateValue(toDate) : undefined}
+              maxDate={(toDate ? parseDateValue(toDate) : null) ?? undefined}
               onChange={setFromDate}
               aria-label="From date"
               align="right"
@@ -311,7 +311,7 @@ export default function AdminActivityPage() {
             />
             <DateField
               value={toDate}
-              minDate={fromDate ? parseDateValue(fromDate) : undefined}
+              minDate={(fromDate ? parseDateValue(fromDate) : null) ?? undefined}
               onChange={setToDate}
               aria-label="To date"
               align="right"

@@ -110,6 +110,52 @@ const STATUS_VARIANT = {
 // four other admin detail pages' own copies -- now imported from
 // business-fields.tsx, the one place it's kept.
 
+type PlaceNullable = {
+  [K in keyof PlaceFormState]: K extends "latitude" | "longitude"
+    ? number | null
+    : K extends "facility_ids"
+      ? string[] | null
+      : K extends "entrance_fee"
+        ? number | null
+        : string | null;
+};
+
+// Row -> form state. Kept outside the component so the page's own
+// complexity isn't inflated by one nullish fallback per column.
+function placeToFormState(data: PlaceNullable): PlaceFormState {
+  return {
+    name: data.name ?? "",
+    category_id: data.category_id ?? "",
+    description: data.description ?? "",
+    historical_background: data.historical_background ?? "",
+    historical_significance: data.historical_significance ?? "",
+    year_or_period: data.year_or_period ?? "",
+    source_reference: data.source_reference ?? "",
+    address: data.address ?? "",
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    operating_hours: data.operating_hours ?? "",
+    entrance_fee: data.entrance_fee !== null ? String(data.entrance_fee) : "",
+    visit_duration: data.visit_duration ?? "",
+    accessibility_info: data.accessibility_info ?? "",
+    rules: data.rules ?? "",
+    facility_ids: data.facility_ids ?? [],
+  };
+}
+
+function placePageTitle(isNew: boolean, name: string): string {
+  if (isNew) return "New Place";
+  return name || "Edit Place";
+}
+
+// One three-step form: 1 = place and visit details, 2 = map pin and
+// address, 3 = rules and historical story.
+const STEP_META = {
+  1: { label: "Place", section: "place" },
+  2: { label: "Location", section: "location" },
+  3: { label: "Rules and history", section: "history" },
+} as const;
+
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -118,7 +164,7 @@ export default function AdminPlaceDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [form, setForm] = useState<PlaceFormState>(EMPTY_FORM);
-  usePageTitle(isNew ? "New Place" : form.name || "Edit Place");
+  usePageTitle(placePageTitle(isNew, form.name));
   const [status, setStatus] = useState<PlaceRecord["verification_status"] | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -217,24 +263,7 @@ export default function AdminPlaceDetailPage() {
           setLoading(false);
           return;
         }
-        setForm({
-          name: data.name ?? "",
-          category_id: data.category_id ?? "",
-          description: data.description ?? "",
-          historical_background: data.historical_background ?? "",
-          historical_significance: data.historical_significance ?? "",
-          year_or_period: data.year_or_period ?? "",
-          source_reference: data.source_reference ?? "",
-          address: data.address ?? "",
-          latitude: data.latitude ?? null,
-          longitude: data.longitude ?? null,
-          operating_hours: data.operating_hours ?? "",
-          entrance_fee: data.entrance_fee !== null ? String(data.entrance_fee) : "",
-          visit_duration: data.visit_duration ?? "",
-          accessibility_info: data.accessibility_info ?? "",
-          rules: data.rules ?? "",
-          facility_ids: data.facility_ids ?? [],
-        });
+        setForm(placeToFormState(data));
         setStatus(data.verification_status);
         setLoading(false);
       });
@@ -386,13 +415,7 @@ export default function AdminPlaceDetailPage() {
   // Verify/Reject lives on), so a reviewer reads a place in the same order
   // staff entered it. Only step 3's tail and the last button differ: a new
   // place has no id yet, so photos can't be added until it is saved.
-  let stepLabel = "Place";
-  if (step === 2) stepLabel = "Location";
-  if (step === 3) stepLabel = "Rules and history";
-
-  let stepSection: "place" | "location" | "history" = "place";
-  if (step === 2) stepSection = "location";
-  if (step === 3) stepSection = "history";
+  const { label: stepLabel, section: stepSection } = STEP_META[step];
 
   const placeForm = (
     <form onSubmit={handleSubmit} className="flex min-h-0 grow flex-col gap-6">

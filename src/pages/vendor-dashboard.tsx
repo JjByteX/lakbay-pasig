@@ -537,6 +537,115 @@ function CreateBusinessStepper({
   );
 }
 
+// A listing needs a name, address, map pin and business type before it can be
+// saved, on both the create and edit gates (see the note in the page below).
+function isBusinessFormComplete(form: BusinessFormState): boolean {
+  return (
+    form.name.trim().length > 0 &&
+    form.address.trim().length > 0 &&
+    form.latitude !== null &&
+    form.longitude !== null &&
+    form.business_type.trim().length > 0
+  );
+}
+
+interface EditListingViewProps {
+  form: BusinessFormState;
+  onChange: <K extends keyof BusinessFormState>(key: K, value: BusinessFormState[K]) => void;
+  onSubmit: (e: FormEvent) => void;
+  onCancel: () => void;
+  saving: boolean;
+  saveError: string | null;
+  canSave: boolean;
+  categories: BusinessCategory[];
+  categoriesError: string | null;
+}
+
+// 4.3: editing branch. Same page, same field set as create. Per
+// ux-ui-guidelines.md's modal-vs-panel rule this is a focused task that
+// already fits a single viewport as a page-level form, so no dialog is
+// introduced just to hold the same fields a second way.
+function EditListingView({
+  form,
+  onChange,
+  onSubmit,
+  onCancel,
+  saving,
+  saveError,
+  canSave,
+  categories,
+  categoriesError,
+}: Readonly<EditListingViewProps>) {
+  return (
+    <PageContainer width="narrow">
+      <h1 className="text-xl font-semibold text-foreground">Edit your listing</h1>
+
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <BusinessFields
+          form={form}
+          onChange={onChange}
+          requiredMarkers
+          addressPlaceholder="Type your address and press Enter to search"
+          showRegisteredOrInformal
+          categories={categories}
+          categoriesError={categoriesError}
+        />
+
+        {saveError && <p className="text-base text-destructive">{saveError}</p>}
+
+        <p className="text-xs text-muted-foreground">* Required</p>
+
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!canSave}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </form>
+    </PageContainer>
+  );
+}
+
+// Back button: this screen is reached from Profile's "List your business"
+// row (profile.tsx), the same navigate(-1)/ArrowLeft/ghost-icon pattern every
+// other detail page already uses top-left, per ux-ui-guidelines.md's
+// Familiarity principle. Scoped to the create branch only. On desktop the
+// button shares a row with the title to save height for the fit-to-viewport
+// form.
+function CreateListingHeader({
+  isMobile,
+  onBack,
+}: Readonly<{ isMobile: boolean; onBack: () => void }>) {
+  const backButton = (
+    <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Back">
+      <ArrowLeft className="h-5 w-5" />
+    </Button>
+  );
+  const title = (
+    <div className="flex items-center gap-2">
+      <Storefront className="h-5 w-5 shrink-0 text-foreground" />
+      <h1 className="text-xl font-semibold text-foreground">List your business</h1>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {backButton}
+        {title}
+      </>
+    );
+  }
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {backButton}
+      {title}
+    </div>
+  );
+}
+
 export default function VendorDashboardPage() {
   const { session, loading } = useAuth();
   const { openAuth } = useAuthModal();
@@ -615,21 +724,9 @@ export default function VendorDashboardPage() {
   // this is what repairs it on its next edit. BusinessFields shows "Map pin
   // required" beside the map while it is missing, so a disabled Save never
   // goes unexplained.
-  const canSubmit =
-    form.name.trim().length > 0 &&
-    form.address.trim().length > 0 &&
-    form.latitude !== null &&
-    form.longitude !== null &&
-    form.business_type.trim().length > 0 &&
-    !creating;
+  const canSubmit = isBusinessFormComplete(form) && !creating;
 
-  const canSaveEdit =
-    editForm.name.trim().length > 0 &&
-    editForm.address.trim().length > 0 &&
-    editForm.latitude !== null &&
-    editForm.longitude !== null &&
-    editForm.business_type.trim().length > 0 &&
-    !saving;
+  const canSaveEdit = isBusinessFormComplete(editForm) && !saving;
 
   // 3.3: submit calls createBusiness. verification_status is never sent,
   // it defaults to 'pending' at the database level (migration 0004),
@@ -713,39 +810,17 @@ export default function VendorDashboardPage() {
     // just to hold the same fields a second way.
     if (editing) {
       return (
-        <PageContainer width="narrow">
-          <h1 className="text-xl font-semibold text-foreground">Edit your listing</h1>
-
-          <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
-            <BusinessFields
-              form={editForm}
-              onChange={updateEditField}
-              requiredMarkers
-              addressPlaceholder="Type your address and press Enter to search"
-              showRegisteredOrInformal
-              categories={categories}
-              categoriesError={categoriesError}
-            />
-
-            {saveError && <p className="text-base text-destructive">{saveError}</p>}
-
-            <p className="text-xs text-muted-foreground">* Required</p>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditing(false)}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!canSaveEdit}>
-                {saving ? "Saving…" : "Save changes"}
-              </Button>
-            </div>
-          </form>
-        </PageContainer>
+        <EditListingView
+          form={editForm}
+          onChange={updateEditField}
+          onSubmit={handleSaveEdit}
+          onCancel={() => setEditing(false)}
+          saving={saving}
+          saveError={saveError}
+          canSave={canSaveEdit}
+          categories={categories}
+          categoriesError={categoriesError}
+        />
       );
     }
 
@@ -762,18 +837,6 @@ export default function VendorDashboardPage() {
       />
     );
   }
-
-  const backButton = (
-    <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
-      <ArrowLeft className="h-5 w-5" />
-    </Button>
-  );
-  const title = (
-    <div className="flex items-center gap-2">
-      <Storefront className="h-5 w-5 shrink-0 text-foreground" />
-      <h1 className="text-xl font-semibold text-foreground">List your business</h1>
-    </div>
-  );
 
   return (
     // Desktop: h-full bounds the page to the viewport so the stepped form
@@ -793,17 +856,7 @@ export default function VendorDashboardPage() {
           vendor-items.tsx's own no-back-button choice already established
           for a page one hop from /vendor. On desktop the button shares a
           row with the title to save height for the fit-to-viewport form. */}
-      {isMobile ? (
-        <>
-          {backButton}
-          {title}
-        </>
-      ) : (
-        <div className="flex shrink-0 items-center gap-2">
-          {backButton}
-          {title}
-        </div>
-      )}
+      <CreateListingHeader isMobile={isMobile} onBack={() => navigate(-1)} />
 
       {isMobile ? (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

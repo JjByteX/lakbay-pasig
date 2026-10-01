@@ -127,8 +127,13 @@ function statusErrorMessage(status: number): string {
 
 // Whisper ends a spoken phrase with a full stop ("Bonete."), which is noise
 // in a search box.
+const TRAILING_PUNCTUATION = new Set([".", "!", "?", "。"]);
+
 function tidy(text: string): string {
-  return text.trim().replace(/[.!?。]+$/, "").trim();
+  const trimmed = text.trim();
+  let end = trimmed.length;
+  while (end > 0 && TRAILING_PUNCTUATION.has(trimmed[end - 1])) end -= 1;
+  return trimmed.slice(0, end).trim();
 }
 
 export function useVoiceSearch(onText: (text: string) => void) {

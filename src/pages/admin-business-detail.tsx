@@ -123,6 +123,65 @@ const STATUS_VARIANT = {
   unverified: "destructive",
 } as const;
 
+// Row -> form state. Kept outside the component so the page's own
+// complexity isn't inflated by one nullish fallback per column.
+function businessToFormState(data: {
+  name: string | null;
+  business_type: string | null;
+  category_id: string | null;
+  description: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  contact: string | null;
+  opening_hours: string | null;
+  rules: string | null;
+  business_story: string | null;
+  unique_specialty: string | null;
+  accessibility_info: string | null;
+  social_media_links: string[] | null;
+}): BusinessFormState {
+  return {
+    name: data.name ?? "",
+    business_type: data.business_type ?? "",
+    category_id: data.category_id ?? "",
+    description: data.description ?? "",
+    address: data.address ?? "",
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    contact: data.contact ?? "",
+    opening_hours: data.opening_hours ?? "",
+    rules: data.rules ?? "",
+    business_story: data.business_story ?? "",
+    unique_specialty: data.unique_specialty ?? "",
+    accessibility_info: data.accessibility_info ?? "",
+    social_media_links: (data.social_media_links ?? []).join(", "),
+  };
+}
+
+// Form state -> update payload. Empty strings become null, same as before.
+function buildBusinessPayload(form: BusinessFormState) {
+  return {
+    name: form.name,
+    business_type: form.business_type || null,
+    category_id: form.category_id || null,
+    description: form.description || null,
+    address: form.address,
+    latitude: form.latitude,
+    longitude: form.longitude,
+    contact: form.contact || null,
+    opening_hours: form.opening_hours || null,
+    rules: form.rules || null,
+    business_story: form.business_story || null,
+    unique_specialty: form.unique_specialty || null,
+    accessibility_info: form.accessibility_info || null,
+    social_media_links: form.social_media_links.trim()
+      ? form.social_media_links.split(",").map((link) => link.trim()).filter(Boolean)
+      : null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export default function AdminBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -189,22 +248,7 @@ export default function AdminBusinessDetailPage() {
           setLoading(false);
           return;
         }
-        setForm({
-          name: data.name ?? "",
-          business_type: data.business_type ?? "",
-          category_id: data.category_id ?? "",
-          description: data.description ?? "",
-          address: data.address ?? "",
-          latitude: data.latitude ?? null,
-          longitude: data.longitude ?? null,
-          contact: data.contact ?? "",
-          opening_hours: data.opening_hours ?? "",
-          rules: data.rules ?? "",
-          business_story: data.business_story ?? "",
-          unique_specialty: data.unique_specialty ?? "",
-          accessibility_info: data.accessibility_info ?? "",
-          social_media_links: (data.social_media_links ?? []).join(", "),
-        });
+        setForm(businessToFormState(data));
         setStatus(data.verification_status);
         setFeaturedStatus(data.featured_status);
         setLoading(false);
@@ -321,25 +365,7 @@ export default function AdminBusinessDetailPage() {
     // review_notes, or reviewed_by here, per architecture-notes.md's Known
     // Fragile Areas note on businesses_update_staff guarding the row, not
     // columns. Only the 6.4 form fields are sent.
-    const payload = {
-      name: form.name,
-      business_type: form.business_type || null,
-      category_id: form.category_id || null,
-      description: form.description || null,
-      address: form.address,
-      latitude: form.latitude,
-      longitude: form.longitude,
-      contact: form.contact || null,
-      opening_hours: form.opening_hours || null,
-      rules: form.rules || null,
-      business_story: form.business_story || null,
-      unique_specialty: form.unique_specialty || null,
-      accessibility_info: form.accessibility_info || null,
-      social_media_links: form.social_media_links.trim()
-        ? form.social_media_links.split(",").map((link) => link.trim()).filter(Boolean)
-        : null,
-      updated_at: new Date().toISOString(),
-    };
+    const payload = buildBusinessPayload(form);
 
     const { error: updateError } = await supabase.from("businesses").update(payload).eq("id", id);
 

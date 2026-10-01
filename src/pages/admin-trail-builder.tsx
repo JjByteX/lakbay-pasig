@@ -697,50 +697,61 @@ export default function AdminTrailBuilderPage() {
     const payload = buildTrailInfoPayload(info);
 
     if (isNew && !routeId) {
-      const { data, error: insertError } = await supabase
-        .from("routes")
-        .insert({ ...payload, created_by: profile.id })
-        .select("id")
-        .single();
+      await createTrail(payload, profile.id);
+      return;
+    }
+    await updateTrail(payload);
+  }
 
-      setSaving(false);
-      if (insertError || !data) {
-        setError(insertError?.message ?? "Could not create this trail.");
-        return;
-      }
-      setRouteId(data.id);
-      setStopsLoading(false);
+  // First save of a new trail: insert the routes row, then write whatever
+  // stops and discovery content were picked before it existed.
+  async function createTrail(payload: ReturnType<typeof buildTrailInfoPayload>, creatorId: string) {
+    const { data, error: insertError } = await supabase
+      .from("routes")
+      .insert({ ...payload, created_by: creatorId })
+      .select("id")
+      .single();
 
-      // Stops picked before the trail existed are written now that there is
-      // a route_id for them. If that write fails the trail row already
-      // exists, so stay on this page with routeId set: the button becomes
-      // "Save Changes" and the next save retries the stops instead of
-      // creating a duplicate trail. Navigating away here would remount the
-      // page and drop the unsaved stops.
-      if (stops.length > 0) {
-        const stopsSaved = await persistStops(stops, data.id);
-        if (!stopsSaved) {
-          setSaving(false);
-          return;
-        }
-      }
+    setSaving(false);
+    if (insertError || !data) {
+      setError(insertError?.message ?? "Could not create this trail.");
+      return;
+    }
+    setRouteId(data.id);
+    setStopsLoading(false);
 
-      // Discovery content written against those stops before the trail
-      // existed goes in last, once the stops have their real ids. A failure
-      // here is handled like a failed stops write: stay, routeId is set, and
-      // the next Save Changes retries.
-      const draftError = await persistDraftDiscovery(data.id);
-      if (draftError) {
+    // Stops picked before the trail existed are written now that there is
+    // a route_id for them. If that write fails the trail row already
+    // exists, so stay on this page with routeId set: the button becomes
+    // "Save Changes" and the next save retries the stops instead of
+    // creating a duplicate trail. Navigating away here would remount the
+    // page and drop the unsaved stops.
+    if (stops.length > 0) {
+      const stopsSaved = await persistStops(stops, data.id);
+      if (!stopsSaved) {
         setSaving(false);
-        setError(draftError);
         return;
       }
+    }
 
+    // Discovery content written against those stops before the trail
+    // existed goes in last, once the stops have their real ids. A failure
+    // here is handled like a failed stops write: stay, routeId is set, and
+    // the next Save Changes retries.
+    const draftError = await persistDraftDiscovery(data.id);
+    if (draftError) {
       setSaving(false);
-      navigate(`/admin/trails/${data.id}`, { replace: true });
+      setError(draftError);
       return;
     }
 
+    setSaving(false);
+    navigate(`/admin/trails/${data.id}`, { replace: true });
+  }
+
+  // Later saves of an existing trail, including the retry path for a first
+  // save whose stops or discovery content write failed.
+  async function updateTrail(payload: ReturnType<typeof buildTrailInfoPayload>) {
     const { error: updateError } = await supabase.from("routes").update(payload).eq("id", routeId!);
 
     if (updateError) {

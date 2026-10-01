@@ -252,30 +252,38 @@ export function filterDiscoverResults(
 ): DiscoverResult[] {
   const q = query.trim().toLowerCase();
 
-  return results.filter((result) => {
-    // Name, or an item name for businesses (places carry no items).
-    if (q && !result.name.toLowerCase().includes(q)) {
-      if (result.kind !== "business" || matchingItem(result, q) == null) return false;
-    }
-    if (categories.length > 0 && !categories.includes(result.category ?? ""))
-      return false;
+  return results.filter(
+    (result) =>
+      matchesQuery(result, q) &&
+      matchesCategories(result, categories) &&
+      matchesPriceRange(result, priceRange) &&
+      matchesFacilities(result, facilities)
+  );
+}
 
-    if (priceRange) {
-      if (result.kind !== "business") return false;
-      const min = priceRange.min ?? -Infinity;
-      const max = priceRange.max ?? Infinity;
-      const hasMatchingItem = result.items.some(
-        (i) => i.price != null && i.price >= min && i.price <= max
-      );
-      if (!hasMatchingItem) return false;
-    }
+// Name, or an item name for businesses (places carry no items).
+function matchesQuery(result: DiscoverResult, q: string): boolean {
+  if (!q || result.name.toLowerCase().includes(q)) return true;
+  return result.kind === "business" && matchingItem(result, q) != null;
+}
 
-    if (facilities.length > 0) {
-      if (result.kind !== "place") return false;
-      const hasEveryFacility = facilities.every((f) => result.facility_ids.includes(f));
-      if (!hasEveryFacility) return false;
-    }
+function matchesCategories(result: DiscoverResult, categories: string[]): boolean {
+  return categories.length === 0 || categories.includes(result.category ?? "");
+}
 
-    return true;
-  });
+function matchesPriceRange(
+  result: DiscoverResult,
+  priceRange: { min: number | null; max: number | null } | null
+): boolean {
+  if (!priceRange) return true;
+  if (result.kind !== "business") return false;
+  const min = priceRange.min ?? -Infinity;
+  const max = priceRange.max ?? Infinity;
+  return result.items.some((i) => i.price != null && i.price >= min && i.price <= max);
+}
+
+function matchesFacilities(result: DiscoverResult, facilities: string[]): boolean {
+  if (facilities.length === 0) return true;
+  if (result.kind !== "place") return false;
+  return facilities.every((f) => result.facility_ids.includes(f));
 }
