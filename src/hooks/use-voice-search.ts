@@ -250,7 +250,7 @@ export function useVoiceSearch(onText: (text: string) => void) {
 
       if (noSpeech) {
         setStatus("idle");
-        setError("Didn't hear anything. Tap the mic and try again.");
+        setError("Didn't catch that. Tap the mic and try again.");
         return;
       }
       if (Date.now() - startedAt < MIN_RECORD_MS) {

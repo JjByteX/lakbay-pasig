@@ -55,9 +55,9 @@ const DEBOUNCE_MS = 300;
  * Voice search: a mic button inside the input records until the person stops
  * talking (about a second of quiet, or 5 seconds of nothing; a tap stops it
  * early) and fills the query with the transcript (use-voice-search.ts, which
- * sends the audio to api/transcribe.js and Groq's hosted Whisper). The mic
- * pulses with the voice level so the person can see it is hearing them. The
- * transcript goes
+ * sends the audio to api/transcribe.js and Groq's hosted Whisper). The stop
+ * icon swells with the voice level so the person can see it is hearing them.
+ * The transcript goes
  * through onQueryChange like typing, so the results panel, Discover's shared
  * filtering and the fuzzy search all react to it with no further wiring. The
  * button is hidden where the browser cannot record. This is the public bar
@@ -159,14 +159,11 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
         >
           {voice.status === "idle" && <Microphone className="h-4 w-4" />}
           {voice.status === "recording" && (
-            <>
-              <span
-                aria-hidden
-                className="absolute inset-1 rounded-full bg-destructive/20 transition-transform duration-100"
-                style={{ transform: `scale(${1 + voice.level * 0.12})` }}
-              />
-              <Stop weight="fill" className="relative h-4 w-4 text-destructive" />
-            </>
+            <Stop
+              weight="fill"
+              className="h-4 w-4 text-destructive transition-transform duration-100"
+              style={{ transform: `scale(${1 + voice.level * 0.15})` }}
+            />
           )}
           {voice.status === "transcribing" && <CircleNotch className="h-4 w-4 animate-spin" />}
         </Button>
