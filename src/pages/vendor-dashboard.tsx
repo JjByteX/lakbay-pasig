@@ -23,6 +23,7 @@ import {
   type BusinessFormState,
 } from "@/components/business/business-fields";
 import { PageContainer } from "@/components/public/page-container";
+import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
 import { usePageTitle } from "@/lib/page-title";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -61,8 +62,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
  * itself modeled on admin-place-detail.tsx): Business, Location, then Rules
  * and story, with a "Step N of 3" row, Back/Next, and a "Required to
  * continue" line. It reuses BusinessFields' existing `section` mode, so no
- * field markup is duplicated. Below md the single scrolling form is
- * unchanged. The edit form is unchanged on both.
+ * field markup is duplicated. Like the admin form it also fits the
+ * viewport: the page root is h-full, the card stretches to the space left
+ * and scrolls its own content (ADMIN_SCROLL_CLASS, the same constant admin
+ * passes), and Back/Next stay pinned under it. Below md the single
+ * scrolling form is unchanged. The edit form is unchanged on both.
  */
 
 // Shared with saved.tsx, trails.tsx, and profile.tsx's own page-local
@@ -455,7 +459,7 @@ function CreateBusinessStepper({
   }
 
   return (
-    <form onSubmit={handleFormSubmit} className="flex flex-col gap-6">
+    <form onSubmit={handleFormSubmit} className="flex min-h-0 grow flex-col gap-6">
       <BusinessFields
         form={form}
         onChange={onChange}
@@ -464,28 +468,28 @@ function CreateBusinessStepper({
         categoriesError={categoriesError}
         section={CREATE_STEP_SECTION[step]}
         stepHeading={`Step ${step} of 3: ${CREATE_STEP_LABEL[step]}`}
-        className={step === 2 ? "min-h-[34rem]" : undefined}
+        className={ADMIN_SCROLL_CLASS}
         addressPlaceholder="Type your address and press Enter to search"
       />
 
       {step === 1 && missingStep1.length > 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm shrink-0 text-muted-foreground">
           Required to continue: {missingStep1.join(", ")}.
         </p>
       )}
 
       {step === 2 && missingStep2.length > 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm shrink-0 text-muted-foreground">
           Required to continue: {missingStep2.join(", ")}.
         </p>
       )}
 
-      {createError && <p className="text-sm text-destructive">{createError}</p>}
+      {createError && <p className="shrink-0 text-sm text-destructive">{createError}</p>}
 
       {/* The keys are load-bearing: Next (type="button") and the submit
           button share a slot, and without keys React reuses the one DOM
           button and flips its type mid-click, submitting the form. */}
-      <div className="flex justify-between gap-2">
+      <div className="flex shrink-0 justify-between gap-2">
         {step === 1 ? (
           <Button key="cancel" type="button" variant="outline" onClick={onCancel}>
             Cancel
@@ -759,8 +763,25 @@ export default function VendorDashboardPage() {
     );
   }
 
+  const backButton = (
+    <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
+      <ArrowLeft className="h-5 w-5" />
+    </Button>
+  );
+  const title = (
+    <div className="flex items-center gap-2">
+      <Storefront className="h-5 w-5 shrink-0 text-foreground" />
+      <h1 className="text-xl font-semibold text-foreground">List your business</h1>
+    </div>
+  );
+
   return (
-    <PageContainer width={isMobile ? "narrow" : "wide"}>
+    // Desktop: h-full bounds the page to the viewport so the stepped form
+    // can fit it, see the header note. Mobile keeps its normal scrolling.
+    <PageContainer
+      width={isMobile ? "narrow" : "wide"}
+      className={isMobile ? undefined : "h-full min-h-0"}
+    >
       {/* Back button: this screen is reached from Profile's "List your
           business" row (profile.tsx), the same navigate(-1)/ArrowLeft/
           ghost-icon pattern every other detail page (discover-place-
@@ -770,15 +791,19 @@ export default function VendorDashboardPage() {
           has-a-business branch above is reached the same way but is the
           vendor's own home base once they have a listing, same reasoning
           vendor-items.tsx's own no-back-button choice already established
-          for a page one hop from /vendor. */}
-      <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
-        <ArrowLeft className="h-5 w-5" />
-      </Button>
-
-      <div className="flex items-center gap-2">
-        <Storefront className="h-5 w-5 shrink-0 text-foreground" />
-        <h1 className="text-xl font-semibold text-foreground">List your business</h1>
-      </div>
+          for a page one hop from /vendor. On desktop the button shares a
+          row with the title to save height for the fit-to-viewport form. */}
+      {isMobile ? (
+        <>
+          {backButton}
+          {title}
+        </>
+      ) : (
+        <div className="flex shrink-0 items-center gap-2">
+          {backButton}
+          {title}
+        </div>
+      )}
 
       {isMobile ? (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
