@@ -170,12 +170,9 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
       )}
 
       {showVoiceNote && (
-        <p
-          role="status"
-          className="absolute inset-x-0 top-full z-50 mt-1 rounded-md border border-border bg-popover px-4 py-3 text-sm text-muted-foreground shadow-md"
-        >
+        <output className="absolute inset-x-0 top-full z-50 mt-1 rounded-md border border-border bg-popover px-4 py-3 text-sm text-muted-foreground shadow-md">
           {voiceNote}
-        </p>
+        </output>
       )}
 
       {showPanel && (

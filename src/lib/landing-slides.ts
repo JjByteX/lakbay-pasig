@@ -1,5 +1,4 @@
 import { supabase } from "./supabase";
-import { validateAvatarFile } from "./avatar-storage";
 
 /**
  * Phase 2 of landing-hero-phases.md. Data access for landing_slides
@@ -89,7 +88,7 @@ export async function reorderSlides(orderedIds: string[]): Promise<void> {
  * file rather than reaching into avatar-storage.ts directly for a check
  * that has nothing to do with avatars.
  */
-export const validateSlideFile = validateAvatarFile;
+export { validateAvatarFile as validateSlideFile } from "./avatar-storage";
 
 /**
  * Public URLs look like ".../storage/v1/object/public/<bucket>/<path>".

@@ -247,7 +247,7 @@ export default function CategoryFormDialog({
             {config.colors && (
               <div className="flex flex-col gap-2">
                 <Label>Color</Label>
-                <div role="group" aria-label="Color" className="grid w-fit grid-cols-5 gap-2">
+                <fieldset aria-label="Color" className="grid w-fit grid-cols-5 gap-2 border-0 p-0">
                   {CATEGORY_COLORS.map((option) => {
                     const selected = form.color === option.value;
                     return (
@@ -263,7 +263,7 @@ export default function CategoryFormDialog({
                       />
                     );
                   })}
-                </div>
+                </fieldset>
               </div>
             )}
 

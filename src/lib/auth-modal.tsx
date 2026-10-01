@@ -38,18 +38,18 @@ export function useAuthModal() {
 
 export function AuthModalProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [open, setOpen] = useState(false);
-  const [mode, setModeState] = useState<AuthModalMode>("login");
+  const [mode, setMode] = useState<AuthModalMode>("login");
 
   const value = useMemo<AuthModalContextValue>(
     () => ({
       open,
       mode,
       openAuth: (nextMode: AuthModalMode = "login") => {
-        setModeState(nextMode);
+        setMode(nextMode);
         setOpen(true);
       },
       closeAuth: () => setOpen(false),
-      setMode: (nextMode: AuthModalMode) => setModeState(nextMode),
+      setMode,
     }),
     [open, mode]
   );

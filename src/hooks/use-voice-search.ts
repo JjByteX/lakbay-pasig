@@ -78,8 +78,8 @@ function openMeter(stream: MediaStream, onRms: (rms: number) => void): () => voi
     if (ctx.state !== "running") return;
     analyser.getByteTimeDomainData(buf);
     let sum = 0;
-    for (let i = 0; i < buf.length; i++) {
-      const x = (buf[i] - 128) / 128;
+    for (const sample of buf) {
+      const x = (sample - 128) / 128;
       sum += x * x;
     }
     onRms(Math.sqrt(sum / buf.length));

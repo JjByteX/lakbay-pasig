@@ -77,7 +77,7 @@ export default function AdminTrailsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    loadTrails().then((rows) => {
+    void loadTrails().then((rows) => {
       if (!cancelled) setTrails(rows);
     });
     return () => {

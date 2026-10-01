@@ -32,7 +32,7 @@ interface AdminPageHeaderProps {
   actions?: ReactNode;
 }
 
-export function AdminPageHeader({ title, breadcrumb = [], badges, actions }: AdminPageHeaderProps) {
+export function AdminPageHeader({ title, breadcrumb = [], badges, actions }: Readonly<AdminPageHeaderProps>) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">

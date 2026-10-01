@@ -95,7 +95,9 @@ function humanize(value: string): string {
 function formatValue(value: unknown): string {
   if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "none";
   if (value === null || value === undefined || value === "") return "none";
-  return humanize(String(value));
+  if (typeof value === "string") return humanize(value);
+  if (typeof value === "number" || typeof value === "boolean") return humanize(String(value));
+  return humanize(JSON.stringify(value));
 }
 
 function describeDetails(row: ActivityRow): string {

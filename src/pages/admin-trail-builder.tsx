@@ -577,8 +577,8 @@ export default function AdminTrailBuilderPage() {
         setLoading(false);
       });
 
-    loadStops(routeId);
-    loadDiscoveryContent(routeId);
+    void loadStops(routeId);
+    void loadDiscoveryContent(routeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId, isNew]);
 
@@ -910,11 +910,11 @@ export default function AdminTrailBuilderPage() {
         name: location.name,
       },
     ];
-    persistStops(next);
+    void persistStops(next);
   }
 
   function handleRemoveStop(stopId: string) {
-    persistStops(stops.filter((s) => s.id !== stopId));
+    void persistStops(stops.filter((s) => s.id !== stopId));
   }
 
   function handleMoveStop(index: number, direction: -1 | 1) {
@@ -922,7 +922,7 @@ export default function AdminTrailBuilderPage() {
     if (targetIndex < 0 || targetIndex >= stops.length) return;
     const next = [...stops];
     [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-    persistStops(next);
+    void persistStops(next);
   }
 
   // 5.1: opens the per-stop modal, listing whatever discovery_content rows

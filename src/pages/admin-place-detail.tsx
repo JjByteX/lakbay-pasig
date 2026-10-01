@@ -156,6 +156,24 @@ const STEP_META = {
   3: { label: "Rules and history", section: "history" },
 } as const;
 
+// Review row -> history entry, and a thrown value -> message. Kept outside
+// the component so the page's own complexity isn't inflated by the nullish
+// fallbacks and instanceof checks.
+function toPlaceReviewEntry(r: PlaceReviewRow): PlaceReviewEntry {
+  return {
+    id: r.id,
+    staff_id: r.staff_id,
+    staff_name: r.profiles[0]?.display_name ?? null,
+    action: r.action,
+    notes: r.notes,
+    created_at: r.created_at,
+  };
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
+
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -232,17 +250,13 @@ export default function AdminPlaceDetailPage() {
     fetchActiveCategories()
       .then(setCategories)
       .catch((err: unknown) => {
-        setCategoriesError(
-          err instanceof Error ? err.message : "Could not load categories."
-        );
+        setCategoriesError(errorMessage(err, "Could not load categories."));
       });
 
     fetchActiveFacilities()
       .then(setFacilities)
       .catch((err: unknown) => {
-        setFacilitiesError(
-          err instanceof Error ? err.message : "Could not load facilities."
-        );
+        setFacilitiesError(errorMessage(err, "Could not load facilities."));
       });
   }, []);
 
@@ -283,16 +297,7 @@ export default function AdminPlaceDetailPage() {
       .eq("reviewed_id", id)
       .order("created_at", { ascending: false })
       .then(({ data }) => {
-        setReviews(
-          (data ?? []).map((r: PlaceReviewRow) => ({
-            id: r.id,
-            staff_id: r.staff_id,
-            staff_name: r.profiles[0]?.display_name ?? null,
-            action: r.action,
-            notes: r.notes,
-            created_at: r.created_at,
-          }))
-        );
+        setReviews((data ?? []).map((r: PlaceReviewRow) => toPlaceReviewEntry(r)));
       });
   }, [id, isNew]);
 

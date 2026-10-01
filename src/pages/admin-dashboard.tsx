@@ -70,7 +70,7 @@ export default function AdminDashboardPage() {
     // review_businesses / admin, so a query from a staff member without
     // that permission just returns nothing, no need to branch on it here.
     if (canPlaces) {
-      Promise.all([
+      void Promise.all([
         supabase.from("places").select("id", { count: "exact", head: true }).eq("verification_status", "pending"),
         // Flagged discovery_content rows have no status of their own
         // (0005/0012), a flagged row is by definition an open item, same
@@ -98,7 +98,7 @@ export default function AdminDashboardPage() {
     // review access to manage_places specifically so this same queue's
     // reviewer sees Trail Content activity too, matching admin-places.tsx's
     // merged list and the 6.1 pending count above.
-    Promise.all([
+    void Promise.all([
       canPlaces
         ? supabase
             .from("place_reviews")

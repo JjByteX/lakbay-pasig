@@ -138,7 +138,7 @@ export default function AdminBusinessesPage() {
       }
     }
 
-    load();
+    void load();
     return () => {
       cancelled = true;
     };

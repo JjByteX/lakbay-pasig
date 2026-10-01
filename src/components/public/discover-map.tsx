@@ -185,7 +185,7 @@ function rectsOverlap(a: CollisionRect, b: CollisionRect): boolean {
 // nearby cells instead of every placed rect (keeps the per-frame pass
 // cheap as the pin count grows).
 class CollisionGrid {
-  private cells = new Map<number, CollisionRect[]>();
+  private readonly cells = new Map<number, CollisionRect[]>();
 
   private static key(cx: number, cy: number): number {
     return (cx + 4096) * 8192 + (cy + 4096);
@@ -1441,8 +1441,10 @@ export function DiscoverMap({
       cone.style.borderRadius = "50%";
       cone.style.maskImage =
         "radial-gradient(circle, black 0%, black 55%, transparent 78%)";
-      cone.style.webkitMaskImage =
-        "radial-gradient(circle, black 0%, black 55%, transparent 78%)";
+      cone.style.setProperty(
+        "-webkit-mask-image",
+        "radial-gradient(circle, black 0%, black 55%, transparent 78%)"
+      );
       // Centering (translate -50%/-50%) is baked into the base transform
       // string alongside the heading rotation below, rather than split
       // across a Tailwind -translate-x-1/2/-translate-y-1/2 class plus an

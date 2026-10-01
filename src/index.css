@@ -226,6 +226,10 @@
    second JS-side theme read for one CSS value.
    ============================================================ */
 .marker-name-label {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
   text-shadow:
     1px 1px 0 hsl(60 40% 100%),
     -1px 1px 0 hsl(60 40% 100%),
@@ -244,17 +248,11 @@
 }
 
 /* Positioning and fade for the label collision pass in discover-map.tsx
-   (layoutMarkers). The label is absolutely positioned around its
+   (layoutMarkers); the base declarations live in the .marker-name-label
+   rule above. The label is absolutely positioned around its
    28px circle; JS only sets data-side (which side has room) and
    data-shown (whether any side has room). The 4px / 2px gaps here must
    match LABEL_GAP_SIDE / LABEL_GAP_VERTICAL in that file. */
-.marker-name-label {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 150ms ease;
-}
-
 .marker-name-label[data-shown="true"] {
   opacity: 1;
   pointer-events: auto;

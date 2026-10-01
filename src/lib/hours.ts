@@ -181,13 +181,13 @@ export function normalizeRanges(ranges: TimeRange[]): TimeRange[] {
 }
 
 export function canAddRange(ranges: TimeRange[]): boolean {
-  const last = ranges[ranges.length - 1];
+  const last = ranges.at(-1);
   return !last || timeToMinutes(last[1]) <= MINUTES_PER_DAY - 2 * TIME_STEP_MINUTES;
 }
 
 // A new range opens an hour after the previous one closed and runs two hours.
 export function addRange(ranges: TimeRange[]): TimeRange[] {
-  const last = ranges[ranges.length - 1];
+  const last = ranges.at(-1);
   const previousClose = last ? timeToMinutes(last[1]) : 0;
   const opens = Math.min(previousClose + 60, MINUTES_PER_DAY - TIME_STEP_MINUTES);
   const closes = Math.min(opens + 120, MINUTES_PER_DAY);
@@ -278,7 +278,15 @@ export const DURATION_MINUTES: readonly number[] = buildDurationMinutes();
 export const DURATION_OPTIONS: readonly string[] = DURATION_MINUTES.map((minutes) => formatDuration(minutes));
 
 const HOURS_PREFIX = /^(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?/;
-const MINUTES_SUFFIX = /^(?:\s*(?:and\s*)?(\d+)\s*m(?:ins?|inutes?)?)?$/;
+const MINUTES_SUFFIX = /^\s*(?:and\s*)?(\d+)\s*m(?:ins?|inutes?)?$/;
+
+// What follows the hours part: nothing (0 extra minutes) or an optional "and"
+// plus a minutes count. null when it is neither.
+function parseMinutesRemainder(rest: string): number | null {
+  if (rest === "") return 0;
+  const match = MINUTES_SUFFIX.exec(rest);
+  return match ? Number(match[1]) : null;
+}
 
 // Reads simple free text back into minutes ("2 hours", "45 minutes",
 // "1h30m"). Anything else, such as a range like "45 to 60 minutes", is null.
@@ -292,11 +300,9 @@ export function parseDurationMinutes(text: string): number | null {
   // this replaced: h, hr, hrs, hour, hours and m, min, mins, minute, minutes.
   const hoursPrefix = HOURS_PREFIX.exec(value);
   if (hoursPrefix) {
-    const minutesSuffix = MINUTES_SUFFIX.exec(value.slice(hoursPrefix[0].length));
-    if (minutesSuffix) {
-      const hours = Number(hoursPrefix[1]);
-      const minutes = minutesSuffix[1] ? Number(minutesSuffix[1]) : 0;
-      return Math.round(hours * 60 + minutes);
+    const minutes = parseMinutesRemainder(value.slice(hoursPrefix[0].length));
+    if (minutes !== null) {
+      return Math.round(Number(hoursPrefix[1]) * 60 + minutes);
     }
   }
 

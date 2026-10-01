@@ -182,6 +182,49 @@ function buildBusinessPayload(form: BusinessFormState) {
   };
 }
 
+// Review row -> history entry. Kept outside the component so the page's own
+// complexity isn't inflated by the nullish fallbacks.
+function toReviewEntry(r: BusinessReviewRow): BusinessReviewEntry {
+  return {
+    id: r.id,
+    staff_id: r.staff_id,
+    staff_name: r.profiles[0]?.display_name ?? null,
+    action: r.action,
+    notes: r.notes,
+    created_at: r.created_at,
+  };
+}
+
+// Prepends a just-inserted review to the history list locally, instead of
+// refetching. Returns the list unchanged when there is no inserted row.
+function prependReview(
+  prev: BusinessReviewEntry[] | null,
+  inserted: {
+    id: string;
+    staff_id: string;
+    action: BusinessReviewEntry["action"];
+    notes: string | null;
+    created_at: string;
+  } | null,
+  staffName: string | null | undefined
+): BusinessReviewEntry[] | null {
+  if (!inserted) return prev;
+  return [
+    {
+      id: inserted.id,
+      staff_id: inserted.staff_id,
+      staff_name: staffName ?? null,
+      action: inserted.action,
+      notes: inserted.notes,
+      created_at: inserted.created_at,
+    },
+    ...(prev ?? []),
+  ];
+}
+
+const STEP_LABELS = { 1: "Business", 2: "Location", 3: "Rules and story" } as const;
+const STEP_SECTIONS = { 1: "business", 2: "location", 3: "story" } as const;
+
 export default function AdminBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -278,16 +321,7 @@ export default function AdminBusinessDetailPage() {
       .eq("business_id", id)
       .order("created_at", { ascending: false })
       .then(({ data }) => {
-        setReviews(
-          (data ?? []).map((r: BusinessReviewRow) => ({
-            id: r.id,
-            staff_id: r.staff_id,
-            staff_name: r.profiles[0]?.display_name ?? null,
-            action: r.action,
-            notes: r.notes,
-            created_at: r.created_at,
-          }))
-        );
+        setReviews((data ?? []).map((r: BusinessReviewRow) => toReviewEntry(r)));
       });
   }, [id]);
 
@@ -324,7 +358,7 @@ export default function AdminBusinessDetailPage() {
         next.delete("toggle");
         return next;
       }, { replace: true });
-      handleFeatureToggle();
+      void handleFeatureToggle();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, featuredStatus]);
@@ -441,19 +475,7 @@ export default function AdminBusinessDetailPage() {
     }
 
     setStatus(nextStatus);
-    if (insertedReview) {
-      setReviews((prev) => [
-        {
-          id: insertedReview.id,
-          staff_id: insertedReview.staff_id,
-          staff_name: profile.display_name ?? null,
-          action: insertedReview.action,
-          notes: insertedReview.notes,
-          created_at: insertedReview.created_at,
-        },
-        ...(prev ?? []),
-      ]);
-    }
+    setReviews((prev) => prependReview(prev, insertedReview, profile.display_name));
     setReviewAction(null);
   }
 
@@ -506,19 +528,7 @@ export default function AdminBusinessDetailPage() {
     }
 
     setFeaturedStatus(nextFeaturedStatus);
-    if (insertedReview) {
-      setReviews((prev) => [
-        {
-          id: insertedReview.id,
-          staff_id: insertedReview.staff_id,
-          staff_name: profile.display_name ?? null,
-          action: insertedReview.action,
-          notes: insertedReview.notes,
-          created_at: insertedReview.created_at,
-        },
-        ...(prev ?? []),
-      ]);
-    }
+    setReviews((prev) => prependReview(prev, insertedReview, profile.display_name));
   }
 
   if (loading) {
@@ -547,13 +557,8 @@ export default function AdminBusinessDetailPage() {
     reviewSubmitLabel = "Verify";
   }
 
-  let stepLabel = "Business";
-  if (step === 2) stepLabel = "Location";
-  if (step === 3) stepLabel = "Rules and story";
-
-  let stepSection: "business" | "location" | "story" = "business";
-  if (step === 2) stepSection = "location";
-  if (step === 3) stepSection = "story";
+  const stepLabel = STEP_LABELS[step];
+  const stepSection = STEP_SECTIONS[step];
 
   return (
     <div className="flex min-h-0 grow flex-col gap-6">

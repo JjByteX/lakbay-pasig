@@ -88,7 +88,7 @@ export default function AdminPlacesPage() {
 
   useEffect(() => {
     let cancelled = false;
-    loadQueue().then((loaded) => {
+    void loadQueue().then((loaded) => {
       if (!cancelled) setRows(loaded);
     });
     return () => {
