@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Storefront } from "@phosphor-icons/react";
+import { ArrowLeft, CaretLeft, CaretRight, Storefront } from "@phosphor-icons/react";
 import type { Session } from "@supabase/supabase-js";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
@@ -24,6 +24,7 @@ import {
 } from "@/components/business/business-fields";
 import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 /**
  * Step 9, Phase 3: create-branch form. Field-list JSX now lives in the
@@ -54,6 +55,14 @@ import { usePageTitle } from "@/lib/page-title";
  * below, same fetchActiveCategories-on-mount shape admin-business-
  * detail.tsx's own Phase 4.2 effect already uses, and both call sites now
  * pass it through.
+ *
+ * Desktop create form: from md up, "List your business" is the same three
+ * step form the admin business review page uses (admin-business-detail.tsx,
+ * itself modeled on admin-place-detail.tsx): Business, Location, then Rules
+ * and story, with a "Step N of 3" row, Back/Next, and a "Required to
+ * continue" line. It reuses BusinessFields' existing `section` mode, so no
+ * field markup is duplicated. Below md the single scrolling form is
+ * unchanged. The edit form is unchanged on both.
  */
 
 // Shared with saved.tsx, trails.tsx, and profile.tsx's own page-local
@@ -372,10 +381,163 @@ function useVendorMetrics(businessId: string | undefined) {
   return { trails, trailsLoading, trailsError, items, itemsLoading, itemsError };
 }
 
+// Desktop create form, see the header note. Same three steps, labels, and
+// Back/Next shape as admin-business-detail.tsx.
+type CreateStep = 1 | 2 | 3;
+
+const CREATE_STEP_LABEL: Record<CreateStep, string> = {
+  1: "Business",
+  2: "Location",
+  3: "Rules and story",
+};
+
+const CREATE_STEP_SECTION = {
+  1: "business",
+  2: "location",
+  3: "story",
+} as const;
+
+function missingBusinessStepFields(form: BusinessFormState): string[] {
+  return [
+    !form.name.trim() && "Business Name",
+    !form.business_type.trim() && "Business Type",
+  ].filter(Boolean) as string[];
+}
+
+function missingLocationStepFields(form: BusinessFormState): string[] {
+  return [
+    !form.address.trim() && "Address",
+    (form.latitude === null || form.longitude === null) && "Map pin",
+  ].filter(Boolean) as string[];
+}
+
+function CreateBusinessStepper({
+  form,
+  onChange,
+  categories,
+  categoriesError,
+  creating,
+  createError,
+  onSubmit,
+  onCancel,
+}: Readonly<{
+  form: BusinessFormState;
+  onChange: <K extends keyof BusinessFormState>(key: K, value: BusinessFormState[K]) => void;
+  categories: BusinessCategory[];
+  categoriesError: string | null;
+  creating: boolean;
+  createError: string | null;
+  onSubmit: (e: FormEvent) => void;
+  onCancel: () => void;
+}>) {
+  const [step, setStep] = useState<CreateStep>(1);
+
+  // Step 3 has no required fields of its own.
+  const missingStep1 = missingBusinessStepFields(form);
+  const missingStep2 = missingLocationStepFields(form);
+  const canSubmit = missingStep1.length === 0 && missingStep2.length === 0 && !creating;
+
+  function handleFormSubmit(e: FormEvent) {
+    e.preventDefault();
+    // Enter inside a step 1 or 2 field means "Next", not save, or a later
+    // step would be skipped. The location picker's own Enter runs the
+    // address search and never reaches this handler.
+    if (step === 1) {
+      if (missingStep1.length === 0) setStep(2);
+      return;
+    }
+    if (step === 2) {
+      if (missingStep2.length === 0) setStep(3);
+      return;
+    }
+    if (!canSubmit) return;
+    onSubmit(e);
+  }
+
+  return (
+    <form onSubmit={handleFormSubmit} className="flex flex-col gap-6">
+      <BusinessFields
+        form={form}
+        onChange={onChange}
+        showRegisteredOrInformal
+        categories={categories}
+        categoriesError={categoriesError}
+        section={CREATE_STEP_SECTION[step]}
+        stepHeading={`Step ${step} of 3: ${CREATE_STEP_LABEL[step]}`}
+        className={step === 2 ? "min-h-[34rem]" : undefined}
+        addressPlaceholder="Type your address and press Enter to search"
+      />
+
+      {step === 1 && missingStep1.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Required to continue: {missingStep1.join(", ")}.
+        </p>
+      )}
+
+      {step === 2 && missingStep2.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Required to continue: {missingStep2.join(", ")}.
+        </p>
+      )}
+
+      {createError && <p className="text-sm text-destructive">{createError}</p>}
+
+      {/* The keys are load-bearing: Next (type="button") and the submit
+          button share a slot, and without keys React reuses the one DOM
+          button and flips its type mid-click, submitting the form. */}
+      <div className="flex justify-between gap-2">
+        {step === 1 ? (
+          <Button key="cancel" type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <Button
+            key="back"
+            type="button"
+            variant="outline"
+            onClick={() => setStep(step === 3 ? 2 : 1)}
+          >
+            <CaretLeft className="h-4 w-4" />
+            Back
+          </Button>
+        )}
+        {step === 1 && (
+          <Button
+            key="next-1"
+            type="button"
+            disabled={missingStep1.length > 0}
+            onClick={() => setStep(2)}
+          >
+            Next
+            <CaretRight className="h-4 w-4" />
+          </Button>
+        )}
+        {step === 2 && (
+          <Button
+            key="next-2"
+            type="button"
+            disabled={missingStep2.length > 0}
+            onClick={() => setStep(3)}
+          >
+            Next
+            <CaretRight className="h-4 w-4" />
+          </Button>
+        )}
+        {step === 3 && (
+          <Button key="save" type="submit" disabled={!canSubmit}>
+            {creating ? "Listing…" : "List my business"}
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 export default function VendorDashboardPage() {
   const { session, loading } = useAuth();
   const { openAuth } = useAuthModal();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const { business, setBusiness, checking, setChecking, checkError } = useOwnBusiness(session);
   const { trails, trailsLoading, trailsError, items, itemsLoading, itemsError } =
@@ -598,7 +760,7 @@ export default function VendorDashboardPage() {
   }
 
   return (
-    <PageContainer width="narrow">
+    <PageContainer width={isMobile ? "narrow" : "wide"}>
       {/* Back button: this screen is reached from Profile's "List your
           business" row (profile.tsx), the same navigate(-1)/ArrowLeft/
           ghost-icon pattern every other detail page (discover-place-
@@ -618,25 +780,38 @@ export default function VendorDashboardPage() {
         <h1 className="text-xl font-semibold text-foreground">List your business</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <BusinessFields
+      {isMobile ? (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <BusinessFields
+            form={form}
+            onChange={updateField}
+            requiredMarkers
+            addressPlaceholder="Type your address and press Enter to search"
+            showRegisteredOrInformal
+            categories={categories}
+            categoriesError={categoriesError}
+          />
+
+          {createError && <p className="text-base text-destructive">{createError}</p>}
+
+          <p className="text-xs text-muted-foreground">* Required</p>
+
+          <Button type="submit" disabled={!canSubmit}>
+            {creating ? "Listing…" : "List my business"}
+          </Button>
+        </form>
+      ) : (
+        <CreateBusinessStepper
           form={form}
           onChange={updateField}
-          requiredMarkers
-          addressPlaceholder="Type your address and press Enter to search"
-          showRegisteredOrInformal
           categories={categories}
           categoriesError={categoriesError}
+          creating={creating}
+          createError={createError}
+          onSubmit={handleSubmit}
+          onCancel={() => navigate(-1)}
         />
-
-        {createError && <p className="text-base text-destructive">{createError}</p>}
-
-        <p className="text-xs text-muted-foreground">* Required</p>
-
-        <Button type="submit" disabled={!canSubmit}>
-          {creating ? "Listing…" : "List my business"}
-        </Button>
-      </form>
+      )}
     </PageContainer>
   );
 }
