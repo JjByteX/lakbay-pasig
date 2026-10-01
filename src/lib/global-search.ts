@@ -181,34 +181,72 @@ async function searchEvents(q: string): Promise<SearchEventHit[]> {
 
 async function searchItems(q: string): Promise<SearchItemHit[]> {
   // business_items_select_own and business_items_write_staff (0004) let an
-  // owner or staff read an unverified store's items, so the status filter is
-  // repeated here, same as searchEvents repeats published = true.
-  // search_items (0042) applies the same two statuses inside the function so
-  // the row cap counts only shown rows, and returns rows already ordered:
-  // best match first, then name, then price low to high, unpriced last.
+  // owner or staff read an unverified store's items, so the status rule is
+  // applied here too, same as searchEvents repeats published = true.
+  // search_items (0042) applies verified/pending inside the function so the
+  // row cap counts only shown rows, and returns rows already ordered: best
+  // match first, then name, then price low to high, unpriced last.
+  //
+  // The RPC is asked for plain item columns only. Chaining an embed filter
+  // (businesses.verification_status), an !inner embed and a per-embed order
+  // and limit onto an .rpc() call made PostgREST answer 400, which the
+  // catch in searchEverything turned into "No results". The business and
+  // the first photo are now read with ordinary table queries instead, the
+  // same shape discover-business-detail.tsx already uses for items.
   const { data, error } = await supabase
     .rpc("search_items", { q, lim: ITEM_FETCH_LIMIT })
-    .in("businesses.verification_status", ["verified", "pending"])
-    .select(
-      "id, name, price, business_id, businesses!inner(name, verification_status), business_item_photos(photo_url)"
-    )
-    .order("sort_order", { referencedTable: "business_item_photos" })
-    .limit(1, { referencedTable: "business_item_photos" });
+    .select("id, name, price, business_id");
 
   if (error) throw error;
-  return (Array.isArray(data) ? data : []).map((row) => {
-    // The !inner embed can come back as an object or a one item array.
-    const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
-    return {
-      kind: "item" as const,
-      id: row.id,
-      name: row.name,
-      price: row.price,
-      photoUrl: row.business_item_photos?.[0]?.photo_url ?? null,
-      businessId: row.business_id,
-      businessName: business.name,
-      verification_status: business.verification_status as "verified" | "pending",
-    };
+  const rows = Array.isArray(data) ? data : [];
+  if (rows.length === 0) return [];
+
+  const itemIds = rows.map((row) => row.id);
+  const businessIds = [...new Set(rows.map((row) => row.business_id))];
+
+  const [businessesRes, photosRes] = await Promise.all([
+    supabase
+      .from("businesses")
+      .select("id, name, verification_status")
+      .in("id", businessIds)
+      .in("verification_status", ["verified", "pending"]),
+    supabase
+      .from("business_item_photos")
+      .select("item_id, photo_url, sort_order")
+      .in("item_id", itemIds)
+      .order("sort_order", { ascending: true }),
+  ]);
+
+  if (businessesRes.error) throw businessesRes.error;
+  // A photo failure should not hide the item, so photos are best effort.
+  const photos = photosRes.error ? [] : (photosRes.data ?? []);
+
+  const businessById = new Map(
+    (businessesRes.data ?? []).map((business) => [business.id, business])
+  );
+  // Photos arrive sorted by sort_order, so the first one seen per item wins.
+  const photoByItem = new Map<string, string>();
+  for (const photo of photos) {
+    if (!photoByItem.has(photo.item_id)) photoByItem.set(photo.item_id, photo.photo_url);
+  }
+
+  // Row order from search_items is kept; an item whose store is not
+  // verified or pending (or not readable) drops out.
+  return rows.flatMap((row) => {
+    const business = businessById.get(row.business_id);
+    if (!business) return [];
+    return [
+      {
+        kind: "item" as const,
+        id: row.id,
+        name: row.name,
+        price: row.price,
+        photoUrl: photoByItem.get(row.id) ?? null,
+        businessId: row.business_id,
+        businessName: business.name,
+        verification_status: business.verification_status as "verified" | "pending",
+      },
+    ];
   });
 }
 
