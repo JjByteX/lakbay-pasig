@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
@@ -458,7 +459,14 @@ export default function DiscoverPage() {
   // there unchanged; nothing here duplicates it.
 
   return (
-    <div className="relative h-full w-full">
+    // data-swipe-owner (map view only): on mobile this page lives inside the
+    // swipe pager (page-pager.tsx). MapLibre pans with the finger, so the map
+    // keeps horizontal drags to itself; the list view has no sideways gesture,
+    // so a swipe there still moves between pages.
+    <div
+      className="relative h-full w-full"
+      data-swipe-owner={view === "map" ? "" : undefined}
+    >
       {/* Phase 4.1's full-bleed, no-card-wrapper rule applies to the map
           only; the list is ordinary scrollable page content, so only the
           map branch keeps the unconstrained h-full/w-full wrapper. This
@@ -527,7 +535,10 @@ export default function DiscoverPage() {
           renders inside DiscoverMap instead (props passed above), not
           here, since it needs the map's coordinate space, not the
           viewport's. */}
-      {isMobile && directionsPanelResult && (
+      {/* Portaled to <body>: the panel is viewport-fixed, but inside the
+          pager's transformed track a fixed element is positioned against
+          the (multi-page-wide) track instead of the screen. */}
+      {isMobile && directionsPanelResult && createPortal(
         <DirectionsPanel
           result={directionsPanelResult}
           selectedMode={selectedMode}
@@ -543,7 +554,8 @@ export default function DiscoverPage() {
           onPickOnMap={handlePickFromOnMap}
           pickingOnMap={pickingOnMap}
           onCancelPickOnMap={handleCancelPickOnMap}
-        />
+        />,
+        document.body,
       )}
     </div>
   );

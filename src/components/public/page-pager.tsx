@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Compass } from "@phosphor-icons/react";
 import { EntryGate } from "@/lib/entry-gate";
 import { setPageTitle } from "@/lib/page-title";
 import TrailsPage from "@/pages/trails";
+import DiscoverPage from "@/pages/discover";
 import SavedPage from "@/pages/saved";
 
 /**
- * Mobile swipe-to-switch-pages for Home, Trails and Saved (Discover is not
- * part of the swipe order). Rendered by MobileShell in place of <Outlet />
- * on exactly these three routes; every other route still renders through
- * the Outlet as before.
+ * Mobile swipe-to-switch-pages for Home, Trails, Discover and Saved, in the
+ * same left-to-right order as the bottom nav, so swiping from Trails lands
+ * on Discover instead of skipping past it. Rendered by MobileShell in place
+ * of <Outlet /> on exactly these four routes; every other route still
+ * renders through the Outlet as before.
+ *
+ * Discover is the one pane that is NOT kept alive. It registers its filter
+ * panel with the shell header and owns a live map, so it mounts only while
+ * it is the current page and unmounts when you leave (exactly as it did
+ * before the pager); a drag toward it shows a light placeholder instead of
+ * mounting the map mid-gesture. On Discover's map view the map owns the
+ * swipe (data-swipe-owner, set in discover.tsx), so there is no page swipe
+ * over the map; the list view and the bottom nav still move between pages.
  *
  * Remembering: each page lives in its own pane with its own vertical
  * scroller, and a pane stays mounted once it has been shown, so scroll
@@ -33,10 +44,12 @@ import SavedPage from "@/pages/saved";
  * No looping: Home and Saved are hard stops with a rubber-band.
  */
 
-const PANES = [EntryGate, TrailsPage, SavedPage] as const;
-const PATHS = ["/", "/trails", "/saved"] as const;
-const TITLES = [null, "Trails", "Saved"] as const;
+const PANES = [EntryGate, TrailsPage, DiscoverPage, SavedPage] as const;
+const PATHS = ["/", "/trails", "/discover", "/saved"] as const;
+const TITLES = [null, "Trails", "Discover", "Saved"] as const;
 const LAST = PANES.length - 1;
+// Mounted only while current (see the doc comment above).
+const DISCOVER = 2;
 
 // Marker for a component that handles its own horizontal touch but that the
 // detection below can't see.
@@ -102,7 +115,7 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
   indexRef.current = index;
 
   const [mounted, setMounted] = useState<number[]>([index]);
-  const isMounted = (i: number) => i === index || mounted.includes(i);
+  const isMounted = (i: number) => i === index || (i !== DISCOVER && mounted.includes(i));
 
   // Title follows the visible page. Runs after child effects in the same
   // commit, so a pane mounted early by a drag that then cancels can't leave
@@ -168,7 +181,7 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
       const dir = dx < 0 ? 1 : -1;
       if (dir !== gesture.revealed) {
         gesture.revealed = dir;
-        if (i + dir >= 0 && i + dir <= LAST) {
+        if (i + dir >= 0 && i + dir <= LAST && i + dir !== DISCOVER) {
           setMounted((prev) => (prev.includes(i + dir) ? prev : [...prev, i + dir]));
         }
       }
@@ -213,8 +226,8 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
     <div ref={viewportRef} className="h-full w-full overflow-hidden">
       <div
         ref={trackRef}
-        className="flex h-full w-[300%] transition-transform duration-300 ease-out motion-reduce:transition-none"
-        style={{ transform: restingTransform(index) }}
+        className="flex h-full transition-transform duration-300 ease-out motion-reduce:transition-none"
+        style={{ width: `${PANES.length * 100}%`, transform: restingTransform(index) }}
       >
         {PANES.map((Pane, i) => (
           <div
@@ -226,9 +239,16 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
               // property because React 18 has no inert prop.
               if (el) el.inert = i !== index;
             }}
-            className="h-full w-1/3 shrink-0 overflow-y-auto [scrollbar-gutter:stable]"
+            className="h-full shrink-0 overflow-y-auto [scrollbar-gutter:stable]"
+            style={{ width: `${100 / PANES.length}%` }}
           >
-            {isMounted(i) ? <Pane /> : null}
+            {isMounted(i) ? (
+              <Pane />
+            ) : i === DISCOVER ? (
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                <Compass weight="bold" className="h-8 w-8" aria-hidden="true" />
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
