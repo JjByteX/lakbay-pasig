@@ -76,9 +76,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Pinned, not latest: setup-cli v1 resolves latest through the GitHub
+      # API without a token, and shared runners hit its rate limit. A fixed
+      # version downloads directly with no lookup. Bump it by hand.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.119.0
 
       # Spins up a throwaway local Postgres in Docker and applies every file
       # in supabase/migrations against it, in order. This never touches the
@@ -101,9 +104,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Pinned, not latest: setup-cli v1 resolves latest through the GitHub
+      # API without a token, and shared runners hit its rate limit. A fixed
+      # version downloads directly with no lookup. Bump it by hand.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.119.0
 
       - name: Link project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
