@@ -1,78 +1,89 @@
-/* Lakbay Pasig brand tokens, extracted directly from the logo pixels */
-/* Red   #D90C18  -> hsl(356 90% 45%) */
-/* Navy  #072E57  -> hsl(211 85% 18%) */
-/* Blue  #0275D7  -> hsl(208 98% 43%) */
-/* Cream #FCFCF8  -> hsl(60 40% 98%) */
+/* Pasig City brand tokens, taken from pasigcity.gov.ph (CATO branding) */
+/* Navy   #003067 -> hsl(212 100% 20%) */
+/* Blue   #1175BE -> hsl(205 84% 41%)  primary, passes 4.5:1 with white */
+/* Blue   #007BFF -> hsl(211 100% 50%) ring */
+/* Red    #DD0000 -> hsl(0 100% 43%) */
+/* Brick  #A24C43 -> hsl(6 41% 45%) */
+/* Text   #212529 -> hsl(210 11% 15%) */
+/* Page   #F8F9FA -> hsl(210 17% 98%) */
+/* Dark mode is not in the Pasig palette; its surfaces are navy #003067 */
+/* hue and saturation at lower lightness. Dark red is #CC5555 lifted to */
+/* 66% lightness so text on it clears 4.5:1. */
 
 @layer base {
   :root {
-    --background: 60 40% 98%;        /* cream */
-    --foreground: 211 85% 18%;       /* navy, primary text */
+    --background: 210 17% 98%;
+    --foreground: 210 11% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 211 85% 18%;
+    --card-foreground: 210 11% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 211 85% 18%;
+    --popover-foreground: 210 11% 15%;
 
-    --primary: 208 98% 43%;          /* blue, main interactive color */
-    --primary-foreground: 60 40% 98%;
+    --primary: 205 84% 41%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 211 85% 18%;        /* navy, secondary actions, CATO admin accents */
-    --secondary-foreground: 60 40% 98%;
+    --secondary: 212 100% 20%;
+    --secondary-foreground: 0 0% 100%;
 
-    --destructive: 356 90% 45%;      /* red, reserve for reject/delete/alerts, matches logo red */
-    --destructive-foreground: 60 40% 98%;
+    --destructive: 0 100% 43%;
+    --destructive-foreground: 0 0% 100%;
 
-    --accent: 356 90% 45% / 0.1;     /* faint red tint for Featured badges, highlights */
-    --accent-foreground: 356 90% 45%;
+    --accent: 6 41% 45% / 0.1;
+    --accent-foreground: 6 41% 45%;
 
-    --muted: 60 10% 94%;
-    --muted-foreground: 211 30% 40%;
+    --muted: 210 16% 93%;
+    --muted-foreground: 165 2% 39%;
 
-    --border: 211 20% 88%;
-    --input: 211 20% 88%;
-    --ring: 208 98% 43%;
+    --border: 210 14% 83%;
+    --input: 210 14% 83%;
+    --ring: 211 100% 50%;
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 211 85% 10%;
-    --foreground: 60 40% 98%;
+    --background: 212 100% 8%;
+    --foreground: 210 17% 98%;
 
-    --card: 211 85% 14%;
-    --card-foreground: 60 40% 98%;
+    --card: 212 100% 12%;
+    --card-foreground: 210 17% 98%;
 
-    --popover: 211 85% 14%;
-    --popover-foreground: 60 40% 98%;
+    --popover: 212 100% 12%;
+    --popover-foreground: 210 17% 98%;
 
-    --primary: 208 98% 55%;
-    --primary-foreground: 211 85% 10%;
+    --primary: 207 88% 50%;
+    --primary-foreground: 212 100% 8%;
 
-    --secondary: 211 40% 25%;
-    --secondary-foreground: 60 40% 98%;
+    --secondary: 212 100% 20%;
+    --secondary-foreground: 210 17% 98%;
 
-    --destructive: 356 80% 55%;
-    --destructive-foreground: 60 40% 98%;
+    --destructive: 0 54% 66%;
+    --destructive-foreground: 212 100% 8%;
 
-    --muted: 211 40% 20%;
-    --muted-foreground: 211 20% 70%;
+    --accent: 0 54% 66% / 0.15;
+    --accent-foreground: 0 54% 66%;
 
-    --border: 211 40% 22%;
-    --input: 211 40% 22%;
-    --ring: 208 98% 55%;
+    --muted: 212 100% 16%;
+    --muted-foreground: 210 14% 83%;
+
+    --border: 212 60% 24%;
+    --input: 212 60% 24%;
+    --ring: 207 88% 50%;
   }
 }
 
 /*
 Usage notes:
-- Red is scarce on purpose in the logo (just the wordmark). Keep it reserved
-  for destructive actions, alerts, and Featured-status badges. Don't use it
-  as a general accent or it stops meaning "important."
+- Red (#DD0000) is reserved for destructive actions and alerts. Brick
+  (#A24C43) tints Featured-status badges. Don't use either as a general
+  accent or it stops meaning "important."
 - Blue is the workhorse interactive color: buttons, links, active nav state.
-- Navy carries text weight and CATO Admin Panel chrome, it reads as
-  institutional and matches the landmark illustrations.
-- Cream stays the base background across both public app and admin panel,
-  it's warmer than shadcn's default white/zinc and ties back to the logo.
+  Primary is #1175BE because white text on #007BFF is 3.98:1 and fails 4.5:1;
+  #007BFF is kept for the focus ring.
+- Navy carries CATO Admin Panel chrome and secondary actions, it reads as
+  institutional.
+- #F8F9FA stays the base background across both public app and admin panel;
+  cards sit on it in white.
 */

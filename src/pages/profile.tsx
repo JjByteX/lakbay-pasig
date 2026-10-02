@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Storefront, Gear as SettingsIcon } from "@phosphor-icons/react";
+import { Storefront } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { supabase } from "@/lib/supabase";
@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
-import { SignOutDialog } from "@/components/sign-out-dialog";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { CharCount } from "@/components/business/business-fields";
 import { PageContainer } from "@/components/public/page-container";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
@@ -61,15 +61,12 @@ export default function ProfilePage() {
   usePageTitle("Profile");
   const { session, profile, loading, refreshProfile } = useAuth();
   const { openAuth } = useAuthModal();
-
-  // Log-out confirmation: this button no longer calls signOut directly,
-  // it opens SignOutDialog, which owns the actual signOut() call. See
-  // sign-out-dialog.tsx.
-  const [signOutOpen, setSignOutOpen] = useState(false);
+  // Two states, same split vendor-dashboard.tsx uses: mobile keeps the single
+  // stacked column, desktop gets a two-column form card.
+  const isMobile = useIsMobile();
 
   const [displayName, setDisplayName] = useState("");
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
-  const [contactNumber, setContactNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
 
@@ -91,7 +88,6 @@ export default function ProfilePage() {
     if (!profile) return;
     setDisplayName(profile.display_name ?? "");
     setProfilePicture(profile.profile_picture ?? null);
-    setContactNumber(profile.contact_number ?? "");
     setDateOfBirth(profile.date_of_birth ?? "");
     setPreferredCategories(profile.preferred_categories ?? []);
   }, [profile]);
@@ -113,7 +109,7 @@ export default function ProfilePage() {
 
   if (!session) {
     return (
-      <PageContainer width="narrow" className="items-start gap-4 py-10">
+      <PageContainer width="form" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Profile</h1>
         <p className="text-base text-muted-foreground">
           Sign in to view and edit your account.
@@ -129,15 +125,10 @@ export default function ProfilePage() {
     );
   }
 
-  // admin-form-fields-plan.md #3: contact number constrained to digits,
-  // sensible length range. Same treatment as admin-staff-detail.tsx's own
-  // updateContactNumber -- PH mobile numbers are 11 digits (09XXXXXXXXX),
-  // capped a little above that (15) to also allow a leading country code
-  // like +63 typed as digits, without accepting arbitrary free text.
-  function updateContactNumber(raw: string) {
-    setContactNumber(raw.replace(/\D/g, "").slice(0, 15));
-  }
-
+  // Contact Number is no longer edited here: it lives only in Settings >
+  // Account (one label, one place), and is deliberately absent from this
+  // payload so a save here can never overwrite it with a stale copy.
+  //
   // 4.4: explicit allow list, not the form state spread wholesale. RLS
   // (profiles_update_own, migration 0001) guards the row, not columns --
   // role, staff_role, active_status, position, and system_permission must
@@ -152,7 +143,6 @@ export default function ProfilePage() {
 
     const payload = {
       display_name: displayName.trim() || null,
-      contact_number: contactNumber.trim() || null,
       date_of_birth: dateOfBirth || null,
       preferred_categories: preferredCategories.length > 0 ? preferredCategories : null,
     };
@@ -194,102 +184,77 @@ export default function ProfilePage() {
     await refreshProfile();
   }
 
-  return (
-    <PageContainer width="narrow">
-      <h1 className="text-xl font-semibold text-foreground">Profile</h1>
+  const avatarUpload = (
+    <AvatarUpload
+      ownerId={session.user.id}
+      displayName={displayName}
+      currentUrl={profilePicture}
+      onChange={handleAvatarChange}
+    />
+  );
 
-      {/* Phase 6.4-6.7: outside the form below since it saves immediately
-          on its own (handleAvatarChange), not gated behind the form's
-          separate Save changes button -- same reasoning place photos
-          save independently of admin-place-detail.tsx's own form Save. */}
-      <AvatarUpload
-        ownerId={session.user.id}
-        displayName={displayName}
-        currentUrl={profilePicture}
-        onChange={handleAvatarChange}
+  const displayNameField = (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="display_name">Display Name</Label>
+      <Input
+        id="display_name"
+        value={displayName}
+        onChange={(e) => setDisplayName(e.target.value)}
+        maxLength={150}
       />
+      <CharCount value={displayName} max={150} />
+    </div>
+  );
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="display_name">Display Name</Label>
-            <Input
-              id="display_name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              maxLength={150}
-            />
-            <CharCount value={displayName} max={150} />
-          </div>
+  const emailField = (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="email">Email</Label>
+      <Input id="email" value={session.user.email ?? ""} readOnly disabled />
+    </div>
+  );
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" value={session.user.email ?? ""} readOnly disabled />
-          </div>
+  const dateOfBirthField = (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="date_of_birth">Date of Birth</Label>
+      <DateField id="date_of_birth" value={dateOfBirth} onChange={setDateOfBirth} />
+    </div>
+  );
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="contact_number">Contact Number</Label>
-            <Input
-              id="contact_number"
-              type="tel"
-              inputMode="numeric"
-              value={contactNumber}
-              onChange={(e) => updateContactNumber(e.target.value)}
-              maxLength={15}
-            />
-          </div>
+  const categoriesField = (
+    <div className="flex flex-col gap-2">
+      <Label>Preferred Categories</Label>
+      <div className="flex flex-wrap gap-2">
+        {CATEGORIES.map((category) => {
+          const active = preferredCategories.includes(category);
+          return (
+            <Button
+              key={category}
+              type="button"
+              variant={active ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleCategory(category)}
+            >
+              {category}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="date_of_birth">Date of Birth</Label>
-            <DateField id="date_of_birth" value={dateOfBirth} onChange={setDateOfBirth} />
-          </div>
+  const saveErrorText = saveError && <p className="text-base text-destructive">{saveError}</p>;
 
-          <div className="flex flex-col gap-2">
-            <Label>Preferred Categories</Label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((category) => {
-                const active = preferredCategories.includes(category);
-                return (
-                  <Button
-                    key={category}
-                    type="button"
-                    variant={active ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => toggleCategory(category)}
-                  >
-                    {category}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-
-          {saveError && <p className="text-base text-destructive">{saveError}</p>}
-        </div>
-
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save changes"}
-        </Button>
-      </form>
-
-      {/* 4.5: no row found is a valid, common outcome, not surfaced as an
-          error -- only a real query failure sets vendorError. Step 9,
-          Phase 2.2: the has-a-business branch below is unchanged from
-          Step 8; this adds the missing no-business-yet branch, since
-          before this step a Registered User with no listing saw nothing
-          here at all, no way to reach /vendor in the first place. One
-          entry point either way, never both at once (vendorBusiness is
-          exclusively one or the other), per ux-ui-guidelines.md's "one
-          label, one place" rule. */}
+  // 4.5: no row found is a valid, common outcome, not surfaced as an
+  // error -- only a real query failure sets vendorError. Step 9,
+  // Phase 2.2: one entry point either way, never both at once
+  // (vendorBusiness is exclusively one or the other), per ux-ui-
+  // guidelines.md's "one label, one place" rule. businesses.name has no
+  // length cap, so the icon is shrink-0 and the name wraps inside a
+  // min-w-0 span instead of overflowing at a 320px viewport.
+  const vendorEntry = (
+    <>
       {vendorError && <p className="text-base text-destructive">{vendorError}</p>}
       {vendorBusiness && (
-        // Phase 6.5 fix: businesses.name (migration 0004) has no length
-        // cap, same unbounded-text risk completed-trail-row.tsx's
-        // credential badge already had before its own max-w-full
-        // break-words fix. Store icon gets shrink-0 so a long name
-        // can't compress it, and the name itself wraps inside a min-w-0
-        // span instead of overflowing the row's fixed-width border/
-        // padding at a 320px viewport.
         <Link
           to="/vendor"
           className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
@@ -307,32 +272,67 @@ export default function ProfilePage() {
           <span>List your business</span>
         </Link>
       )}
+    </>
+  );
 
-      {/* Settings: Personalization, Phase 2.4: same visual pattern as the
-          vendor entry rows above (icon plus label, one tap target), not a
-          second Profile-page section competing with account info in the
-          same card -- per ux-ui-guidelines.md's Card fragmentation rule,
-          Settings is its own concern, not a field group bolted onto the
-          account-info card. Icon and "Settings" label together per Phase
-          2.5 and the Icon Rules -- gear is not one of the icons exempt
-          from a visible label. */}
-      <Link
-        to="/profile/settings"
-        className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
-      >
-        <SettingsIcon className="h-4 w-4 shrink-0" />
-        <span>Settings</span>
-      </Link>
+  // Mobile state: single stacked column. profile_picture saves immediately
+  // on its own (handleAvatarChange), so the avatar sits outside the form.
+  if (isMobile) {
+    return (
+      <PageContainer width="form">
+        <h1 className="text-xl font-semibold text-foreground">Profile</h1>
 
-      {/* 4.6: sign out lives here now, same signOut function home.tsx
-          currently calls (removed from that page in Phase 5). Now opens
-          SignOutDialog for a confirmation step instead of calling
-          signOut directly. */}
-      <Button variant="secondary" onClick={() => setSignOutOpen(true)} className="w-fit">
-        Sign out
-      </Button>
+        {avatarUpload}
 
-      <SignOutDialog open={signOutOpen} onOpenChange={setSignOutOpen} />
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+            {displayNameField}
+            {emailField}
+            {dateOfBirthField}
+            {categoriesField}
+            {saveErrorText}
+          </div>
+
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving..." : "Save changes"}
+          </Button>
+        </form>
+
+        {vendorEntry}
+      </PageContainer>
+    );
+  }
+
+  // Desktop state: avatar in its own card, then a two-column form card
+  // (identity on the left, date of birth and categories on the right) with
+  // Save right-aligned under it.
+  return (
+    <PageContainer width="form">
+      <h1 className="text-xl font-semibold text-foreground">Profile</h1>
+
+      <div className="rounded-lg border border-border bg-card p-4">{avatarUpload}</div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="flex flex-col gap-4">
+              {displayNameField}
+              {emailField}
+            </div>
+            <div className="flex flex-col gap-4">
+              {dateOfBirthField}
+              {categoriesField}
+            </div>
+          </div>
+          {saveErrorText}
+        </div>
+
+        <Button type="submit" disabled={saving} className="self-end">
+          {saving ? "Saving..." : "Save changes"}
+        </Button>
+      </form>
+
+      {vendorEntry}
     </PageContainer>
   );
 }

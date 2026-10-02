@@ -2,7 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Storefront, Flag, Eye, CheckCircle, XCircle, Star } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
+import { bulkReviewBusinesses, type BulkBusinessAction } from "@/lib/bulk-review";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BulkActionBar } from "@/components/admin/bulk-action-bar";
+import { CharCount } from "@/components/business/business-fields";
 import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
@@ -66,14 +81,56 @@ interface BusinessRow extends PrioritizedBusiness {
   featured_status: "listed" | "featured";
 }
 
+// What each bulk action applies to, and its wording. Verify/Reject only make
+// sense for pending businesses; Feature/Unfeature for the other featured
+// state. Selected rows that don't qualify are skipped, and the dialog says so.
+const BULK_ACTIONS: Record<
+  BulkBusinessAction,
+  { title: string; verb: string; appliesTo: (b: BusinessRow) => boolean; blurb: string }
+> = {
+  verify: {
+    title: "Verify",
+    verb: "Verify",
+    appliesTo: (b) => b.verificationStatus === "pending",
+    blurb: "Each business will be marked verified and visible to the public.",
+  },
+  reject: {
+    title: "Reject",
+    verb: "Reject",
+    appliesTo: (b) => b.verificationStatus === "pending",
+    blurb: "Explain what needs to change. The same note is recorded on every business.",
+  },
+  feature: {
+    title: "Feature",
+    verb: "Feature",
+    appliesTo: (b) => b.featured_status !== "featured",
+    blurb: "Each business will be marked Featured.",
+  },
+  unfeature: {
+    title: "Unfeature",
+    verb: "Unfeature",
+    appliesTo: (b) => b.featured_status === "featured",
+    blurb: "Each business will go back to Listed.",
+  },
+};
+
 export default function AdminBusinessesPage() {
   usePageTitle("Businesses");
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [businesses, setBusinesses] = useState<BusinessRow[] | null>(null);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("all");
   const [featuredFilter, setFeaturedFilter] = useState<(typeof FEATURED_OPTIONS)[number]>("all");
+
+  // Bulk actions: checked ids (AdminDataTable's `selection`, remembered
+  // across table pages and filters), and the confirm dialog the bar opens.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkAction, setBulkAction] = useState<BulkBusinessAction | null>(null);
+  const [bulkNotes, setBulkNotes] = useState("");
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +214,56 @@ export default function AdminBusinessesPage() {
     });
   }, [businesses, search, statusFilter, featuredFilter]);
 
+  // Selection survives filtering, so some checked rows can be out of view.
+  // A bulk action still reaches every checked row it applies to, so say how
+  // many are hidden.
+  const visibleIds = new Set(filtered.map((b) => b.id));
+  const hiddenSelected = [...selectedIds].filter((id) => !visibleIds.has(id)).length;
+  const selectedRows = (businesses ?? []).filter((b) => selectedIds.has(b.id));
+  const countFor = (action: BulkBusinessAction) =>
+    selectedRows.filter(BULK_ACTIONS[action].appliesTo).length;
+
+  function openBulkDialog(action: BulkBusinessAction) {
+    setBulkAction(action);
+    setBulkNotes("");
+    setBulkError(null);
+  }
+
+  async function handleBulkSubmit() {
+    if (!bulkAction || !profile) return;
+    const targets = selectedRows.filter(BULK_ACTIONS[bulkAction].appliesTo);
+    setBulkSubmitting(true);
+    setBulkError(null);
+    try {
+      await bulkReviewBusinesses({
+        action: bulkAction,
+        notes: bulkNotes,
+        staffId: profile.id,
+        ids: targets.map((b) => b.id),
+      });
+      const done = new Set(targets.map((b) => b.id));
+      setBusinesses((prev) =>
+        (prev ?? []).map((b) => {
+          if (!done.has(b.id)) return b;
+          if (bulkAction === "verify") return { ...b, verificationStatus: "verified" };
+          if (bulkAction === "reject") return { ...b, verificationStatus: "unverified" };
+          return { ...b, featured_status: bulkAction === "feature" ? "featured" : "listed" };
+        })
+      );
+      setSelectedIds(new Set());
+      setBulkAction(null);
+    } catch (err: unknown) {
+      setBulkError(err instanceof Error ? err.message : "Could not save the changes.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
+
+  const bulkTargetCount = bulkAction ? countFor(bulkAction) : 0;
+  const bulkSkipped = selectedIds.size - bulkTargetCount;
+  let bulkSubmitLabel = bulkAction ? BULK_ACTIONS[bulkAction].verb : "";
+  if (bulkSubmitting) bulkSubmitLabel = "Submitting…";
+
   const columns: AdminColumn<BusinessRow>[] = [
     {
       key: "name",
@@ -226,7 +333,7 @@ export default function AdminBusinessesPage() {
   ];
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-6">
+    <div className="relative flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Businesses</h1>
       </div>
@@ -237,6 +344,7 @@ export default function AdminBusinessesPage() {
         loading={businesses === null}
         keyField="id"
         autoPageSize
+        selection={{ selectedIds, onChange: setSelectedIds }}
         emptyIcon={Storefront}
         empty={businesses && businesses.length > 0 ? "Matching businesses will appear here." : "Businesses will appear here."}
         toolbar={
@@ -269,6 +377,102 @@ export default function AdminBusinessesPage() {
           </AdminFilterBar>
         }
       />
+
+      <BulkActionBar
+        count={selectedIds.size}
+        detail={hiddenSelected > 0 ? `${hiddenSelected} hidden by filters` : undefined}
+        onClear={() => setSelectedIds(new Set())}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          disabled={countFor("reject") === 0}
+          onClick={() => openBulkDialog("reject")}
+        >
+          <XCircle className="h-4 w-4" />
+          Reject ({countFor("reject")})
+        </Button>
+        <Button
+          size="sm"
+          className="gap-1"
+          disabled={countFor("verify") === 0}
+          onClick={() => openBulkDialog("verify")}
+        >
+          <CheckCircle className="h-4 w-4" />
+          Verify ({countFor("verify")})
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          disabled={countFor("feature") === 0}
+          onClick={() => openBulkDialog("feature")}
+        >
+          <Star className="h-4 w-4" />
+          Feature ({countFor("feature")})
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          disabled={countFor("unfeature") === 0}
+          onClick={() => openBulkDialog("unfeature")}
+        >
+          <Star weight="fill" className="h-4 w-4" />
+          Unfeature ({countFor("unfeature")})
+        </Button>
+      </BulkActionBar>
+
+      <Dialog open={bulkAction !== null} onOpenChange={(open) => !open && !bulkSubmitting && setBulkAction(null)}>
+        <DialogContent>
+          {bulkAction && (
+            <DialogHeader>
+              <DialogTitle>
+                {BULK_ACTIONS[bulkAction].title} {bulkTargetCount}{" "}
+                {bulkTargetCount === 1 ? "business" : "businesses"}?
+              </DialogTitle>
+              <DialogDescription>
+                {BULK_ACTIONS[bulkAction].blurb}
+                {bulkSkipped > 0 &&
+                  ` ${bulkSkipped} of your ${selectedIds.size} selected ${
+                    bulkSkipped === 1 ? "doesn't" : "don't"
+                  } apply and will be left as is.`}
+              </DialogDescription>
+            </DialogHeader>
+          )}
+
+          {bulkAction === "reject" && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="bulk-review-notes">Review Notes</Label>
+              <Textarea
+                id="bulk-review-notes"
+                value={bulkNotes}
+                onChange={(e) => setBulkNotes(e.target.value)}
+                placeholder="Reason for rejection"
+                required
+                maxLength={1000}
+              />
+              <CharCount value={bulkNotes} max={1000} />
+            </div>
+          )}
+
+          {bulkError && <p className="text-sm text-destructive">{bulkError}</p>}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAction(null)} disabled={bulkSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant={bulkAction === "reject" ? "destructive" : "default"}
+              onClick={handleBulkSubmit}
+              disabled={bulkSubmitting || (bulkAction === "reject" && bulkNotes.trim().length === 0)}
+            >
+              {bulkSubmitLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

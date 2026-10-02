@@ -1,6 +1,23 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Envelope, Phone, MapPin, FacebookLogo, ArrowSquareOut, SealCheck } from "@phosphor-icons/react";
+import {
+  Envelope,
+  Phone,
+  MapPin,
+  FacebookLogo,
+  ArrowSquareOut,
+  SealCheck,
+  MapTrifold,
+  Storefront,
+  CalendarBlank,
+} from "@phosphor-icons/react";
+import {
+  MotionConfig,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from "motion/react";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -174,7 +191,7 @@ function NavAction() {
 
   return (
     <Button onClick={() => navigate(dashboardPath)} variant="secondary" size="sm">
-      Go to Dashboard
+      {isStaff ? "Go to Dashboard" : "Go to Home"}
     </Button>
   );
 }
@@ -244,7 +261,7 @@ function NavAction() {
 // page happens to be scrolled to the top.
 function LandingHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 grid h-16 grid-cols-[1fr_auto_1fr] items-center bg-card px-6 lg:px-12">
+    <header className="fixed inset-x-4 top-4 z-50 mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center rounded-full border border-border bg-card/70 px-5 backdrop-blur-md">
       <Link to="/welcome" className="flex items-center gap-2 justify-self-start">
         <img src={logo} alt="Lakbay Pasig" className="h-8 w-8" />
       </Link>
@@ -282,6 +299,141 @@ function LandingHeader() {
     </header>
   );
 }
+
+// The hero carousel starts slightly small and settles to full size as it
+// scrolls into view. No extra container around it.
+function HeroCarouselFrame({ slides }: Readonly<{ slides: LandingSlide[] }>) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "start 0.35"] });
+  const scale = useTransform(scrollYProgress, [0, 1], [0.88, 1]);
+  const y = useTransform(scrollYProgress, [0, 1], [48, 0]);
+  return (
+    <motion.div
+      ref={ref}
+      style={{ scale, y }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.9, delay: 0.85 }}
+      className="relative z-10 aspect-[16/10] w-full max-w-5xl overflow-hidden rounded-lg sm:aspect-[16/9]"
+    >
+      <HeroCarousel slides={slides} />
+    </motion.div>
+  );
+}
+
+// Landing motion helpers (framer-motion, via the `motion` package already
+// in the project). MotionConfig below honors the OS reduced-motion setting.
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+function Reveal({ children, delay = 0, className }: Readonly<{ children: ReactNode; delay?: number; className?: string }>) {
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.7, ease: EASE, delay }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// Word-by-word fade/blur reveal, ported from Qula's RevealWords
+// (work.tsx, used for the project modal text): every word is its own span
+// that fades in from 4px below while going from blur(3px) to sharp, each
+// one staggered a few milliseconds after the last. Qula plays it on mount
+// because it lives in a modal; here it plays once when the text scrolls
+// into view. The parent drives the children through variants, so the
+// stagger always starts from the moment the text becomes visible.
+function RevealWords({
+  text,
+  className,
+  wordDelay = 0.022,
+  duration = 0.4,
+}: Readonly<{ text: string; className?: string; wordDelay?: number; duration?: number }>) {
+  let wordIndex = 0;
+  return (
+    <motion.p
+      className={className}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, margin: "-80px" }}
+    >
+      {text.split(/(\s+)/).map((part, i) => {
+        if (!part.trim()) return part;
+        const delay = wordIndex * wordDelay;
+        wordIndex++;
+        return (
+          <motion.span
+            key={`${part}-${i}`}
+            className="inline-block"
+            style={{ whiteSpace: "pre" }}
+            variants={{
+              hidden: { opacity: 0, y: 4, filter: "blur(3px)" },
+              show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration, delay, ease: "easeOut" } },
+            }}
+          >
+            {part}
+          </motion.span>
+        );
+      })}
+    </motion.p>
+  );
+}
+
+// Scroll-driven section container. Only the panel behind the content
+// animates (scale and corner radius); the content on top never moves.
+// "enter": the panel starts inset with rounded corners and opens to full
+// width as it arrives. "exit": the panel shrinks and rounds off as it
+// scrolls away. The layer sits at -z-10 inside an isolated stacking
+// context, so children need no extra positioning.
+function ScrollPanel({
+  id,
+  mode,
+  bg,
+  layer,
+  className,
+  children,
+}: Readonly<{ id?: string; mode: "enter" | "exit"; bg: string; layer?: ReactNode; className?: string; children: ReactNode }>) {
+  const ref = useRef<HTMLElement>(null);
+  const reduceMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: mode === "enter" ? ["start end", "start 0.3"] : ["start start", "end start"],
+  });
+  const scale = useTransform(scrollYProgress, [0, 1], mode === "enter" ? [0.9, 1] : [1, 0.93]);
+  const borderRadius = useTransform(scrollYProgress, [0, 1], mode === "enter" ? [56, 0] : [0, 40]);
+  return (
+    <section ref={ref} id={id} className={`relative isolate ${className ?? ""}`}>
+      <motion.div
+        aria-hidden="true"
+        className={`absolute inset-0 -z-10 overflow-hidden ${bg}`}
+        style={reduceMotion ? undefined : { scale, borderRadius }}
+      >
+        {layer}
+      </motion.div>
+      {children}
+    </section>
+  );
+}
+
+function Tile({ className, delay = 0, children }: Readonly<{ className: string; delay?: number; children: ReactNode }>) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 40, scale: 0.96 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      whileHover={{ y: -4 }}
+      viewport={{ once: true, margin: "-60px" }}
+      transition={{ duration: 0.7, ease: EASE, delay }}
+      className={`flex flex-col gap-4 overflow-hidden rounded-[2rem] p-7 ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+const HEADLINE = ["Lakbay", "Pasig."];
 
 export default function LandingPage() {
   usePageTitle("Welcome");
@@ -409,180 +561,139 @@ export default function LandingPage() {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <div id="top" className="flex min-h-screen flex-col">
-      {/* Header now renders once here, fixed to the full viewport width
-          for the whole page (see LandingHeader's own top comment) --
-          pt-16 below matches its h-16 so the hero content underneath
-          doesn't start hidden beneath the fixed bar. */}
       <LandingHeader />
 
-      {/* Hero: Notion-style, single centered column, stacked top to
-          bottom -- headline, subtitle, CTAs, then the carousel BELOW
-          that text (not beside it). HeroLinesBackground is back, per
-          direct instruction ("the wave lines should be in the
-          background") -- now used as a full-bleed backdrop layer behind
-          the ENTIRE hero (headline through carousel), not scoped to a
-          left column like the old two-column version. It's an
-          absolutely-positioned `inset-0` layer inside this wrapper
-          (which is `relative overflow-hidden` for that to work), placed
-          first in source order and BEHIND the actual hero content, which
-          sits in its own `relative z-10` wrapper on top of it -- so the
-          lines read as a backdrop the copy and carousel sit over, never
-          on top of or interleaved with them. Unchanged internally:
-          still the same left-cluster-only, blue-tinted, bottom-left-
-          anchored artwork that component's own top comment documents;
-          only where it's mounted changed (full hero backdrop instead of
-          one half of a two-column split).
+      {/* Hero: centered title, subtitle and buttons, then the carousel,
+          which wakes up (scales in) as it scrolls into view. */}
+      <ScrollPanel
+        mode="exit"
+        bg="bg-card"
+        layer={<HeroLinesBackground />}
+        className="flex flex-col items-center gap-8 px-6 pb-16 pt-24 text-center lg:px-12 lg:pt-28"
+      >
 
-          Top padding: pt-24/pt-28, between the original two-column
-          version's pt-32/pt-40 (reported as too much gap above the
-          headline) and the very first trim to pt-20/pt-24 (reported as
-          cut too far back down) -- splitting the difference per direct
-          feedback on both directions rather than picking either extreme
-          again.
-
-          HeroCarousel: back to its earlier CONTAINED sizing (max-w-5xl,
-          centered, not full-bleed) -- direct instruction: "don't make
-          the picture bigger... I liked the size of it before." The
-          previous revision's full-bleed treatment (negative-margin
-          -mx-6/-mx-12 canceling this wrapper's own padding) was what
-          grew it edge-to-edge; that's reverted here. It still has no
-          border, rounded corners, or shadow (the still-standing "slap it
-          in the background, not a separate outlined/shadowed container"
-          instruction from the prior turn), it's just no longer
-          full-bleed-wide -- borderless/shadowless and max-w-5xl-
-          contained are two independent properties, and only the
-          full-bleed WIDTH was the regression here.
-
-          This wrapper's own bg-muted was later dropped too, per direct
-          feedback with a screenshot ("change the color so the container
-          behind the picture is gone") -- that gray/beige fill was a
-          second, literal panel sitting behind the carousel and its
-          caption/dots row, visually reading as its own boxed container
-          against the hero background, on top of (not the same thing as)
-          the wave-lines backdrop fixed the turn before. HeroCarousel's
-          own slides (hero-carousel.tsx) already paint their own bg-card
-          surface per slide, so this wrapper needed no fill of its own at
-          all -- removing bg-muted here doesn't leave a gap, it just
-          stops adding a second, redundant panel underneath.
-
-          Fourteenth direct instruction ("make the background of the
-          hero same background as the top bar color"): this wrapper now
-          carries bg-card explicitly, matching LandingHeader's own
-          bg-card (at the time, bg-card/80 -- the header added /80
-          opacity + backdrop-blur only because it floats fixed OVER this
-          hero as the page scrolls underneath it, while a flat section
-          fill like this one has nothing to blur or see through). Before
-          this, the hero had no background class of its own and
-          inherited bg-background from body (see index.css) -- a
-          different, slightly warmer off-white token than bg-card's pure
-          white in light mode (index.css: `--card: 0 0% 100%` vs
-          `--background: 60 40% 98%`), close enough to look like a
-          coincidental match at a glance but not the same color.
-
-          Fifteenth direct instruction ("nav and background color of
-          hero must be identical"): LandingHeader's own bg-card/80 +
-          backdrop-blur, mentioned above, is gone now too -- see that
-          component's own comment for why partial opacity can never be
-          IDENTICAL to a flat color once anything other than this exact
-          hero happens to be scrolled underneath it. Both this hero and
-          the header now use the exact same plain, fully opaque bg-card
-          class, so "identical" holds under every scroll position, not
-          only when the header happens to be sitting directly on top of
-          this section.
-          HeroLinesBackground's own root fill is updated to match (its
-          own file, see that component's comment on this same change)
-          so it continues to blend into whatever this section's real
-          background is, rather than the two drifting apart again. */}
-      <div className="relative flex flex-col items-center gap-10 overflow-hidden bg-card px-6 pb-16 pt-24 text-center lg:px-12 lg:pt-28">
-        <HeroLinesBackground />
-
-        <div className="relative z-10 flex max-w-2xl flex-col items-center gap-1">
-          <h1 className="text-4xl font-semibold text-foreground lg:text-5xl">
-            Lakbay Pasig.
-          </h1>
-          <p className="max-w-xl text-base text-muted-foreground lg:text-lg">
-            A thousand small moments in this city worth living for.
-            <br />
-            Places that mean more once you know their story.
-          </p>
+        <div className="relative z-10 flex max-w-3xl flex-col items-center gap-4">
+          <motion.h1
+            className="text-5xl font-semibold text-foreground lg:text-6xl"
+            initial="hidden"
+            animate="show"
+            variants={{ show: { transition: { staggerChildren: 0.14 } } }}
+          >
+            {HEADLINE.map((word) => (
+              <motion.span
+                key={word}
+                className="mr-[0.25em] inline-block last:mr-0"
+                variants={{ hidden: { opacity: 0, y: 48 }, show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: EASE } } }}
+              >
+                {word}
+              </motion.span>
+            ))}
+          </motion.h1>
+          <motion.p
+            className="max-w-xl text-base text-muted-foreground lg:text-xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: EASE, delay: 0.45 }}
+          >
+            Thousand moments in this city worth living for.
+          </motion.p>
         </div>
 
-        <div className="relative z-10 flex flex-col items-center gap-3 sm:flex-row">
-          <Button onClick={() => openAuth("signup")} size="lg" className="flex-1 sm:flex-none">
-            Get started
-          </Button>
-          <Button asChild variant="outline" size="lg" className="flex-1 sm:flex-none">
-            <Link to="/">Continue as Guest</Link>
-          </Button>
-        </div>
+        <motion.div
+          className="relative z-10 flex flex-col items-center gap-3 sm:flex-row"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: EASE, delay: 0.65 }}
+        >
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="w-full sm:w-auto">
+            <Button onClick={() => openAuth("signup")} size="lg" className="w-full sm:w-auto">
+              Get started
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="w-full sm:w-auto">
+            <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+              <Link to="/">Continue as Guest</Link>
+            </Button>
+          </motion.div>
+        </motion.div>
 
-        <div className="relative z-10 aspect-[16/10] w-full max-w-5xl overflow-hidden sm:aspect-[16/9]">
-          <HeroCarousel slides={heroSlides} />
-        </div>
-      </div>
+        <HeroCarouselFrame slides={heroSlides} />
+      </ScrollPanel>
 
-      {/* About: project-brief.md's own Problem/Goal lines as the base,
-          rewritten per the seventeenth direct instruction ("the about is
-          being too much and not what the app is about... some can have
-          not verified. I don't like comparison with others. I don't
-          like em dash"). Three fixes to the prior copy:
-          (1) "Every place, business, and trail... is verified by CATO"
-          overstated data-model.md's actual field -- Local Historical
-          Place and Local Business both carry a Verification Status of
-          Pending, Verified, or Unverified, reviewed per item by CATO
-          staff (Reviewed By), not a blanket claim that everything on
-          the platform is verified. Rewritten to describe the status
-          itself (checked by CATO, shown plainly) rather than assert a
-          universal state the data model doesn't support.
-          (2) No comparison to other platforms/competitors -- direct
-          instruction. Earlier drafts leaned on competitive-positioning.
-          md's "Google Maps shows X, this app shows Y" framing; that
-          framing is for a pitch deck, not this page, so it's dropped
-          here even though the source doc uses it.
-          (3) No em dashes, anywhere in this paragraph or its own
-          comment -- direct instruction, plain periods/commas throughout
-          instead.
-          Same page, own section, flat surface (bg-card) per the
-          no-gradient rule, 8px-grid spacing throughout. */}
-      <section id="about" className="scroll-mt-20 bg-card px-6 py-16 lg:px-16">
-        <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          <h2 className="text-2xl font-semibold text-foreground">About</h2>
-          <p className="text-base text-muted-foreground">
-            Pasig's heritage sites, local businesses, and cultural history sit scattered across generic map
-            listings and social media, mixed in with unrelated city posts. Lakbay Pasig ties this content back
-            to one source: the Pasig City Tourism Office (CATO).
-          </p>
-          <p className="text-base text-muted-foreground">
-            CATO staff review every place and business submitted to the platform and mark its status clearly,
-            verified, pending, or not yet verified, so you always know where a listing stands. Places and
-            trails are also shown as sequenced, location based stories, so a walk around the city comes with
-            context instead of just a pin on a map.
-          </p>
+      {/* About: scroll-lit statement, then a bento grid. Copy rules still
+          hold: no comparison with other platforms, no blanket "everything
+          is verified" claim, no em dashes. */}
+      <ScrollPanel id="about" mode="enter" bg="bg-card" className="scroll-mt-20 px-6 py-28 lg:px-16">
+        <div className="mx-auto flex max-w-6xl flex-col gap-20">
+<RevealWords
+            className="text-3xl font-semibold leading-tight text-foreground sm:text-4xl lg:text-5xl"
+            text="Pasig's heritage sites, local businesses and cultural history sit scattered across listings and social media. Lakbay Pasig brings them back to one source, the City Tourism Office, so every place comes with its story."
+          />
+
+          <div className="grid gap-4 md:auto-rows-[minmax(14rem,auto)] md:grid-cols-4">
+            <Tile className="bg-primary text-primary-foreground md:col-span-2 md:row-span-2">
+              <SealCheck className="h-9 w-9" aria-hidden="true" />
+              <h3 className="text-3xl font-semibold sm:text-4xl">Reviewed by CATO</h3>
+              <p className="max-w-sm text-base text-primary-foreground/85">
+                CATO staff review every place and business, and its status is shown plainly, so you always know where a listing stands.
+              </p>
+              <div className="mt-auto flex flex-wrap gap-2 pt-6">
+                {["Verified", "Pending", "Not yet verified"].map((label) => (
+                  <span key={label} className="rounded-full bg-primary-foreground/15 px-4 py-1.5 text-sm font-semibold">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </Tile>
+
+            <Tile delay={0.1} className="border border-border bg-background text-foreground">
+              <MapTrifold className="h-8 w-8 text-primary" aria-hidden="true" />
+              <h3 className="text-2xl font-semibold">Trails with a story</h3>
+              <p className="text-base text-muted-foreground">Walk the city in sequence, with context at every stop.</p>
+            </Tile>
+
+            <Tile delay={0.2} className="border border-border bg-background text-foreground">
+              <Storefront className="h-8 w-8 text-primary" aria-hidden="true" />
+              <h3 className="text-2xl font-semibold">Local businesses</h3>
+              <p className="text-base text-muted-foreground">Find shops and eateries near Pasig's heritage sites.</p>
+            </Tile>
+
+            <Tile delay={0.3} className="border border-border bg-background text-foreground md:col-span-2">
+              <CalendarBlank className="h-8 w-8 text-primary" aria-hidden="true" />
+              <h3 className="text-2xl font-semibold">CATO events</h3>
+              <p className="text-base text-muted-foreground">Events and guided Trails unlock once you sign in.</p>
+            </Tile>
+          </div>
         </div>
+      </ScrollPanel>
+
+      {/* Features: same live verified showcase (fetchHomeShowcase,
+          CategoryPhotoRow). The #features id stays for the header link. */}
+      <section id="features" className="scroll-mt-20 bg-background px-6 py-24 lg:px-16">
+        <Reveal className="mx-auto flex max-w-3xl flex-col gap-6">
+          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">See what is waiting for you</h2>
+          {featuresBody}
+        </Reveal>
       </section>
 
-      {/* Features: reuses home.tsx's own Places/Businesses photo showcase
-          exactly (fetchHomeShowcase, CategoryPhotoRow), same live verified
-          content a signed-in resident's Home feed shows -- not a new
-          static feature-card grid. Own section between About and Contact,
-          plain surface (alternating with About's/Contact's bg-card,
-          same visual rhythm those two already establish between
-          themselves). Trails and Events named in a plain closing line
-          rather than a third photo strip, per this file's own top comment
-          on why trail-card.tsx's row shape doesn't fit this strip.
-          The section's "Features" title and its subtitle were removed per
-          direct instruction; the #features id stays so the header's
-          Features link still scrolls here. */}
-      <section id="features" className="scroll-mt-20 px-6 py-16 lg:px-16">
-        <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          {featuresBody}
-
-          <p className="text-sm text-muted-foreground">
-            Lakbay Pasig also includes guided heritage Trails and CATO-published Events, both unlocked
-            once you sign in.
+      {/* Final call to action: flat rounded block, no decoration */}
+      <section className="bg-background px-4 py-16">
+        <Reveal className="mx-auto flex max-w-6xl flex-col items-center gap-6 rounded-[2rem] bg-primary px-6 py-20 text-center text-primary-foreground">
+          <h2 className="text-4xl font-semibold tracking-tight sm:text-6xl">Start walking.</h2>
+          <p className="max-w-md text-lg text-primary-foreground/85">
+            Sign in to unlock trails and events, or browse the city as a guest.
           </p>
-        </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button onClick={() => openAuth("signup")} size="lg" className="w-full border-transparent bg-card text-foreground hover:bg-card/90 sm:w-auto">
+              Get started
+            </Button>
+            <Button asChild variant="outline" size="lg" className="w-full border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:w-auto">
+              <Link to="/">Continue as Guest</Link>
+            </Button>
+          </div>
+        </Reveal>
       </section>
 
       {/* Contact: two columns per direct spec. Left keeps the real CATO
@@ -598,7 +709,7 @@ export default function LandingPage() {
           link beneath the embed opens the same address in Google Maps
           proper, for anyone who wants turn-by-turn rather than just a
           look at the pin. */}
-      <section id="contact" className="scroll-mt-20 bg-card px-6 py-16 lg:px-16">
+      <ScrollPanel id="contact" mode="enter" bg="bg-card" className="scroll-mt-20 px-6 py-16 lg:px-16">
         <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
             <h2 className="text-2xl font-semibold text-foreground">Contact</h2>
@@ -661,7 +772,11 @@ export default function LandingPage() {
             </a>
           </div>
         </div>
-      </section>
+      </ScrollPanel>
+    <footer className="bg-card px-6 py-6 text-center text-sm text-muted-foreground">
+        Lakbay Pasig. Places and businesses reviewed by the Pasig City Tourism Office (CATO).
+      </footer>
     </div>
+    </MotionConfig>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { MapTrifold, Pencil, UploadSimple, DownloadSimple } from "@phosphor-icons/react";
+import { MapTrifold, Pencil, UploadSimple, DownloadSimple, Plus } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
@@ -224,7 +224,10 @@ export default function AdminTrailsPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Trails</h1>
-        <Button onClick={() => navigate("/admin/trails/new")}>New Trail</Button>
+        <Button onClick={() => navigate("/admin/trails/new")} className="gap-1 pl-3.5">
+          <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
+          New Trail
+        </Button>
       </div>
 
       {toggleError && (

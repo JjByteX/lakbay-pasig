@@ -1,7 +1,8 @@
-import { SquaresFour, ChartBar, Bank, Storefront, CalendarDots, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
+import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useSettingsModal } from "@/lib/settings-modal";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -12,8 +13,10 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -26,6 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { SidebarLogoRow } from "@/components/sidebar-logo-row";
+import type { NotificationQueue } from "@/lib/admin-notifications";
 
 // Sidebar Sections per admin-panel-spec.md. Dashboard always visible.
 // Places needs manage_places or admin, Businesses needs review_businesses or
@@ -90,9 +94,15 @@ const NAV_ITEMS = [
   { to: "/admin/activity", label: "Activity", icon: Pulse, permission: null, permissions: null, adminOnly: true, group: "tools" },
 ];
 
-export function AdminSidebar() {
+export function AdminSidebar({
+  searchOpen,
+  onSearch,
+  queues,
+}: Readonly<{ searchOpen: boolean; onSearch: () => void; queues: NotificationQueue[] | null }>) {
   const { profile } = useAuth();
+  const { isMobile, setOpenMobile } = useSidebar();
   const navigate = useNavigate();
+  const { openSettings } = useSettingsModal();
   const { pathname: currentPath } = useLocation();
   const isAdmin = profile?.staff_role === "admin";
 
@@ -123,6 +133,21 @@ export function AdminSidebar() {
       item.to === "/admin"
         ? currentPath === item.to
         : currentPath === item.to || currentPath.startsWith(`${item.to}/`);
+    // Badge is centered on the row's midpoint (top-1/2 + translate) rather
+    // than a fixed top offset, so it stays centered whatever the row height,
+    // and sits 8px from the right edge to mirror the icon's 8px on the left.
+    // Pending-review count for this section, if it has a queue (Places,
+    // Businesses). Shown only above zero. Expanded: a count on the right of
+    // the row, the same place Gmail, Slack and Linear put theirs, and the
+    // UK Ministry of Justice design system's notification badge. Collapsed
+    // to icons: a dot on the icon instead, since the count has no room.
+    // This replaced the header bell, so the count sits on the section it
+    // belongs to instead of in a menu that points at it. Brand blue
+    // (primary), not red: red is this app's destructive color (reject,
+    // delete) and pending review is work waiting, not a problem. Per
+    // ux-ui-guidelines.md's 60/30/10 rule the accent is for badges and
+    // highlights, used sparingly.
+    const pending = queues?.find((queue) => queue.route === item.to)?.count ?? 0;
     return (
       <SidebarMenuItem key={item.to}>
         <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
@@ -131,6 +156,18 @@ export function AdminSidebar() {
             <span>{item.label}</span>
           </NavLink>
         </SidebarMenuButton>
+        {pending > 0 && (
+          <>
+            <SidebarMenuBadge className="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground right-2 top-1/2 -translate-y-1/2 leading-none">
+              {pending > 99 ? "99+" : pending}
+              <span className="sr-only"> pending</span>
+            </SidebarMenuBadge>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-1 top-1 hidden h-2 w-2 rounded-full bg-primary group-data-[collapsible=icon]:block"
+            />
+          </>
+        )}
       </SidebarMenuItem>
     );
   }
@@ -154,7 +191,31 @@ export function AdminSidebar() {
       <SidebarContent className="gap-0">
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>{mainItems.map(renderItem)}</SidebarMenu>
+            <SidebarMenu>
+              {/* Search: first row, above Dashboard, same row styling as the
+                  nav rows and the same spot as the resident sidebar's
+                  Search row. A button, not a field: it opens the Spotlight
+                  search (admin-search-bar.tsx), which admin.tsx owns, so
+                  isActive follows the modal's open state like the resident
+                  row follows its panel. Below md the sidebar sheet closes
+                  first so the search doesn't open underneath it. */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={searchOpen}
+                  tooltip="Search"
+                  aria-haspopup="dialog"
+                  aria-keyshortcuts="Control+K Meta+K"
+                  onClick={() => {
+                    if (isMobile) setOpenMobile(false);
+                    onSearch();
+                  }}
+                >
+                  <MagnifyingGlass weight={searchOpen ? "fill" : "bold"} className="h-4 w-4 shrink-0" />
+                  <span>Search</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {mainItems.map(renderItem)}
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -249,7 +310,7 @@ export function AdminSidebar() {
                 A resident's own counterpart to this item (public-sidebar.
                 tsx, public-shell.tsx's AccountMenu) sends staff/admin back
                 here the same way. */}
-            <DropdownMenuItem onClick={() => navigate("/admin/settings")}>
+            <DropdownMenuItem onClick={() => openSettings()}>
               <SettingsIcon className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>

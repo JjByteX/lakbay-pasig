@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { IconContext } from "@phosphor-icons/react";
 import App from "./App";
 import "./index.css";
@@ -21,6 +21,11 @@ import "./index.css";
 // render correctly. Imported once here, at the entry point.
 import "maplibre-gl/dist/maplibre-gl.css";
 
+// A data router (not <BrowserRouter>) so pages can use useBlocker, which the
+// admin tables' "discard your selection?" prompt needs. One catch-all route
+// renders App, whose own <Routes> tree is unchanged.
+const router = createBrowserRouter([{ path: "*", element: <App /> }]);
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {/* Bold is the default weight for every Phosphor icon (regular read
@@ -28,9 +33,7 @@ createRoot(document.getElementById("root")!).render(
         (fill for selected or saved states) still win over this context
         value. */}
     <IconContext.Provider value={{ weight: "bold" }}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </IconContext.Provider>
   </StrictMode>
 );

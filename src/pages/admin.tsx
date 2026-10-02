@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth-context";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminSearchBar } from "@/components/admin/admin-search-bar";
-import { AdminNotificationBell } from "@/components/admin/admin-notification-bell";
+import { useAdminNotificationQueues } from "@/hooks/use-admin-notification-queues";
+import { totalPending } from "@/lib/admin-notifications";
 import { cn } from "@/lib/utils";
 
 // Exact-match list routes — each one's own AdminDataTable measures this
@@ -29,6 +31,13 @@ export default function AdminPage() {
   const { profile, loading } = useAuth();
   const { pathname } = useLocation();
   const isBoundedRoute = BOUNDED_LIST_ROUTES.has(pathname) || BOUNDED_SUB_PAGE.test(pathname);
+  // Spotlight search: opened by the sidebar's Search row or Ctrl/Cmd+K. State
+  // lives here, not in the sidebar, since the mobile sidebar sheet unmounts
+  // its contents when closed.
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Pending-review counts for the sidebar rows and the phone menu button.
+  const queues = useAdminNotificationQueues();
+  const pendingTotal = queues ? totalPending(queues) : 0;
 
   // Session loading state, distinct from the happy path per plan 3.4.
   if (loading) {
@@ -57,45 +66,27 @@ export default function AdminPage() {
 
   return (
     <SidebarProvider>
-      <AdminSidebar />
+      <AdminSidebar searchOpen={searchOpen} onSearch={() => setSearchOpen(true)} queues={queues} />
+      <AdminSearchBar open={searchOpen} onOpenChange={setSearchOpen} />
       <SidebarInset className="h-svh overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-6">
-          {/* Desktop hides this trigger: the sidebar's own header row
-              (sidebar-logo-row.tsx) already collapses and expands it, so a
-              second button here would duplicate it. Below md the sidebar
-              is an offcanvas sheet with no header row on screen, so this
-              stays the only way to open it there. */}
-          <SidebarTrigger className="md:hidden" />
-          {/* Phase 3.4/4.3: search and notifications land here together,
-              both new to this header, which previously held only the
-              trigger (confirmed directly before adding anything, per
-              constraints.md's File Traversal rule). Search sits top
-              right at a bounded width (its own max-w-xs) rather than
-              stretching the full remaining row, per ux-ui-guidelines.md's
-              Component Sizing Rules ("size components proportionally to
-              the amount of content they hold") -- a full-width bar here
-              would be oversized against a single-line input, the same
-              reasoning that rule already applies elsewhere in this
-              codebase. ml-auto pushes the bell+search group to the right
-              edge as one unit. No profile icon exists in this header to
-              sit left of (admin-sidebar.tsx's footer already owns
-              account/sign-out, see admin-notification-bell.tsx's own
-              header comment) -- not added here, outside this phase's
-              scope.
-              Bug fix / direct instruction: notification bell moved before
-              search (previously search, then bell) -- plain JSX order
-              swap, this row has no separate CSS order property either
-              child relies on, so DOM order alone decides the visual
-              left-to-right order in this flex row.
-              Bug fix / direct instruction: px-4 -> px-6, matching the
-              content area's own p-6 below -- the header's right edge sat
-              noticeably closer to the viewport edge than the page content
-              underneath it did, since the two used different horizontal
-              padding scales for what should read as one consistent page
-              margin running the full height of the admin shell. */}
-          <div className="ml-auto flex items-center gap-2">
-            <AdminNotificationBell />
-            <AdminSearchBar />
+        {/* Phone-only top bar. Search moved into the sidebar (the Search
+            row) and the notification bell was replaced by pending counts
+            on the sidebar's Places and Businesses rows, so on desktop this
+            bar would hold nothing and is not rendered, which gives its
+            56px back to the page. Below md the sidebar is an offcanvas
+            sheet, so the trigger here is the only way to open it; it
+            carries a dot when anything is pending, because the counts
+            themselves are inside the closed sheet. */}
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-6 md:hidden">
+          <div className="relative">
+            <SidebarTrigger />
+            {pendingTotal > 0 && (
+              <span
+                role="status"
+                aria-label={`${pendingTotal} pending`}
+                className="pointer-events-none absolute right-0 top-0 h-2 w-2 rounded-full bg-primary"
+              />
+            )}
           </div>
         </header>
         <div

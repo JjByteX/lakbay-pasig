@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CalendarDots, CaretLeft, CaretRight, DownloadSimple, Hourglass, Pencil, UploadSimple } from "@phosphor-icons/react";
+import { CalendarDots, CaretLeft, CaretRight, DownloadSimple, Hourglass, Pencil, UploadSimple, Plus } from "@phosphor-icons/react";
+import { bulkUpdateEvents, type BulkEventAction } from "@/lib/bulk-review";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,21 @@ import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BulkActionBar } from "@/components/admin/bulk-action-bar";
 import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
@@ -79,6 +90,14 @@ import { formatDateTimeNoSeconds, hasTimeOfDay } from "@/lib/datetime";
 // Edit action. Hand-built against the native Date object like
 // src/components/ui/calendar.tsx (that one is a date picker with no event
 // content, so it is not reused here).
+//
+// Bulk actions: the List view opts into AdminDataTable's `selection`, the
+// same checkbox column, select-scope prompt and discard-selection prompt
+// Places and Businesses use, with the shared BulkActionBar for the actions.
+// The actions are the row actions, batched: Publish, Unpublish and Set
+// status (bulkUpdateEvents in bulk-review.ts). The Calendar has no
+// checkboxes, so switching to it clears the selection rather than leaving
+// checked rows behind a view that can't show them or guard leaving the page.
 
 interface EventRow {
   id: string;
@@ -99,6 +118,44 @@ const LIFECYCLE_VARIANT = {
 const LIFECYCLE_STATUSES = ["upcoming", "ongoing", "past"] as const;
 const LIFECYCLE_FILTER_OPTIONS = ["all", ...LIFECYCLE_STATUSES] as const;
 const PUBLISHED_OPTIONS = ["all", "published", "draft"] as const;
+
+// What each bulk action applies to, and its wording. Selected rows already in
+// the target state are skipped, and the dialog says so.
+const BULK_ACTIONS: Record<
+  BulkEventAction,
+  { title: string; verb: string; appliesTo: (e: EventRow) => boolean; blurb: string }
+> = {
+  publish: {
+    title: "Publish",
+    verb: "Publish",
+    appliesTo: (e) => !e.published,
+    blurb: "Each announcement will be visible to the public.",
+  },
+  unpublish: {
+    title: "Unpublish",
+    verb: "Unpublish",
+    appliesTo: (e) => e.published,
+    blurb: "Each announcement will go back to Draft and be hidden from the public.",
+  },
+  upcoming: {
+    title: "Set to upcoming",
+    verb: "Set to upcoming",
+    appliesTo: (e) => e.lifecycle_status !== "upcoming",
+    blurb: "Each announcement's lifecycle status will be set to upcoming.",
+  },
+  ongoing: {
+    title: "Set to ongoing",
+    verb: "Set to ongoing",
+    appliesTo: (e) => e.lifecycle_status !== "ongoing",
+    blurb: "Each announcement's lifecycle status will be set to ongoing.",
+  },
+  past: {
+    title: "Set to past",
+    verb: "Set to past",
+    appliesTo: (e) => e.lifecycle_status !== "past",
+    blurb: "Each announcement's lifecycle status will be set to past.",
+  },
+};
 
 type ViewMode = "calendar" | "list";
 
@@ -326,6 +383,13 @@ export default function AdminEventsPage() {
   const [publishedFilter, setPublishedFilter] = useState<(typeof PUBLISHED_OPTIONS)[number]>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
 
+  // Bulk actions: checked ids (AdminDataTable's `selection`, remembered
+  // across paging, sorting and filtering) and the confirm dialog the bar opens.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkAction, setBulkAction] = useState<BulkEventAction | null>(null);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
   // Modal conversion: dialog open/closed and which event it's editing
   // (null = New) both derive from the ?event= search param rather than
   // separate useState, so a deep link (admin-search-bar.tsx's Announcements
@@ -445,6 +509,54 @@ export default function AdminEventsPage() {
     });
   }, [events, search, lifecycleFilter, publishedFilter]);
 
+  // Selection survives filtering, so some checked rows can be out of view.
+  // A bulk action still reaches every checked row it applies to, so say how
+  // many are hidden.
+  const visibleIds = new Set(filtered.map((e) => e.id));
+  const hiddenSelected = [...selectedIds].filter((id) => !visibleIds.has(id)).length;
+  const selectedRows = (events ?? []).filter((e) => selectedIds.has(e.id));
+  const countFor = (action: BulkEventAction) => selectedRows.filter(BULK_ACTIONS[action].appliesTo).length;
+
+  function openBulkDialog(action: BulkEventAction) {
+    setBulkAction(action);
+    setBulkError(null);
+  }
+
+  async function handleBulkSubmit() {
+    if (!bulkAction) return;
+    const targets = selectedRows.filter(BULK_ACTIONS[bulkAction].appliesTo);
+    setBulkSubmitting(true);
+    setBulkError(null);
+    try {
+      await bulkUpdateEvents({ action: bulkAction, ids: targets.map((e) => e.id) });
+      const done = new Set(targets.map((e) => e.id));
+      setEvents((prev) =>
+        (prev ?? []).map((e) => {
+          if (!done.has(e.id)) return e;
+          if (bulkAction === "publish") return { ...e, published: true };
+          if (bulkAction === "unpublish") return { ...e, published: false };
+          return { ...e, lifecycle_status: bulkAction };
+        })
+      );
+      setSelectedIds(new Set());
+      setBulkAction(null);
+    } catch (err: unknown) {
+      setBulkError(err instanceof Error ? err.message : "Could not save the changes.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
+
+  function changeViewMode(next: ViewMode) {
+    if (next === "calendar") setSelectedIds(new Set());
+    setViewMode(next);
+  }
+
+  const bulkTargetCount = bulkAction ? countFor(bulkAction) : 0;
+  const bulkSkipped = selectedIds.size - bulkTargetCount;
+  let bulkSubmitLabel = bulkAction ? BULK_ACTIONS[bulkAction].verb : "";
+  if (bulkSubmitting) bulkSubmitLabel = "Submitting…";
+
   const columns: AdminColumn<EventRow>[] = [
     {
       key: "title",
@@ -524,7 +636,7 @@ export default function AdminEventsPage() {
 
   const toolbar = (
     <AdminFilterBar>
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+      <Tabs value={viewMode} onValueChange={(v) => changeViewMode(v as ViewMode)}>
         <TabsList>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="list">List</TabsTrigger>
@@ -559,10 +671,13 @@ export default function AdminEventsPage() {
   );
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-6">
+    <div className="relative flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Announcements</h1>
-        <Button onClick={openNew}>New Event</Button>
+        <Button onClick={openNew} className="gap-1 pl-3.5">
+          <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
+          New Event
+        </Button>
       </div>
 
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
@@ -574,6 +689,7 @@ export default function AdminEventsPage() {
           loading={events === null}
           keyField="id"
           autoPageSize
+          selection={{ selectedIds, onChange: setSelectedIds }}
           emptyIcon={CalendarDots}
           empty={events && events.length > 0 ? "Matching events will appear here." : "Events will appear here."}
           toolbar={toolbar}
@@ -591,6 +707,82 @@ export default function AdminEventsPage() {
           )}
         </div>
       )}
+
+      <BulkActionBar
+        count={selectedIds.size}
+        detail={hiddenSelected > 0 ? `${hiddenSelected} hidden by filters` : undefined}
+        onClear={() => setSelectedIds(new Set())}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          disabled={countFor("unpublish") === 0}
+          onClick={() => openBulkDialog("unpublish")}
+        >
+          <DownloadSimple className="h-4 w-4" />
+          Unpublish ({countFor("unpublish")})
+        </Button>
+        <Button
+          size="sm"
+          className="gap-1"
+          disabled={countFor("publish") === 0}
+          onClick={() => openBulkDialog("publish")}
+        >
+          <UploadSimple className="h-4 w-4" />
+          Publish ({countFor("publish")})
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1">
+              <Hourglass className="h-4 w-4" />
+              Set status
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {LIFECYCLE_STATUSES.map((status) => (
+              <DropdownMenuItem
+                key={status}
+                disabled={countFor(status) === 0}
+                onSelect={() => openBulkDialog(status)}
+              >
+                {status} ({countFor(status)})
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </BulkActionBar>
+
+      <Dialog open={bulkAction !== null} onOpenChange={(open) => !open && !bulkSubmitting && setBulkAction(null)}>
+        <DialogContent>
+          {bulkAction && (
+            <DialogHeader>
+              <DialogTitle>
+                {BULK_ACTIONS[bulkAction].title} {bulkTargetCount}{" "}
+                {bulkTargetCount === 1 ? "announcement" : "announcements"}?
+              </DialogTitle>
+              <DialogDescription>
+                {BULK_ACTIONS[bulkAction].blurb}
+                {bulkSkipped > 0 &&
+                  ` ${bulkSkipped} of your ${selectedIds.size} selected ${
+                    bulkSkipped === 1 ? "doesn't" : "don't"
+                  } apply and will be left as is.`}
+              </DialogDescription>
+            </DialogHeader>
+          )}
+
+          {bulkError && <p className="text-sm text-destructive">{bulkError}</p>}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAction(null)} disabled={bulkSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkSubmit} disabled={bulkSubmitting || bulkTargetCount === 0}>
+              {bulkSubmitLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EventFormDialog
         open={dialogOpen}

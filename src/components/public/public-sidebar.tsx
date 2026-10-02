@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
+import { useSettingsModal } from "@/lib/settings-modal";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -62,6 +63,7 @@ export function PublicSidebar({
   const { openAuth } = useAuthModal();
   const { pathname: currentPath } = useLocation();
   const navigate = useNavigate();
+  const { openSettings } = useSettingsModal();
 
   // Log-out confirmation: same SignOutDialog (owns the actual signOut()
   // call) public-shell.tsx's mobile AccountMenu and admin-sidebar.tsx's
@@ -206,7 +208,7 @@ export function PublicSidebar({
                 <UserIcon className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/profile/settings")}>
+              <DropdownMenuItem onClick={() => openSettings()}>
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>

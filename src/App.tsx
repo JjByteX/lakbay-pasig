@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth-context";
 import { AuthModalProvider } from "@/lib/auth-modal";
+import { SettingsModalProvider } from "@/lib/settings-modal";
+import { SettingsModal } from "@/components/settings-modal";
 import { AuthModalRoute } from "@/lib/auth-modal-route";
 import { EntryGate } from "@/lib/entry-gate";
 import { AuthModal } from "@/components/auth/auth-modal";
@@ -51,6 +53,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AuthModalProvider>
+        <SettingsModalProvider>
         <Routes>
           {/* Public shell, five tabs per navigation-and-access-control.md's
               Bottom Nav Order, Guest accessible, no session required. home.tsx
@@ -317,6 +320,8 @@ export default function App() {
           </Route>
         </Routes>
         <AuthModal />
+        <SettingsModal />
+        </SettingsModalProvider>
       </AuthModalProvider>
     </AuthProvider>
   );

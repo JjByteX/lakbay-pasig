@@ -4,8 +4,8 @@
   "description": "Pasig heritage sites, businesses, and guided routes, verified by CATO.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FCFCF8",
-  "theme_color": "#0275D7",
+  "background_color": "#F8F9FA",
+  "theme_color": "#007BFF",
   "icons": [
     {
       "src": "/icons/icon-192.png",

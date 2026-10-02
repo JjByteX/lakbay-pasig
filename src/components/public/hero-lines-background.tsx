@@ -26,8 +26,8 @@ import { startHeroLinesAnimation } from "./hero-lines-animation.js";
  * extracted animation logic at all (hero-lines.svg, hero-lines-
  * animation.js, both byte-for-byte ports of the supplied file), it only
  * wraps them and applies a CSS filter to shift the original grayscale
- * (#060606..#525252) stroke gradients to the brand blue (--primary,
- * #0275D7) without re-deriving every stop by hand.
+ * (#060606..#525252) stroke gradients to the brand blue (Pasig
+ * #007BFF) without re-deriving every stop by hand.
  *
  * hue-rotate + saturate on a grayscale source is not reliable (grayscale
  * has no hue to rotate), so this uses an SVG filter (feColorMatrix) that
@@ -533,14 +533,14 @@ export function HeroLinesBackground() {
                 luminance), so each output channel is read off the input
                 RED channel only (coefficient on G and B = 0) as
                 out = slope*L + navy_floor, ramping from the navy floor
-                (0x07,0x2E,0x57) at L=0 to the brand blue ceiling
-                (0x02,0x75,0xD7) at L=1. Alpha passes through untouched. */}
+                (0x00,0x30,0x67) at L=0 to the brand blue ceiling
+                (0x00,0x7B,0xFF) at L=1. Alpha passes through untouched. */}
             <feColorMatrix
               type="matrix"
               values="
-                -0.0196 0 0 0 0.0275
-                 0.2784 0 0 0 0.1804
-                 0.5020 0 0 0 0.3412
+                 0      0 0 0 0
+                 0.2941 0 0 0 0.1882
+                 0.5961 0 0 0 0.4039
                  0      0 0 1 0
               "
             />

@@ -24,6 +24,7 @@ import {
 } from "@/components/business/business-fields";
 import { PageContainer } from "@/components/public/page-container";
 import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { usePageTitle } from "@/lib/page-title";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -61,8 +62,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
  * step form the admin business review page uses (admin-business-detail.tsx,
  * itself modeled on admin-place-detail.tsx): Business, Location, then Rules
  * and story, with a "Step N of 3" row, Back/Next, and a "Required to
- * continue" line. It reuses BusinessFields' existing `section` mode, so no
- * field markup is duplicated. Like the admin form it also fits the
+ * continue" line. It reuses BusinessFields' existing `section` mode with the
+ * same props admin passes (two columns from lg up, Name and Type in one
+ * row, wide card), so no field markup is duplicated. Like the admin form it also fits the
  * viewport: the page root is h-full, the card stretches to the space left
  * and scrolls its own content (ADMIN_SCROLL_CLASS, the same constant admin
  * passes), and Back/Next stay pinned under it. Below md the single
@@ -228,7 +230,7 @@ function BusinessDashboard({
   const showTrailList = !trailsLoading && !trailsError && trails.length > 0;
 
   return (
-    <PageContainer width="narrow">
+    <PageContainer width="form">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="min-w-0 max-w-full break-words text-xl font-semibold text-foreground">
           {business.name}
@@ -467,6 +469,7 @@ function CreateBusinessStepper({
         categories={categories}
         categoriesError={categoriesError}
         section={CREATE_STEP_SECTION[step]}
+        nameAndTypeInRow
         stepHeading={`Step ${step} of 3: ${CREATE_STEP_LABEL[step]}`}
         className={ADMIN_SCROLL_CLASS}
         addressPlaceholder="Type your address and press Enter to search"
@@ -577,7 +580,7 @@ function EditListingView({
   categoriesError,
 }: Readonly<EditListingViewProps>) {
   return (
-    <PageContainer width="narrow">
+    <PageContainer width="form">
       <h1 className="text-xl font-semibold text-foreground">Edit your listing</h1>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -608,7 +611,8 @@ function EditListingView({
   );
 }
 
-// Back button: this screen is reached from Profile's "List your business"
+// Heading: desktop shows the admin-style "Profile > List your business"
+// breadcrumb; mobile keeps the back button below. This screen is reached from Profile's "List your business"
 // row (profile.tsx), the same navigate(-1)/ArrowLeft/ghost-icon pattern every
 // other detail page already uses top-left, per ux-ui-guidelines.md's
 // Familiarity principle. Scoped to the create branch only. On desktop the
@@ -618,30 +622,29 @@ function CreateListingHeader({
   isMobile,
   onBack,
 }: Readonly<{ isMobile: boolean; onBack: () => void }>) {
-  const backButton = (
-    <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Back">
-      <ArrowLeft className="h-5 w-5" />
-    </Button>
-  );
-  const title = (
-    <div className="flex items-center gap-2">
-      <Storefront className="h-5 w-5 shrink-0 text-foreground" />
-      <h1 className="text-xl font-semibold text-foreground">List your business</h1>
-    </div>
-  );
-
   if (isMobile) {
     return (
       <>
-        {backButton}
-        {title}
+        <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Back">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-2">
+          <Storefront className="h-5 w-5 shrink-0 text-foreground" />
+          <h1 className="text-xl font-semibold text-foreground">List your business</h1>
+        </div>
       </>
     );
   }
+  // Desktop: the same "Previous Page > Current Page" heading every admin
+  // page uses (AdminPageHeader), instead of a back button. This screen is
+  // reached from Profile's "List your business" row, so Profile is the
+  // ancestor.
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      {backButton}
-      {title}
+    <div className="shrink-0">
+      <AdminPageHeader
+        breadcrumb={[{ label: "Profile", to: "/profile" }]}
+        title="List your business"
+      />
     </div>
   );
 }
@@ -693,7 +696,7 @@ export default function VendorDashboardPage() {
 
   if (!session) {
     return (
-      <PageContainer width="narrow" className="items-start gap-4 py-10">
+      <PageContainer width="form" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Vendor</h1>
         <p className="text-base text-muted-foreground">
           Sign in to list or manage your business.
@@ -786,7 +789,7 @@ export default function VendorDashboardPage() {
 
   if (checking) {
     return (
-      <PageContainer width="narrow">
+      <PageContainer width="form">
         <h1 className="text-xl font-semibold text-foreground">Vendor</h1>
         <p className="text-base text-muted-foreground">Loading…</p>
       </PageContainer>
@@ -795,7 +798,7 @@ export default function VendorDashboardPage() {
 
   if (checkError) {
     return (
-      <PageContainer width="narrow">
+      <PageContainer width="form">
         <h1 className="text-xl font-semibold text-foreground">Vendor</h1>
         <p className="text-base text-destructive">{checkError}</p>
       </PageContainer>
@@ -841,10 +844,9 @@ export default function VendorDashboardPage() {
   return (
     // Desktop: h-full bounds the page to the viewport so the stepped form
     // can fit it, see the header note. Mobile keeps its normal scrolling.
-    <PageContainer
-      width={isMobile ? "narrow" : "wide"}
-      className={isMobile ? undefined : "h-full min-h-0"}
-    >
+    // Desktop: the "full" width (same 448px column on mobile), the same
+    // edge-to-edge span as the admin card in admin-business-detail.tsx.
+    <PageContainer width="full" className={isMobile ? undefined : "h-full min-h-0"}>
       {/* Back button: this screen is reached from Profile's "List your
           business" row (profile.tsx), the same navigate(-1)/ArrowLeft/
           ghost-icon pattern every other detail page (discover-place-

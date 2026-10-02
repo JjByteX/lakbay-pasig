@@ -278,6 +278,10 @@ interface BusinessFieldsProps {
   /** Rendered at the end of the "story" card (admin puts the read-only
    *  Items here), so it scrolls with the card. */
   storyFooter?: ReactNode;
+  /** Section "business" only: stack Opening Hours under the fields instead
+   *  of in a right column at lg. For a narrow page, where two columns would
+   *  be squeezed. Admin leaves it off and is unchanged. */
+  singleColumn?: boolean;
 }
 
 export function BusinessFields({
@@ -293,6 +297,7 @@ export function BusinessFields({
   section,
   stepHeading,
   storyFooter,
+  singleColumn = false,
 }: Readonly<BusinessFieldsProps>) {
   const pin =
     form.latitude !== null && form.longitude !== null
@@ -572,8 +577,13 @@ export function BusinessFields({
     return (
       <div className={cardClass}>
         {heading}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
-          <div className="flex flex-col gap-4 lg:pr-4">
+        <div
+          className={cn(
+            "grid grid-cols-1 gap-4",
+            !singleColumn && "lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border"
+          )}
+        >
+          <div className={cn("flex flex-col gap-4", !singleColumn && "lg:pr-4")}>
             {nameAndType}
             {categoryField}
             {descriptionField}
@@ -582,7 +592,7 @@ export function BusinessFields({
             {accessibilityField}
             {registeredField}
           </div>
-          <div className="flex flex-col gap-4 lg:pl-4">{hoursField}</div>
+          <div className={cn("flex flex-col gap-4", !singleColumn && "lg:pl-4")}>{hoursField}</div>
         </div>
       </div>
     );

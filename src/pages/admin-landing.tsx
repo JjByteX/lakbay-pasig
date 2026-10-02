@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Slideshow, Trash } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, Pencil, Slideshow, Trash, Plus } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -123,7 +123,10 @@ export default function AdminLandingPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Landing Page</h1>
-        <Button onClick={openNew}>Add Slide</Button>
+        <Button onClick={openNew} className="gap-1 pl-3.5">
+          <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
+          Add Slide
+        </Button>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

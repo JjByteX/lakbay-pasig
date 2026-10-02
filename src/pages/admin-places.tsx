@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bank, Eye, CheckCircle, XCircle } from "@phosphor-icons/react";
+import { Bank, Eye, CheckCircle, XCircle, Plus } from "@phosphor-icons/react";
+import { useAuth } from "@/lib/auth-context";
+import { bulkReviewPlaces } from "@/lib/bulk-review";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BulkActionBar } from "@/components/admin/bulk-action-bar";
+import { CharCount } from "@/components/business/business-fields";
 import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import {
   Select,
@@ -78,13 +92,29 @@ function typeFilterOptionLabel(option: (typeof TYPE_OPTIONS)[number]): string {
   return "Trail Content";
 }
 
+// Discovery (trail content) rows are always reviewable; place rows only while
+// pending. Used by the row actions and by bulk selection, so a row that can't
+// be reviewed can't be checked either.
+function isReviewable(row: QueueRow): boolean {
+  return row.kind !== "place" || row.verification_status === "pending";
+}
+
 export default function AdminPlacesPage() {
   usePageTitle("Places");
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [rows, setRows] = useState<QueueRow[] | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_OPTIONS)[number]>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("all");
+
+  // Bulk actions: checked row ids (AdminDataTable's `selection`), and the
+  // Verify/Reject confirm dialog the bar opens.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkAction, setBulkAction] = useState<"verify" | "reject" | null>(null);
+  const [bulkNotes, setBulkNotes] = useState("");
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,7 +273,7 @@ export default function AdminPlacesPage() {
         // and are always reviewable; place rows can only be reviewed while
         // pending. Same split the three-dot menus had.
         const base = row.kind === "place" ? `/admin/places/${row.id}` : `/admin/places/discovery/${row.id}`;
-        const reviewable = row.kind !== "place" || row.verification_status === "pending";
+        const reviewable = isReviewable(row);
         return (
           <AdminIconActions>
             <AdminIconAction icon={Eye} label="View" onClick={() => navigate(base)} />
@@ -259,11 +289,61 @@ export default function AdminPlacesPage() {
     },
   ];
 
+  // Selection survives filtering, so some checked rows can be out of view.
+  // The bulk action still applies to every checked row, so say how many.
+  const visibleIds = new Set(filtered.map((r) => r.id));
+  const hiddenSelected = [...selectedIds].filter((id) => !visibleIds.has(id)).length;
+  const selectedRows = (rows ?? []).filter((r) => selectedIds.has(r.id));
+  const selectedPlaceIds = selectedRows.filter((r) => r.kind === "place").map((r) => r.id);
+  const selectedDiscoveryIds = selectedRows.filter((r) => r.kind === "discovery_content").map((r) => r.id);
+
+  function openBulkDialog(action: "verify" | "reject") {
+    setBulkAction(action);
+    setBulkNotes("");
+    setBulkError(null);
+  }
+
+  async function handleBulkSubmit() {
+    if (!bulkAction || !profile) return;
+    setBulkSubmitting(true);
+    setBulkError(null);
+    try {
+      await bulkReviewPlaces({
+        action: bulkAction,
+        notes: bulkNotes,
+        staffId: profile.id,
+        placeIds: selectedPlaceIds,
+        discoveryIds: selectedDiscoveryIds,
+      });
+      // Places move to their new status in place; trail content stays
+      // flagged (its review is log-only), so those rows are left alone.
+      const reviewed = new Set(selectedPlaceIds);
+      const nextStatus = bulkAction === "verify" ? "verified" : "rejected";
+      setRows((prev) =>
+        (prev ?? []).map((r) =>
+          r.kind === "place" && reviewed.has(r.id) ? { ...r, verification_status: nextStatus } : r
+        )
+      );
+      setSelectedIds(new Set());
+      setBulkAction(null);
+    } catch (err: unknown) {
+      setBulkError(err instanceof Error ? err.message : "Could not save the review.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }
+
+  let bulkSubmitLabel = bulkAction === "verify" ? "Verify" : "Reject";
+  if (bulkSubmitting) bulkSubmitLabel = "Submitting…";
+
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-6">
+    <div className="relative flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Places</h1>
-        <Button onClick={() => navigate("/admin/places/new")}>New Place</Button>
+        <Button onClick={() => navigate("/admin/places/new")} className="gap-1 pl-3.5">
+          <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
+          New Place
+        </Button>
       </div>
 
       <AdminDataTable
@@ -272,6 +352,7 @@ export default function AdminPlacesPage() {
         loading={rows === null}
         keyField="id"
         autoPageSize
+        selection={{ selectedIds, onChange: setSelectedIds, isSelectable: isReviewable }}
         emptyIcon={Bank}
         empty={rows && rows.length > 0 ? "Matching places will appear here." : "Places will appear here."}
         toolbar={
@@ -304,6 +385,69 @@ export default function AdminPlacesPage() {
           </AdminFilterBar>
         }
       />
+
+      <BulkActionBar
+        count={selectedIds.size}
+        detail={hiddenSelected > 0 ? `${hiddenSelected} hidden by filters` : undefined}
+        onClear={() => setSelectedIds(new Set())}
+      >
+        <Button variant="outline" size="sm" className="gap-1" onClick={() => openBulkDialog("reject")}>
+          <XCircle className="h-4 w-4" />
+          Reject
+        </Button>
+        <Button size="sm" className="gap-1" onClick={() => openBulkDialog("verify")}>
+          <CheckCircle className="h-4 w-4" />
+          Verify
+        </Button>
+      </BulkActionBar>
+
+      <Dialog open={bulkAction !== null} onOpenChange={(open) => !open && !bulkSubmitting && setBulkAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {bulkAction === "verify" ? "Verify" : "Reject"} {selectedIds.size}{" "}
+              {selectedIds.size === 1 ? "item" : "items"}?
+            </DialogTitle>
+            <DialogDescription>
+              {bulkAction === "verify"
+                ? "Each selected place will be marked verified and visible to the public."
+                : "Explain what needs to change. The same note is recorded on every selected item."}
+              {selectedDiscoveryIds.length > 0 &&
+                " Trail Content reviews are logged only; their status does not change."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {bulkAction === "reject" && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="bulk-review-notes">Review Notes</Label>
+              <Textarea
+                id="bulk-review-notes"
+                value={bulkNotes}
+                onChange={(e) => setBulkNotes(e.target.value)}
+                placeholder="Reason for rejection"
+                required
+                maxLength={1000}
+              />
+              <CharCount value={bulkNotes} max={1000} />
+            </div>
+          )}
+
+          {bulkError && <p className="text-sm text-destructive">{bulkError}</p>}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAction(null)} disabled={bulkSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              variant={bulkAction === "reject" ? "destructive" : "default"}
+              onClick={handleBulkSubmit}
+              disabled={bulkSubmitting || (bulkAction === "reject" && bulkNotes.trim().length === 0)}
+            >
+              {bulkSubmitLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

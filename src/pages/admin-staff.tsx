@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Users, Pencil, UserCheck, UserMinus } from "@phosphor-icons/react";
+import { Users, Pencil, UserCheck, UserMinus, Plus } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
@@ -236,7 +236,10 @@ export default function AdminStaffPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Staff</h1>
-        <Button onClick={() => setDialogTarget("new")}>New Staff Account</Button>
+        <Button onClick={() => setDialogTarget("new")} className="gap-1 pl-3.5">
+          <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
+          New Staff Account
+        </Button>
       </div>
 
       {toggleError && <p className="text-sm text-destructive">{toggleError}</p>}

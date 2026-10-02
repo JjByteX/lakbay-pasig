@@ -47,20 +47,12 @@ import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from 
  * to show, and the schema is not this file's to change.
  *
  * Adapted to this codebase, not to Qula's:
- * - Caption legibility: originally a solid caption bar under the image
- *   at the full card surface token (its own row, pushing the image to
- *   share height with it), per decision-log.md entry #18. Changed per
- *   direct instruction ("move the text in front of the picture... just
- *   add a box behind the text depending on its width"): the caption is
- *   now an overlay, absolutely positioned over the bottom-left corner of
- *   the full-height photo, in a small bg-card pill sized to its own text
- *   content (px-3 py-1.5, no explicit width) rather than a full-width
- *   bar -- so the image fills the ENTIRE tile height (no more shared
- *   row eating into it) and the caption floats on top of it instead of
- *   displacing it. This is still not Qula's dark gradient scrim over the
- *   photo (a structural gradient, which ux-ui-guidelines.md bans) -- a
- *   solid, opaque, self-sized pill is legible against any photo without
- *   introducing a gradient.
+ * - Caption legibility: no box behind the text. Per direct instruction,
+ *   the caption sits on the photo's bottom edge over a light linear
+ *   gradient that rises from the bottom (so the picture stays visible
+ *   above it), with a 3-layer progressive blur on the same band for a
+ *   modern, soft look. This is a deliberate exception to ux-ui-guidelines.md's
+ *   no-gradient rule, made by instruction. See CaptionOverlay.
  * - Tile count follows the PANEL's own measured width, not the viewport.
  *   On desktop this panel is half the screen, so Qula's viewport
  *   breakpoint would pick the wrong layout. Wide panel + 3 or more
@@ -309,6 +301,43 @@ function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
   return width;
 }
 
+// Caption over the photo, no box behind the text. The overlay covers only
+// the bottom quarter of the image (a caption is one or two lines), and has
+// two parts: a light linear gradient rising from the bottom so the white
+// text stays readable on any photo, and a progressive blur made of three
+// stacked backdrop-blur layers. Each layer is masked to a shorter band
+// than the one before it, so blur strength grows smoothly toward the
+// bottom edge with no visible line where the sharp photo ends. The class
+// strings are written out in full so Tailwind can see them.
+const CAPTION_BLUR_LAYERS = [
+  "backdrop-blur-[1px] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_50%,transparent_100%)] [mask-image:linear-gradient(to_top,black_0%,black_50%,transparent_100%)]",
+  "backdrop-blur-[2px] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_25%,transparent_65%)] [mask-image:linear-gradient(to_top,black_0%,black_25%,transparent_65%)]",
+  "backdrop-blur-[4px] [-webkit-mask-image:linear-gradient(to_top,black_0%,transparent_40%)] [mask-image:linear-gradient(to_top,black_0%,transparent_40%)]",
+];
+
+// Both layers ignore the pointer so drag and click still reach the tile.
+function CaptionOverlay({ caption }: Readonly<{ caption: string }>) {
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[28%] min-h-16 bg-gradient-to-t from-black/40 via-black/15 to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[28%] min-h-16"
+      >
+        {CAPTION_BLUR_LAYERS.map((layer) => (
+          <div key={layer} className={`absolute inset-0 ${layer}`} />
+        ))}
+      </div>
+      <p className="absolute inset-x-3 bottom-3 line-clamp-2 text-sm font-semibold text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.45)] sm:inset-x-4 sm:bottom-4 sm:text-base">
+        {caption}
+      </p>
+    </>
+  );
+}
+
 interface HeroTileProps {
   slide: LandingSlide;
   slotOffset: number;
@@ -319,10 +348,9 @@ interface HeroTileProps {
 }
 
 // One tile. Every tile is the same fixed box: the image fills the
-// ENTIRE tile (top to bottom), and the caption is a small self-sized
-// pill overlaid on the photo's bottom-left corner -- see this file's
-// top comment's "Adapted to this codebase" note for why this replaced
-// the earlier solid-bar-below-the-image layout. Side tiles stay visible
+// ENTIRE tile (top to bottom), and the caption is overlaid on the
+// photo's bottom edge by CaptionOverlay (gradient + blur, no box) -- see
+// this file's top comment's "Adapted to this codebase" note. Side tiles stay visible
 // as peeks but get no pointer target of their own beyond "bring me to
 // center".
 function HeroTile({
@@ -369,11 +397,7 @@ function HeroTile({
           />
         )}
       </div>
-      <div className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] rounded-md bg-card px-3 py-1.5 sm:bottom-4 sm:left-4">
-        <p className="line-clamp-2 text-sm font-semibold text-card-foreground sm:text-base">
-          {slide.caption}
-        </p>
-      </div>
+      <CaptionOverlay caption={slide.caption} />
     </motion.button>
   );
 }
@@ -426,7 +450,7 @@ function HeroFilmstripInner({
 }
 
 // A carousel of one has nothing to loop or drag, so render the photo
-// with the same overlaid caption pill as HeroTile, with none of the
+// with the same CaptionOverlay as HeroTile, with none of the
 // carousel chrome.
 function StaticSlide({ slide }: Readonly<{ slide: LandingSlide }>) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -448,11 +472,7 @@ function StaticSlide({ slide }: Readonly<{ slide: LandingSlide }>) {
           />
         )}
       </div>
-      <div className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] rounded-md bg-card px-3 py-1.5 sm:bottom-4 sm:left-4">
-        <p className="line-clamp-2 text-sm font-semibold text-card-foreground sm:text-base">
-          {slide.caption}
-        </p>
-      </div>
+      <CaptionOverlay caption={slide.caption} />
     </div>
   );
 }

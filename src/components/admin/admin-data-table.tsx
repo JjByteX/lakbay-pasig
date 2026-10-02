@@ -1,4 +1,4 @@
-import { useMemo, useReducer, type ReactNode } from "react";
+import { useMemo, useReducer, useState, type ReactNode } from "react";
 import { CaretLeft, CaretRight, CaretUp, CaretDown, CaretUpDown, Tray, type Icon } from "@phosphor-icons/react";
 import {
   Table,
@@ -11,6 +11,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DiscardSelectionDialog } from "@/components/admin/discard-selection-dialog";
+import { SelectScopeDialog } from "@/components/admin/select-scope-dialog";
+import { useSelectionNavigationGuard } from "@/hooks/use-selection-navigation-guard";
 import { cn } from "@/lib/utils";
 import { useAutoPageSize } from "@/hooks/use-auto-page-size";
 
@@ -66,6 +70,26 @@ import { useAutoPageSize } from "@/hooks/use-auto-page-size";
  * wants a fixed page size instead (e.g. an embedded table inside a detail
  * page, with no bounded outlet to measure against) can still opt out.
  *
+ * ROW SELECTION (bulk actions)
+ * ─────────────────────────────
+ * Opt-in via the `selection` prop, so every admin list can share it. The
+ * page owns the selected ids (it needs them to run its bulk action) and
+ * passes `{ selectedIds, onChange, isSelectable? }`. The table adds a
+ * leading checkbox column: one checkbox per row, and one in the header that
+ * selects (or clears) every selectable row on the current page, showing a
+ * dash when only some are checked. The page renders a BulkActionBar for the
+ * actions.
+ *
+ * The selection is remembered for as long as the person stays on the admin
+ * page: it survives moving to another table page, re-sorting, and filter or
+ * search edits (a checked row that is filtered out stays checked and comes
+ * back when it matches again). The header checkbox selects the rows on the
+ * current table page; when the list spans more than one page it first asks
+ * whether to select only what is shown or every row matching the current
+ * search and filters. Ticking it again clears what it selected. Leaving the page (another route, or closing the
+ * tab) while rows are checked opens a "Discard your selection?" prompt first,
+ * so a checked selection is never lost by accident.
+ *
  * Column-driven cells and header, "actions" column auto-detection and
  * centering, and the sort icon set (ChevronUp/Down/ChevronsUpDown) are
  * carried over as-is — same interaction and layout the original list pages
@@ -89,6 +113,14 @@ export interface AdminColumn<T> {
   /** Sort by this field instead of `key`, for render-only columns. */
   sortKey?: string;
   align?: "left" | "right";
+}
+
+export interface AdminSelection<T> {
+  selectedIds: ReadonlySet<string>;
+  onChange: (next: Set<string>) => void;
+  /** Rows that return false get a disabled checkbox and are skipped by
+   *  select-all. Default: every row is selectable. */
+  isSelectable?: (row: T) => boolean;
 }
 
 interface AdminDataTableProps<T> {
@@ -115,6 +147,8 @@ interface AdminDataTableProps<T> {
   /** Search row, filters, segmented tabs — rendered above the table, inside its own border. */
   toolbar?: ReactNode;
   className?: string;
+  /** Opt-in row checkboxes for bulk actions, see ROW SELECTION above. */
+  selection?: AdminSelection<T>;
 }
 
 const sortInitial = { key: null as string | null, dir: "asc" as "asc" | "desc" };
@@ -260,9 +294,13 @@ export default function AdminDataTable<T>({
   onRowClick,
   toolbar,
   className,
+  selection,
 }: Readonly<AdminDataTableProps<T>>) {
   const [sortState, dispatchSort] = useReducer(sortReducer, sortInitial);
   const [page, setPage] = useReducer((_: number, p: number) => p, 1);
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const selectedCount = selection?.selectedIds.size ?? 0;
+  const navBlocker = useSelectionNavigationGuard(selectedCount > 0);
 
   const {
     containerRef: apsContainerRef,
@@ -301,6 +339,68 @@ export default function AdminDataTable<T>({
 
   const isEmpty = !loading && paginated.length === 0;
 
+  // ── Row selection ─────────────────────────────────────────────────────
+  const rowIdOf = (row: T) => String(row[keyField] ?? JSON.stringify(row));
+  const canSelect = (row: T) => selection?.isSelectable?.(row) ?? true;
+  const selectableIds = paginated.filter(canSelect).map(rowIdOf);
+  const selectedOnPage = selection ? selectableIds.filter((id) => selection.selectedIds.has(id)) : [];
+  const allSelected = selectableIds.length > 0 && selectedOnPage.length === selectableIds.length;
+
+  // Every selectable row matching the current search and filters, across
+  // all table pages (sortedRows is the full filtered list, not one page).
+  const selectableAllIds = sortedRows.filter(canSelect).map(rowIdOf);
+  const spansPages = selectableAllIds.length > selectableIds.length;
+  const allMatchingSelected =
+    selection !== undefined &&
+    selectableAllIds.length > 0 &&
+    selectableAllIds.every((id) => selection.selectedIds.has(id));
+
+  function changeSelection(ids: string[], checked: boolean) {
+    if (!selection) return;
+    const next = new Set(selection.selectedIds);
+    for (const id of ids) {
+      if (checked) next.add(id);
+      else next.delete(id);
+    }
+    selection.onChange(next);
+  }
+
+  function toggleAllOnPage() {
+    if (!selection) return;
+    // Ticked already: clear everything the tick could have selected, so
+    // after "all rows" one untick clears all of them, not just this page.
+    if (allSelected) {
+      changeSelection(allMatchingSelected ? selectableAllIds : selectableIds, false);
+      return;
+    }
+    // More than one page of rows: ask what "all" should mean.
+    if (spansPages) {
+      setScopeOpen(true);
+      return;
+    }
+    changeSelection(selectableIds, true);
+  }
+
+  function chooseScope(ids: string[]) {
+    changeSelection(ids, true);
+    setScopeOpen(false);
+  }
+
+  function toggleRow(id: string) {
+    if (!selection) return;
+    const next = new Set(selection.selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selection.onChange(next);
+  }
+
+  function discardAndLeave() {
+    // proceed() first: clearing the selection re-renders and would drop the
+    // blocker before it could be used.
+    navBlocker.proceed?.();
+    selection?.onChange(new Set());
+  }
+
   // Extracted from a nested ternary (loading ? ... : !isEmpty ? ... : null)
   // inline in the table body below: three mutually exclusive render states
   // (skeleton rows while loading, real rows once loaded and non-empty,
@@ -308,19 +408,31 @@ export default function AdminDataTable<T>({
   // below the table).
   let tableBody: ReactNode = null;
   if (loading) {
-    tableBody = <TableSkeletonRows columns={columns} rowCount={effectivePageSize || 10} />;
+    tableBody = <TableSkeletonRows columns={columns} rowCount={effectivePageSize || 10} withCheckbox={!!selection} />;
   } else if (!isEmpty) {
     tableBody = (
       <TableBody>
         {paginated.map((row) => {
-          const rowKey = String(row[keyField] ?? JSON.stringify(row));
+          const rowKey = rowIdOf(row);
+          const checked = selection?.selectedIds.has(rowKey) ?? false;
           return (
             <TableRow
               key={rowKey}
               style={ROW_STYLE}
+              data-state={checked ? "selected" : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={onRowClick ? "cursor-pointer" : undefined}
             >
+              {selection && (
+                <TableCell className={cn(CELL_CLASS, "w-10 pr-0")} onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={checked}
+                    disabled={!canSelect(row)}
+                    onChange={() => toggleRow(rowKey)}
+                    aria-label="Select row"
+                  />
+                </TableCell>
+              )}
               {columns.map((col) => {
                 const actionsCol = isActionsColumn(col);
                 return (
@@ -361,6 +473,17 @@ export default function AdminDataTable<T>({
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
+                {selection && (
+                  <TableHead className="w-10 pr-0" style={{ height: "var(--height-table-header)" }}>
+                    <Checkbox
+                      checked={allSelected}
+                      indeterminate={selectedOnPage.length > 0 && !allSelected}
+                      disabled={selectableIds.length === 0}
+                      onChange={toggleAllOnPage}
+                      aria-label="Select all rows on this page"
+                    />
+                  </TableHead>
+                )}
                 {columns.map((col) => (
                   <SortableHeaderCell key={col.key} col={col} sortState={sortState} onSort={handleSort} />
                 ))}
@@ -414,6 +537,28 @@ export default function AdminDataTable<T>({
           </div>
         </div>
       )}
+
+      {selection && (
+        <SelectScopeDialog
+          open={scopeOpen}
+          shownCount={selectableIds.length}
+          totalCount={selectableAllIds.length}
+          onSelectShown={() => chooseScope(selectableIds)}
+          onSelectAll={() => chooseScope(selectableAllIds)}
+          onCancel={() => setScopeOpen(false)}
+        />
+      )}
+
+      {selection && (
+        <DiscardSelectionDialog
+          open={navBlocker.state === "blocked"}
+          count={selectedCount}
+          keepLabel="Stay on this page"
+          discardLabel="Discard and leave"
+          onKeep={() => navBlocker.reset?.()}
+          onDiscard={discardAndLeave}
+        />
+      )}
     </div>
   );
 }
@@ -434,9 +579,11 @@ function widthFor(rowIndex: number, colIndex: number) {
 function TableSkeletonRows<T>({
   columns,
   rowCount,
+  withCheckbox = false,
 }: Readonly<{
   columns: AdminColumn<T>[];
   rowCount: number;
+  withCheckbox?: boolean;
 }>) {
   const rowIndexes = Array.from({ length: Math.max(1, rowCount) }, (_, i) => i);
 
@@ -444,6 +591,11 @@ function TableSkeletonRows<T>({
     <TableBody>
       {rowIndexes.map((rowIndex) => (
         <TableRow key={rowIndex} style={ROW_STYLE}>
+          {withCheckbox && (
+            <TableCell className={cn(CELL_CLASS, "w-10 pr-0")}>
+              <Skeleton className="h-4 w-4 rounded" />
+            </TableCell>
+          )}
           {columns.map((col, colIndex) => {
             const actionsCol = isActionsColumn(col);
             return (

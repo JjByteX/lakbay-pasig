@@ -35,7 +35,7 @@ interface AdminPageHeaderProps {
 export function AdminPageHeader({ title, breadcrumb = [], badges, actions }: Readonly<AdminPageHeaderProps>) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1">
           {breadcrumb.map((crumb) => (
             <span key={crumb.to} className="flex items-center gap-1">

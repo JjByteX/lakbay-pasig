@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Tag, Pencil, type Icon as PhosphorIcon } from "@phosphor-icons/react";
+import { Tag, Pencil, type Icon as PhosphorIcon, Plus } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
@@ -414,7 +414,10 @@ export default function AdminCategoriesPage() {
     <div className="flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Categories</h1>
-        <Button onClick={() => setDialogTarget("new")}>Add Category</Button>
+        <Button onClick={() => setDialogTarget("new")} className="gap-1 pl-3.5">
+          <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
+          Add Category
+        </Button>
       </div>
 
       <AdminDataTable

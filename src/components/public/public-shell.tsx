@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { useAuthModal } from "@/lib/auth-modal";
+import { useSettingsModal } from "@/lib/settings-modal";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 
 // Global search: shell-owned per the resolved spec ("shared query state
@@ -628,6 +629,7 @@ function isSearchVisible(pathname: string): boolean {
 function AccountMenu() {
   const { session, profile } = useAuth();
   const navigate = useNavigate();
+  const { openSettings } = useSettingsModal();
   const { openAuth } = useAuthModal();
   const initial = profile?.display_name?.[0]?.toUpperCase();
   // Log-out confirmation: "Sign out" no longer calls signOut directly,
@@ -695,7 +697,7 @@ function AccountMenu() {
             <UserIcon className="mr-2 h-4 w-4" />
             Profile
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => navigate("/profile/settings")}>
+          <DropdownMenuItem onClick={() => openSettings()}>
             <SettingsIcon className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>

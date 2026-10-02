@@ -60,7 +60,7 @@ function PhotoCard({ item, onSelect }: Readonly<{ item: CategoryPhotoRowItem; on
       <div
         className="absolute inset-x-0 bottom-0 h-2/3"
         style={{
-          background: "linear-gradient(to top, rgb(7 46 87 / 0.85), transparent)",
+          background: "linear-gradient(to top, rgb(0 48 103 / 0.85), transparent)",
         }}
       />
       {/* Phase 3.2: no verification badge here -- home.tsx's Places/
