@@ -1,5 +1,6 @@
 import { House, MapTrifold, Compass, Bookmark } from "@phosphor-icons/react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { discoverResumeTarget } from "@/lib/discover-memory";
 
 // Fixed left-to-right order per navigation-and-access-control.md's Bottom Nav
 // Order, minus Profile: Home, Trails, Discover (center), Saved. Profile
@@ -18,13 +19,21 @@ const TABS = [
 ] as const;
 
 export function BottomNav() {
+  const { pathname } = useLocation();
+  const onDiscover = pathname === "/discover" || pathname.startsWith("/discover/");
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 h-16 border-t border-border bg-card">
       <div className="mx-auto flex h-full max-w-md items-center justify-around px-2">
-        {TABS.map((tab) => (
+        {TABS.map((tab) => {
+          // From another tab, Discover reopens the place or business page
+          // that was left open (mobile swipe pager keeps it). Tapping it
+          // while already in Discover goes to the map, like any tab bar.
+          const resume = tab.to === "/discover" && !onDiscover ? discoverResumeTarget() : null;
+          return (
           <NavLink
             key={tab.to}
-            to={tab.to}
+            to={resume ? resume.to : tab.to}
+            state={resume?.state}
             end={tab.end}
             className={({ isActive }) =>
               `flex h-full flex-1 flex-col items-center justify-center gap-1 text-xs font-semibold ${
@@ -42,7 +51,8 @@ export function BottomNav() {
               </>
             )}
           </NavLink>
-        ))}
+          );
+        })}
       </div>
     </nav>
   );

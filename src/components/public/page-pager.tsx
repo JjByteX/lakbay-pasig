@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
+import { Route, Routes, useLocation, useNavigate, type Location } from "react-router-dom";
 import { Compass } from "@phosphor-icons/react";
 import { EntryGate } from "@/lib/entry-gate";
 import { setPageTitle } from "@/lib/page-title";
+import { discoverResumeTarget, getDiscoverResumePath, isDiscoverDetailPath, rememberDiscoverPath } from "@/lib/discover-memory";
 import TrailsPage from "@/pages/trails";
 import DiscoverPage from "@/pages/discover";
+import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
+import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
 import SavedPage from "@/pages/saved";
 
 /**
@@ -14,13 +17,18 @@ import SavedPage from "@/pages/saved";
  * of <Outlet /> on exactly these four routes; every other route still
  * renders through the Outlet as before.
  *
- * Discover is the one pane that is NOT kept alive. It registers its filter
- * panel with the shell header and owns a live map, so it mounts only while
- * it is the current page and unmounts when you leave (exactly as it did
- * before the pager); a drag toward it shows a light placeholder instead of
- * mounting the map mid-gesture. On Discover's map view the map owns the
- * swipe (data-swipe-owner, set in discover.tsx), so there is no page swipe
- * over the map; the list view and the bottom nav still move between pages.
+ * Discover is the one pane with two behaviours (see DiscoverPane). The map
+ * and list screen registers its filter panel with the shell header and owns
+ * a live map, so it mounts only while it is the current page and a drag
+ * toward it shows a light placeholder instead of mounting the map
+ * mid-gesture. A place or business page, on the other hand, is a plain
+ * page: it is part of the swipe order (/discover/place/:id and
+ * /discover/business/:id map to the Discover slot), it swipes like Trails
+ * does, and when you swipe or tap to another page it stays open underneath
+ * and comes back exactly as you left it. On Discover's map view the map
+ * owns the swipe (data-swipe-owner, set in discover.tsx), so there is no
+ * page swipe over the map; the list view and the bottom nav still move
+ * between pages.
  *
  * Remembering: each page lives in its own pane with its own vertical
  * scroller, and a pane stays mounted once it has been shown, so scroll
@@ -44,11 +52,11 @@ import SavedPage from "@/pages/saved";
  * No looping: Home and Saved are hard stops with a rubber-band.
  */
 
-const PANES = [EntryGate, TrailsPage, DiscoverPage, SavedPage] as const;
+// null = Discover, rendered by DiscoverPane (it needs to know if it's current).
+const PANES: readonly (ComponentType | null)[] = [EntryGate, TrailsPage, null, SavedPage];
 const PATHS = ["/", "/trails", "/discover", "/saved"] as const;
 const TITLES = [null, "Trails", "Discover", "Saved"] as const;
 const LAST = PANES.length - 1;
-// Mounted only while current (see the doc comment above).
 const DISCOVER = 2;
 
 // Marker for a component that handles its own horizontal touch but that the
@@ -73,6 +81,7 @@ const RUBBER_BAND = 0.25;
 /** Index of the pager page for a pathname, or -1 when the route isn't one. */
 export function pagerIndexFor(pathname: string): number {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (isDiscoverDetailPath(path)) return DISCOVER;
   return (PATHS as readonly string[]).indexOf(path);
 }
 
@@ -96,6 +105,66 @@ function ownsHorizontalGesture(target: EventTarget | null): boolean {
   return false;
 }
 
+/**
+ * The Discover slot. It renders its own routes against a location it holds
+ * on to, instead of the live one, so the page survives the user leaving:
+ *
+ *  - Current: it follows the real location (map, list, or a place/business
+ *    page).
+ *  - Not current, last on a place/business page: that page stays mounted
+ *    with the location it had, so scroll position and loaded data are kept
+ *    and swiping back lands on it as it was.
+ *  - Not current, last on the map/list: a light placeholder, so the map
+ *    unmounts (and clears its header filters) like it always has.
+ *
+ * What it last showed is also recorded in discover-memory.ts so the swipe
+ * back (and the bottom nav's Discover tab) navigate to that page, not to
+ * the bare map.
+ */
+function DiscoverPane({ active }: Readonly<{ active: boolean }>) {
+  const location = useLocation();
+  const held = useRef<Partial<Location> | string | null>(null);
+  if (active) held.current = location;
+  else if (held.current === null) held.current = getDiscoverResumePath();
+  const heldPath = typeof held.current === "string" ? held.current : (held.current?.pathname ?? "/discover");
+
+  const key = active ? `${location.pathname}${location.search}` : null;
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const lastKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (active) rememberDiscoverPath(`${location.pathname}${location.search}`);
+  }, [active, location.pathname, location.search]);
+
+  // A different place opened inside this pane starts at the top; coming
+  // back to the same page (key unchanged) leaves the scroll where it was.
+  useLayoutEffect(() => {
+    if (key === null) return;
+    if (lastKey.current !== null && lastKey.current !== key) {
+      const scroller = wrapperRef.current?.parentElement;
+      if (scroller) scroller.scrollTop = 0;
+    }
+    lastKey.current = key;
+  }, [key]);
+
+  const showContent = active || isDiscoverDetailPath(heldPath);
+  return (
+    <div ref={wrapperRef} className="h-full w-full">
+      {showContent ? (
+        <Routes location={held.current ?? undefined}>
+          <Route path="/discover" element={<DiscoverPage />} />
+          <Route path="/discover/place/:id" element={<DiscoverPlaceDetailPage />} />
+          <Route path="/discover/business/:id" element={<DiscoverBusinessDetailPage />} />
+        </Routes>
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+          <Compass weight="bold" className="h-8 w-8" aria-hidden="true" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Gesture {
   startX: number;
   startY: number;
@@ -115,7 +184,7 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
   indexRef.current = index;
 
   const [mounted, setMounted] = useState<number[]>([index]);
-  const isMounted = (i: number) => i === index || (i !== DISCOVER && mounted.includes(i));
+  const isMounted = (i: number) => i === index || mounted.includes(i);
 
   // Title follows the visible page. Runs after child effects in the same
   // commit, so a pane mounted early by a drag that then cancels can't leave
@@ -181,7 +250,7 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
       const dir = dx < 0 ? 1 : -1;
       if (dir !== gesture.revealed) {
         gesture.revealed = dir;
-        if (i + dir >= 0 && i + dir <= LAST && i + dir !== DISCOVER) {
+        if (i + dir >= 0 && i + dir <= LAST) {
           setMounted((prev) => (prev.includes(i + dir) ? prev : [...prev, i + dir]));
         }
       }
@@ -207,7 +276,15 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
       const flicked = Math.abs(g.velocity) > COMMIT_VELOCITY && Math.sign(g.velocity) === Math.sign(g.dx);
       const commit = e.type === "touchend" && next >= 0 && next <= LAST && (farEnough || flicked);
       settle(commit ? next : i);
-      if (commit) navigate(PATHS[next]);
+      if (commit) {
+        // Discover reopens whichever of its pages was left open.
+        if (next === DISCOVER) {
+          const target = discoverResumeTarget();
+          navigate(target.to, { state: target.state });
+        } else {
+          navigate(PATHS[next]);
+        }
+      }
     };
 
     viewport.addEventListener("touchstart", onStart, { passive: true });
@@ -242,13 +319,7 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
             className="h-full shrink-0 overflow-y-auto [scrollbar-gutter:stable]"
             style={{ width: `${100 / PANES.length}%` }}
           >
-            {isMounted(i) ? (
-              <Pane />
-            ) : i === DISCOVER ? (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                <Compass weight="bold" className="h-8 w-8" aria-hidden="true" />
-              </div>
-            ) : null}
+            {Pane === null ? <DiscoverPane active={i === index} /> : isMounted(i) ? <Pane /> : null}
           </div>
         ))}
       </div>

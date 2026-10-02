@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Info, BookOpen } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
@@ -12,6 +12,7 @@ import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
+import { useDiscoverBack } from "@/lib/discover-memory";
 import { cn } from "@/lib/utils";
 
 // Phase 6.4 (step-5-phases.md): full record fields from businesses and
@@ -81,7 +82,7 @@ function itemsTabLabel(businessType: BusinessDetail["business_type"]): string {
  */
 export default function DiscoverBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const goBack = useDiscoverBack();
   const [searchParams] = useSearchParams();
   const itemId = searchParams.get("item");
   const [business, setBusiness] = useState<BusinessDetail | null>(null);
@@ -220,7 +221,7 @@ export default function DiscoverBusinessDetailPage() {
 
   return (
     <PageContainer width={hasPhotos ? "wide" : "narrow"}>
-      <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
+      <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
         <ArrowLeft className="h-5 w-5" />
       </Button>
 
