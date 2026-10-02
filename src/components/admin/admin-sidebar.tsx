@@ -62,14 +62,20 @@ import type { NotificationQueue } from "@/lib/admin-notifications";
 // Two groups, in this order: Main (no label, same spot the single group
 // always had, so nothing above or beside it moves) and Tools (labeled).
 // `group` only picks the block an item renders in; who sees it is still
-// decided by permission, permissions and adminOnly. Reports is not in this
-// list yet, see the placeholder row in the Tools group below.
+// decided by permission, permissions and adminOnly.
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: SquaresFour, permission: null, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/events", label: "Announcements", icon: CalendarDots, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/places", label: "Places", icon: Bank, permission: "manage_places" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/businesses", label: "Businesses", icon: Storefront, permission: "review_businesses" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/trails", label: "Trails", icon: MapTrifold, permission: "build_trails" as const, permissions: null, adminOnly: false, group: "main" },
+  // Reports (reports-phases.md Phase 6.1): selector at /admin/reports, first
+  // report is the barangay heatmap. Own permission (view_reports, migration
+  // 0043), not folded into an existing value: none of the five cover reading
+  // counts across Places and Businesses. First Tools entry, above Landing
+  // Page. Route guard in App.tsx uses the same permission, keep the two in
+  // step.
+  { to: "/admin/reports", label: "Reports", icon: ChartBar, permission: "view_reports" as const, permissions: null, adminOnly: false, group: "tools" },
   // Landing Page (landing-hero-phases.md Phase 3.1): the hero carousel
   // shown to a signed-out visitor on /welcome, /login, and /signup. Own
   // permission (manage_landing, migration 0033), not folded into
@@ -228,23 +234,6 @@ export function AdminSidebar({
           <SidebarGroupLabel className="pointer-events-none">Tools</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* Reports: coming soon placeholder. Not a link and not in
-                  NAV_ITEMS, since there is no route or permission yet (no
-                  spec covers it). Admin only for now, so staff never see a
-                  greyed out section, per admin-panel-spec.md's Access Rule.
-                  When the page exists, move this into NAV_ITEMS as the
-                  first group: "tools" entry and delete this row. */}
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton disabled>
-                    <ChartBar weight="bold" className="h-4 w-4 shrink-0" />
-                    <span>Reports</span>
-                    <span className="ml-auto text-xs group-data-[collapsible=icon]:hidden">
-                      Coming soon
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
               {toolItems.map(renderItem)}
             </SidebarMenu>
           </SidebarGroupContent>

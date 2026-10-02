@@ -124,6 +124,10 @@ values
   -- only this permission ... sees no other admin section") has a real
   -- login to exercise, same reasoning as staff.places/staff.business above.
   ('00000000-0000-0000-0000-000000000000', 'b13f9b4b-6d0a-4f9a-8f5a-2f7cf3a1e6a1', 'authenticated', 'authenticated', 'staff.landing@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '40 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
+  -- reports-phases.md Phase 6.3: demo account holding only view_reports, so
+  -- the Phase 6 gate (sees Reports, nothing else, redirected from a section
+  -- it lacks) has a real login to exercise, same reasoning as staff.landing.
+  ('00000000-0000-0000-0000-000000000000', 'e080ddf9-804f-4beb-b6cd-04b52f954e54', 'authenticated', 'authenticated', 'staff.reports@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '20 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
 
   -- Registered Users, no business (6)
   ('00000000-0000-0000-0000-000000000000', 'ed8d4b57-6a77-418b-9db3-11c18e18fbca', 'authenticated', 'authenticated', 'resident1@lakbay-demo.local', extensions.crypt('Demo!Password123', extensions.gen_salt('bf')), now(), now() - interval '300 days', now(), '{"provider":"email","providers":["email"]}', '{}', '', '', '', '', '', '', '', ''),
@@ -225,6 +229,15 @@ update public.profiles set
   position = 'Landing Page Content Editor',
   system_permission = array['manage_landing']
 where id = 'b13f9b4b-6d0a-4f9a-8f5a-2f7cf3a1e6a1';
+
+-- reports-phases.md Phase 6.3: holds only view_reports, nothing else.
+-- Reports must be the only admin section this login sees.
+update public.profiles set
+  role = 'staff', staff_role = 'staff', active_status = 'active',
+  display_name = 'Demo Staff Reports', contact_number = '+639170000008',
+  position = 'Planning Analyst',
+  system_permission = array['view_reports']
+where id = 'e080ddf9-804f-4beb-b6cd-04b52f954e54';
 
 -- 2.3 Residents (no business)
 update public.profiles set

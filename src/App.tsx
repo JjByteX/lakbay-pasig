@@ -31,6 +31,8 @@ import AdminTrailsPage from "@/pages/admin-trails";
 import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
 import AdminCategoriesPage from "@/pages/admin-categories";
 import AdminLandingPage from "@/pages/admin-landing";
+import AdminReportsPage from "@/pages/admin-reports";
+import AdminReportHeatmapPage from "@/pages/admin-report-heatmap";
 import AdminStaffPage from "@/pages/admin-staff";
 import AdminActivityPage from "@/pages/admin-activity";
 import AdminSettingsPage from "@/pages/admin-settings";
@@ -262,6 +264,28 @@ export default function App() {
                   requiredPermission={["manage_places", "build_trails", "publish_events", "review_businesses"]}
                 >
                   <AdminCategoriesPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Reports, reports-phases.md Phase 6.2: selector at /reports and
+                the barangay heatmap at /reports/heatmap. Both gated on
+                view_reports (migration 0043), matching admin-sidebar.tsx's
+                Reports nav item exactly so the route guard and the sidebar
+                visibility stay in sync, same pattern as Landing Page below.
+                Admin bypasses the check like every other requiredPermission. */}
+            <Route
+              path="reports"
+              element={
+                <ProtectedRoute requiredPermission="view_reports">
+                  <AdminReportsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="reports/heatmap"
+              element={
+                <ProtectedRoute requiredPermission="view_reports">
+                  <AdminReportHeatmapPage />
                 </ProtectedRoute>
               }
             />

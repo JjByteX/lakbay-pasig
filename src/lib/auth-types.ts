@@ -6,7 +6,8 @@ export type SystemPermission =
   | "review_businesses"
   | "publish_events"
   | "build_trails"
-  | "manage_landing";
+  | "manage_landing"
+  | "view_reports";
 
 export interface Profile {
   id: string;

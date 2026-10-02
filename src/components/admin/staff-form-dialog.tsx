@@ -44,6 +44,7 @@ const SYSTEM_PERMISSIONS = [
   { value: "publish_events", label: "Announcements" },
   { value: "build_trails", label: "Trails" },
   { value: "manage_landing", label: "Landing Page" },
+  { value: "view_reports", label: "Reports" },
 ] as const;
 
 type SystemPermission = (typeof SYSTEM_PERMISSIONS)[number]["value"];
