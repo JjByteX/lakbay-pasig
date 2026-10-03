@@ -266,6 +266,19 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
               ))}
             </ResultGroup>
           )}
+
+          {!loading && results.fiestas.length > 0 && (
+            <ResultGroup label="Fiestas">
+              {results.fiestas.map((fiesta) => (
+                <ResultRow
+                  key={fiesta.id}
+                  title={fiesta.name}
+                  subtitle={fiesta.date_label}
+                  onClick={() => goTo(`/fiestas/${fiesta.id}`)}
+                />
+              ))}
+            </ResultGroup>
+          )}
         </div>
       )}
     </div>

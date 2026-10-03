@@ -14,6 +14,7 @@ import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
 import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
 import EventDetailPage from "@/pages/event-detail";
+import FiestaDetailPage from "@/pages/fiesta-detail";
 import SavedPage from "@/pages/saved";
 import ProfilePage from "@/pages/profile";
 import SettingsPage from "@/pages/settings";
@@ -27,12 +28,14 @@ import AdminDiscoveryContentReviewPage from "@/pages/admin-discovery-content-rev
 import AdminBusinessesPage from "@/pages/admin-businesses";
 import AdminBusinessDetailPage from "@/pages/admin-business-detail";
 import AdminEventsPage from "@/pages/admin-events";
+import AdminFiestasPage from "@/pages/admin-fiestas";
 import AdminTrailsPage from "@/pages/admin-trails";
 import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
 import AdminCategoriesPage from "@/pages/admin-categories";
 import AdminLandingPage from "@/pages/admin-landing";
 import AdminReportsPage from "@/pages/admin-reports";
 import AdminReportHeatmapPage from "@/pages/admin-report-heatmap";
+import AdminReportFiestasPage from "@/pages/admin-report-fiestas";
 import AdminStaffPage from "@/pages/admin-staff";
 import AdminActivityPage from "@/pages/admin-activity";
 import AdminSettingsPage from "@/pages/admin-settings";
@@ -96,6 +99,7 @@ export default function App() {
                 bar stay visible per ux-ui-guidelines.md's Layout Shell Rules.
                 Reached from AnnouncementCarousel's tile click (home.tsx). */}
             <Route path="events/:id" element={<EventDetailPage />} />
+            <Route path="fiestas/:id" element={<FiestaDetailPage />} />
             <Route path="saved" element={<SavedPage />} />
             <Route path="profile" element={<ProfilePage />} />
             {/* Settings: Personalization, Phase 2.1: no ProtectedRoute
@@ -219,6 +223,14 @@ export default function App() {
               }
             />
             <Route
+              path="fiestas"
+              element={
+                <ProtectedRoute requiredPermission="publish_events">
+                  <AdminFiestasPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="trails"
               element={
                 <ProtectedRoute requiredPermission="build_trails">
@@ -286,6 +298,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission="view_reports">
                   <AdminReportHeatmapPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="reports/fiestas"
+              element={
+                <ProtectedRoute requiredPermission="view_reports">
+                  <AdminReportFiestasPage />
                 </ProtectedRoute>
               }
             />

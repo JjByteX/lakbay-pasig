@@ -12,6 +12,11 @@ const REPORTS = [
     name: "Barangay heatmap",
     description: "How many Places and Businesses each barangay has, verified and pending.",
   },
+  {
+    to: "/admin/reports/fiestas",
+    name: "Fiesta coverage",
+    description: "Which barangays have a published fiesta, only drafts, or none yet.",
+  },
 ];
 
 export default function AdminReportsPage() {

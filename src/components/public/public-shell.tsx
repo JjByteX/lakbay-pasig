@@ -582,8 +582,10 @@ function HeaderFilterArea({
 // level (not under any tab's own path prefix), reached from Home's
 // AnnouncementCarousel's tile click, so it's still part of the Home surface the
 // search bar should stay mounted across, same reasoning as the trails/
-// discover/saved detail-route case below.
-const SEARCH_VISIBLE_PATHS = ["/", "/trails", "/discover", "/saved", "/events"];
+// discover/saved detail-route case below. "/fiestas" is the same case:
+// fiestas/:id sits at the shell's top level, reached from a search result or
+// a Barangay Hall page's Fiesta tab, so the search bar stays mounted there too.
+const SEARCH_VISIBLE_PATHS = ["/", "/trails", "/discover", "/saved", "/events", "/fiestas"];
 
 function isSearchVisible(pathname: string): boolean {
   // Trails/Discover/Saved/Events detail routes (e.g. /trails/:id) nest

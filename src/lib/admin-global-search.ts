@@ -13,6 +13,8 @@ import { readEmbeddedName } from "./place-categories";
 // distinguish these, the public bar deliberately does not surface them).
 //
 // Five content types per 3.2: Places, Businesses, Events, Trails, Staff.
+// Fiestas (migrations 0044 and 0045) are a sixth, read through
+// fiestas_select_staff the same way: publish_events or admin, drafts included.
 // Each reads through that table's own `_select_staff` policy (places_
 // select_staff, businesses_select_staff, routes_select_staff, events_
 // select_staff, profiles_select_admin), not the `_select_public` policy
@@ -71,6 +73,14 @@ export interface AdminSearchEventHit {
   published: boolean;
 }
 
+export interface AdminSearchFiestaHit {
+  kind: "fiesta";
+  id: string;
+  name: string;
+  date_label: string;
+  published: boolean;
+}
+
 export interface AdminSearchStaffHit {
   kind: "staff";
   id: string;
@@ -83,6 +93,7 @@ export interface AdminSearchResults {
   businesses: AdminSearchBusinessHit[];
   trails: AdminSearchTrailHit[];
   events: AdminSearchEventHit[];
+  fiestas: AdminSearchFiestaHit[];
   staff: AdminSearchStaffHit[];
 }
 
@@ -91,6 +102,7 @@ export const EMPTY_ADMIN_SEARCH_RESULTS: AdminSearchResults = {
   businesses: [],
   trails: [],
   events: [],
+  fiestas: [],
   staff: [],
 };
 
@@ -100,6 +112,7 @@ export function hasAnyAdminResults(results: AdminSearchResults): boolean {
     results.businesses.length > 0 ||
     results.trails.length > 0 ||
     results.events.length > 0 ||
+    results.fiestas.length > 0 ||
     results.staff.length > 0
   );
 }
@@ -179,6 +192,25 @@ async function searchEvents(q: string): Promise<AdminSearchEventHit[]> {
   }));
 }
 
+async function searchFiestas(q: string): Promise<AdminSearchFiestaHit[]> {
+  // fiestas_select_staff (0044): publish_events or admin. only_published is
+  // false for the same reason as searchEvents above: staff reviewing the
+  // Fiestas list need to find a draft by name or barangay too. A staff
+  // member without publish_events gets zero rows under RLS, not an error.
+  const { data, error } = await supabase
+    .rpc("search_fiestas", { q, lim: RESULT_LIMIT, only_published: false })
+    .select("id, name, date_label, published");
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []).map((row) => ({
+    kind: "fiesta" as const,
+    id: row.id,
+    name: row.name,
+    date_label: row.date_label,
+    published: row.published,
+  }));
+}
+
 async function searchStaff(q: string): Promise<AdminSearchStaffHit[]> {
   // profiles_select_admin (0001/0009): admin only. A non-admin Staff
   // member's query returns zero rows under RLS (see file header), which
@@ -222,13 +254,14 @@ export async function searchAdminEverything(query: string): Promise<AdminSearchR
   const q = query.trim();
   if (!q) return EMPTY_ADMIN_SEARCH_RESULTS;
 
-  const [places, businesses, trails, events, staff] = await Promise.all([
+  const [places, businesses, trails, events, fiestas, staff] = await Promise.all([
     searchPlaces(q).catch(() => []),
     searchBusinesses(q).catch(() => []),
     searchTrails(q).catch(() => []),
     searchEvents(q).catch(() => []),
+    searchFiestas(q).catch(() => []),
     searchStaff(q).catch(() => []),
   ]);
 
-  return { places, businesses, trails, events, staff };
+  return { places, businesses, trails, events, fiestas, staff };
 }

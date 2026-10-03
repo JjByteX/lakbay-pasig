@@ -3,6 +3,8 @@ import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from "ma
 import { MapTrifold } from "@phosphor-icons/react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ReportDownloadMenu } from "@/components/admin/report-download-menu";
+import type { ReportTable } from "@/lib/report-files";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { usePageTitle } from "@/lib/page-title";
@@ -370,6 +372,32 @@ export default function AdminReportHeatmapPage() {
   const loadFailed = boundaryError !== null || pointsError !== null;
   const isEmpty = !loading && !loadFailed && points.length === 0;
 
+  // What the download holds: the list on screen, so the Type select carries
+  // over. The Status select only shades the map and sorts the list, and the
+  // list already shows both counts, so the file does too.
+  function reportTable(): ReportTable {
+    const notes = [
+      "Counts verified and pending Places and Businesses by barangay. Rejected Places and unverified Businesses are left out. This is not the same set Discover shows.",
+    ];
+    if (noPin.total > 0) {
+      notes.push(`${noPin.verified} verified and ${noPin.pending} pending have no pin, so they are not on the map.`);
+    }
+    if (noMatch.total > 0) {
+      notes.push(`${noMatch.verified} verified and ${noMatch.pending} pending sit outside every barangay.`);
+    }
+    return {
+      title: "Barangay heatmap",
+      details: [
+        `Type: ${TYPE_LABEL[type]}`,
+        `Made: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
+      ],
+      columns: ["Barangay", "Verified", "Pending"],
+      rows: rows.map((r) => [r.name, r.verified, r.pending]),
+      footer: ["Total", totals.verified, totals.pending],
+      notes,
+    };
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <AdminPageHeader
@@ -401,6 +429,11 @@ export default function AdminReportHeatmapPage() {
                 ))}
               </SelectContent>
             </Select>
+            <ReportDownloadMenu
+              getTable={reportTable}
+              fileBase={`barangay-heatmap-${type === "all" ? "places-and-businesses" : type === "place" ? "places" : "businesses"}`}
+              disabled={loading || loadFailed || isEmpty}
+            />
           </div>
         }
       />

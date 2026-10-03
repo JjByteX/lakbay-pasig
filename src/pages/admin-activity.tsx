@@ -68,6 +68,7 @@ const TARGET_LABEL: Record<string, string> = {
   place: "Place",
   business: "Business",
   event: "Announcement",
+  fiesta: "Fiesta",
   trail: "Trail",
   discovery_content: "Trail content",
   landing_slide: "Landing slide",

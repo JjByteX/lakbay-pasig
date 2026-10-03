@@ -1,4 +1,4 @@
-import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
+import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, FlagBanner, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -66,6 +66,7 @@ import type { NotificationQueue } from "@/lib/admin-notifications";
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: SquaresFour, permission: null, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/events", label: "Announcements", icon: CalendarDots, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
+  { to: "/admin/fiestas", label: "Fiestas", icon: FlagBanner, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/places", label: "Places", icon: Bank, permission: "manage_places" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/businesses", label: "Businesses", icon: Storefront, permission: "review_businesses" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/trails", label: "Trails", icon: MapTrifold, permission: "build_trails" as const, permissions: null, adminOnly: false, group: "main" },

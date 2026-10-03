@@ -888,3 +888,145 @@ insert into public.landing_slides (image_url, caption, sort_order, active) value
    'Walk through centuries of Pasigueño heritage', 1, true);
 
 commit;
+-- Fiestas seed. Source: Pasig City Hall Library, "The Barangay Fiestas of
+-- Pasig City" (2021 post), which itself copies p. 68 of "Pasigueno Hanapin
+-- Mo ang Hamon ng Bagong Milenyo" (427th Araw ng Pasig, 2000), so the list
+-- is about 26 years old. Every row loads UNPUBLISHED: CATO has not confirmed
+-- these dates, and the label "Verified by Pasig Tourism Office" must not
+-- appear on unconfirmed data. Staff publish a row once CATO checks it.
+--
+-- Dev only, like the rest of this file. Real fiesta content is a content
+-- task (build-order step 11), entered or confirmed by CATO staff, so none of
+-- this runs against the hosted project.
+--
+-- Barangay names follow the geojson spelling, not the library list's:
+-- Sta. Cruz -> Santa Cruz, Sta. Rosa -> Santa Rosa, Sto. Tomas -> Santo
+-- Tomas, Sta. Lucia -> Santa Lucia.
+--
+-- Web check of the conflicts (done after the first version of this seed):
+--   * San Joaquin: the list gives San Guillermo, which is Buting's saint in
+--     the row above. The barangay's own history page names San Joaquin
+--     (St. Joachim) as patron, feast July 26 ("Araw ng San Joaquin"), which
+--     is also the Church feast of Sts. Joachim and Anne. Fixed below.
+--   * Kalawaan: July 29 (St. Martha) is the parish feast, confirmed by the
+--     Diocese of Pasig directory and ParishPH. The Itik-Itik Festival (last
+--     Sunday of February, also for St. Martha) is a separate celebration per
+--     the Pasig City Guide and Wikipedia. Both are seeded as two rows.
+--   * San Antonio: not in the list. Its patron is San Antonio de Padua, and
+--     its 2026 novena posts (#BSAFiesta2026) ran about June 4-12, which fits
+--     the June 13 feast. The date is inferred from that, so it is flagged in
+--     source_reference. Added below.
+--   * Napico: PSA figures count it inside Manggahan ("Manggahan incl.
+--     Napico") and the Sagrada Familia Chapel is listed in Napico, Manggahan.
+--     It is tagged Manggahan and keeps Napico as the community.
+--   * Ugong: the list says 3rd Sunday of November, the Pasig City Guide says
+--     the Sunday before the Feast of Christ the King. They are the same day
+--     unless Christ the King falls on Nov 20 or 21. The label states the
+--     second rule and the usual result, for CATO to confirm.
+--
+-- Still unresolved, left as written for CATO:
+--   * Santa Cruz lists San Jose as patron. Its May 2-3 date matches the
+--     Feast of the Holy Cross (May 3), so San Jose may be copied from the
+--     San Jose row above. No Pasig source found, so not changed.
+--   * Santolan: the list says "3rd week of September", but the library's own
+--     Santolan history says the fiesta moved from Sept 18 to Sept 22, the
+--     feast of Sto. Tomas de Villanueva. Not changed.
+do $$
+declare
+  r record;
+  v_id uuid;
+  v_source constant text := 'Pasig City Hall Library, The Barangay Fiestas of Pasig City (2021), from Pasigueno Hanapin Mo ang Hamon ng Bagong Milenyo (2000)';
+begin
+  for r in
+    select * from (values
+      ('Maybunga',         1,  'January 17',               'San Antonio Abad'),
+      ('San Antonio',      6,  'June 13',                  'San Antonio de Padua'),
+      ('Pinagbuhatan',     1,  'January 20',               'San Sebastian'),
+      ('Buting',           2,  'February 10',              'San Guillermo'),
+      ('San Jose',         3,  'March 19',                 'San Jose'),
+      ('Caniogan',         4,  'April 17-18',              'Sta. Clara de Montefalco'),
+      ('Malinao',          4,  'April 26',                 'Our Lady of Good Counsel'),
+      ('Bagong Ilog',      4,  'April 30',                 'Sta. Rosa de Lima'),
+      ('Sumilang',         4,  'April 30',                 'Sta. Rosa de Lima'),
+      ('Bambang',          5,  'May 1',                    'San Felipe'),
+      ('Dela Paz',         5,  '1st Sunday of May',        'Nuestra Senora dela Paz'),
+      ('Santa Cruz',       5,  'May 2-3',                  'San Jose'),
+      ('Bagong Katipunan', 5,  'May 11',                   'Fatima'),
+      ('Kapasigan',        5,  'May 15',                   'San Isidro'),
+      ('San Joaquin',      7,  'July 26',                  'San Joaquin'),
+      ('Kalawaan',         7,  'July 29',                  'Sta. Martha'),
+      ('Santa Rosa',       8,  'August 23',                'Sta. Rosa'),
+      ('Oranbo',           8,  'August 28',                'St. Augustine'),
+      ('Palatiw',          8,  'August 28',                'St. Augustine'),
+      ('San Nicolas',      9,  'September 10',             'San Antonio de Tolentino'),
+      ('Santolan',         9,  '3rd week of September',   'Santo Tomas de Villanueva'),
+      ('Santo Tomas',      9,  'September 22',             'Sto. Tomas'),
+      ('San Miguel',       9,  'September 29',             'San Miguel'),
+      ('Rosario',          10, 'October 7',                'Sto. Rosario'),
+      ('Pineda',           10, 'October 15',               'Sta. Teresa de Avila'),
+      ('Ugong',            11, 'Sunday before the Feast of Christ the King (usually the 3rd Sunday of November)', 'Nuestra Senora del Rosario'),
+      ('Sagad',            12, 'December 13',              'Sta. Lucia'),
+      ('Manggahan',        12, 'December 13',              'Sta. Lucia'),
+      ('Santa Lucia',      12, 'December 13',              'Sta. Lucia'),
+      ('Kapitolyo',        12, 'Sunday after Christmas',   'Holy Family')
+    ) as s(barangay, month, date_label, saint)
+  loop
+    insert into public.fiestas (name, patron_saint, month, date_label, source_reference, published)
+    values (
+      'Fiesta ng ' || r.barangay, r.saint, r.month, r.date_label,
+      case r.barangay
+        when 'San Antonio' then 'Not in the City Hall Library list. Date inferred from the barangay''s 2026 novena posts and the June 13 feast of St. Anthony of Padua, confirm with the barangay.'
+        when 'San Joaquin' then v_source || '. Saint corrected to San Joaquin per the barangay history page.'
+        else v_source
+      end,
+      false
+    )
+    returning id into v_id;
+
+    insert into public.fiesta_barangays (fiesta_id, barangay)
+    values (v_id, r.barangay);
+  end loop;
+
+  -- Kalawaan's Itik-Itik Festival: a separate celebration for St. Martha,
+  -- besides the July 29 parish fiesta above.
+  insert into public.fiestas (name, patron_saint, month, date_label, source_reference, published)
+  values ('Itik-Itik Festival', 'Sta. Martha', 2, 'Last Sunday of February',
+          'Pasig City Guide (pasigcityguide.com, Pasig Events and Festivals), also listed on Wikipedia, Annual events in Metro Manila. Not in the City Hall Library list.', false)
+  returning id into v_id;
+
+  insert into public.fiesta_barangays (fiesta_id, barangay)
+  values (v_id, 'Kalawaan');
+
+  -- Napico: a community inside Manggahan, so it carries both.
+  insert into public.fiestas (name, patron_saint, community, month, date_label, source_reference, published)
+  values ('Fiesta ng Napico', 'Sagrada Pamilya', 'Napico', 12, 'Last Sunday of December', v_source, false)
+  returning id into v_id;
+
+  insert into public.fiesta_barangays (fiesta_id, barangay)
+  values (v_id, 'Manggahan');
+
+  -- Start and end dates (0044) for the fixed-date rows: "April 17-18" becomes
+  -- 2026-04-17 and 2026-04-18. The year is only a carrier and is never shown.
+  -- Labels that are rules ("3rd Sunday of November") do not match and keep
+  -- empty dates. Only labels whose month name agrees with the row's month are
+  -- touched, which also satisfies fiestas_start_date_month_check.
+  update public.fiestas f
+  set start_date = make_date(2026, f.month, (x.m)[2]::int),
+      end_date = case
+        when (x.m)[3] is null then null
+        else make_date(2026, f.month, (x.m)[3]::int)
+      end
+  from (
+    select id, regexp_match(
+      date_label,
+      '^(January|February|March|April|May|June|July|August|September|October|November|December) ([0-9]{1,2})(?:-([0-9]{1,2}))?$'
+    ) as m
+    from public.fiestas
+  ) x
+  where f.id = x.id
+    and x.m is not null
+    and f.month = array_position(
+      array['January','February','March','April','May','June','July','August','September','October','November','December'],
+      (x.m)[1]
+    );
+end $$;

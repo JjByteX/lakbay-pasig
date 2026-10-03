@@ -5,6 +5,7 @@ import {
   Bank,
   CalendarDots,
   CircleNotch,
+  FlagBanner,
   MagnifyingGlass,
   MapTrifold,
   Microphone,
@@ -135,6 +136,17 @@ function buildGroups(results: AdminSearchResults): SpotlightGroup[] {
         subtitle: event.category,
         badge: <StatusBadge status={event.published ? "published" : "draft"} />,
         icon: CalendarDots,
+      })),
+    },
+    {
+      label: "Fiestas",
+      items: results.fiestas.map((fiesta) => ({
+        id: `fiesta-${fiesta.id}`,
+        path: `/admin/fiestas?fiesta=${fiesta.id}`,
+        title: fiesta.name,
+        subtitle: fiesta.date_label,
+        badge: <StatusBadge status={fiesta.published ? "published" : "draft"} />,
+        icon: FlagBanner,
       })),
     },
     {

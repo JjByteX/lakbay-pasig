@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { ArrowLeft, Info, Scroll } from "@phosphor-icons/react";
+import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, FlagBanner, Info, Scroll } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
+import {
+  BARANGAY_HALL_CATEGORY,
+  barangayForPin,
+  fetchPublishedFiestasForBarangay,
+  type PublicFiesta,
+} from "@/lib/fiestas";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { Button } from "@/components/ui/button";
@@ -37,6 +43,13 @@ import { cn } from "@/lib/utils";
 // Phase 3.3: the chip row's own scope now explicitly changes, gaining an
 // icon beside each facility name (matching Discover's place category
 // chips), so each row also carries the facility's icon, not just its name.
+//
+// Fiesta tab (migrations 0044 and 0045): a place in the Barangay Hall
+// category gets a third segment, Fiesta, beside Details and History. Which
+// barangay's fiestas it shows is computed from the pin (barangay.ts,
+// decision #21), not stored on the place, so staff enter a fiesta once in
+// Fiestas and every hall page picks it up. Published fiestas only. Every
+// other category's page is unchanged.
 //
 // History tab phase: full record view splits into a segmented Details /
 // History tab control (Tabs primitive, same one discover.tsx already uses
@@ -98,6 +111,10 @@ export default function DiscoverPlaceDetailPage() {
   // facility_ids client-side -- the same pattern admin-place-detail.tsx
   // already uses for this exact relationship.
   const [allFacilities, setAllFacilities] = useState<PlaceFacility[]>([]);
+  // Fiesta tab: null while loading, [] when the barangay has none published
+  // (or the pin falls outside every barangay, or the lookup failed -- all
+  // read the same to a resident, so one empty state).
+  const [fiestas, setFiestas] = useState<PublicFiesta[] | null>(null);
 
   useEffect(() => {
     fetchActiveFacilities()
@@ -177,6 +194,29 @@ export default function DiscoverPlaceDetailPage() {
       });
   }, [id]);
 
+  const showFiestaTab = place?.category === BARANGAY_HALL_CATEGORY;
+
+  useEffect(() => {
+    setFiestas(null);
+    if (!place || place.category !== BARANGAY_HALL_CATEGORY) return;
+    if (place.latitude === null || place.longitude === null) {
+      setFiestas([]);
+      return;
+    }
+    let cancelled = false;
+    barangayForPin(place.latitude, place.longitude)
+      .then((name) => (name ? fetchPublishedFiestasForBarangay(name) : []))
+      .then((rows) => {
+        if (!cancelled) setFiestas(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setFiestas([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [place]);
+
   // Resolves this place's facility_ids against the fetched facility
   // directory, same client-side match admin-place-detail.tsx does for its
   // own facility chip row.
@@ -255,9 +295,10 @@ export default function DiscoverPlaceDetailPage() {
               source_reference). Defaults to Details, the visit-info tab a
               user coming from a marker or list row is most likely after. */}
           <Tabs defaultValue="details" className="xl:col-start-2 xl:row-start-2">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className={cn("grid w-full", showFiestaTab ? "grid-cols-3" : "grid-cols-2")}>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>
+              {showFiestaTab && <TabsTrigger value="fiesta">Fiesta</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="details" className="flex flex-col gap-4">
@@ -352,6 +393,33 @@ export default function DiscoverPlaceDetailPage() {
                   <EmptyState icon={Scroll} className="text-base">The history of this place will appear here.</EmptyState>
                 )}
             </TabsContent>
+
+            {showFiestaTab && (
+              <TabsContent value="fiesta" className="flex flex-col gap-4">
+                {fiestas === null && <p className="text-base text-muted-foreground">Loading…</p>}
+
+                {fiestas?.map((fiesta) => (
+                  <div key={fiesta.id} className="flex flex-col gap-1">
+                    <Link
+                      to={`/fiestas/${fiesta.id}`}
+                      className="w-fit text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                    >
+                      {fiesta.name}
+                    </Link>
+                    <p className="text-sm text-muted-foreground">
+                      {[fiesta.date_label, fiesta.patron_saint].filter(Boolean).join(" · ")}
+                    </p>
+                    {fiesta.description && <p className="text-base text-muted-foreground">{fiesta.description}</p>}
+                  </div>
+                ))}
+
+                {fiestas?.length === 0 && (
+                  <EmptyState icon={FlagBanner} className="text-base">
+                    The fiesta of this barangay will appear here.
+                  </EmptyState>
+                )}
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       )}

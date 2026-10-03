@@ -56,6 +56,13 @@ export interface SearchEventHit {
   category: string | null;
 }
 
+export interface SearchFiestaHit {
+  kind: "fiesta";
+  id: string;
+  name: string;
+  date_label: string;
+}
+
 export interface SearchItemHit {
   kind: "item";
   id: string;
@@ -77,6 +84,7 @@ export interface GlobalSearchResults {
   businesses: SearchBusinessHit[];
   trails: SearchTrailHit[];
   events: SearchEventHit[];
+  fiestas: SearchFiestaHit[];
   items: SearchItemHit[];
 }
 
@@ -85,6 +93,7 @@ export const EMPTY_SEARCH_RESULTS: GlobalSearchResults = {
   businesses: [],
   trails: [],
   events: [],
+  fiestas: [],
   items: [],
 };
 
@@ -94,6 +103,7 @@ export function hasAnyResults(results: GlobalSearchResults): boolean {
     results.businesses.length > 0 ||
     results.trails.length > 0 ||
     results.events.length > 0 ||
+    results.fiestas.length > 0 ||
     results.items.length > 0
   );
 }
@@ -176,6 +186,26 @@ async function searchEvents(q: string): Promise<SearchEventHit[]> {
     id: row.id,
     title: row.title,
     category: readEmbeddedName(row.event_categories),
+  }));
+}
+
+async function searchFiestas(q: string): Promise<SearchFiestaHit[]> {
+  // fiestas_select_public (0044): published = true only. search_fiestas
+  // (0045) takes only_published, default true, and applies it inside the
+  // function, same as search_events, so a staff account browsing the public
+  // surface still never sees drafts and the row cap counts published rows.
+  // It matches the name, community, patron saint and barangay tags, so
+  // "Buting" finds the fiesta even when its name does not say so.
+  const { data, error } = await supabase
+    .rpc("search_fiestas", { q, lim: RESULT_LIMIT })
+    .select("id, name, date_label");
+
+  if (error) throw error;
+  return (Array.isArray(data) ? data : []).map((row) => ({
+    kind: "fiesta" as const,
+    id: row.id,
+    name: row.name,
+    date_label: row.date_label,
   }));
 }
 
@@ -263,13 +293,14 @@ export async function searchEverything(query: string): Promise<GlobalSearchResul
   const q = query.trim();
   if (!q) return EMPTY_SEARCH_RESULTS;
 
-  const [places, businesses, trails, events, items] = await Promise.all([
+  const [places, businesses, trails, events, fiestas, items] = await Promise.all([
     searchPlaces(q).catch(() => []),
     searchBusinesses(q).catch(() => []),
     searchTrails(q).catch(() => []),
     searchEvents(q).catch(() => []),
+    searchFiestas(q).catch(() => []),
     searchItems(q).catch(() => []),
   ]);
 
-  return { places, businesses, trails, events, items };
+  return { places, businesses, trails, events, fiestas, items };
 }
