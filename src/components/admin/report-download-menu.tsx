@@ -11,7 +11,9 @@ import { REPORT_FORMATS, buildReportFile, type ReportFormat, type ReportTable } 
 
 // One Download dropdown shared by every report: Excel, PDF or Word. The file is
 // built in the browser from the table the page is showing (report-files.ts), so
-// it follows the page's current filter and nothing is fetched again.
+// it follows the page's current filter and nothing is fetched again. A page
+// may build its table asynchronously (the heatmap waits for a frame of its map
+// so the file can carry the picture), so getTable can return a promise.
 
 const ITEMS: { format: ReportFormat; icon: Icon }[] = [
   { format: "xlsx", icon: FileXls },
@@ -21,7 +23,7 @@ const ITEMS: { format: ReportFormat; icon: Icon }[] = [
 
 interface ReportDownloadMenuProps {
   /** Called when a format is picked, so the file holds what is on screen now. */
-  getTable: () => ReportTable;
+  getTable: () => ReportTable | Promise<ReportTable>;
   /** File name without extension or date, e.g. "fiesta-coverage". */
   fileBase: string;
   /** True while the report is loading or failed, since there is nothing to save. */
@@ -37,12 +39,15 @@ function todayStamp(): string {
 
 export function ReportDownloadMenu({ getTable, fileBase, disabled = false }: Readonly<ReportDownloadMenuProps>) {
   const [error, setError] = useState<string | null>(null);
+  // True while a file is being made, so a second click cannot start another.
+  const [busy, setBusy] = useState(false);
 
-  function download(format: ReportFormat) {
+  async function download(format: ReportFormat) {
     setError(null);
+    setBusy(true);
     try {
       const { extension, mime } = REPORT_FORMATS[format];
-      const bytes = buildReportFile(format, getTable());
+      const bytes = buildReportFile(format, await getTable());
       // Every builder returns a whole array, so its buffer is exactly the file.
       const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: mime }));
       const link = document.createElement("a");
@@ -54,6 +59,8 @@ export function ReportDownloadMenu({ getTable, fileBase, disabled = false }: Rea
       URL.revokeObjectURL(url);
     } catch {
       setError("Could not create the file. Try again.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -62,7 +69,7 @@ export function ReportDownloadMenu({ getTable, fileBase, disabled = false }: Rea
       {error && <span className="text-xs text-destructive">{error}</span>}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" disabled={disabled} className="gap-2">
+          <Button variant="outline" disabled={disabled || busy} className="gap-2">
             <DownloadSimple className="h-4 w-4" aria-hidden="true" />
             Download
             <CaretDown className="h-3.5 w-3.5" aria-hidden="true" />

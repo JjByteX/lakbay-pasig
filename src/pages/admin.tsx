@@ -10,7 +10,10 @@ import { cn } from "@/lib/utils";
 
 // Exact-match list routes — each one's own AdminDataTable measures this
 // outlet region to auto-size its page (see admin-data-table.tsx's
-// VIEWPORT FIT comment).
+// VIEWPORT FIT comment). The two report pages are here too: Fiesta coverage
+// is an AdminDataTable, and the Barangay heatmap fills the region with its
+// map and a list that scrolls on its own. The Reports selector page is not,
+// it is a short list with nothing to fit.
 const BOUNDED_LIST_ROUTES = new Set([
   "/admin/places",
   "/admin/businesses",
@@ -20,6 +23,8 @@ const BOUNDED_LIST_ROUTES = new Set([
   "/admin/categories",
   "/admin/staff",
   "/admin/activity",
+  "/admin/reports/heatmap",
+  "/admin/reports/fiestas",
 ]);
 
 // Sub pages (place new/edit, discovery review, business detail, trail

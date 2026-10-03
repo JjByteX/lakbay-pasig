@@ -4,7 +4,7 @@ import { MapTrifold } from "@phosphor-icons/react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReportDownloadMenu } from "@/components/admin/report-download-menu";
-import type { ReportTable } from "@/lib/report-files";
+import type { ReportImage, ReportTable } from "@/lib/report-files";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { usePageTitle } from "@/lib/page-title";
@@ -60,6 +60,74 @@ function legendLabel(step: number, max: number): string {
   const hi = Math.floor((max * step) / STEPS);
   if (hi < lo) return "–";
   return lo === hi ? `${lo}` : `${lo}–${hi}`;
+}
+
+const IMAGE_MAX_WIDTH = 1600;
+
+interface LegendSpec {
+  heading: string;
+  /** One label per shade step, lightest first. Empty when nothing is shaded. */
+  labels: string[];
+  dark: boolean;
+}
+
+// The map canvas plus a legend and credit strip under it, as one JPEG for the
+// download. Must run inside the frame that drew the canvas: WebGL clears its
+// buffer once a frame is shown, so a later read gives a blank picture. The
+// strip repeats the on-screen legend and the OpenStreetMap / OpenFreeMap
+// credit, which the map itself leaves out (attributionControl is off).
+function composeMapImage(source: HTMLCanvasElement, legend: LegendSpec): ReportImage {
+  const palette = legend.dark ? MOCHA : LATTE;
+  const scale = Math.min(1, IMAGE_MAX_WIDTH / source.width);
+  const width = Math.round(source.width * scale);
+  const mapHeight = Math.round(source.height * scale);
+  const font = Math.max(12, Math.round(width / 55));
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = mapHeight + Math.round(font * 4.6);
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("A 2D canvas is not available.");
+
+  ctx.fillStyle = palette.base;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(source, 0, 0, width, mapHeight);
+
+  const pad = Math.round(font * 0.8);
+  const family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  const legendY = mapHeight + Math.round(font * 1.5);
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = palette.text;
+  ctx.font = `600 ${font}px ${family}`;
+  let x = pad;
+  ctx.fillText(`${legend.heading}:`, x, legendY);
+  x += ctx.measureText(`${legend.heading}:`).width + font * 0.9;
+  ctx.font = `${font}px ${family}`;
+  if (legend.labels.length === 0) {
+    ctx.fillText("Nothing to shade", x, legendY);
+  } else {
+    const swatchW = font * 1.8;
+    const swatchH = font * 0.95;
+    legend.labels.forEach((label, i) => {
+      ctx.globalAlpha = STEP_OPACITY[i + 1];
+      ctx.fillStyle = palette.mauve;
+      ctx.fillRect(x, legendY - swatchH / 2, swatchW, swatchH);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = palette.road;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, legendY - swatchH / 2 + 0.5, swatchW - 1, swatchH - 1);
+      x += swatchW + font * 0.35;
+      ctx.fillStyle = palette.text;
+      ctx.fillText(label, x, legendY);
+      x += ctx.measureText(label).width + font * 1.1;
+    });
+  }
+  ctx.font = `${Math.round(font * 0.8)}px ${family}`;
+  ctx.fillText("© OpenStreetMap contributors, OpenFreeMap", pad, mapHeight + Math.round(font * 3.5));
+
+  const binary = atob(out.toDataURL("image/jpeg", 0.92).split(",")[1]);
+  const jpeg = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) jpeg[i] = binary.charCodeAt(i);
+  return { jpeg, width: out.width, height: out.height, alt: "Map of Pasig barangays shaded by count" };
 }
 
 async function loadBoundaries(): Promise<BarangayFeature[]> {
@@ -372,10 +440,49 @@ export default function AdminReportHeatmapPage() {
   const loadFailed = boundaryError !== null || pointsError !== null;
   const isEmpty = !loading && !loadFailed && points.length === 0;
 
+  // A picture of the map as it is now, with the legend, for the download.
+  // The hovered barangay's thick outline is screen feedback, so it is switched
+  // off for the one frame that is read and put back after.
+  async function captureMapImage(): Promise<ReportImage> {
+    const current = mapRef.current;
+    if (!current || !styleReadyRef.current || features.length === 0) throw new Error("The map is not ready.");
+    // Declared type, so the hoisted onRender below sees a Map, not Map | null.
+    const map: maplibregl.Map = current;
+    const legend: LegendSpec = {
+      heading: `${STATUS_LABEL[status]} ${type === "all" ? "Places and Businesses" : TYPE_LABEL[type]}`,
+      labels: max === 0 ? [] : Array.from({ length: STEPS }, (_, i) => legendLabel(i + 1, max)),
+      dark,
+    };
+    const marked = hoveredRef.current;
+    if (marked) map.setFeatureState({ source: SOURCE, id: marked }, { hover: false });
+    try {
+      return await new Promise<ReportImage>((resolve, reject) => {
+        function onRender() {
+          map.off("render", onRender);
+          window.clearTimeout(timer);
+          try {
+            resolve(composeMapImage(map.getCanvas(), legend));
+          } catch (e) {
+            reject(e);
+          }
+        }
+        const timer = window.setTimeout(() => {
+          map.off("render", onRender);
+          reject(new Error("The map did not draw in time."));
+        }, 3000);
+        map.on("render", onRender);
+        map.triggerRepaint();
+      });
+    } finally {
+      if (marked) map.setFeatureState({ source: SOURCE, id: marked }, { hover: true });
+    }
+  }
+
   // What the download holds: the list on screen, so the Type select carries
   // over. The Status select only shades the map and sorts the list, and the
-  // list already shows both counts, so the file does too.
-  function reportTable(): ReportTable {
+  // list already shows both counts, so the file does too. It also carries a
+  // picture of the map, so the Status line says what the shading means.
+  async function reportTable(): Promise<ReportTable> {
     const notes = [
       "Counts verified and pending Places and Businesses by barangay. Rejected Places and unverified Businesses are left out. This is not the same set Discover shows.",
     ];
@@ -385,21 +492,33 @@ export default function AdminReportHeatmapPage() {
     if (noMatch.total > 0) {
       notes.push(`${noMatch.verified} verified and ${noMatch.pending} pending sit outside every barangay.`);
     }
+    let image: ReportImage | undefined;
+    try {
+      image = await captureMapImage();
+    } catch {
+      // The counts are still worth saving; say what is missing.
+      notes.push("The map picture could not be added to this file.");
+    }
     return {
       title: "Barangay heatmap",
       details: [
         `Type: ${TYPE_LABEL[type]}`,
+        `Map shaded by: ${STATUS_LABEL[status]} count`,
         `Made: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
       ],
       columns: ["Barangay", "Verified", "Pending"],
       rows: rows.map((r) => [r.name, r.verified, r.pending]),
       footer: ["Total", totals.verified, totals.pending],
       notes,
+      image,
     };
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    // Bounded by admin.tsx (BOUNDED_LIST_ROUTES): from md up the page fits the
+    // viewport and only the barangay list scrolls. Below md the map and list
+    // stack, so the page scrolls instead of squeezing both into a phone screen.
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto md:overflow-hidden">
       <AdminPageHeader
         title="Barangay heatmap"
         breadcrumb={[{ label: "Reports", to: "/admin/reports" }]}
@@ -446,11 +565,11 @@ export default function AdminReportHeatmapPage() {
       {pointsError && <p className="text-sm text-destructive">{pointsError}</p>}
       {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-2">
+      <div className="grid gap-4 md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_360px] md:grid-rows-[minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col gap-2">
           <div
             ref={containerRef}
-            className="h-[55svh] min-h-[320px] overflow-hidden rounded-lg border border-border md:h-[calc(100svh-15rem)]"
+            className="h-[55svh] min-h-[320px] overflow-hidden rounded-lg border border-border md:h-auto md:min-h-0 md:flex-1"
           />
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2" aria-label={`Legend, ${STATUS_LABEL[status]} count`}>
@@ -482,7 +601,7 @@ export default function AdminReportHeatmapPage() {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-col gap-3 md:max-h-[calc(100svh-15rem)]">
+        <div className="flex min-h-0 flex-col gap-3">
           {loadFailed ? (
             <EmptyState icon={MapTrifold}>Counts are unavailable until the report data loads.</EmptyState>
           ) : isEmpty ? (

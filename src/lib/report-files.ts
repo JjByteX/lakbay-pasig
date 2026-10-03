@@ -6,6 +6,20 @@
 // objects in the standard Helvetica font. This file has no imports and no
 // DOM, so the self-check at the bottom runs under plain Node. The browser
 // side (making the file and clicking a link) is report-download-menu.tsx.
+//
+// A report can carry one picture (the heatmap's map). It arrives as finished
+// JPEG bytes, so no format here has to decode or compress an image: the PDF
+// embeds the JPEG as is (DCTDecode), and .xlsx and .docx store it as a media
+// file next to the XML.
+
+/** A finished JPEG and its size in pixels. */
+export interface ReportImage {
+  jpeg: Uint8Array;
+  width: number;
+  height: number;
+  /** Alternative text for the picture, read out by screen readers. */
+  alt?: string;
+}
 
 export interface ReportTable {
   title: string;
@@ -18,6 +32,8 @@ export interface ReportTable {
   footer?: (string | number)[];
   /** Plain lines under the table. */
   notes: string[];
+  /** An optional picture: under the details in PDF and Word, beside the table in Excel. */
+  image?: ReportImage;
 }
 
 export type ReportFormat = "xlsx" | "pdf" | "docx";
@@ -91,10 +107,18 @@ function crc32(data: Uint8Array): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-function zip(files: { name: string; text: string }[]): Uint8Array {
+// The largest size that fits inside maxW x maxH with the picture's own
+// proportions. Units are the caller's (pixels, points or EMU).
+function fitInside(image: ReportImage, maxW: number, maxH: number): { w: number; h: number } {
+  const scale = Math.min(maxW / image.width, maxH / image.height);
+  return { w: Math.round(image.width * scale), h: Math.round(image.height * scale) };
+}
+
+// An entry is XML text, or raw bytes for a picture. Both are stored, not compressed.
+function zip(files: { name: string; text?: string; data?: Uint8Array }[]): Uint8Array {
   const entries = files.map((f) => {
     const name = textEncoder.encode(f.name);
-    const data = textEncoder.encode(f.text);
+    const data = f.data ?? textEncoder.encode(f.text ?? "");
     return { name, data, crc: crc32(data) };
   });
   const localSize = entries.reduce((n, e) => n + 30 + e.name.length + e.data.length, 0);
@@ -211,10 +235,11 @@ function buildXlsx(table: ReportTable): Uint8Array {
     .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
     .join("");
 
+  const image = table.image;
   const sheet =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-    `<cols>${cols}</cols><sheetData>${rows.join("")}</sheetData></worksheet>`;
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+    `<cols>${cols}</cols><sheetData>${rows.join("")}</sheetData>${image ? `<drawing r:id="rId1"/>` : ""}</worksheet>`;
 
   const styles =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -238,6 +263,50 @@ function buildXlsx(table: ReportTable): Uint8Array {
     `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
     `</styleSheet>`;
 
+  // The picture sits beside the table, one empty column to its right, starting
+  // at the top, so it is in view the moment the file opens.
+  const picture: { name: string; text?: string; data?: Uint8Array }[] = [];
+  if (image) {
+    const EMU_PER_PX = 9525;
+    const size = fitInside(image, 720, 520);
+    const cx = size.w * EMU_PER_PX;
+    const cy = size.h * EMU_PER_PX;
+    picture.push(
+      {
+        name: "xl/worksheets/_rels/sheet1.xml.rels",
+        text:
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+          `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>` +
+          `</Relationships>`,
+      },
+      {
+        name: "xl/drawings/drawing1.xml",
+        text:
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+          `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+          `<xdr:oneCellAnchor>` +
+          `<xdr:from><xdr:col>${table.columns.length + 1}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>` +
+          `<xdr:ext cx="${cx}" cy="${cy}"/>` +
+          `<xdr:pic>` +
+          `<xdr:nvPicPr><xdr:cNvPr id="2" name="Picture 1" descr="${xmlEscape(image.alt ?? "Report picture")}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>` +
+          `<xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>` +
+          `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>` +
+          `</xdr:pic><xdr:clientData/>` +
+          `</xdr:oneCellAnchor></xdr:wsDr>`,
+      },
+      {
+        name: "xl/drawings/_rels/drawing1.xml.rels",
+        text:
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+          `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.jpeg"/>` +
+          `</Relationships>`,
+      },
+      { name: "xl/media/image1.jpeg", data: image.jpeg },
+    );
+  }
+
   return zip([
     {
       name: "[Content_Types].xml",
@@ -246,9 +315,11 @@ function buildXlsx(table: ReportTable): Uint8Array {
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
         `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `<Default Extension="xml" ContentType="application/xml"/>` +
+        (image ? `<Default Extension="jpeg" ContentType="image/jpeg"/>` : "") +
         `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
         `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
         `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+        (image ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : "") +
         `</Types>`,
     },
     {
@@ -277,6 +348,7 @@ function buildXlsx(table: ReportTable): Uint8Array {
     },
     { name: "xl/styles.xml", text: styles },
     { name: "xl/worksheets/sheet1.xml", text: sheet },
+    ...picture,
   ]);
 }
 
@@ -319,17 +391,39 @@ function buildDocx(table: ReportTable): Uint8Array {
     (table.footer ? rowXml(table.footer, { bold: true }) : "") +
     `</w:tbl>`;
 
+  // The picture is one inline paragraph, as wide as the text area allows but
+  // no taller than 4.5 inches, so the table still starts on the first page.
+  const image = table.image;
+  let picture = "";
+  if (image) {
+    const size = fitInside(image, 6400800, 4114800); // 7 in x 4.5 in, in EMU
+    picture =
+      `<w:p><w:pPr><w:spacing w:after="160"/></w:pPr><w:r><w:drawing>` +
+      `<wp:inline distT="0" distB="0" distL="0" distR="0">` +
+      `<wp:extent cx="${size.w}" cy="${size.h}"/>` +
+      `<wp:docPr id="1" name="Picture 1" descr="${xmlEscape(image.alt ?? "Report picture")}"/>` +
+      `<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+      `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+      `<pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="image1.jpeg"/><pic:cNvPicPr/></pic:nvPicPr>` +
+      `<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+      `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${size.w}" cy="${size.h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+      `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+  }
+
   const body =
     docxParagraph(table.title, { bold: true, size: 32, after: 120 }) +
     table.details.map((d) => docxParagraph(d, { after: 40 })).join("") +
     docxParagraph("", { after: 120 }) +
+    picture +
     tbl +
     docxParagraph("", { after: 120 }) +
     table.notes.map((n) => docxParagraph(n, { size: 18, after: 60 })).join("");
 
   const document =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}` +
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
+    `xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+    `xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}` +
     `<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>` +
     `</w:body></w:document>`;
 
@@ -341,6 +435,7 @@ function buildDocx(table: ReportTable): Uint8Array {
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
         `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `<Default Extension="xml" ContentType="application/xml"/>` +
+        (image ? `<Default Extension="jpeg" ContentType="image/jpeg"/>` : "") +
         `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
         `</Types>`,
     },
@@ -353,6 +448,19 @@ function buildDocx(table: ReportTable): Uint8Array {
         `</Relationships>`,
     },
     { name: "word/document.xml", text: document },
+    ...(image
+      ? [
+          {
+            name: "word/_rels/document.xml.rels",
+            text:
+              `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+              `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+              `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.jpeg"/>` +
+              `</Relationships>`,
+          },
+          { name: "word/media/image1.jpeg", data: image.jpeg },
+        ]
+      : []),
   ]);
 }
 
@@ -418,6 +526,14 @@ function pdfEscape(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
+// Bytes as a string with one character per byte, in chunks so a large picture
+// does not overflow the argument limit of fromCharCode.
+function bytesToLatin1(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return out;
+}
+
 function buildPdf(table: ReportTable): Uint8Array {
   const PAGE_W = 612;
   const PAGE_H = 792;
@@ -474,6 +590,16 @@ function buildPdf(table: ReportTable): Uint8Array {
   }
   y -= 10;
 
+  // The picture goes under the details, as wide as the page allows but no
+  // taller than 330 points, so the table's first rows still fit on page 1.
+  const image = table.image;
+  if (image) {
+    const size = fitInside(image, CONTENT_W, 330);
+    ensure(size.h, false);
+    ops().push(`q ${size.w} 0 0 ${size.h} ${MARGIN} ${(y - size.h).toFixed(2)} cm /Im1 Do Q`);
+    y -= size.h + 14;
+  }
+
   drawRow(table.columns, { header: true });
   for (const row of table.rows) drawRow(row, {});
   if (table.footer) drawRow(table.footer, { bold: true });
@@ -496,9 +622,11 @@ function buildPdf(table: ReportTable): Uint8Array {
   });
 
   // Objects: 1 catalog, 2 page tree, 3 and 4 fonts, then a page and its
-  // content stream per page.
+  // content stream per page, then the picture (if any) as the last object.
   const objects: string[] = [];
   const pageNumbers = pages.map((_, i) => 5 + i * 2);
+  const imageNumber = 5 + pages.length * 2;
+  const xObjects = image ? ` /XObject << /Im1 ${imageNumber} 0 R >>` : "";
   objects.push(`<< /Type /Catalog /Pages 2 0 R >>`);
   objects.push(`<< /Type /Pages /Kids [${pageNumbers.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
   objects.push(`<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`);
@@ -507,10 +635,19 @@ function buildPdf(table: ReportTable): Uint8Array {
     const stream = page.join("\n");
     objects.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] ` +
-        `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${pageNumbers[i] + 1} 0 R >>`,
+        `/Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xObjects} >> /Contents ${pageNumbers[i] + 1} 0 R >>`,
     );
     objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
   });
+  if (image) {
+    // The JPEG bytes ride along as a Latin-1 string (one character per byte),
+    // which the byte conversion at the end turns back into the same bytes.
+    const data = bytesToLatin1(image.jpeg);
+    objects.push(
+      `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} ` +
+        `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${data.length} >>\nstream\n${data}\nendstream`,
+    );
+  }
 
   // Every character is Latin-1 (toLatin1 above, ASCII everywhere else), so a
   // string's length is its byte length and offsets can be counted in characters.
@@ -555,6 +692,10 @@ function demo() {
   const xref = Number(/startxref\n(\d+)/.exec(pdf)?.[1]);
   assertEqual(pdf.slice(xref, xref + 4), "xref", "startxref points at the xref table");
   assertEqual(columnLetter(0) + columnLetter(25) + columnLetter(26), "AZAA", "column letters");
+  const withImage: ReportTable = { ...sample, image: { jpeg: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), width: 4, height: 3 } };
+  assertEqual(String.fromCharCode(...buildReportFile("xlsx", withImage).slice(0, 2)), "PK", "xlsx with a picture is a zip");
+  assertEqual(String.fromCharCode(...buildReportFile("docx", withImage).slice(0, 2)), "PK", "docx with a picture is a zip");
+  assertEqual(String.fromCharCode(...buildReportFile("pdf", withImage)).includes("/DCTDecode"), true, "pdf carries the picture");
   console.log("report-files.ts demo: all checks passed");
 }
 

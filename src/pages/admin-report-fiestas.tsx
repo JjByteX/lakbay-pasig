@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FlagBanner } from "@phosphor-icons/react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +18,10 @@ import type { ReportTable } from "@/lib/report-files";
 // Counts come from report_fiesta_coverage() (migration 0045), a counts-only
 // definer function, because a view_reports-only staff member cannot read draft
 // fiestas through RLS. The barangay list is the closed list in fiestas.ts.
+//
+// Layout: a table view in AdminDataTable, like the Fiestas list. admin.tsx
+// bounds this route (BOUNDED_LIST_ROUTES), so the page fits the viewport and
+// the table pages itself to the space left instead of scrolling the page.
 
 interface CoverageRow {
   barangay: string | null; // null: fiestas with no barangay tag
@@ -46,7 +51,38 @@ interface Row {
   published: number;
   draft: number;
   status: Status;
+  /** STATUS_ORDER of the status, so the Status column sorts gaps first. */
+  order: number;
 }
+
+const COLUMNS: AdminColumn<Row>[] = [
+  { key: "name", label: "Barangay", render: (r) => <span className="font-medium text-foreground">{r.name}</span> },
+  {
+    key: "published",
+    label: "Published",
+    align: "right",
+    width: "140px",
+    render: (r) => <span className="tabular-nums text-foreground">{r.published}</span>,
+  },
+  {
+    key: "draft",
+    label: "Draft",
+    align: "right",
+    width: "140px",
+    render: (r) => <span className="tabular-nums text-muted-foreground">{r.draft}</span>,
+  },
+  {
+    key: "status",
+    label: "Status",
+    sortKey: "order",
+    width: "170px",
+    render: (r) => (
+      <Badge variant={r.status === "published" ? "default" : r.status === "draft_only" ? "outline" : "destructive"}>
+        {STATUS_LABEL[r.status]}
+      </Badge>
+    ),
+  },
+];
 
 function statusOf(published: number, draft: number): Status {
   if (published > 0) return "published";
@@ -91,8 +127,9 @@ export default function AdminReportFiestasPage() {
       const c = byName.get(name);
       const published = c?.published_count ?? 0;
       const draft = c?.draft_count ?? 0;
-      return { name, published, draft, status: statusOf(published, draft) };
-    }).sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.name.localeCompare(b.name));
+      const status = statusOf(published, draft);
+      return { name, published, draft, status, order: STATUS_ORDER[status] };
+    }).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   }, [coverage]);
 
   const untagged = coverage.find((c) => c.barangay === null);
@@ -126,7 +163,7 @@ export default function AdminReportFiestasPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <AdminPageHeader
         title="Fiesta coverage"
         breadcrumb={[{ label: "Reports", to: "/admin/reports" }]}
@@ -154,53 +191,36 @@ export default function AdminReportFiestasPage() {
       </p>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {loadFailed ? (
-        <EmptyState icon={FlagBanner}>Counts are unavailable until the report data loads.</EmptyState>
-      ) : !loading ? (
+        <EmptyState icon={FlagBanner} className="flex-1">
+          Counts are unavailable until the report data loads.
+        </EmptyState>
+      ) : (
         <>
-          <p className="text-sm text-foreground">
-            <span className="font-medium">{counts.published} of {BARANGAYS.length}</span> barangays have a published
-            fiesta, {counts.draft_only} have drafts only, and {counts.none} have none.
-          </p>
-          <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <div className="grid grid-cols-[minmax(0,1fr)_72px_72px_110px] gap-2 border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
-              <span>Barangay</span>
-              <span className="text-right">Published</span>
-              <span className="text-right">Draft</span>
-              <span>Status</span>
-            </div>
-            {shown.length === 0 ? (
-              <EmptyState icon={FlagBanner}>No barangay matches this filter.</EmptyState>
-            ) : (
-              <ul className="divide-y divide-border">
-                {shown.map((r) => (
-                  <li
-                    key={r.name}
-                    className="grid grid-cols-[minmax(0,1fr)_72px_72px_110px] items-center gap-2 px-3 py-1.5 text-sm"
-                  >
-                    <span className="truncate text-foreground">{r.name}</span>
-                    <span className="text-right tabular-nums text-foreground">{r.published}</span>
-                    <span className="text-right tabular-nums text-muted-foreground">{r.draft}</span>
-                    <span>
-                      <Badge variant={r.status === "published" ? "default" : r.status === "draft_only" ? "outline" : "destructive"}>
-                        {STATUS_LABEL[r.status]}
-                      </Badge>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {untagged && (
+          {!loading && (
+            <p className="text-sm text-foreground">
+              <span className="font-medium">{counts.published} of {BARANGAYS.length}</span> barangays have a published
+              fiesta, {counts.draft_only} have drafts only, and {counts.none} have none.
+            </p>
+          )}
+          <AdminDataTable
+            columns={COLUMNS}
+            rows={shown}
+            loading={loading}
+            keyField="name"
+            autoPageSize
+            empty="No barangay matches this filter."
+            emptyIcon={FlagBanner}
+          />
+          {untagged && !loading && (
             <p className="text-xs text-muted-foreground">
               {untagged.published_count} published and {untagged.draft_count} draft fiestas have no barangay tag
               (city-wide, or a community only), so they are not in the rows above.
             </p>
           )}
         </>
-      ) : null}
+      )}
     </div>
   );
 }

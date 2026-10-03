@@ -66,10 +66,15 @@ import type { NotificationQueue } from "@/lib/admin-notifications";
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: SquaresFour, permission: null, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/events", label: "Announcements", icon: CalendarDots, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
-  { to: "/admin/fiestas", label: "Fiestas", icon: FlagBanner, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/places", label: "Places", icon: Bank, permission: "manage_places" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/businesses", label: "Businesses", icon: Storefront, permission: "review_businesses" as const, permissions: null, adminOnly: false, group: "main" },
   { to: "/admin/trails", label: "Trails", icon: MapTrifold, permission: "build_trails" as const, permissions: null, adminOnly: false, group: "main" },
+  // Fiestas: last in Main. It shares publish_events with Announcements, which
+  // is why it first landed next to it, but a fiesta is permanent reference
+  // data, not news (decision log, Fiestas), and the list is about 30 rows
+  // edited a few times a year. So it sits after the day to day sections and
+  // does not split Places, Businesses and Trails.
+  { to: "/admin/fiestas", label: "Fiestas", icon: FlagBanner, permission: "publish_events" as const, permissions: null, adminOnly: false, group: "main" },
   // Reports (reports-phases.md Phase 6.1): selector at /admin/reports, first
   // report is the barangay heatmap. Own permission (view_reports, migration
   // 0043), not folded into an existing value: none of the five cover reading
