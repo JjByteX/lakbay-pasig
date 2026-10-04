@@ -653,7 +653,7 @@ function LegendPanel({
               className={`block h-4 w-4 shrink-0 rounded-full shadow ${RING_PENDING}`}
               style={{ backgroundColor: categoryColor(null) }}
             />
-            <span className="text-sm text-foreground">Pending Verification</span>
+            <span className="text-sm text-foreground">Pending CATO review</span>
           </div>
         </div>
 

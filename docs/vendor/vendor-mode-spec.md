@@ -10,7 +10,7 @@ A person can browse the app normally, then switch into Vendor mode to manage the
 
 ### Tier 1: Basic Listing
 
-Goes live instantly. Shows a visible "Pending Verification" badge until CATO reviews it. Vendor gets full value right away, no wait tied to CATO staff availability.
+Goes live instantly. Shows a visible "Pending CATO review" badge until CATO reviews it. Vendor gets full value right away, no wait tied to CATO staff availability.
 
 CATO reviews at their own pace after the fact. Review checks accuracy, not permission to exist. If something is wrong, CATO edits, requests a correction, or unpublishes with review notes.
 

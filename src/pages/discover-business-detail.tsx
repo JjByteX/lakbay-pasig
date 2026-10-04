@@ -11,6 +11,8 @@ import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
+import { SaveButton } from "@/components/public/save-button";
+import { RecommendationRow } from "@/components/public/recommendation-row";
 import { usePageTitle } from "@/lib/page-title";
 import { useDiscoverBack } from "@/lib/discover-memory";
 import { cn } from "@/lib/utils";
@@ -72,13 +74,9 @@ function itemsTabLabel(businessType: BusinessDetail["business_type"]): string {
 /**
  * Phase 6.2, 6.4: full record detail page for a business, reached the same
  * way as the place detail page (result-card.tsx's "View full details"
- * link). No save action here, saved_places (migration 0007) is place-only
- * by schema and by data-model.md's End User fields, no saved_businesses
- * table exists (saved-places.ts's own note); businesses are not saveable
- * in v1, so this page simply has no heart icon rather than a disabled one
- * with nothing to explain, per ux-ui-guidelines.md's Disabled/gated rule
- * (a control with no path to ever becoming enabled shouldn't be shown at
- * all, that rule governs a control that unlocks under some condition).
+ * link). The heart in the header saves the business to saved_businesses
+ * (migration 0047, decision-log.md entry #41), the same control and place in
+ * the header as the place page. It was left out in v1 while no table existed.
  */
 export default function DiscoverBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -221,9 +219,12 @@ export default function DiscoverBusinessDetailPage() {
 
   return (
     <PageContainer width={hasPhotos ? "wide" : "narrow"}>
-      <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
-        <ArrowLeft className="h-5 w-5" />
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        {business && <SaveButton kind="business" itemId={business.id} />}
+      </div>
 
       {(loading || !itemsLoaded) && <p className="text-base text-muted-foreground">Loading…</p>}
 
@@ -423,6 +424,13 @@ export default function DiscoverBusinessDetailPage() {
           </Tabs>
         </div>
       )}
+
+      {/* Similar (recommendation-plan.md, Scope): after the whole grid, full
+          width, so the xl sticky gallery column is not disturbed. Places and
+          businesses mixed in one row, this business left out. Guests see it too,
+          the hide control only shows when signed in. Renders nothing when
+          empty or on error. */}
+      {!loading && business && <RecommendationRow anchor={{ kind: "business", id: business.id }} title="Similar" />}
     </PageContainer>
   );
 }

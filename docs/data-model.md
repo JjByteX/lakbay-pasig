@@ -125,5 +125,6 @@ Rule: only proximity triggered secrets go here, radius and sequence required. Ge
 - Preferred Categories -Matthew
 - Saved Places -Matthew
 - Saved Routes -Matthew
+- Saved Businesses (added with migration 0047, own table, same shape as Saved Places)
 - Trails Completed -JJ
 - Account Creation Date -Matthew

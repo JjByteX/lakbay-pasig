@@ -23,7 +23,7 @@ import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/direction
 //
 // Verification label per navigation-and-access-control.md's v1 scope:
 // "Verified by Pasig Tourism Office" only, no named contributor credit.
-// Pending business gets a visually distinct "Pending Verification" label,
+// Pending business gets a visually distinct "Pending CATO review" label,
 // per vendor-mode-spec.md, so an unreviewed listing never borrows the look
 // of institutional trust it has not earned yet. Both states share one
 // inline icon + text layout; pending uses a muted question seal.
@@ -40,7 +40,7 @@ export function VerificationBadge({ status }: Readonly<{ status: DiscoverResult[
   return (
     <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground">
       <Icon className={cn("h-4 w-4 shrink-0", pending ? "text-muted-foreground" : "text-primary")} aria-hidden="true" />
-      {pending ? "Pending Verification" : "Verified by Pasig Tourism Office"}
+      {pending ? "Pending CATO review" : "Verified by Pasig Tourism Office"}
     </span>
   );
 }

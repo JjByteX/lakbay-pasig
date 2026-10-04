@@ -5,15 +5,14 @@ import type { DiscoverPlace } from "./discover-types";
 
 /**
  * Phase 6.5-6.6 (step-5-phases.md): saved_places (migration 0007, owner-
- * only RLS via saved_places_own) is place-only, per data-model.md's End
- * User fields (Saved Places, Saved Routes — no Saved Businesses) and the
- * table's own place_id foreign key (references public.places(id), not a
- * type-plus-id pattern like route_stops/discovery_content use). No
- * saved_businesses table exists anywhere in the schema. This is the data
- * model as designed, not a gap this phase should silently patch by
- * inventing a new table, schema is on architecture-notes.md's never-
- * touch-without-approval list. Businesses are therefore not saveable in
- * v1; the save action only ever renders on a place's detail page.
+ * only RLS via saved_places_own) is place-only, with a place_id foreign
+ * key (references public.places(id), not a type-plus-id pattern like
+ * route_stops/discovery_content use). Businesses have their own table,
+ * saved_businesses (migration 0047, saved-businesses.ts), rather than a
+ * type column here, the same reason 0007 gives for keeping saved_places
+ * and saved_routes apart. Until 0047 businesses were not saveable in v1,
+ * which was the data model as designed then, not a gap to patch silently:
+ * schema is on architecture-notes.md's never-touch-without-approval list.
  */
 
 export async function isPlaceSaved(userId: string, placeId: string): Promise<boolean> {

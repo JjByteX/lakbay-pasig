@@ -1,11 +1,37 @@
 import { Heart } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { isPlaceSaved, toggleSavedPlace } from "@/lib/saved-places";
+import { isBusinessSaved, toggleSavedBusiness } from "@/lib/saved-businesses";
 import { useSavedToggle } from "@/hooks/use-saved-toggle";
 import { cn } from "@/lib/utils";
 
+// What the heart saves. Each kind has its own table (saved_places 0007,
+// saved_businesses 0047) and its own lib functions and error copy, picked once
+// below. The optimistic toggle itself is use-saved-toggle.ts, shared.
+const KINDS = {
+  place: {
+    fetchIsSaved: isPlaceSaved,
+    toggle: toggleSavedPlace,
+    saveErrorMessage: "Couldn't save this place. Try again.",
+    removeErrorMessage: "Couldn't remove this place. Try again.",
+    saveLabel: "Save this place",
+    removeLabel: "Remove from saved places",
+  },
+  business: {
+    fetchIsSaved: isBusinessSaved,
+    toggle: toggleSavedBusiness,
+    saveErrorMessage: "Couldn't save this business. Try again.",
+    removeErrorMessage: "Couldn't remove this business. Try again.",
+    saveLabel: "Save this business",
+    removeLabel: "Remove from saved businesses",
+  },
+} as const;
+
 interface SaveButtonProps {
-  placeId: string;
+  // Defaults to "place", so a caller that saves a place passes only itemId.
+  kind?: keyof typeof KINDS;
+  // The place id or the business id, whichever kind says.
+  itemId: string;
   // Step 8, Phase 3.1: optional, additive prop. Existing call sites
   // (discover-place-detail.tsx) pass none and are unaffected. The Saved
   // page's SavedPlaceRow passes this to remove its own row from the list
@@ -18,17 +44,17 @@ interface SaveButtonProps {
 }
 
 /**
- * Phase 6.5-6.6 (step-5-phases.md): heart icon, place-only per saved-
- * places.ts's own note (no saved_businesses table exists, matches
- * data-model.md's End User fields). Signed-in tap inserts or deletes the
- * saved_places row directly (6.5), no confirmation modal for a reversible
+ * Phase 6.5-6.6 (step-5-phases.md): heart icon. It was place-only until
+ * migration 0047 added saved_businesses (decision-log.md entry #41), so it
+ * now takes a kind. Signed-in tap inserts or deletes the saved_places or
+ * saved_businesses row directly (6.5), no confirmation modal for a reversible
  * personal action. Guest sees the identical heart icon and tapping it
  * opens the auth popup via openAuth("login") instead of writing
  * (landing-hero-phases.md 7.4, previously navigate("/login") in 6.6),
  * rather than a disabled button, since ux-ui-guidelines.md's Disabled/gated rule
  * requires a disabled action to clearly communicate what unlocks it, and a
  * bare disabled heart with no explanation would fail that. Also enforced
- * at the database layer independent of this UI check, saved_places has no
+ * at the database layer independent of this UI check, neither table has a
  * policy allowing an unauthenticated insert.
  *
  * Heart is one of Phosphor's standard icons for this exact concept
@@ -41,17 +67,17 @@ interface SaveButtonProps {
  * Step 8 cleanup: the optimistic check-on-mount / flip / revert-with-
  * error logic below is src/hooks/use-saved-toggle.ts's useSavedToggle,
  * shared with save-route-button.tsx rather than kept as two byte-
- * identical copies. This component only supplies the place-specific
- * pieces: placeId as the generic itemId, saved-places.ts's own
- * isPlaceSaved/toggleSavedPlace, and its own error copy.
+ * identical copies. This component only supplies the kind-specific
+ * pieces (the KINDS table above): the lib functions and the copy.
  */
-export function SaveButton({ placeId, onToggle }: Readonly<SaveButtonProps>) {
+export function SaveButton({ kind = "place", itemId, onToggle }: Readonly<SaveButtonProps>) {
+  const copy = KINDS[kind];
   const { saved, loading, error, handleClick } = useSavedToggle({
-    itemId: placeId,
-    fetchIsSaved: isPlaceSaved,
-    toggle: toggleSavedPlace,
-    saveErrorMessage: "Couldn't save this place. Try again.",
-    removeErrorMessage: "Couldn't remove this place. Try again.",
+    itemId,
+    fetchIsSaved: copy.fetchIsSaved,
+    toggle: copy.toggle,
+    saveErrorMessage: copy.saveErrorMessage,
+    removeErrorMessage: copy.removeErrorMessage,
     onToggle,
   });
 
@@ -63,7 +89,7 @@ export function SaveButton({ placeId, onToggle }: Readonly<SaveButtonProps>) {
         size="icon"
         onClick={handleClick}
         disabled={loading}
-        aria-label={saved ? "Remove from saved places" : "Save this place"}
+        aria-label={saved ? copy.removeLabel : copy.saveLabel}
         aria-pressed={saved}
       >
         <Heart weight={saved ? "fill" : "bold"} className={cn("h-5 w-5", saved && "text-primary")} />

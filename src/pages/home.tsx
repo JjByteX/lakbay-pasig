@@ -10,6 +10,7 @@ import {
   type CategoryPhotoRowItem,
 } from "@/components/public/category-photo-row";
 import { PageContainer } from "@/components/public/page-container";
+import { RecommendationRow } from "@/components/public/recommendation-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Megaphone, SealCheck } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -237,6 +238,12 @@ export default function HomePage() {
         <h2 className="text-base font-semibold text-foreground">Announcements</h2>
         {announcementsBody}
       </div>
+
+      {/* Recommendations: directly under Announcements, above the photo
+          rows. The row's own title is the heading ("For you", "Near you" or
+          "Around Pasig"), so there is no h2 here. It renders nothing when
+          empty or on error, so it never blocks Home. */}
+      <RecommendationRow />
 
       {showcaseBody}
     </PageContainer>

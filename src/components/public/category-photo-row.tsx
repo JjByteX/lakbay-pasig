@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, DotsThreeVertical, EyeSlash } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RecentlyVerifiedItem } from "@/lib/home-types";
+import { VerificationBadge } from "./result-card";
+import { itemKey } from "@/lib/recommendations";
 
 /**
  * home-photo-showcase-phases.md Phase 3.1: one row for the Home photo
@@ -26,12 +29,27 @@ export interface CategoryPhotoRowItem {
   kind: RecentlyVerifiedItem["kind"];
   name: string;
   coverPhotoUrl: string | null;
+  // Recommendations (recommendation-plan.md, Reason label): both optional, so
+  // the existing verified-only rows pass neither and look the same. A reason
+  // ("Near you", "Open now", "Similar to X") shows under the photo. A status
+  // shows the verification badge, which the recommendation rows need on every
+  // card because they mix Verified and Pending businesses.
+  reason?: string | null;
+  verificationStatus?: "verified" | "pending";
 }
 
 interface CategoryPhotoRowProps {
   categoryName: string;
   items: CategoryPhotoRowItem[];
   onSelect: (item: CategoryPhotoRowItem) => void;
+  // "Not interested". The control only renders when this is given, so guests
+  // (who cannot hide) never see it. Recommendation rows only.
+  onHide?: (item: CategoryPhotoRowItem) => void;
+  // Items hidden in this view (itemKey of each). A hidden card turns into one
+  // "Hidden. Undo" line in place, same footprint, so the row does not shift.
+  // There is no toast primitive in the app, so the undo lives on the card.
+  hiddenIds?: ReadonlySet<string>;
+  onUndo?: (item: CategoryPhotoRowItem) => void;
 }
 
 // Phase 3.4: fixed card size, shared by the card and the skeleton below so
@@ -39,6 +57,15 @@ interface CategoryPhotoRowProps {
 // when data arrives). One class string rather than inline px so it can step
 // up at md (144px -> 176px) for desktop; both are on the 8px grid.
 const CARD_SIZE = "h-36 w-36 md:h-44 md:w-44";
+const CARD_WIDTH = "w-36 md:w-44";
+const PHOTO_HEIGHT = "h-36 md:h-44";
+// Recommendation cards add a caption strip (reason and badge) under the square
+// photo. The strip is as tall as its content and no taller: cards in one row
+// already stretch to the tallest, and a reserved blank area showed up as dead
+// space whenever a row had no reason lines (the "Around Pasig" case). The
+// skeleton is a typical card, photo plus a one line reason and a two line
+// badge, so a loaded row lands close to it.
+const CARD_WITH_STRIP_HEIGHT = "h-52 md:h-[248px]";
 
 // Phase 3.2: one photo card -- cover photo as the background, name
 // overlaid at the bottom over a scrim. Same scrim recipe auth-layout.tsx
@@ -46,33 +73,100 @@ const CARD_SIZE = "h-36 w-36 md:h-44 md:w-44";
 // an absolutely-positioned gradient from a dark, near-opaque base up to
 // transparent, with the label sitting inside that gradient's opaque end,
 // rather than inventing a new overlay treatment for this card.
-function PhotoCard({ item, onSelect }: Readonly<{ item: CategoryPhotoRowItem; onSelect: (item: CategoryPhotoRowItem) => void }>) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(item)}
-      className={`group relative shrink-0 overflow-hidden rounded-lg border border-border bg-cover bg-center text-left transition-transform hover:-translate-y-0.5 ${CARD_SIZE}`}
-      style={{
-        backgroundImage: item.coverPhotoUrl ? `url(${item.coverPhotoUrl})` : undefined,
-      }}
-    >
-      {!item.coverPhotoUrl && <div className="absolute inset-0 bg-muted" />}
+function PhotoCard({
+  item,
+  onSelect,
+  onHide,
+  hidden = false,
+  onUndo,
+}: Readonly<{
+  item: CategoryPhotoRowItem;
+  onSelect: (item: CategoryPhotoRowItem) => void;
+  onHide?: (item: CategoryPhotoRowItem) => void;
+  hidden?: boolean;
+  onUndo?: (item: CategoryPhotoRowItem) => void;
+}>) {
+  const hasStrip = item.reason != null || item.verificationStatus != null;
+  if (hidden) {
+    return (
       <div
-        className="absolute inset-x-0 bottom-0 h-2/3"
-        style={{
-          background: "linear-gradient(to top, rgb(0 48 103 / 0.85), transparent)",
-        }}
-      />
-      {/* Phase 3.2: no verification badge here -- home.tsx's Places/
-          Businesses framing (Phase 5.2) already states every card in this
-          section is verified, so a per-card badge would repeat that fact
-          on every tile rather than add information. */}
-      <span className="relative flex h-full flex-col justify-end p-3">
-        <span className="line-clamp-2 text-sm font-semibold text-primary-foreground">
-          {item.name}
+        className={`flex shrink-0 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-muted p-3 ${CARD_WIDTH}`}
+      >
+        <p role="status" className="text-sm text-foreground">
+          Hidden.
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={() => onUndo?.(item)}>
+          Undo
+        </Button>
+      </div>
+    );
+  }
+  // The select button and the hide control are siblings inside one wrapper: a
+  // button inside a button is invalid HTML.
+  return (
+    <div className={`relative shrink-0 transition-transform hover:-translate-y-0.5 ${CARD_WIDTH}`}>
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span
+          className={`relative block w-full shrink-0 bg-cover bg-center ${PHOTO_HEIGHT}`}
+          style={{
+            backgroundImage: item.coverPhotoUrl ? `url(${item.coverPhotoUrl})` : undefined,
+          }}
+        >
+          {!item.coverPhotoUrl && <span className="absolute inset-0 bg-muted" />}
+          <span
+            className="absolute inset-x-0 bottom-0 h-2/3"
+            style={{
+              background: "linear-gradient(to top, rgb(0 48 103 / 0.85), transparent)",
+            }}
+          />
+          {/* Phase 3.2: the verified-only rows show no badge here -- home.tsx's
+              Places/Businesses framing (Phase 5.2) already states every card
+              in that section is verified. A recommendation row mixes Verified
+              and Pending, so its cards carry the badge in the strip below. */}
+          <span className="relative flex h-full flex-col justify-end p-3">
+            <span className="line-clamp-2 text-sm font-semibold text-primary-foreground">
+              {item.name}
+            </span>
+          </span>
         </span>
-      </span>
-    </button>
+        {hasStrip && (
+          <span className="flex flex-1 flex-col gap-1 bg-card p-2">
+            {item.reason && (
+              <span className="line-clamp-2 text-xs text-muted-foreground">{item.reason}</span>
+            )}
+            {item.verificationStatus && <VerificationBadge status={item.verificationStatus} />}
+          </span>
+        )}
+      </button>
+      {/* A plain filled circle, no ring: the photo can be any color, so the dots
+          sit on the card surface (Booking and Pinterest do the same for the
+          control they put on a photo), and a ring would only add a second edge. */}
+      {onHide && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="absolute right-2 top-2 h-10 w-10 rounded-full border-transparent"
+              aria-label={`More options for ${item.name}`}
+            >
+              <DotsThreeVertical className="h-5 w-5" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="gap-2" onSelect={() => onHide(item)}>
+              <EyeSlash className="h-4 w-4" aria-hidden="true" />
+              Not interested
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }
 
@@ -80,7 +174,7 @@ function PhotoCard({ item, onSelect }: Readonly<{ item: CategoryPhotoRowItem; on
 // own three-row convention in home.tsx) and same fixed width/height as the
 // loaded PhotoCard above, laid out as a row instead of stacked -- widened
 // from SectionSkeleton's vertical shape rather than a new pattern.
-export function CategoryPhotoRowSkeleton() {
+export function CategoryPhotoRowSkeleton({ withStrip = false }: Readonly<{ withStrip?: boolean }> = {}) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center md:min-h-8">
@@ -88,7 +182,10 @@ export function CategoryPhotoRowSkeleton() {
       </div>
       <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-1">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className={`shrink-0 rounded-lg ${CARD_SIZE}`} />
+          <Skeleton
+            key={i}
+            className={`shrink-0 rounded-lg ${withStrip ? `${CARD_WIDTH} ${CARD_WITH_STRIP_HEIGHT}` : CARD_SIZE}`}
+          />
         ))}
       </div>
     </div>
@@ -112,7 +209,14 @@ export function CategoryPhotoRowSkeleton() {
  * inside the page container (page-container.tsx), while the heading above it stays within
  * the page's normal padding.
  */
-export function CategoryPhotoRow({ categoryName, items, onSelect }: Readonly<CategoryPhotoRowProps>) {
+export function CategoryPhotoRow({
+  categoryName,
+  items,
+  onSelect,
+  onHide,
+  hiddenIds,
+  onUndo,
+}: Readonly<CategoryPhotoRowProps>) {
   // Desktop arrows: a mouse has no swipe, and the thin scrollbar is easy to
   // miss. Shown at md+ only, and only while the strip actually overflows;
   // each end disables itself at the edge. Native scrollBy, no library.
@@ -177,7 +281,14 @@ export function CategoryPhotoRow({ categoryName, items, onSelect }: Readonly<Cat
       </div>
       <div ref={stripRef} className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-1">
         {items.map((item) => (
-          <PhotoCard key={`${item.kind}-${item.id}`} item={item} onSelect={onSelect} />
+          <PhotoCard
+            key={`${item.kind}-${item.id}`}
+            item={item}
+            onSelect={onSelect}
+            onHide={onHide}
+            hidden={hiddenIds?.has(itemKey(item)) ?? false}
+            onUndo={onUndo}
+          />
         ))}
       </div>
     </div>

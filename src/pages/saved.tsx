@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Bookmark, CheckCircle, MapTrifold, type Icon } from "@phosphor-icons/react";
+import { Bookmark, CheckCircle, MapTrifold, Storefront, type Icon } from "@phosphor-icons/react";
 import { fetchSavedPlaces } from "@/lib/saved-places";
+import { fetchSavedBusinesses, type SavedBusiness } from "@/lib/saved-businesses";
 import { fetchSavedRoutes } from "@/lib/saved-routes";
 import { fetchCompletedRoutes } from "@/lib/trail-completion";
 import type { DiscoverPlace } from "@/lib/discover-types";
@@ -120,8 +121,8 @@ function ThreeLineSectionSkeleton() {
  * step-8-plan.md's scope line exactly: Saved Places, Saved Trails,
  * Completed Trails.
  *
- * Segmented control: the three sections now sit behind one Places / Trails /
- * Completed control (the same Tabs primitive discover-place-detail.tsx uses
+ * Segmented control: the sections now sit behind one Places / Businesses /
+ * Trails / Completed control (Businesses was added with migration 0047) (the same Tabs primitive discover-place-detail.tsx uses
  * for Details / History) instead of stacking, so one list shows at a time.
  * The segment label is each section's title, so the old h2 headings are
  * gone (ux-ui-guidelines.md: one label per concept, and the page title
@@ -177,6 +178,12 @@ export default function SavedPage() {
   const [placesLoading, setPlacesLoading] = useState(true);
   const [placesError, setPlacesError] = useState<string | null>(null);
 
+  // Businesses (saved_businesses, migration 0047): the same row as a place,
+  // its own list and its own load/error/empty state.
+  const [businesses, setBusinesses] = useState<SavedBusiness[]>([]);
+  const [businessesLoading, setBusinessesLoading] = useState(true);
+  const [businessesError, setBusinessesError] = useState<string | null>(null);
+
   const [trails, setTrails] = useState<TrailSummary[]>([]);
   const [trailsLoading, setTrailsLoading] = useState(true);
   const [trailsError, setTrailsError] = useState<string | null>(null);
@@ -203,6 +210,19 @@ export default function SavedPage() {
         setPlaces([]);
       })
       .finally(() => setPlacesLoading(false));
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    setBusinessesLoading(true);
+    setBusinessesError(null);
+    fetchSavedBusinesses(session.user.id)
+      .then(setBusinesses)
+      .catch((err: unknown) => {
+        setBusinessesError(errorMessageFrom(err, "Could not load saved businesses."));
+        setBusinesses([]);
+      })
+      .finally(() => setBusinessesLoading(false));
   }, [session]);
 
   useEffect(() => {
@@ -238,7 +258,7 @@ export default function SavedPage() {
       <PageContainer width="wide" className="items-start gap-4 py-10">
         <h1 className="text-xl font-semibold text-foreground">Saved</h1>
         <p className="text-base text-muted-foreground">
-          Sign in to see your saved places, saved trails, and completed trails.
+          Sign in to see your saved places, saved businesses, saved trails, and completed trails.
         </p>
         <Button onClick={() => openAuth("login")}>Sign in</Button>
       </PageContainer>
@@ -250,8 +270,9 @@ export default function SavedPage() {
       <h1 className="text-xl font-semibold text-foreground">Saved</h1>
 
       <Tabs defaultValue="places">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="places">Places</TabsTrigger>
+          <TabsTrigger value="businesses">Businesses</TabsTrigger>
           <TabsTrigger value="trails">Trails</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
         </TabsList>
@@ -272,6 +293,30 @@ export default function SavedPage() {
                     place={place}
                     onClick={() => navigate(`/discover/place/${place.id}`)}
                     onUnsave={() => setPlaces((prev) => prev.filter((p) => p.id !== place.id))}
+                  />
+                </li>
+              ))}
+            </ul>
+          </SavedSection>
+        </TabsContent>
+
+        <TabsContent value="businesses">
+          <SavedSection
+            error={businessesError}
+            loading={businessesLoading}
+            skeleton={<ThreeLineSectionSkeleton />}
+            isEmpty={businesses.length === 0}
+            emptyIcon={Storefront}
+            emptyText="Saved businesses will appear here."
+          >
+            <ul className="-mx-6 flex flex-col divide-y divide-border">
+              {businesses.map((business) => (
+                <li key={business.id}>
+                  <SavedPlaceRow
+                    place={business}
+                    kind="business"
+                    onClick={() => navigate(`/discover/business/${business.id}`)}
+                    onUnsave={() => setBusinesses((prev) => prev.filter((b) => b.id !== business.id))}
                   />
                 </li>
               ))}

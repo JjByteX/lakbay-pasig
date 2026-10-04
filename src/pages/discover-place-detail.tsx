@@ -21,6 +21,7 @@ import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
+import { RecommendationRow } from "@/components/public/recommendation-row";
 import { usePageTitle } from "@/lib/page-title";
 import { useDiscoverBack } from "@/lib/discover-memory";
 import { cn } from "@/lib/utils";
@@ -233,7 +234,7 @@ export default function DiscoverPlaceDetailPage() {
         <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        {place && <SaveButton placeId={place.id} />}
+        {place && <SaveButton itemId={place.id} />}
       </div>
 
       {loading && <p className="text-base text-muted-foreground">Loading…</p>}
@@ -423,6 +424,13 @@ export default function DiscoverPlaceDetailPage() {
           </Tabs>
         </div>
       )}
+
+      {/* Similar (recommendation-plan.md, Scope): after the whole grid, full
+          width, so the xl sticky gallery column is not disturbed. Places and
+          businesses mixed in one row, this place left out. Guests see it too,
+          the hide control only shows when signed in. Renders nothing when
+          empty or on error. */}
+      {!loading && place && <RecommendationRow anchor={{ kind: "place", id: place.id }} title="Similar" />}
     </PageContainer>
   );
 }

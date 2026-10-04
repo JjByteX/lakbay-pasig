@@ -1,6 +1,7 @@
 import { VerificationBadge } from "./result-card";
 import { SaveButton } from "./save-button";
 import type { DiscoverPlace } from "@/lib/discover-types";
+import type { SavedBusiness } from "@/lib/saved-businesses";
 
 /**
  * Step 8, Phase 3.1: Saved page's Saved Places row. Not a reuse of
@@ -30,13 +31,17 @@ import type { DiscoverPlace } from "@/lib/discover-types";
  * it's unsaved, without SaveButton needing to know it's being rendered
  * inside a list.
  */
+// The Saved page's Businesses tab reuses this row (two callers, one shape:
+// name, category, badge, heart), so it takes either kind. The file keeps its
+// name to avoid a rename for one extra caller. `kind` picks the heart's table.
 interface SavedPlaceRowProps {
-  place: DiscoverPlace;
+  place: DiscoverPlace | SavedBusiness;
+  kind?: "place" | "business";
   onClick: () => void;
   onUnsave: () => void;
 }
 
-export function SavedPlaceRow({ place, onClick, onUnsave }: Readonly<SavedPlaceRowProps>) {
+export function SavedPlaceRow({ place, kind = "place", onClick, onUnsave }: Readonly<SavedPlaceRowProps>) {
   return (
     <div className="flex w-full items-center gap-2 px-6 py-4">
       <button
@@ -48,7 +53,7 @@ export function SavedPlaceRow({ place, onClick, onUnsave }: Readonly<SavedPlaceR
         <span className="text-sm text-muted-foreground md:min-w-0 md:truncate">{place.category}</span>
         <VerificationBadge status={place.verification_status} />
       </button>
-      <SaveButton placeId={place.id} onToggle={(saved) => !saved && onUnsave()} />
+      <SaveButton kind={kind} itemId={place.id} onToggle={(saved) => !saved && onUnsave()} />
     </div>
   );
 }

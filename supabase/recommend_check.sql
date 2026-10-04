@@ -1,4 +1,4 @@
--- Runnable check for recommend_items and its tables (0046). Not a migration,
+-- Runnable check for recommend_items and its tables (0046, plus saved_businesses 0047). Not a migration,
 -- not part of db:reset. Run by hand after every db:reset while 0046 is being
 -- built, and again after any change to the constants in its declare block:
 --
@@ -358,6 +358,18 @@ select pg_temp.assert(
   pg_temp.names('resident2', 14.5764, 121.0851) = pg_temp.names('anon', 14.5764, 121.0851),
   '2.4/2.8: resident2 is not affected by resident1''s saves and hides');
 
+-- 2.8 A saved business is left out too (saved_businesses, 0047). resident1 also
+-- saves Biz 03, so only the two hours specials remain. Anon is unchanged.
+insert into public.saved_businesses (user_id, business_id)
+select d.id, b.id from pg_temp.demo_users d, public.businesses b where d.name = 'resident1' and b.name = 'TEST Biz 03';
+select pg_temp.assert(
+  pg_temp.names('resident1', 14.5764, 121.0851) = array['TEST Broken hours', 'TEST Legacy hours'],
+  '2.8: resident1 also loses the saved business, got ' || pg_temp.names('resident1', 14.5764, 121.0851)::text);
+select pg_temp.assert(
+  pg_temp.names('anon', 14.5764, 121.0851) =
+    array['TEST Biz 01', 'TEST Biz 03', 'TEST Broken hours', 'TEST Legacy hours', 'TEST Place 01'],
+  '2.8: another caller still sees the business resident1 saved');
+
 -- 2.8 The anchor is left out of its own Similar row. Anchor Biz 03 as anon.
 select pg_temp.assert(
   pg_temp.names('anon', 14.5764, 121.0851, 'business', (select id from public.businesses where name = 'TEST Biz 03')) =
@@ -632,6 +644,24 @@ select pg_temp.assert(
 select pg_temp.assert(
   not exists (select 1 from pg_temp.rec('anon', 14.9, 121.4, 30) r where r.reason like 'Similar%'),
   '2.22: a guest has no taste, so no Similar reason');
+
+-- Taste also comes from a saved business (0047). resident2 saves Q Biz C
+-- (direction C) and nothing else yet: the saved business is left out, the other
+-- C item comes first and names it. Rolled back so the trail test below starts
+-- from the same state as before.
+savepoint saved_business_taste;
+insert into public.saved_businesses (user_id, business_id)
+select d.id, b.id from pg_temp.demo_users d, public.businesses b where d.name = 'resident2' and b.name = 'TEST Q Biz C';
+select pg_temp.assert(
+  pg_temp.pos_of('resident2', 14.9, 121.4, 'TEST Q Biz C') is null,
+  '2.22: a saved business is left out of the row');
+select pg_temp.assert(
+  pg_temp.pos_of('resident2', 14.9, 121.4, 'TEST Q Place C1') = 1,
+  '2.22: a saved business lifts the similar item to the top');
+select pg_temp.assert(
+  (select reason from pg_temp.rec('resident2', 14.9, 121.4, 30) where name = 'TEST Q Place C1') = 'Similar to TEST Q Biz C',
+  '2.22: the reason names the saved business');
+rollback to savepoint saved_business_taste;
 
 -- Taste also comes from completed trail stops. resident2 completes a trail
 -- whose only stop is Q Place B1 (direction B), so B items rise for resident2.

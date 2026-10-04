@@ -9,7 +9,9 @@ import {
   FONT_SIZES,
   type FontSizePreference,
 } from "@/lib/preferences";
+import { fetchHidden, itemKey, unhideItem, type HiddenItem } from "@/lib/recommendations";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -382,6 +384,10 @@ export function SettingsSections({
               </SelectContent>
             </Select>
           </SettingsRow>
+
+          {/* Public shell only: the admin shell shares this component
+              (compact), and its staff have no recommendation rows. */}
+          {!compact && <HiddenItemsBlock userId={session.user.id} body={body} />}
         </>
       )}
 
@@ -584,6 +590,87 @@ function DarkModeSwitch({
         </AnimatePresence>
       </motion.span>
     </button>
+  );
+}
+
+// Hidden items (recommendation-plan.md, Not interested): the items this person
+// chose Not interested on in the For you and Similar rows, each with an Unhide
+// button. Names come from ordinary queries, and an item the person can no
+// longer see is skipped (fetchHidden). Unhiding only puts the item back in
+// those rows, it changes nothing else.
+function HiddenItemsBlock({ userId, body }: Readonly<{ userId: string; body: string }>) {
+  const [items, setItems] = useState<HiddenItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchHidden(userId)
+      .then((rows) => {
+        if (!cancelled) setItems(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load hidden items.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function onUnhide(item: HiddenItem) {
+    setBusyKey(itemKey(item));
+    setError(null);
+    try {
+      await unhideItem(userId, item.kind, item.id);
+      setItems((prev) => prev?.filter((i) => itemKey(i) !== itemKey(item)) ?? prev);
+    } catch {
+      setError("Couldn't unhide this. Try again.");
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  let content: ReactNode;
+  if (items === null) {
+    content = error ? <p className={cn(body, "text-destructive")}>{error}</p> : <Skeleton className="h-10 w-full" />;
+  } else if (items.length === 0) {
+    content = <p className={cn(body, "text-muted-foreground")}>No hidden items</p>;
+  } else {
+    content = (
+      <>
+        {items.map((item) => (
+          <SettingsRow
+            key={itemKey(item)}
+            label={item.name}
+            htmlFor={`unhide_${itemKey(item)}`}
+            description={item.kind === "place" ? "Place" : "Business"}
+            body={body}
+          >
+            <Button
+              id={`unhide_${itemKey(item)}`}
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busyKey === itemKey(item)}
+              onClick={() => void onUnhide(item)}
+            >
+              Unhide
+            </Button>
+          </SettingsRow>
+        ))}
+        {error && <p className={cn(body, "pt-2 text-destructive")}>{error}</p>}
+      </>
+    );
+  }
+
+  return (
+    <div className="flex flex-col pt-6">
+      <SectionHeading>Hidden items</SectionHeading>
+      <p className="pb-2 text-sm text-muted-foreground">
+        Left out of the For you and Similar rows. Search and Discover still show them.
+      </p>
+      {content}
+    </div>
   );
 }
 

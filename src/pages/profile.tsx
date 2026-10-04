@@ -5,7 +5,10 @@ import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { supabase } from "@/lib/supabase";
 import { getVendorBusiness, type VendorBusiness } from "@/lib/vendor-status";
+import { fetchActiveCategories as fetchPlaceCategories } from "@/lib/place-categories";
+import { fetchActiveCategories as fetchBusinessCategories } from "@/lib/business-categories";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { DateField } from "@/components/ui/date-field";
 import { Label } from "@/components/ui/label";
@@ -15,11 +18,65 @@ import { PageContainer } from "@/components/public/page-container";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTitle } from "@/lib/page-title";
 
-// Phase 4.1: same category set data-model.md and admin-place-detail.tsx's
-// own CATEGORIES constant use for Local Historical Place. Reused as-is,
-// not redefined, per constraints.md's Inventory Before Suggesting rule --
-// this is the one existing enumeration of the concept in the codebase.
-const CATEGORIES = ["Heritage Site", "Museum", "Monument", "Church", "Cultural Site"] as const;
+// Preferred Categories read the live place_categories and business_categories
+// tables (recommendation-plan.md, Gaps), not a hardcoded list, so a category
+// CATO adds or renames shows up here. The choice is stored as names in
+// profiles.preferred_categories (text[], no schema change, decision-log.md
+// entry #7) and gives a small lift to matching items in the Home row.
+//
+// ponytail: a stored name matches by text, so a category renamed by CATO stops
+// matching until the person picks it again, and the stale name stays stored,
+// unseen and harmless. Switch to ids if CATO renames often.
+type CategoryNames = { status: "loading" } | { status: "error" } | { status: "ready"; names: string[] };
+
+function CategoryChipGroup({
+  label,
+  list,
+  selected,
+  onToggle,
+}: Readonly<{
+  label: string;
+  list: CategoryNames;
+  selected: string[];
+  onToggle: (name: string) => void;
+}>) {
+  let body;
+  if (list.status === "loading") {
+    body = (
+      <div className="flex gap-2">
+        <Skeleton className="h-7 w-20" />
+        <Skeleton className="h-7 w-24" />
+        <Skeleton className="h-7 w-16" />
+      </div>
+    );
+  } else if (list.status === "error") {
+    body = <p className="text-sm text-destructive">Couldn&apos;t load {label.toLowerCase()} categories.</p>;
+  } else if (list.names.length === 0) {
+    body = <p className="text-sm text-muted-foreground">No {label.toLowerCase()} categories yet.</p>;
+  } else {
+    body = (
+      <div className="flex flex-wrap gap-2">
+        {list.names.map((name) => (
+          <Button
+            key={name}
+            type="button"
+            variant={selected.includes(name) ? "default" : "outline"}
+            size="sm"
+            onClick={() => onToggle(name)}
+          >
+            {name}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      {body}
+    </div>
+  );
+}
 
 // Shared with saved.tsx and trails.tsx's own page-local copies (same
 // PostgrestError shape check, not an Error subclass). Kept as a local copy
@@ -69,6 +126,8 @@ export default function ProfilePage() {
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
+  const [placeList, setPlaceList] = useState<CategoryNames>({ status: "loading" });
+  const [businessList, setBusinessList] = useState<CategoryNames>({ status: "loading" });
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -91,6 +150,23 @@ export default function ProfilePage() {
     setDateOfBirth(profile.date_of_birth ?? "");
     setPreferredCategories(profile.preferred_categories ?? []);
   }, [profile]);
+
+  // The two category lists load independently, so one failing never hides the
+  // other. Both tables are public read, the page only needs them signed in.
+  const signedIn = session !== null;
+  useEffect(() => {
+    if (!signedIn) return;
+    let cancelled = false;
+    fetchPlaceCategories()
+      .then((rows) => !cancelled && setPlaceList({ status: "ready", names: rows.map((r) => r.name) }))
+      .catch(() => !cancelled && setPlaceList({ status: "error" }));
+    fetchBusinessCategories()
+      .then((rows) => !cancelled && setBusinessList({ status: "ready", names: rows.map((r) => r.name) }))
+      .catch(() => !cancelled && setBusinessList({ status: "error" }));
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
 
   // 4.5: vendor entry point. No row found is a valid, common outcome (most
   // accounts aren't vendors), not surfaced as an error -- only a real query
@@ -156,10 +232,11 @@ export default function ProfilePage() {
       return;
     }
 
-    // 4.3: preferred_categories feeds Home and Discover live
-    // (navigation-and-access-control.md), so context has to reflect the
-    // write immediately, not on next session load. Phase 0.8's
-    // refreshProfile does this without a page reload.
+    // 4.3: context has to reflect the write immediately, not on next
+    // session load. Phase 0.8's refreshProfile does this without a page
+    // reload. preferred_categories feeds the Home recommendation row
+    // (recommend_items reads it from profiles itself). Discover does not
+    // read it, despite navigation-and-access-control.md (open-questions.md).
     await refreshProfile();
   }
 
@@ -221,24 +298,10 @@ export default function ProfilePage() {
   );
 
   const categoriesField = (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <Label>Preferred Categories</Label>
-      <div className="flex flex-wrap gap-2">
-        {CATEGORIES.map((category) => {
-          const active = preferredCategories.includes(category);
-          return (
-            <Button
-              key={category}
-              type="button"
-              variant={active ? "default" : "outline"}
-              size="sm"
-              onClick={() => toggleCategory(category)}
-            >
-              {category}
-            </Button>
-          );
-        })}
-      </div>
+      <CategoryChipGroup label="Places" list={placeList} selected={preferredCategories} onToggle={toggleCategory} />
+      <CategoryChipGroup label="Businesses" list={businessList} selected={preferredCategories} onToggle={toggleCategory} />
     </div>
   );
 
