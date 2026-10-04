@@ -323,3 +323,29 @@ Scope: phases 1 and 2 cover the public and admin global search. Not yet changed:
 **Rejected:** A heart on the recommendation cards (see Decision). One polymorphic saved table with a type column. A Saved businesses section stacked under Places instead of its own tab.
 
 ---
+**#:** 42
+**Milestone:** Recommendations, Similar row distance (migration 0048)
+
+**Decision:** The Similar row on place and business pages measures distance from the page item's own pin, not from the person. A museum in Kapitolyo viewed from across Pasig used to show items near the viewer, and a tourist outside Pasig lost the distance term completely (the 10 km rule dropped their location and they got the rotated fallback of everything). `recommend_items` is recreated in 0048 with the 0047 body and only these changes: in anchor mode the distance centre is the anchor's pin and the caller's `lat` and `lng` are ignored; an anchor with no pin (or one the caller cannot read) has no centre, so the row has no distance term and orders by taste and the daily rotation; `distance_km` in a Similar row is km from the anchor; the "Near you" reason becomes "Nearby" in anchor mode, since the row is no longer measured from the person. Without an anchor nothing changes. On the client, `useRecommendations` fetches a Similar row at once with no coordinates, so it no longer waits up to two seconds for a location fix or refetches when one arrives. The Home row keeps its fix-wait rules (#16).
+
+**Standing rule:** A Similar row never depends on the visitor's location. Signature, return type, weights, taste bands, the per category cap and every rule in #40 and #41 are unchanged. Changing `recommend_items` again is a new migration, never an edit to 0046, 0047 or 0048 after it has been applied.
+
+**Accepted limits:** Written without running the app or the database, so migration 0048, `db lint` and the new 2.30 asserts in `supabase/recommend_check.sql` need a hand run. Taste bands are still ranks among today's candidates, not a similarity threshold, so with few listings the best match can be a weak one and the row still says Similar. That is judged on real neighbour output (`npm run embed -- --neighbours`) once real content exists, not guessed at here. Mixing places and businesses in one Similar row, the cap of 3 per category and saved items being left out are unchanged trade-offs.
+
+**Rejected:** Keeping the person as the centre and adding the anchor as a second term (two distances in one score is harder to explain than one). Falling back to the caller's position when the anchor has no pin (it would make the same page rank differently per visitor). A fixed similarity cutoff for the label (needs real vectors to pick, see Accepted limits).
+
+---
+
+**#:** 43
+**Milestone:** Recommendations, distance shown in the UI
+
+**Decision:** Distance is shown where a person is choosing between places, as a straight-line figure next to the category, the way Google Maps result rows do it. Surfaces: the Discover list row, the map preview modal, the place and business detail pages (all "350 m away", measured from the live location, the same fix the list is sorted by), and the recommendation cards. On the Home row a card reads "350 m away". On a Similar row, which is measured from the page item (#42), it reads "350 m from here", because a bare "350 m" there would be read as distance from the viewer. Where a card shows a distance it replaces the "Near you" and "Nearby" reasons instead of repeating them (ux-ui-guidelines.md, one message once). "Open now" and "Similar to X" stay. One helper, `src/lib/distance-label.ts`, reuses `formatDistance` (the Directions panel's formatter: meters under 1 km, km with one decimal from 1 km) and `distanceKm`, so no second formatter exists. No icon, no new font size or weight: the figure sits in the existing muted `text-sm` / `text-xs` line, joined with the same middle dot the Directions panel uses. No distance is shown without a location fix or a pin, and there is no placeholder. `ResultCard` gained an optional `distanceFrom` prop for the live fix, since its `userLocation` prop is the route origin and can be a custom From (#16).
+
+**Standing rule:** A distance in the UI is "away" (from the person) or "from here" (from the page item), never a bare number. It is always straight-line, so the Directions panel's road figure can differ from it and is not the same claim. A custom From changes routing only, never the distance shown on a card or row. `distance-label.ts` stays free of component and context imports: the shell imports `result-card.tsx` through `global-search-bar.tsx`, so reading the shell from the helper would be an import cycle.
+
+**Accepted limits:** Written without running the app, so the list, preview modal, detail pages and both recommendation rows need a hand look, including a 390 px screen: a recommendation card with "Open now" or "Similar to X" gains one line, and cards in a row stretch to the tallest. `REASONS_SAID_BY_DISTANCE` in `recommendation-row.tsx` matches the reason strings from `recommend_items` ("Near you", "Nearby"), so a change to those strings in the function needs the same change there. A visitor far from Pasig sees large figures ("45.2 km away"), which is accurate and useful to a tourist. Not done: the map's desktop hover preview, the search dropdown and the Saved list, none of which have a location or pin on hand without more plumbing.
+
+**Rejected:** A pin icon next to every figure (the address line already carries no icon, and the figure is a text label). A separate distance badge or chip (a second visual element for one number). Showing distance from a custom From on cards and rows (the list sorts by the live fix, a different number on the modal would disagree with the row the person just tapped).
+
+---
+

@@ -62,54 +62,34 @@ function errorMessageFrom(err: unknown, fallback: string): string {
     : fallback;
 }
 
-// Phase 6.2 fix: two-line row skeleton, matching trails.tsx's
-// TrailListSkeleton shape (name line + one metadata line). Correct for
-// Saved Trails and Completed Trails, whose real rows wrap trail-card.tsx's
-// two-line shape. Saved Places is NOT this shape -- SavedPlaceRow renders
-// name, category, AND a VerificationBadge, the same three-line shape as
-// verified-item-card.tsx's row, which home.tsx's own SectionSkeleton
-// already gives three skeleton lines for that exact reason. This function
-// was previously shared across all three sections at two lines, silently
-// under-representing Saved Places' real row. Split into two skeletons
-// instead, one per real row shape, rather than padding every section to
-// three and over-representing Saved/Completed Trails' true two-line rows.
-// `inline` mirrors trails.tsx's TrailListSkeleton at md+ (one line, name left,
-// meta right) for Saved Trails, whose real row is TrailCard inline. Completed
-// Trails keeps its second line (date + credential) at md, so it stays stacked.
-function TwoLineSectionSkeleton({ inline = false }: Readonly<{ inline?: boolean }>) {
+// Grids, not lists: Saved shows cards in the Home photo-card style. Places and
+// Businesses are photo cards, two across on mobile and three at md+ (a photo
+// tile needs the width). Trails and Completed are text-only cards, one across
+// on mobile and three at md+. gap-4 is on the 8px grid. Each skeleton below
+// matches its real card's proportions, so a loading grid and a loaded grid
+// occupy about the same footprint.
+const PHOTO_GRID = "grid grid-cols-2 gap-4 md:grid-cols-3";
+const TEXT_GRID = "grid grid-cols-1 gap-4 md:grid-cols-3";
+
+// Square photo plus the footer under it (category, badge, heart).
+function PhotoGridSkeleton() {
   return (
-    <ul className="flex flex-col divide-y divide-border">
-      {[0, 1, 2].map((i) => (
-        <li
-          key={i}
-          className={
-            inline
-              ? "flex flex-col gap-1 px-6 py-4 md:flex-row md:items-center md:justify-between"
-              : "flex flex-col gap-1 px-6 py-4"
-          }
-        >
-          <Skeleton className={inline ? "h-4 w-2/3 md:w-1/3" : "h-4 w-2/3"} />
-          <Skeleton className={inline ? "h-3 w-1/3 md:w-1/6" : "h-3 w-1/3"} />
-        </li>
+    <div className={PHOTO_GRID}>
+      {[0, 1, 2, 3].map((i) => (
+        <Skeleton key={i} className="aspect-[4/5] rounded-lg" />
       ))}
-    </ul>
+    </div>
   );
 }
 
-function ThreeLineSectionSkeleton() {
+// Name line and a meta line or two, inside a bordered card.
+function TextGridSkeleton() {
   return (
-    <ul className="flex flex-col divide-y divide-border">
+    <div className={TEXT_GRID}>
       {[0, 1, 2].map((i) => (
-        <li
-          key={i}
-          className="flex flex-col gap-1 px-6 py-4 md:grid md:grid-cols-[1fr_12rem_auto] md:items-center md:gap-6"
-        >
-          <Skeleton className="h-4 w-2/3 md:w-1/2" />
-          <Skeleton className="h-3 w-1/3 md:w-1/2" />
-          <Skeleton className="h-4 w-20" />
-        </li>
+        <Skeleton key={i} className="h-24 rounded-lg" />
       ))}
-    </ul>
+    </div>
   );
 }
 
@@ -123,7 +103,7 @@ function ThreeLineSectionSkeleton() {
  *
  * Segmented control: the sections now sit behind one Places / Businesses /
  * Trails / Completed control (Businesses was added with migration 0047) (the same Tabs primitive discover-place-detail.tsx uses
- * for Details / History) instead of stacking, so one list shows at a time.
+ * for Details / History) instead of stacking, so one grid shows at a time.
  * The segment label is each section's title, so the old h2 headings are
  * gone (ux-ui-guidelines.md: one label per concept, and the page title
  * already says Saved). The short labels also fit three across the 448px
@@ -281,14 +261,14 @@ export default function SavedPage() {
           <SavedSection
             error={placesError}
             loading={placesLoading}
-            skeleton={<ThreeLineSectionSkeleton />}
+            skeleton={<PhotoGridSkeleton />}
             isEmpty={places.length === 0}
             emptyIcon={Bookmark}
             emptyText="Saved places will appear here."
           >
-            <ul className="-mx-6 flex flex-col divide-y divide-border">
+            <ul className={PHOTO_GRID}>
               {places.map((place) => (
-                <li key={place.id}>
+                <li key={place.id} className="min-w-0">
                   <SavedPlaceRow
                     place={place}
                     onClick={() => navigate(`/discover/place/${place.id}`)}
@@ -304,14 +284,14 @@ export default function SavedPage() {
           <SavedSection
             error={businessesError}
             loading={businessesLoading}
-            skeleton={<ThreeLineSectionSkeleton />}
+            skeleton={<PhotoGridSkeleton />}
             isEmpty={businesses.length === 0}
             emptyIcon={Storefront}
             emptyText="Saved businesses will appear here."
           >
-            <ul className="-mx-6 flex flex-col divide-y divide-border">
+            <ul className={PHOTO_GRID}>
               {businesses.map((business) => (
-                <li key={business.id}>
+                <li key={business.id} className="min-w-0">
                   <SavedPlaceRow
                     place={business}
                     kind="business"
@@ -328,14 +308,14 @@ export default function SavedPage() {
           <SavedSection
             error={trailsError}
             loading={trailsLoading}
-            skeleton={<TwoLineSectionSkeleton inline />}
+            skeleton={<TextGridSkeleton />}
             isEmpty={trails.length === 0}
             emptyIcon={MapTrifold}
             emptyText="Saved trails will appear here."
           >
-            <ul className="-mx-6 flex flex-col divide-y divide-border">
+            <ul className={TEXT_GRID}>
               {trails.map((trail) => (
-                <li key={trail.id}>
+                <li key={trail.id} className="min-w-0">
                   <SavedTrailRow
                     trail={trail}
                     onClick={() => navigate(`/trails/${trail.id}`)}
@@ -351,14 +331,14 @@ export default function SavedPage() {
           <SavedSection
             error={completedError}
             loading={completedLoading}
-            skeleton={<TwoLineSectionSkeleton />}
+            skeleton={<TextGridSkeleton />}
             isEmpty={completed.length === 0}
             emptyIcon={CheckCircle}
             emptyText="Completed trails will appear here."
           >
-            <ul className="-mx-6 flex flex-col divide-y divide-border">
+            <ul className={TEXT_GRID}>
               {completed.map((trail) => (
-                <li key={trail.id}>
+                <li key={trail.id} className="min-w-0">
                   <CompletedTrailRow trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
                 </li>
               ))}

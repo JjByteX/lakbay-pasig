@@ -22,13 +22,20 @@ import { cn } from "@/lib/utils";
 interface TrailCardProps {
   trail: TrailSummary;
   onClick: () => void;
-  // One line at md+ (name left, meta right). Opt-in: Trails catalog,
-  // saved-trail-row.tsx and completed-trail-row.tsx pass it; stacked below md.
+  // One line at md+ (name left, meta right). Opt-in: the Trails catalog
+  // passes it; stacked below md.
   inline?: boolean;
 }
 
+// Theme, duration and budget on one line. Shared with the Saved page's trail
+// cards (saved-trail-row.tsx, completed-trail-row.tsx), which no longer wrap
+// TrailCard but show the same line.
+export function trailMeta(trail: TrailSummary): string {
+  return [trail.theme, trail.estimated_duration, trail.estimated_budget].filter(Boolean).join(" · ");
+}
+
 export function TrailCard({ trail, onClick, inline = false }: Readonly<TrailCardProps>) {
-  const meta = [trail.theme, trail.estimated_duration, trail.estimated_budget].filter(Boolean).join(" · ");
+  const meta = trailMeta(trail);
 
   return (
     <button

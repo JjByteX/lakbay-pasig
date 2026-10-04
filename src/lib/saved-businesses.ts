@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { readEmbeddedName } from "./place-categories";
+import { fetchCoverPhotoUrls } from "./home-query";
 
 /**
  * saved_businesses (migration 0047, own rows only via saved_businesses_own),
@@ -10,14 +11,17 @@ import { readEmbeddedName } from "./place-categories";
  * count of saves is ever shown or read (recommendation-plan.md, Principles).
  */
 
-// A saved business as the Saved page's row needs it. Deliberately not
+// A saved business as the Saved page's card needs it. Deliberately not
 // DiscoverBusiness: that type already has five constructors (architecture-
-// notes.md) and this row only shows a name, a category and a badge.
+// notes.md) and this card only shows a cover photo, a name, a category and a
+// badge. coverPhotoUrl is the same lowest-sort_order business_photos url
+// DiscoverPlace.coverPhotoUrl carries for a saved place, null when none.
 export interface SavedBusiness {
   id: string;
   name: string;
   category: string;
   verification_status: "verified" | "pending";
+  coverPhotoUrl: string | null;
 }
 
 export async function isBusinessSaved(userId: string, businessId: string): Promise<boolean> {
@@ -82,10 +86,19 @@ export async function fetchSavedBusinesses(userId: string): Promise<SavedBusines
 
   if (error) throw error;
 
+  // Cover photos, same shared helper fetchSavedPlaces uses (business_photos
+  // here). Run after the rows resolve since it needs the surviving ids.
+  const coverPhotos = await fetchCoverPhotoUrls(
+    "business_photos",
+    "business_id",
+    (data ?? []).map((row) => row.id)
+  );
+
   return (data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
     category: readEmbeddedName(row.business_categories) ?? row.category_text_legacy ?? "",
     verification_status: row.verification_status as "verified" | "pending",
+    coverPhotoUrl: coverPhotos.get(row.id) ?? null,
   }));
 }

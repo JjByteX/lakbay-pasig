@@ -6,6 +6,8 @@ import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { VerificationBadge } from "@/components/public/result-card";
 import { PageDirectionsButton } from "@/components/public/page-directions-button";
+import { useUserLocation } from "@/components/public/public-shell";
+import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HoursDisplay } from "@/components/public/hours-display";
 import { PhotoGallery } from "@/components/public/photo-gallery";
@@ -95,6 +97,9 @@ export default function DiscoverBusinessDetailPage() {
   // data-model.md draws between a business's general "Pictures" and a
   // per-item photo.
   const [photos, setPhotos] = useState<string[]>([]);
+  // "350 m away" on the category line, from the live location. Hidden without
+  // a fix or a pin.
+  const { userLocation } = useUserLocation();
 
   useEffect(() => {
     if (!id) return;
@@ -217,6 +222,10 @@ export default function DiscoverBusinessDetailPage() {
   // xl+: photos left (sticky), info right. No photos -> single narrow column.
   const hasPhotos = photos.length > 0;
 
+  const categoryLine = business
+    ? joinMeta([business.category, distanceAway(userLocation, business.latitude, business.longitude)])
+    : "";
+
   return (
     <PageContainer width={hasPhotos ? "wide" : "narrow"}>
       <div className="flex items-center justify-between">
@@ -236,9 +245,9 @@ export default function DiscoverBusinessDetailPage() {
         <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-2 xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
           <div className="flex flex-col gap-2 xl:col-start-2 xl:row-start-1">
             <h1 className="text-xl font-semibold text-foreground">{business.name}</h1>
-            {business.category && (
-              <p className="text-sm text-muted-foreground">{business.category}</p>
-            )}
+            {/* A business with no category still shows its distance, and one
+                with neither shows no line at all. */}
+            {categoryLine && <p className="text-sm text-muted-foreground">{categoryLine}</p>}
             {/* Location field, phase 6.2 (location-field-plan.md): same
                 muted line as the place detail page, under the category
                 line and above the badge. Conditional on its own -- a

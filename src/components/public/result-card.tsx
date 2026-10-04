@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/directions";
+import { distanceAway, joinMeta } from "@/lib/distance-label";
 
 // Phase 6.1 (step-5-phases.md), pulled forward because Phase 4.4 requires
 // it to exist: "the same result card component Phase 6 defines." Scoped
@@ -64,6 +65,11 @@ interface ResultCardProps {
   // fetch below already unlock for a custom From with no GPS fix, with no
   // shell read inside this card.
   userLocation: Coordinates | null;
+  // The live location, for the "350 m away" on the category line. Separate
+  // from userLocation above, which is the route origin and can be a custom
+  // From: the distance stays "from you", the same figure the Discover list
+  // sorts by. Optional and null hides the distance, nothing else changes.
+  distanceFrom?: Coordinates | null;
   // Called with the route geometry and the result it was fetched for, on a
   // successful fetch. discover-map.tsx owns the actual map instance and the
   // GeoJSON source/line-layer draw, so this card only fetches and hands
@@ -107,7 +113,13 @@ interface ResultCardProps {
  * (onOpenChange(false)) so the drawn line is visible, per the plan's own
  * "close or minimize the popup so the line is visible."
  */
-export function ResultCard({ result, onOpenChange, userLocation, onRouteFound }: Readonly<ResultCardProps>) {
+export function ResultCard({
+  result,
+  onOpenChange,
+  userLocation,
+  distanceFrom = null,
+  onRouteFound,
+}: Readonly<ResultCardProps>) {
   const [directionsStatus, setDirectionsStatus] = useState<"idle" | "loading" | "error">("idle");
   const [directionsError, setDirectionsError] = useState<string | null>(null);
 
@@ -176,7 +188,9 @@ export function ResultCard({ result, onOpenChange, userLocation, onRouteFound }:
                 <DialogTitle>{result.name}</DialogTitle>
               </DialogHeader>
               <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">{result.category}</p>
+                <p className="text-sm text-muted-foreground">
+                  {joinMeta([result.category, distanceAway(distanceFrom, result.latitude, result.longitude)])}
+                </p>
                 {result.description && (
                   <p className="text-base text-foreground">{result.description}</p>
                 )}

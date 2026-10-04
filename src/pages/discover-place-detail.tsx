@@ -22,6 +22,8 @@ import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
 import { RecommendationRow } from "@/components/public/recommendation-row";
+import { useUserLocation } from "@/components/public/public-shell";
+import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { usePageTitle } from "@/lib/page-title";
 import { useDiscoverBack } from "@/lib/discover-memory";
 import { cn } from "@/lib/utils";
@@ -106,6 +108,9 @@ export default function DiscoverPlaceDetailPage() {
   // an empty array here (no rows yet) is a legitimate, unremarkable
   // result, not an error, so there is no separate photosError to track.
   const [photos, setPhotos] = useState<string[]>([]);
+  // "350 m away" on the category line, from the live location. Hidden without
+  // a fix or a pin.
+  const { userLocation } = useUserLocation();
   // place_facilities has no foreign-key relationship PostgREST can embed
   // on places (facility_ids is a plain uuid[] column, migration 0026), so
   // the facility directory is fetched separately here and matched against
@@ -247,7 +252,9 @@ export default function DiscoverPlaceDetailPage() {
         <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-2 xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
           <div className="flex flex-col gap-2 xl:col-start-2 xl:row-start-1">
             <h1 className="text-xl font-semibold text-foreground">{place.name}</h1>
-            <p className="text-sm text-muted-foreground">{place.category}</p>
+            <p className="text-sm text-muted-foreground">
+              {joinMeta([place.category, distanceAway(userLocation, place.latitude, place.longitude)])}
+            </p>
             {/* Location field, phase 6.1 (location-field-plan.md): address
                 is a label filled from the pin, not a visit info block, so
                 it sits here as a muted line, same style as the category

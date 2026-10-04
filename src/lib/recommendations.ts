@@ -40,7 +40,8 @@ export interface RecommendationCard {
   name: string;
   coverPhotoUrl: string | null;
   verification_status: "verified" | "pending";
-  // "Similar to X", "Open now", "Near you", or null (no line is shown).
+  // "Similar to X", "Open now", "Near you" (Home) or "Nearby" (Similar row, near
+  // the page item), or null (no line is shown).
   reason: string | null;
   distanceKm: number | null;
 }
@@ -247,6 +248,10 @@ const FIRST_FIX_WAIT_MS = 2000;
  * the row is meant to stay put). A sign in or sign out, or a different anchor,
  * starts over.
  *
+ * A Similar row (anchor set) is the exception: recommend_items measures it
+ * from the anchor's own pin (migration 0048), so it fetches at once with no
+ * coordinates, waits for no fix and never refetches when one arrives.
+ *
  * Reads useUserLocation, so there is no second geolocation call.
  *
  * ponytail: the row is fetched once per fix state, not as the person walks.
@@ -261,7 +266,10 @@ export function useRecommendations(anchor?: RecommendationAnchor) {
   const anchorKind = anchor?.kind ?? null;
   const anchorId = anchor?.id ?? null;
   const key = `${userId ?? "guest"}|${anchorKind ?? ""}|${anchorId ?? ""}`;
-  const hasFix = userLocation !== null;
+  // A Similar row (anchor set) is measured from the page item's own pin
+  // (migration 0048), so it never waits for, sends or refetches on a location
+  // fix. Only the Home row gates on one.
+  const hasFix = anchorKind === null && userLocation !== null;
 
   // The latest position, read when a fetch starts. Not a dependency of the
   // fetch effect, so movement alone never refetches.
@@ -300,6 +308,13 @@ export function useRecommendations(anchor?: RecommendationAnchor) {
         });
     };
 
+    // Similar row: no location involved, fetch at once.
+    if (target) {
+      run(null);
+      return () => {
+        cancelled = true;
+      };
+    }
     if (hasFix) {
       run(coordsRef.current);
       return () => {

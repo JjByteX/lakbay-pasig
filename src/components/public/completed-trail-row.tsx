@@ -1,34 +1,23 @@
 import { Badge } from "@/components/ui/badge";
-import { TrailCard } from "./trail-card";
+import { trailMeta } from "./trail-card";
 import type { TrailSummary } from "@/lib/trail-types";
 
 /**
- * Step 8, Phase 3.4: Saved page's Completed Trails row. Small wrapper
- * around trail-card.tsx, not a copy of it, per step-8-plan.md's own
- * instruction ("Needs a small wrapper around TrailCard, not the bare
- * card"). Renders the base TrailCard row unchanged, then adds a completed
- * date and, when a credential exists, an inline "Earned: {name}" line
- * beneath it -- two facts TrailCard has no reason to render for its other
- * caller (trails.tsx's catalog, which has no per-user completion data at
- * all).
+ * The Saved page's Completed card. Was a TrailCard row with a date and
+ * credential line under it; now one card in the Saved grid: name, the
+ * theme / duration / budget line, the completed date, and when a credential
+ * exists an "Earned: {name}" badge. File and export keep their old names
+ * (constraints.md: no renames without approval).
  *
- * "Earned: {name}" wording and treatment (Badge variant="accent") copied
- * exactly from trail-detail.tsx's own completed-state badge
- * (`{completed ? "Earned" : "Earn"}: {trail.credential.credential_name}`),
- * per step-8-plan.md's "exact wording trail-detail.tsx already uses."
- * Every route reaching this component is already completed (it only ever
- * renders from fetchCompletedRoutes's result), so there is no "Earn"
- * (aspirational) branch here, only "Earned".
+ * "Earned: {name}" wording and Badge variant="accent" are copied from
+ * trail-detail.tsx's completed-state badge. Every trail reaching this
+ * component is already completed (fetchCompletedRoutes), so there is no
+ * "Earn" (aspirational) branch. No heart: Completed is a completion log,
+ * not a saved list, so there is no onUnsave. One credential per completed
+ * trail, shown here, not in a second list.
  *
- * No heart control on this row: Completed Trails is a completion log,
- * not a saved-item list (step-8-plan.md scopes the heart/unsave control
- * to Saved Places and Saved Trails only), so no onUnsave prop exists here
- * unlike saved-place-row.tsx and saved-trail-row.tsx.
- *
- * One credential per completed route, no separate credentials section,
- * per step-8-plan.md and ux-ui-guidelines.md's card fragmentation rule --
- * this line is where a credential shows up, not a second list repeating
- * the same route.
+ * Badge sits outside the tap target (it is a div, and a button may hold
+ * only phrasing content), under it inside the same card.
  */
 function formatCompletedDate(iso: string): string | null {
   if (!iso) return null;
@@ -46,20 +35,26 @@ interface CompletedTrailRowProps {
 
 export function CompletedTrailRow({ trail, onClick }: Readonly<CompletedTrailRowProps>) {
   const formattedDate = formatCompletedDate(trail.completed_at);
+  const meta = trailMeta(trail);
 
   return (
-    <div className="flex w-full flex-col gap-1">
-      <TrailCard inline trail={trail} onClick={onClick} />
-      <div className="flex flex-wrap items-center gap-2 px-6 pb-4 -mt-2">
-        {formattedDate && (
-          <span className="text-sm text-muted-foreground">Completed {formattedDate}</span>
-        )}
-        {trail.credentialName && (
+    <div className="flex h-full flex-col rounded-lg border border-border bg-card transition-transform hover:-translate-y-0.5">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex flex-1 flex-col items-start gap-1 rounded-lg p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <span className="line-clamp-2 text-base font-semibold text-foreground">{trail.name}</span>
+        {meta && <span className="text-sm text-muted-foreground">{meta}</span>}
+        {formattedDate && <span className="text-sm text-muted-foreground">Completed {formattedDate}</span>}
+      </button>
+      {trail.credentialName && (
+        <div className="px-4 pb-4">
           <Badge variant="accent" className="w-fit max-w-full break-words">
             Earned: {trail.credentialName}
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

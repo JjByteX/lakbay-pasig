@@ -4,6 +4,7 @@ import { sortDiscoverResults } from "@/lib/discover-query";
 import { formatItemPrice, matchingItem } from "@/lib/item-match";
 import type { DiscoverResult } from "@/lib/discover-types";
 import type { RouteGeometry } from "@/lib/directions";
+import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -138,7 +139,12 @@ export function DiscoverList({
                 className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted"
               >
                 <span className="text-base font-semibold text-foreground">{result.name}</span>
-                <span className="text-sm text-muted-foreground">{result.category}</span>
+                {/* The category line carries the distance, the way Google Maps
+                    lists do. Same live fix the list is sorted by, so the number
+                    explains the order. No fix or no pin: the category alone. */}
+                <span className="text-sm text-muted-foreground">
+                  {joinMeta([result.category, distanceAway(userLocation, result.latitude, result.longitude)])}
+                </span>
                 {item && (
                   <span className="text-sm">
                     <span className="text-foreground">{item.name}</span>{" "}
@@ -161,6 +167,7 @@ export function DiscoverList({
         // origin, so a custom From unlocks Directions from the List view
         // too. The distance sort above stays on userLocation.
         userLocation={origin}
+        distanceFrom={userLocation}
         onRouteFound={onRouteFound}
       />
     </>

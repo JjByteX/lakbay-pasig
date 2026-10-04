@@ -1,19 +1,20 @@
-import { TrailCard } from "./trail-card";
+import { trailMeta } from "./trail-card";
 import { SaveRouteButton } from "./save-route-button";
 import type { TrailSummary } from "@/lib/trail-types";
 
 /**
- * Step 8, Phase 3.2: Saved page's Saved Trails row. trail-card.tsx's own
- * render is a single full-width `<button>` (Step 7, Phase 2.2), so it
- * cannot also carry the heart control step-8-plan.md requires ("Saved is
- * not read only") nested inside it, a button cannot contain another
- * interactive button. This wrapper places TrailCard and SaveRouteButton
- * as flex siblings, same composition saved-place-row.tsx uses for the
- * identical problem on the Saved Places section, rather than modifying
- * trail-card.tsx itself, which stays unchanged for its existing catalog
- * usage in trails.tsx per constraints.md's Inventory Before Suggesting
- * rule (extend by wrapping, don't reshape a component every other caller
- * already relies on).
+ * The Saved page's Trails card. Was TrailCard wrapped in a list row beside
+ * a heart; now a card of its own for the Saved grid (name, then the same
+ * theme / duration / budget line TrailCard shows, via its exported
+ * trailMeta). Trails have no photos, so this is a plain card, same border,
+ * radius and hover lift as the photo cards beside it in the other tabs.
+ * File and export keep their old names (constraints.md: no renames without
+ * approval).
+ *
+ * The tap target and the heart are siblings (a button cannot contain
+ * another button). The heart's 8px inset puts its center level with the
+ * name's first line. SaveRouteButton's onToggle removes the card the moment
+ * the trail is unsaved.
  */
 interface SavedTrailRowProps {
   trail: TrailSummary;
@@ -22,12 +23,19 @@ interface SavedTrailRowProps {
 }
 
 export function SavedTrailRow({ trail, onClick, onUnsave }: Readonly<SavedTrailRowProps>) {
+  const meta = trailMeta(trail);
+
   return (
-    <div className="flex w-full items-center gap-2">
-      <div className="min-w-0 flex-1">
-        <TrailCard inline trail={trail} onClick={onClick} />
-      </div>
-      <div className="pr-4">
+    <div className="flex h-full items-start rounded-lg border border-border bg-card transition-transform hover:-translate-y-0.5">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex min-w-0 flex-1 flex-col items-start gap-1 rounded-lg p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <span className="line-clamp-2 text-base font-semibold text-foreground">{trail.name}</span>
+        {meta && <span className="text-sm text-muted-foreground">{meta}</span>}
+      </button>
+      <div className="p-2">
         <SaveRouteButton routeId={trail.id} onToggle={(saved) => !saved && onUnsave()} />
       </div>
     </div>

@@ -1,4 +1,4 @@
--- Runnable check for recommend_items and its tables (0046, plus saved_businesses 0047). Not a migration,
+-- Runnable check for recommend_items and its tables (0046, saved_businesses 0047, Similar anchor distance 0048). Not a migration,
 -- not part of db:reset. Run by hand after every db:reset while 0046 is being
 -- built, and again after any change to the constants in its declare block:
 --
@@ -729,6 +729,63 @@ select pg_temp.assert(
   exists (select 1 from pg_temp.rec('anon', 14.9, 121.4, 30, 'place', (select id from public.places where name = 'TEST Q Place A1')) r where r.name = 'TEST Q Place A2'),
   '2.24: the same hide does not touch another caller');
 delete from public.rec_hides;
+
+-- 2.30 (0048) Anchor mode measures distance from the anchor's pin, never from the
+-- caller. Anchor TEST Place 01 sits in the main cluster, so the callers below are
+-- a guest outside Pasig, a guest with no location, and a guest in the taste
+-- cluster. All three must get the same row, with a distance on every card.
+create or replace function pg_temp.asnap(p_lat double precision, p_lng double precision, p_ak text, p_aid uuid)
+returns text language sql as $$
+  select coalesce(string_agg(r.name || '|' || coalesce(r.reason, '') || '|' || coalesce(round(r.km::numeric, 4)::text, ''),
+                             ';' order by r.pos), '')
+  from pg_temp.rec('anon', p_lat, p_lng, 12, p_ak, p_aid) r
+$$;
+select pg_temp.assert(
+  (select count(*) from pg_temp.rec('anon', 14.11, 120.96, 12, 'place', (select id from public.places where name = 'TEST Place 01'))) = 12,
+  '2.30: a caller outside Pasig still gets a full Similar row');
+select pg_temp.assert(
+  not exists (select 1 from pg_temp.rec('anon', 14.11, 120.96, 12, 'place', (select id from public.places where name = 'TEST Place 01')) r where r.km is null),
+  '2.30: a caller outside Pasig still gets a distance on every card (the term is not lost)');
+select pg_temp.assert(
+  pg_temp.asnap(14.11, 120.96, 'place', (select id from public.places where name = 'TEST Place 01'))
+    = pg_temp.asnap(null, null, 'place', (select id from public.places where name = 'TEST Place 01'))
+  and pg_temp.asnap(14.11, 120.96, 'place', (select id from public.places where name = 'TEST Place 01'))
+    = pg_temp.asnap(14.9, 121.4, 'place', (select id from public.places where name = 'TEST Place 01')),
+  '2.30: the Similar row does not depend on where the caller is');
+-- The km on each card is the haversine distance from the anchor's pin.
+select pg_temp.assert(
+  not exists (
+    select 1
+    from pg_temp.rec('anon', 14.11, 120.96, 12, 'place', (select id from public.places where name = 'TEST Place 01')) r
+    join (select id, latitude as la, longitude as lo from public.places
+          union all select id, latitude, longitude from public.businesses) t on t.id = r.id
+    cross join (select latitude as alat, longitude as alng from public.places where name = 'TEST Place 01') a
+    where abs(r.km - 2 * 6371 * asin(least(1, sqrt(
+            sin(radians((t.la - a.alat) / 2)) ^ 2
+            + cos(radians(a.alat)) * cos(radians(t.la)) * sin(radians((t.lo - a.alng) / 2)) ^ 2)))) > 0.001),
+  '2.30: distance_km is measured from the anchor, not from the caller');
+-- "Near you" is wrong when the row is measured from the page item.
+select pg_temp.assert(
+  not exists (select 1 from pg_temp.rec('anon', 14.5764, 121.0851, 12, 'place', (select id from public.places where name = 'TEST Place 01')) r
+              where r.reason is distinct from 'Open now' and r.reason is distinct from 'Nearby'),
+  '2.30: anchor mode says Nearby or Open now, never Near you');
+select pg_temp.assert(
+  exists (select 1 from pg_temp.rec('anon', 14.5764, 121.0851, 12, 'place', (select id from public.places where name = 'TEST Place 01')) r
+          where r.reason = 'Nearby'),
+  '2.30: anchor mode gives the Nearby reason to items that are not marked open');
+-- A normal row is unchanged: still measured from the caller, still Near you.
+select pg_temp.assert(
+  exists (select 1 from pg_temp.rec('anon', 14.5764, 121.0851, 30) r where r.reason = 'Near you'),
+  '2.30: a row without an anchor still says Near you');
+-- An anchor with no pin has no centre: rows still come back, with no distance and
+-- no reason, even when the caller sent a position.
+select pg_temp.assert(
+  (select count(*) from pg_temp.rec('anon', 14.5764, 121.0851, 12, 'business', (select id from public.businesses where name = 'TEST NoPin biz'))) = 12,
+  '2.30: an anchor with no pin still gives a full row');
+select pg_temp.assert(
+  not exists (select 1 from pg_temp.rec('anon', 14.5764, 121.0851, 12, 'business', (select id from public.businesses where name = 'TEST NoPin biz')) r
+              where r.km is not null or r.reason is not null),
+  '2.30: an anchor with no pin has no distance and no reason, the caller position is ignored');
 
 -- ---------------------------------------------------------------------------
 -- Table access (2.25 to 2.27)

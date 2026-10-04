@@ -1957,6 +1957,7 @@ export function DiscoverMap({
         // origin. The blue dot and recenter effect above stay on
         // userLocation.
         userLocation={origin}
+        distanceFrom={userLocation}
         onRouteFound={onRouteFound}
       />
     </div>

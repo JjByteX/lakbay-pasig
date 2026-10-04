@@ -5,6 +5,13 @@ import {
   type CategoryPhotoRowItem,
 } from "@/components/public/category-photo-row";
 import { useRecommendations, type RecommendationAnchor } from "@/lib/recommendations";
+import { distanceFromHere, kmAway } from "@/lib/distance-label";
+
+// Reasons the function gives only to say "close by". When the card shows a
+// distance line the reason would say the same thing twice ("Near you" above
+// "350 m away"), so the distance replaces it. "Open now" and "Similar to X"
+// say something else and stay.
+const REASONS_SAID_BY_DISTANCE = new Set(["Near you", "Nearby"]);
 
 /**
  * The recommendation row (recommendation-plan.md, Scope; recommendation-
@@ -18,7 +25,11 @@ import { useRecommendations, type RecommendationAnchor } from "@/lib/recommendat
  * is "For you" and a guest is "Near you". With an anchor the caller passes the
  * title ("Similar"). The cards' reason lines come from the function. With no
  * usable location it sends none for "Near you" or "Open now", since the title
- * already says it.
+ * already says it. A Similar row is measured from the page item, not the
+ * person (migration 0048), so its cards read "350 m from here", never "away",
+ * and it does not depend on the person's location at all. Where a card shows a
+ * distance, it replaces the "Near you" / "Nearby" reason instead of repeating
+ * it.
  *
  * The row is optional: while loading it shows one skeleton, and on an empty
  * result or an error it renders nothing, so it never blocks the page and never
@@ -40,14 +51,22 @@ export function RecommendationRow({
     else heading = canHide ? "For you" : "Near you";
   }
 
-  const items: CategoryPhotoRowItem[] = cards.map((card) => ({
-    id: card.id,
-    kind: card.kind,
-    name: card.name,
-    coverPhotoUrl: card.coverPhotoUrl,
-    reason: card.reason,
-    verificationStatus: card.verification_status,
-  }));
+  // distance_km is from the person on the Home row and from the page item on a
+  // Similar row (migration 0048), so the words differ: "away" or "from here".
+  // The function sends no distance when it has no usable centre, and then no
+  // line shows.
+  const items: CategoryPhotoRowItem[] = cards.map((card) => {
+    const distanceLabel = anchor ? distanceFromHere(card.distanceKm) : kmAway(card.distanceKm);
+    return {
+      id: card.id,
+      kind: card.kind,
+      name: card.name,
+      coverPhotoUrl: card.coverPhotoUrl,
+      reason: distanceLabel && card.reason && REASONS_SAID_BY_DISTANCE.has(card.reason) ? null : card.reason,
+      distanceLabel,
+      verificationStatus: card.verification_status,
+    };
+  });
 
   // Not interested: only for a signed in user (guests store nothing), and only
   // on these rows. Search, Discover and trails keep showing the item.

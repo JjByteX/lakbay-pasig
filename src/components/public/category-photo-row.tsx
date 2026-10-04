@@ -36,6 +36,10 @@ export interface CategoryPhotoRowItem {
   // card because they mix Verified and Pending businesses.
   reason?: string | null;
   verificationStatus?: "verified" | "pending";
+  // "350 m away" or "350 m from here", already worded by the caller. Its own
+  // line under the reason, so a long reason ("Similar to ...") is never
+  // squeezed by it. Null or absent shows nothing.
+  distanceLabel?: string | null;
 }
 
 interface CategoryPhotoRowProps {
@@ -86,7 +90,7 @@ function PhotoCard({
   hidden?: boolean;
   onUndo?: (item: CategoryPhotoRowItem) => void;
 }>) {
-  const hasStrip = item.reason != null || item.verificationStatus != null;
+  const hasStrip = item.reason != null || item.distanceLabel != null || item.verificationStatus != null;
   if (hidden) {
     return (
       <div
@@ -137,6 +141,9 @@ function PhotoCard({
           <span className="flex flex-1 flex-col gap-1 bg-card p-2">
             {item.reason && (
               <span className="line-clamp-2 text-xs text-muted-foreground">{item.reason}</span>
+            )}
+            {item.distanceLabel && (
+              <span className="text-xs text-muted-foreground">{item.distanceLabel}</span>
             )}
             {item.verificationStatus && <VerificationBadge status={item.verificationStatus} />}
           </span>
