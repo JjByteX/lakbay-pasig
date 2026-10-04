@@ -7,6 +7,7 @@ import { AuthModalRoute } from "@/lib/auth-modal-route";
 import { EntryGate } from "@/lib/entry-gate";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { GoogleReturnHandler } from "@/components/auth/google-return-handler";
+import { CategoriesOnboarding } from "@/components/auth/categories-onboarding";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
 import TrailsPage from "@/pages/trails";
@@ -374,6 +375,9 @@ export default function App() {
             /admin and get their signed_in log row, same as the password
             flow in login-form.tsx. Renders nothing. */}
         <GoogleReturnHandler />
+        {/* Fullscreen Preferred Categories, once, on a person's first signed
+            in visit (email and Google alike). Renders nothing otherwise. */}
+        <CategoriesOnboarding />
         <SettingsModal />
         </SettingsModalProvider>
       </AuthModalProvider>
