@@ -149,9 +149,10 @@ export default function PrivacyPage() {
         <Section title="Your rights">
           <P>
             Under the Data Privacy Act you can ask to see the personal data we hold about you, correct it, object to how
-            it is used, and ask for it to be deleted. You can edit most of your details yourself in Settings, under
-            Account. For anything else, including deleting your account, contact us below. You also have the right to
-            complain to the National Privacy Commission.
+            it is used, and ask for it to be deleted. You can edit most of your details, or delete your account, yourself
+            in Settings, under Account. Staff accounts and accounts with a business listing cannot be deleted there:
+            contact us below, along with anything else. You also have the right to complain to the National Privacy
+            Commission.
           </P>
         </Section>
 

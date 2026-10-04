@@ -21,6 +21,7 @@ import { Moon, Sun } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { SettingsSection } from "@/lib/settings-modal";
 import { withThemeTransition } from "@/lib/theme-transition";
+import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 
 // 8.6: same minimum this repo already enforces at signup (signup.tsx),
 // so "too short" reads the same reason in both places a password is ever
@@ -236,6 +237,7 @@ export function SettingsSections({
   const [firstName, setFirstName] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
   const [lastName, setLastName] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
   const [contactNumber, setContactNumber] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -454,6 +456,25 @@ export function SettingsSections({
             inputMode="numeric"
             validate={validateContactNumber}
           />
+
+          {/* Residents only. Staff and admin accounts are managed from Admin,
+              Staff, and delete_my_account() (migration 0049) refuses them
+              too, so this is not the only guard. */}
+          {!profile?.staff_role && (
+            <>
+              <SettingsRow
+                label="Delete account"
+                htmlFor="delete_account"
+                description="Permanently removes your account and its data."
+                body={body}
+              >
+                <Button id="delete_account" type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>
+                  Delete
+                </Button>
+              </SettingsRow>
+              <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
+            </>
+          )}
         </>
       )}
 
