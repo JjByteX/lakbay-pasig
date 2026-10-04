@@ -13,7 +13,8 @@ import {
 } from "react";
 import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon } from "@phosphor-icons/react";
 import { BottomNav } from "./bottom-nav";
-import { PagePager, pagerIndexFor } from "./page-pager";
+import { PagePager } from "./page-pager";
+import { pagerIndexFor } from "@/lib/pager-index";
 import { PublicSidebar } from "./public-sidebar";
 import { GlobalSearchBar } from "./global-search-bar";
 import { useAuth } from "@/lib/auth-context";
@@ -436,7 +437,6 @@ export function useDiscoverFilters(content: ReactNode | null) {
   useEffect(() => {
     setFilters(content);
     return () => setFilters(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, setFilters]);
 }
 

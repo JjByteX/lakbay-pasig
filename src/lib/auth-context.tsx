@@ -129,7 +129,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const value = useMemo<AuthContextValue>(
     () => ({ session, profile, loading, signOut, refreshProfile }),
-    [session, profile, loading, signOut, refreshProfile]
+    [session, profile, loading, refreshProfile]
   );
 
   return (

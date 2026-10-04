@@ -24,7 +24,9 @@ export interface NotificationQueue {
  * a zeroed-out or greyed placeholder row, same Access Rule reasoning
  * admin-sidebar.tsx's own NAV_ITEMS filter already applies.
  */
-export async function fetchNotificationQueues(profile: Profile | null): Promise<NotificationQueue[]> {
+export async function fetchNotificationQueues(
+  profile: Pick<Profile, "staff_role" | "system_permission"> | null,
+): Promise<NotificationQueue[]> {
   const isAdmin = profile?.staff_role === "admin";
   const canPlaces = isAdmin || !!profile?.system_permission?.includes("manage_places");
   const canBusinesses = isAdmin || !!profile?.system_permission?.includes("review_businesses");

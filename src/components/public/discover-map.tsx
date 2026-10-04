@@ -1321,7 +1321,6 @@ export function DiscoverMap({
       mapRef.current = null;
       setMapInstance(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Phase 1 follow-up: a locate tap recenters the camera but drew nothing

@@ -22,15 +22,22 @@ export function useAdminNotificationQueues(): NotificationQueue[] | null {
   const { pathname } = useLocation();
   const [queues, setQueues] = useState<NotificationQueue[] | null>(null);
 
+  // Only these fields decide which queues a person can see, so the effect
+  // reads them, not the whole profile object.
+  const profileId = profile?.id;
+  const staffRole = profile?.staff_role ?? null;
+  const systemPermission = profile?.system_permission ?? null;
+
   useEffect(() => {
     let cancelled = false;
-    void fetchNotificationQueues(profile).then((next) => {
+    const access = profileId ? { staff_role: staffRole, system_permission: systemPermission } : null;
+    void fetchNotificationQueues(access).then((next) => {
       if (!cancelled) setQueues(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [profile?.id, profile?.staff_role, profile?.system_permission, pathname]);
+  }, [profileId, staffRole, systemPermission, pathname]);
 
   return queues;
 }

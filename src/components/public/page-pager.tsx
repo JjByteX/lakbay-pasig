@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from
 import { Route, Routes, useLocation, useNavigate, type Location } from "react-router-dom";
 import { Compass } from "@phosphor-icons/react";
 import { EntryGate } from "@/lib/entry-gate";
+import { DISCOVER, PATHS } from "@/lib/pager-index";
 import { setPageTitle } from "@/lib/page-title";
 import { discoverResumeTarget, getDiscoverResumePath, isDiscoverDetailPath, rememberDiscoverPath } from "@/lib/discover-memory";
 import TrailsPage from "@/pages/trails";
@@ -54,10 +55,8 @@ import SavedPage from "@/pages/saved";
 
 // null = Discover, rendered by DiscoverPane (it needs to know if it's current).
 const PANES: readonly (ComponentType | null)[] = [EntryGate, TrailsPage, null, SavedPage];
-const PATHS = ["/", "/trails", "/discover", "/saved"] as const;
 const TITLES = [null, "Trails", "Discover", "Saved"] as const;
 const LAST = PANES.length - 1;
-const DISCOVER = 2;
 
 // Marker for a component that handles its own horizontal touch but that the
 // detection below can't see.
@@ -77,21 +76,6 @@ const COMMIT_RATIO = 0.25;
 const COMMIT_VELOCITY = 0.45; // px per ms
 // Dragging past Home or Saved resists instead of following the finger.
 const RUBBER_BAND = 0.25;
-
-// Drops every trailing slash by scanning back from the end. A /\/+$/ regex
-// retries from each slash in a long run of them (super-linear), this is one pass.
-function stripTrailingSlashes(pathname: string): string {
-  let end = pathname.length;
-  while (end > 0 && pathname[end - 1] === "/") end--;
-  return pathname.slice(0, end);
-}
-
-/** Index of the pager page for a pathname, or -1 when the route isn't one. */
-export function pagerIndexFor(pathname: string): number {
-  const path = pathname.length > 1 ? stripTrailingSlashes(pathname) : pathname;
-  if (isDiscoverDetailPath(path)) return DISCOVER;
-  return (PATHS as readonly string[]).indexOf(path);
-}
 
 const restingTransform = (index: number) => `translate3d(${(-index * 100) / PANES.length}%, 0, 0)`;
 

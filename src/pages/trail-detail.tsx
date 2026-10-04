@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, NavigationArrow, CheckCircle, MapPin } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
@@ -305,6 +305,37 @@ export default function TrailDetailPage() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [id]);
 
+  // Phase 5.1: shared by both places that can unlock the final stop --
+  // the proximity effect below (the normal multi-stop case) and
+  // handleStart below (a one-stop trail's first unlock is also its last,
+  // there is no proximity step in between the two). Keeping this as one
+  // function rather than duplicating the same "is this the last stop"
+  // check in both call sites, per ponytail's reuse-over-duplication rule.
+  // Guarded on !completed so a trail already finished (isRouteCompleted's
+  // load, or an earlier finish this session) never inserts a second
+  // completed_routes row.
+  // A useCallback, defined ahead of that effect, so the effect can list it as
+  // a dependency. It changes only when session, trail or completed do, the
+  // same inputs the effect already re-ran on.
+  const maybeCompleteTrail = useCallback(
+    (unlockedStopId: string) => {
+      if (!session || !trail || completed) return;
+      const isFinalStop = trail.stops[trail.stops.length - 1]?.id === unlockedStopId;
+      if (!isFinalStop) return;
+
+      setCompleted(true); // optimistic, matches the unlock write it follows
+      setCompleting(true);
+      setCompleteError(null);
+      completeTrail(session.user.id, trail.id, trail.credential?.id)
+        .catch(() => {
+          setCompleted(false); // revert: completion write failed
+          setCompleteError("Couldn't record your completion. Try again.");
+        })
+        .finally(() => setCompleting(false));
+    },
+    [session, trail, completed],
+  );
+
   // 4.5: unlock check. Signed-in only, matching every other route_progress
   // write in this file (route_progress_own RLS, migration 0018, rejects an
   // unauthenticated write regardless, this is an app-layer mirror of that
@@ -353,32 +384,7 @@ export default function TrailDetailPage() {
         // Silent, see docblock: no user-facing retry for a check that
         // already retries itself on the next position update.
       });
-  }, [session, trail, routeProgress, watchedPosition, completed]);
-
-  // Phase 5.1: shared by both places that can unlock the final stop --
-  // the proximity effect above (the normal multi-stop case) and
-  // handleStart below (a one-stop trail's first unlock is also its last,
-  // there is no proximity step in between the two). Keeping this as one
-  // function rather than duplicating the same "is this the last stop"
-  // check in both call sites, per ponytail's reuse-over-duplication rule.
-  // Guarded on !completed so a trail already finished (isRouteCompleted's
-  // load, or an earlier finish this session) never inserts a second
-  // completed_routes row.
-  function maybeCompleteTrail(unlockedStopId: string) {
-    if (!session || !trail || completed) return;
-    const isFinalStop = trail.stops[trail.stops.length - 1]?.id === unlockedStopId;
-    if (!isFinalStop) return;
-
-    setCompleted(true); // optimistic, matches the unlock write it follows
-    setCompleting(true);
-    setCompleteError(null);
-    completeTrail(session.user.id, trail.id, trail.credential?.id)
-      .catch(() => {
-        setCompleted(false); // revert: completion write failed
-        setCompleteError("Couldn't record your completion. Try again.");
-      })
-      .finally(() => setCompleting(false));
-  }
+  }, [session, trail, routeProgress, watchedPosition, maybeCompleteTrail]);
 
   // 3.4/4.3: Start button. Unauthenticated branch unchanged from Phase 3,
   // visible to everyone, never disabled, reusing save-button.tsx's exact

@@ -64,10 +64,21 @@ export function buildReportFile(format: ReportFormat, table: ReportTable): Uint8
 
 const textEncoder = new TextEncoder();
 
+// XML 1.0 cannot carry the control characters below 0x20, except tab, line
+// feed and carriage return. Checked by code, not by a regex, because a regex
+// over control characters is what no-control-regex forbids.
+function stripXmlControls(value: string): string {
+  let out = "";
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code >= 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) out += ch;
+  }
+  return out;
+}
+
 // Characters XML 1.0 cannot carry are dropped, the five reserved ones escaped.
 function xmlEscape(value: string): string {
-  return value
-    .replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+  return stripXmlControls(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -479,13 +490,15 @@ const HELVETICA_WIDTHS = [
 
 // Typographic punctuation to its ASCII lookalike, then anything past Latin-1 to "?".
 function toLatin1(value: string): string {
-  return value
+  const typographic = value
     .replaceAll(/[\u2013\u2014]/g, "-")
     .replaceAll(/[\u2018\u2019]/g, "'")
     .replaceAll(/[\u201C\u201D]/g, '"')
-    .replaceAll("\u2026", "...")
-    .replaceAll(/[\u0000-\u001F]/g, " ")
-    .replaceAll(/[^\u0020-\u007E\u00A0-\u00FF]/g, "?");
+    .replaceAll("\u2026", "...");
+  // Control characters become spaces (by code, see stripXmlControls).
+  let spaced = "";
+  for (const ch of typographic) spaced += (ch.codePointAt(0) ?? 0) < 0x20 ? " " : ch;
+  return spaced.replaceAll(/[^\u0020-\u007E\u00A0-\u00FF]/g, "?");
 }
 
 function textWidth(text: string, size: number, bold: boolean): number {

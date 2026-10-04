@@ -579,7 +579,6 @@ export default function AdminTrailBuilderPage() {
 
     void loadStops(routeId);
     void loadDiscoveryContent(routeId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId, isNew]);
 
   async function loadStops(forRouteId: string) {

@@ -370,7 +370,6 @@ export default function AdminReportHeatmapPage() {
       styleReadyRef.current = false;
     };
     // sync only reads refs, so the map is created once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fit the view to the barangays once they load, then lock the map to that
@@ -429,7 +428,6 @@ export default function AdminReportHeatmapPage() {
     dataRef.current = collection;
     maskRef.current = mask;
     if (mapRef.current) sync(mapRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection, mask]);
 
   useEffect(() => {
