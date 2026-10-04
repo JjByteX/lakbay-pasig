@@ -162,12 +162,14 @@ function toReady(rows: CategoryRow[], iconFor: (icon: string) => PhosphorIcon): 
  * hides the other. `enabled` holds the fetch back until the picker is about to
  * show.
  */
-export function useCategoryNames(enabled: boolean) {
+export function useCategoryNames(enabled: boolean, attempt = 0) {
   const [placeList, setPlaceList] = useState<CategoryNames>({ status: "loading" });
   const [businessList, setBusinessList] = useState<CategoryNames>({ status: "loading" });
 
   useEffect(() => {
     if (!enabled) return;
+    setPlaceList({ status: "loading" });
+    setBusinessList({ status: "loading" });
     let cancelled = false;
     fetchPlaceCategories()
       .then((rows) => !cancelled && setPlaceList(toReady(rows, getCategoryIcon)))
@@ -178,7 +180,7 @@ export function useCategoryNames(enabled: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, attempt]);
 
   return { placeList, businessList };
 }

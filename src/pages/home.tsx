@@ -11,6 +11,7 @@ import {
 } from "@/components/public/category-photo-row";
 import { PageContainer } from "@/components/public/page-container";
 import { RecommendationRow } from "@/components/public/recommendation-row";
+import { PersonalizePrompt } from "@/components/auth/categories-onboarding";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Megaphone, SealCheck } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -243,6 +244,7 @@ export default function HomePage() {
           rows. The row's own title is the heading ("For you", "Near you" or
           "Around Pasig"), so there is no h2 here. It renders nothing when
           empty or on error, so it never blocks Home. */}
+      <PersonalizePrompt />
       <RecommendationRow />
 
       {showcaseBody}

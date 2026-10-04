@@ -32,6 +32,7 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [resend, setResend] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const passwordLongEnough = password.length >= MIN_PASSWORD_LENGTH;
@@ -60,14 +61,46 @@ export function SignupForm() {
     setSubmitted(true);
   }
 
+  // Same call login-form.tsx makes for an unverified account.
+  async function handleResend() {
+    setResend("sending");
+    const { error: resendError } = await supabase.auth.resend({ type: "signup", email });
+    setResend(resendError ? "error" : "sent");
+  }
+
+  // Hands the email to the login form so it is not typed twice.
+  function backToLogin() {
+    try {
+      sessionStorage.setItem("lakbay:prefill-email", email);
+    } catch {
+      /* the login form just starts blank */
+    }
+    setMode("login");
+  }
+
   if (submitted) {
     return (
       <div className="flex flex-col items-center gap-4 text-center">
         <h1 className="text-xl font-semibold text-foreground">Check your email</h1>
         <p className="text-base text-muted-foreground">
-          We sent a confirmation link to {email}. Verify your email before logging in.
+          We sent a confirmation link to {email}. Confirm it, log in, and we&apos;ll ask what you like so Home fits you.
         </p>
-        <button type="button" onClick={() => setMode("login")} className="text-base text-primary underline">
+        {resend === "error" && (
+          <p className="text-base text-destructive">We couldn&apos;t resend the email. Wait a minute and try again.</p>
+        )}
+        {resend === "sent" ? (
+          <p className="text-base text-muted-foreground">Sent again. Check your spam folder too.</p>
+        ) : (
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resend === "sending"}
+            className="text-base text-primary underline disabled:opacity-50"
+          >
+            {resend === "sending" ? "Sending..." : "Didn't get it? Resend the email"}
+          </button>
+        )}
+        <button type="button" onClick={backToLogin} className="text-base text-primary underline">
           Back to login
         </button>
       </div>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useAuthModal } from "@/lib/auth-modal";
@@ -39,12 +39,27 @@ export function LoginForm() {
   const navigate = useNavigate();
   const { closeAuth, setMode } = useAuthModal();
 
-  const [email, setEmail] = useState("");
+  // Prefilled when the person just came from the sign-up confirmation screen.
+  const [email, setEmail] = useState(() => {
+    try {
+      return sessionStorage.getItem("lakbay:prefill-email") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resent, setResent] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("lakbay:prefill-email");
+    } catch {
+      /* nothing to clear */
+    }
+  }, []);
 
   const canSubmit = email.length > 0 && password.length > 0 && !submitting;
 
