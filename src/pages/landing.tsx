@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Envelope,
@@ -10,9 +10,13 @@ import {
   MapTrifold,
   Storefront,
   CalendarBlank,
+  List,
+  X,
 } from "@phosphor-icons/react";
 import {
+  AnimatePresence,
   MotionConfig,
+  animate,
   motion,
   useReducedMotion,
   useScroll,
@@ -34,6 +38,7 @@ import { HeroLinesBackground } from "@/components/public/hero-lines-background";
 import { useAuthModal } from "@/lib/auth-modal";
 import { usePageTitle } from "@/lib/page-title";
 import { useAuth } from "@/lib/auth-context";
+import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 
 /**
  * landing-hero-phases.md Phase 6. Route /welcome, outside PublicShell --
@@ -167,7 +172,11 @@ const CATO_MAP_DIRECTIONS_URL = `https://www.google.com/maps/search/?api=1&query
 // residents have no /admin equivalent -- the label stays the same across
 // both signed-in cases, only the destination differs, so this isn't a
 // third branch, just one signed-in branch with a role-picked target.
-function NavAction() {
+//
+// `mobile` is the same action inside the mobile menu: full width and the
+// regular button height, and `onAction` closes the menu first so it is not
+// left open behind the auth popup or the page navigation.
+function NavAction({ mobile = false, onAction }: Readonly<{ mobile?: boolean; onAction?: () => void }>) {
   const { session, profile } = useAuth();
   const { openAuth } = useAuthModal();
   const navigate = useNavigate();
@@ -178,9 +187,20 @@ function NavAction() {
   // (bg-secondary navy, secondary-foreground text) now supplies the
   // needed contrast directly, so this no longer needs its own pill
   // override or the "outline" variant's border-stripping.
+  const size = mobile ? "lg" : "sm";
+  const className = mobile ? "w-full" : undefined;
+
   if (!session) {
     return (
-      <Button onClick={() => openAuth("login")} variant="secondary" size="sm">
+      <Button
+        onClick={() => {
+          onAction?.();
+          openAuth("login");
+        }}
+        variant="secondary"
+        size={size}
+        className={className}
+      >
         Sign in
       </Button>
     );
@@ -190,7 +210,15 @@ function NavAction() {
   const dashboardPath = isStaff ? "/admin" : "/";
 
   return (
-    <Button onClick={() => navigate(dashboardPath)} variant="secondary" size="sm">
+    <Button
+      onClick={() => {
+        onAction?.();
+        navigate(dashboardPath);
+      }}
+      variant="secondary"
+      size={size}
+      className={className}
+    >
       {isStaff ? "Go to Dashboard" : "Go to Home"}
     </Button>
   );
@@ -259,61 +287,193 @@ function NavAction() {
 // itself uses (landing.tsx's hero <div>, see its own comment) -- so the
 // two are the same color under every circumstance, not just while the
 // page happens to be scrolled to the top.
+
+// Header nav: click animates the page scroll instead of jumping.
+//
+// The links keep real href="#id" so open-in-new-tab, copy-link and no-JS
+// still work; a plain left click is intercepted and animated with motion's
+// `animate`. The URL hash is deliberately not touched: the app runs on a
+// data router (main.tsx), and writing history state behind its back can
+// corrupt its back/forward bookkeeping.
+//
+// Duration grows with distance (long jumps get more time, short ones stay
+// snappy) and uses an ease-in-out curve. The animation stops the moment the
+// visitor takes over the scroll themselves (wheel, touch, scroll keys), so it
+// never fights them, and is skipped entirely for reduced-motion users.
+const NAV_LINKS = [
+  { id: "top", label: "Home" },
+  { id: "about", label: "About" },
+  { id: "features", label: "Features" },
+  { id: "contact", label: "Contact" },
+] as const;
+
+const NAV_SCROLL_EASE = [0.65, 0, 0.35, 1] as const;
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+// Stops the in-flight nav scroll (if any) and removes its listeners.
+let stopNavScroll: (() => void) | null = null;
+
+function scrollToSection(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+
+  // Land where the CSS scroll-mt-20 on each section says to, so the fixed
+  // header never covers the heading. #top is the page itself.
+  const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+  const to = id === "top"
+    ? 0
+    : Math.min(Math.max(target.getBoundingClientRect().top + window.scrollY - margin, 0), maxScroll);
+  const from = window.scrollY;
+
+  stopNavScroll?.();
+  if (Math.abs(to - from) < 2) return;
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollTo(0, to);
+    return;
+  }
+
+  const distance = Math.abs(to - from);
+  const duration = Math.min(1.4, Math.max(0.6, distance / 2200 + 0.4));
+
+  const onKey = (e: KeyboardEvent) => {
+    if (SCROLL_KEYS.has(e.key)) stop();
+  };
+  const stop = () => {
+    controls.stop();
+    window.removeEventListener("wheel", stop);
+    window.removeEventListener("touchstart", stop);
+    window.removeEventListener("keydown", onKey);
+    if (stopNavScroll === stop) stopNavScroll = null;
+  };
+
+  const controls = animate(from, to, {
+    duration,
+    ease: NAV_SCROLL_EASE,
+    onUpdate: (value) => window.scrollTo(0, value),
+    onComplete: stop,
+  });
+  window.addEventListener("wheel", stop, { passive: true });
+  window.addEventListener("touchstart", stop, { passive: true });
+  window.addEventListener("keydown", onKey);
+  stopNavScroll = stop;
+}
+
+function handleNavClick(e: MouseEvent<HTMLAnchorElement>, id: string) {
+  // Let the browser handle new-tab / download style clicks.
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  scrollToSection(id);
+}
+
+// Below the sm breakpoint the centered links and the action would not fit
+// in the pill (the links used to simply disappear on phones, leaving only
+// the logo and Sign in), so there the pill shows the logo and a menu button.
+// The button opens a dropdown card under the pill with the same nav links
+// (animated scroll, same handler as desktop) and the same NavAction. It
+// closes on a link or action tap, Escape, a tap outside the header, or when
+// the viewport grows past the breakpoint. Desktop layout is unchanged.
 function LandingHeader() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const closeMenu = () => setMenuOpen(false);
+  useDismissOnOutsideOrEscape(headerRef, closeMenu);
+
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 640px)");
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setMenuOpen(false);
+    };
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
   return (
-    <header className="fixed inset-x-4 top-4 z-50 mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center rounded-full border border-border bg-card/70 px-5 backdrop-blur-md">
+    <header
+      ref={headerRef}
+      className="fixed inset-x-4 top-4 z-50 mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center rounded-full border border-border bg-card/70 px-5 backdrop-blur-md"
+    >
       <Link to="/welcome" className="flex items-center gap-2 justify-self-start">
         <img src={logo} alt="Lakbay Pasig" className="h-8 w-8" />
       </Link>
 
-      <nav className="col-start-2 flex items-center gap-6 justify-self-center">
-        <a
-          href="#top"
-          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
-        >
-          Home
-        </a>
-        <a
-          href="#about"
-          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
-        >
-          About
-        </a>
-        <a
-          href="#features"
-          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
-        >
-          Features
-        </a>
-        <a
-          href="#contact"
-          className="hidden text-sm font-medium text-foreground/80 hover:text-foreground sm:inline"
-        >
-          Contact
-        </a>
+      <nav className="col-start-2 hidden items-center gap-6 justify-self-center sm:flex">
+        {NAV_LINKS.map((link) => (
+          <motion.a
+            key={link.id}
+            href={`#${link.id}`}
+            onClick={(e) => handleNavClick(e, link.id)}
+            whileTap={{ scale: 0.94 }}
+            className="text-sm font-medium text-foreground/80 hover:text-foreground"
+          >
+            {link.label}
+          </motion.a>
+        ))}
       </nav>
 
-      <div className="col-start-3 justify-self-end">
+      <div className="col-start-3 hidden justify-self-end sm:block">
         <NavAction />
       </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="col-start-3 justify-self-end rounded-full sm:hidden"
+        aria-label={menuOpen ? "Close menu" : "Open menu"}
+        aria-expanded={menuOpen}
+        aria-controls="landing-mobile-menu"
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        {menuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <List className="h-5 w-5" aria-hidden="true" />}
+      </Button>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            id="landing-mobile-menu"
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.2, ease: EASE }}
+            className="absolute inset-x-0 top-full mt-2 origin-top rounded-3xl border border-border bg-card p-3 shadow-lg sm:hidden"
+          >
+            <nav aria-label="Landing page sections" className="flex flex-col">
+              {NAV_LINKS.map((link) => (
+                <motion.a
+                  key={link.id}
+                  href={`#${link.id}`}
+                  onClick={(e) => {
+                    handleNavClick(e, link.id);
+                    closeMenu();
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  className="rounded-2xl px-4 py-3 text-base font-medium text-foreground hover:bg-muted"
+                >
+                  {link.label}
+                </motion.a>
+              ))}
+            </nav>
+            <div className="mt-2 border-t border-border pt-3">
+              <NavAction mobile onAction={closeMenu} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }
 
-// The hero carousel starts slightly small and settles to full size as it
-// scrolls into view. No extra container around it.
+// The hero carousel just fades in. It used to also scale and slide as it
+// scrolled into view; that scroll-linked transform sat on top of the
+// carousel and the animated line artwork and was a big part of the hero lag,
+// so it is gone. No extra container around it.
 function HeroCarouselFrame({ slides }: Readonly<{ slides: LandingSlide[] }>) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "start 0.35"] });
-  const scale = useTransform(scrollYProgress, [0, 1], [0.88, 1]);
-  const y = useTransform(scrollYProgress, [0, 1], [48, 0]);
   return (
     <motion.div
-      ref={ref}
-      style={{ scale, y }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.9, delay: 0.85 }}
+      transition={{ duration: 0.6, delay: 0.5 }}
       className="relative z-10 aspect-[16/10] w-full max-w-5xl overflow-hidden rounded-lg sm:aspect-[16/9]"
     >
       <HeroCarousel slides={slides} />
@@ -388,28 +548,57 @@ function RevealWords({
 // width as it arrives. "exit": the panel shrinks and rounds off as it
 // scrolls away. The layer sits at -z-10 inside an isolated stacking
 // context, so children need no extra positioning.
+//
+// "enter" settles at progress 1 when the section's top reaches 30% of the
+// viewport. A section that sits at the very bottom of the page (Contact,
+// followed only by the footer) can never be scrolled that far up, so its
+// progress stalled short of 1 and the panel stayed shrunken and rounded
+// forever. `settleAtEnd` finishes the animation when the section's bottom
+// edge reaches the viewport bottom instead, which every last section can
+// reach.
+//
+// "exit" only scales (a compositor-only transform) and keeps a fixed bottom
+// radius. Animating borderRadius on an overflow-hidden layer forces a
+// repaint of everything inside it each frame, and the hero layer holds the
+// animated line artwork.
 function ScrollPanel({
   id,
   mode,
   bg,
   layer,
   className,
+  settleAtEnd = false,
   children,
-}: Readonly<{ id?: string; mode: "enter" | "exit"; bg: string; layer?: ReactNode; className?: string; children: ReactNode }>) {
+}: Readonly<{
+  id?: string;
+  mode: "enter" | "exit";
+  bg: string;
+  layer?: ReactNode;
+  className?: string;
+  settleAtEnd?: boolean;
+  children: ReactNode;
+}>) {
   const ref = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
+  const exiting = mode === "exit";
   const { scrollYProgress } = useScroll({
     target: ref,
-    offset: mode === "enter" ? ["start end", "start 0.3"] : ["start start", "end start"],
+    offset: exiting
+      ? ["start start", "end start"]
+      : settleAtEnd
+        ? ["start end", "end end"]
+        : ["start end", "start 0.3"],
   });
-  const scale = useTransform(scrollYProgress, [0, 1], mode === "enter" ? [0.9, 1] : [1, 0.93]);
-  const borderRadius = useTransform(scrollYProgress, [0, 1], mode === "enter" ? [56, 0] : [0, 40]);
+  const scale = useTransform(scrollYProgress, [0, 1], exiting ? [1, 0.93] : [0.9, 1]);
+  const borderRadius = useTransform(scrollYProgress, [0, 1], [56, 0]);
+  // Reduced motion: no scroll-driven style at all. Exit: scale only.
+  const layerStyle = reduceMotion ? undefined : exiting ? { scale } : { scale, borderRadius };
   return (
     <section ref={ref} id={id} className={`relative isolate ${className ?? ""}`}>
       <motion.div
         aria-hidden="true"
-        className={`absolute inset-0 -z-10 overflow-hidden ${bg}`}
-        style={reduceMotion ? undefined : { scale, borderRadius }}
+        className={`absolute inset-0 -z-10 overflow-hidden ${bg} ${exiting ? "rounded-b-[2.5rem] will-change-transform" : ""}`}
+        style={layerStyle}
       >
         {layer}
       </motion.div>
@@ -562,11 +751,16 @@ export default function LandingPage() {
 
   return (
     <MotionConfig reducedMotion="user">
-    <div id="top" className="flex min-h-screen flex-col">
+    {/* The root paints --landing-backdrop (index.css), the layer that shows
+        behind the scroll panels while they scale and round. It used to be
+        the page's own near-white --background, which is almost identical
+        to the white panels, so the layer was barely visible in light mode
+        and only faintly in dark mode. */}
+    <div id="top" className="flex min-h-screen flex-col bg-[hsl(var(--landing-backdrop))]">
       <LandingHeader />
 
       {/* Hero: centered title, subtitle and buttons, then the carousel,
-          which wakes up (scales in) as it scrolls into view. */}
+          which fades in. */}
       <ScrollPanel
         mode="exit"
         bg="bg-card"
@@ -670,13 +864,18 @@ export default function LandingPage() {
       </ScrollPanel>
 
       {/* Features: same live verified showcase (fetchHomeShowcase,
-          CategoryPhotoRow). The #features id stays for the header link. */}
-      <section id="features" className="scroll-mt-20 bg-background px-6 py-24 lg:px-16">
+          CategoryPhotoRow). The #features id stays for the header link.
+          This used to be a plain bg-background <section>: fully opaque and
+          not a ScrollPanel, so it had no container animation and painted
+          over the page backdrop. It is now a ScrollPanel on bg-card like
+          About and Contact, so the panel opens up against the backdrop as
+          it scrolls in. */}
+      <ScrollPanel id="features" mode="enter" bg="bg-card" className="scroll-mt-20 px-6 py-24 lg:px-16">
         <Reveal className="mx-auto flex max-w-3xl flex-col gap-6">
           <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">See what is waiting for you</h2>
           {featuresBody}
         </Reveal>
-      </section>
+      </ScrollPanel>
 
       {/* Final call to action: flat rounded block, no decoration */}
       <section className="bg-background px-4 py-16">
@@ -709,8 +908,8 @@ export default function LandingPage() {
           link beneath the embed opens the same address in Google Maps
           proper, for anyone who wants turn-by-turn rather than just a
           look at the pin. */}
-      <ScrollPanel id="contact" mode="enter" bg="bg-card" className="scroll-mt-20 px-6 py-16 lg:px-16">
-        <div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-2">
+      <ScrollPanel id="contact" mode="enter" settleAtEnd bg="bg-card" className="scroll-mt-20 px-6 py-16 lg:px-16">
+        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
             <h2 className="text-2xl font-semibold text-foreground">Contact</h2>
             <p className="text-base text-muted-foreground">
@@ -752,7 +951,7 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="h-64 w-full overflow-hidden rounded-lg border border-border lg:h-full lg:min-h-64">
+            <div className="h-64 w-full overflow-hidden rounded-lg border border-border lg:h-auto lg:min-h-64 lg:flex-1">
               <iframe
                 title="CATO office location"
                 src={CATO_MAP_EMBED_SRC}

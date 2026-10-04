@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   motion,
   useMotionValue,
@@ -50,9 +50,15 @@ import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from 
  * - Caption legibility: no box behind the text. Per direct instruction,
  *   the caption sits on the photo's bottom edge over a light linear
  *   gradient that rises from the bottom (so the picture stays visible
- *   above it), with a 3-layer progressive blur on the same band for a
- *   modern, soft look. This is a deliberate exception to ux-ui-guidelines.md's
- *   no-gradient rule, made by instruction. See CaptionOverlay.
+ *   above it). This is a deliberate exception to ux-ui-guidelines.md's
+ *   no-gradient rule, made by instruction. See CaptionOverlay. The
+ *   3-layer progressive backdrop blur that used to sit on the same band
+ *   is gone (hero lag fix): backdrop-filter on every tile, while the
+ *   tiles are being translated, is re-blurred every frame.
+ * - Slide motion stays off the React render path (hero lag fix). Each
+ *   tile derives its own `x` from the spring with useTransform, so a
+ *   frame of travel updates transforms directly. The parent re-renders
+ *   only when the set of mounted tiles changes, not on every frame.
  * - Tile count follows the PANEL's own measured width, not the viewport.
  *   On desktop this panel is half the screen, so Qula's viewport
  *   breakpoint would pick the wrong layout. Wide panel + 3 or more
@@ -287,9 +293,13 @@ function useLiveSwipe({
 
 // Live pixel width of a container via ResizeObserver, same as Qula's
 // useContainerWidth, so tile geometry resolves to plain numbers.
+//
+// Measured in a layout effect so the first width is known before the first
+// paint. With a plain effect the strip painted once at width 0, then again
+// at its real size.
 function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
   const [width, setWidth] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const update = () => setWidth(el.offsetWidth);
@@ -302,35 +312,17 @@ function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
 }
 
 // Caption over the photo, no box behind the text. The overlay covers only
-// the bottom quarter of the image (a caption is one or two lines), and has
-// two parts: a light linear gradient rising from the bottom so the white
-// text stays readable on any photo, and a progressive blur made of three
-// stacked backdrop-blur layers. Each layer is masked to a shorter band
-// than the one before it, so blur strength grows smoothly toward the
-// bottom edge with no visible line where the sharp photo ends. The class
-// strings are written out in full so Tailwind can see them.
-const CAPTION_BLUR_LAYERS = [
-  "backdrop-blur-[1px] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_50%,transparent_100%)] [mask-image:linear-gradient(to_top,black_0%,black_50%,transparent_100%)]",
-  "backdrop-blur-[2px] [-webkit-mask-image:linear-gradient(to_top,black_0%,black_25%,transparent_65%)] [mask-image:linear-gradient(to_top,black_0%,black_25%,transparent_65%)]",
-  "backdrop-blur-[4px] [-webkit-mask-image:linear-gradient(to_top,black_0%,transparent_40%)] [mask-image:linear-gradient(to_top,black_0%,transparent_40%)]",
-];
-
-// Both layers ignore the pointer so drag and click still reach the tile.
+// the bottom band of the image (a caption is one or two lines): a light
+// linear gradient rising from the bottom so the white text stays readable
+// on any photo. It ignores the pointer so drag and click still reach the
+// tile.
 function CaptionOverlay({ caption }: Readonly<{ caption: string }>) {
   return (
     <>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[28%] min-h-16 bg-gradient-to-t from-black/40 via-black/15 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] min-h-20 bg-gradient-to-t from-black/55 via-black/25 to-transparent"
       />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[28%] min-h-16"
-      >
-        {CAPTION_BLUR_LAYERS.map((layer) => (
-          <div key={layer} className={`absolute inset-0 ${layer}`} />
-        ))}
-      </div>
       <p className="absolute inset-x-3 bottom-3 line-clamp-2 text-sm font-semibold text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.45)] sm:inset-x-4 sm:bottom-4 sm:text-base">
         {caption}
       </p>
@@ -340,7 +332,9 @@ function CaptionOverlay({ caption }: Readonly<{ caption: string }>) {
 
 interface HeroTileProps {
   slide: LandingSlide;
-  slotOffset: number;
+  index: number;
+  count: number;
+  combined: MotionValue<number>;
   containerWidthPx: number;
   tilesInViewport: number;
   isCenter: boolean;
@@ -349,19 +343,33 @@ interface HeroTileProps {
 
 // One tile. Every tile is the same fixed box: the image fills the
 // ENTIRE tile (top to bottom), and the caption is overlaid on the
-// photo's bottom edge by CaptionOverlay (gradient + blur, no box) -- see
+// photo's bottom edge by CaptionOverlay (gradient, no box) -- see
 // this file's top comment's "Adapted to this codebase" note. Side tiles stay visible
 // as peeks but get no pointer target of their own beyond "bring me to
 // center".
 function HeroTile({
   slide,
-  slotOffset,
+  index,
+  count,
+  combined,
   containerWidthPx,
   tilesInViewport,
   isCenter,
   onSelect,
 }: Readonly<HeroTileProps>) {
   const [imageFailed, setImageFailed] = useState(false);
+
+  // The Portal slot is recomputed from the live spring value on every
+  // frame, but as a motion value: it writes the tile's transform directly
+  // and never re-renders React.
+  const x = useTransform(combined, (live) =>
+    tileOffsetPx(
+      wrappedSlot(index, count, live),
+      containerWidthPx,
+      tilesInViewport,
+      TILE_GAP_PX
+    )
+  );
 
   return (
     <motion.button
@@ -377,7 +385,7 @@ function HeroTile({
       style={{
         width: tileWidthPx(containerWidthPx, tilesInViewport, TILE_GAP_PX),
         left: 0,
-        x: tileOffsetPx(slotOffset, containerWidthPx, tilesInViewport, TILE_GAP_PX),
+        x,
       }}
     >
       <div className="relative h-full w-full overflow-hidden bg-muted">
@@ -402,45 +410,69 @@ function HeroTile({
   );
 }
 
-// Separated so the live spring value is read every frame without
-// re-rendering the parent -- each tile's wrapped slot is recomputed
-// straight from the motion value on every paint (the Portal).
+// Which tiles are mounted for a given live offset: anything within the
+// visible range plus a one-tile buffer, so an incoming tile is already
+// mounted a frame before it is needed. Qula culls at 1.5 for a 1.8-tile
+// viewport; a single-tile viewport only ever shows +-1. Returned as a
+// string so React can bail out of a state update when nothing changed.
+function mountedMask(
+  live: number,
+  count: number,
+  tilesInViewport: number
+): string {
+  const cullAt = tilesInViewport > 1 ? 1.5 : 1.25;
+  let mask = "";
+  for (let i = 0; i < count; i++) {
+    mask += Math.abs(wrappedSlot(i, count, live)) > cullAt ? "0" : "1";
+  }
+  return mask;
+}
+
+// Re-renders only when the set of mounted tiles changes (a tile entering
+// or leaving the buffer), not on every spring frame. Positions are handled
+// per tile by HeroTile's own useTransform.
 function HeroFilmstripInner({
   slides,
   combined,
+  activeIndex,
   containerWidthPx,
   tilesInViewport,
   onSelect,
 }: Readonly<{
   slides: LandingSlide[];
   combined: MotionValue<number>;
+  activeIndex: number;
   containerWidthPx: number;
   tilesInViewport: number;
   onSelect: (index: number) => void;
 }>) {
-  const [liveOffset, setLiveOffset] = useState(() => combined.get());
-  useMotionValueEvent(combined, "change", (v) => setLiveOffset(v));
-
   const count = slides.length;
-  // Cull anything outside the visible range plus a one-tile buffer so an
-  // incoming tile is already mounted a frame before it is needed. Qula
-  // culls at 1.5 for a 1.8-tile viewport; a single-tile viewport only
-  // ever shows +-1.
-  const cullAt = tilesInViewport > 1 ? 1.5 : 1.25;
+  // The state exists only to trigger a re-render when the mounted set
+  // changes (an identical string bails out). What is rendered is always
+  // derived from the live value, so a change in slide count or tile layout
+  // can never leave a stale mask on screen.
+  const [, setMountedSet] = useState(() =>
+    mountedMask(combined.get(), count, tilesInViewport)
+  );
+  useMotionValueEvent(combined, "change", (live) =>
+    setMountedSet(mountedMask(live, count, tilesInViewport))
+  );
+  const mask = mountedMask(combined.get(), count, tilesInViewport);
 
   return (
     <>
       {slides.map((slide, i) => {
-        const slot = wrappedSlot(i, count, liveOffset);
-        if (Math.abs(slot) > cullAt) return null;
+        if (mask[i] !== "1") return null;
         return (
           <HeroTile
             key={slide.id}
             slide={slide}
-            slotOffset={slot}
+            index={i}
+            count={count}
+            combined={combined}
             containerWidthPx={containerWidthPx}
             tilesInViewport={tilesInViewport}
-            isCenter={Math.abs(slot) < 0.5}
+            isCenter={i === activeIndex}
             onSelect={() => onSelect(i)}
           />
         );
@@ -520,15 +552,13 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
   // Measured on the strip itself, so tile count follows the panel's real
   // width (a half-screen column on desktop), not the viewport.
   const stripRef = useRef<HTMLElement | null>(null);
-  const [panelWidthPx, setPanelWidthPx] = useState(0);
   const measuredWidthPx = useContainerWidth(stripRef);
-  useEffect(() => setPanelWidthPx(measuredWidthPx), [measuredWidthPx]);
 
   // Exactly 2 slides would put the same tile on both sides of the center
   // (wrappedSlot folds the midpoint to the negative side, so one
   // neighbor is left-only), so 2 slides always show a single tile.
   const tilesInViewport =
-    count >= 3 && panelWidthPx >= PEEK_MIN_PANEL_PX ? TILES_PEEK : TILES_SINGLE;
+    count >= 3 && measuredWidthPx >= PEEK_MIN_PANEL_PX ? TILES_PEEK : TILES_SINGLE;
 
   const swipe = useLiveSwipe({
     enabled: true,
@@ -621,6 +651,7 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
           <HeroFilmstripInner
             slides={slides}
             combined={track.combined}
+            activeIndex={index}
             containerWidthPx={measuredWidthPx}
             tilesInViewport={tilesInViewport}
             onSelect={handleTileSelect}

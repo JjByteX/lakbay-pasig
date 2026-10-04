@@ -44,6 +44,13 @@
     --input: 210 14% 83%;
     --ring: 211 100% 50%;
 
+    /* Landing page only (pages/landing.tsx). The layer that shows behind
+       the scroll panels while they scale and round off. --card (white) and
+       --background (98%) are nearly the same color, so using either made
+       that layer invisible. A cool blue-gray, clearly darker than the white
+       panels, makes it read as a deliberate backdrop. */
+    --landing-backdrop: 210 30% 88%;
+
     /* Category colors. An admin picks one per Place and Business category,
        and the Discover map fills the marker, colors its label, and tints
        the legend with it. The category tables store the key (red, teal),
@@ -110,6 +117,10 @@
     --border: 212 60% 24%;
     --input: 212 60% 24%;
     --ring: 207 88% 50%;
+
+    /* Landing backdrop in dark mode: well below --card (12%) and
+       --background (8%) so the panel edges stand out against it. */
+    --landing-backdrop: 212 100% 3%;
 
     --category-red: 356 90% 68%;
     --category-orange: 28 95% 62%;

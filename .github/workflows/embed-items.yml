@@ -1,0 +1,46 @@
+name: Embed items
+
+# Keeps public.item_embeddings (migration 0046) in step with places and
+# businesses for the recommender. Separate from ci.yml: it needs the service
+# role key, which no pull request run should ever see. Nightly at 18:00 UTC,
+# which is 2 AM in Manila, plus a manual run. The first fill of the hosted
+# project is a workflow_dispatch run.
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+# Two runs never overlap. A second one waits for the first instead of
+# cancelling it halfway through a write.
+concurrency:
+  group: embed-items
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  embed:
+    name: Embed new and changed items
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # ponytail: no model cache, the quantized model (about 118 MB) is
+      # downloaded on every run that has something to embed. Add an
+      # actions/cache step only when the download time starts to hurt. A run
+      # with nothing to embed never loads the model.
+      - name: Embed
+        run: npm run embed
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

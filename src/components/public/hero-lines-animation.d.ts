@@ -23,4 +23,18 @@
 // hero-lines-background.tsx's own useEffect, which calls this with its
 // containerRef.current (an HTMLDivElement) and calls the returned
 // function on unmount.
-export function startHeroLinesAnimation(root: HTMLElement): () => void;
+//
+// The optional second argument was added for performance and every field
+// is optional: `skip` (line indices never computed or written), `mapPath`
+// (rewrites each line's `d` string once per frame, before the single DOM
+// write), and `fps` (frame-rate cap for the loop).
+export interface HeroLinesOptions {
+  skip?: ReadonlySet<number>;
+  mapPath?: (index: number, d: string) => string;
+  fps?: number;
+}
+
+export function startHeroLinesAnimation(
+  root: HTMLElement,
+  options?: HeroLinesOptions
+): () => void;

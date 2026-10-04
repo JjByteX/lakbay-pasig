@@ -219,7 +219,28 @@ import { startHeroLinesAnimation } from "./hero-lines-animation.js";
  * rectangle" bug the tenth instruction fixed, just with the two colors'
  * roles swapped.
  */
+/*
+ * Performance pass (hero was laggy). The artwork is unchanged; what it costs
+ * to draw each frame is not:
+ * - The SVG feColorMatrix filter (CSS `filter: url(#...)`) is gone. A filter
+ *   on a layer whose paths change every frame is re-rasterized every frame.
+ *   The same navy -> blue ramp is applied once, at mount, straight to the
+ *   gradient stop colors (tintGray below). The matrix is affine, so tinting
+ *   the stops gives the same pixels as filtering the interpolated result.
+ * - The MutationObserver that re-wrote `d` after the animation had written it
+ *   (two DOM writes per left-edge line per frame) is gone. The tangent
+ *   extension now runs through the animation's `mapPath` hook, so each line
+ *   is written once.
+ * - The 11 right-cluster lines are passed as `skip`, so they are no longer
+ *   computed every frame just to be hidden with CSS.
+ * - The loop is capped at LINE_FPS and pauses while the hero is off screen
+ *   (both live in hero-lines-animation.js).
+ */
 const RIGHT_SIDE_LINE_INDICES = [11, 12, 13, 14, 15, 16, 17, 18, 19, 33, 39];
+const HIDDEN_LINES: ReadonlySet<number> = new Set(RIGHT_SIDE_LINE_INDICES);
+
+// The swells travel at 20-34 px/s, so 30 fps is indistinguishable from 60.
+const LINE_FPS = 30;
 
 // Thirteenth direct instruction ("I think they're cut off maybe because
 // of the crop? why put it in a container too when you can just slap it
@@ -296,6 +317,10 @@ const CONTENT_H = 897;
 // [data-i], rather than deleting those lines from CURVES) and for the
 // crop window (runtime viewBox/preserveAspectRatio edits on the
 // injected <svg>, rather than editing hero-lines.svg on disk).
+//
+// (Superseded mechanism note: the MutationObserver described next was
+// replaced by the animation's `mapPath` hook, see the performance note
+// above. The math is the same, it now runs inside extendPathD.)
 //
 // Mechanism: a MutationObserver watches every one of these paths' `d`
 // attribute (the animation script rewrites `d` on every one of its own
@@ -384,18 +409,30 @@ const LEFT_EDGE_LINE_INDICES = new Set([
   41, 42, 43, 44, 45, 46, 47,
 ]);
 
-function extendPathStart(pathEl: SVGPathElement) {
-  const d = pathEl.getAttribute("d");
-  if (!d) return;
+// Maps the source's grayscale stop colors (0 = black, 1 = white) onto the
+// dark-navy -> brand-blue ramp the old SVG filter produced. The source is
+// grayscale, so the first byte is the luminance L. Output channels are
+// R = 0, G = 0.2941 * L + 0.1882, B = 0.5961 * L + 0.4039: navy #003067 at
+// L = 0 up to brand blue #007BFF at L = 1, so faint lines stay pale and bold
+// lines read as the strong brand blue.
+function tintGray(hex: string): string | null {
+  const match = /^#([0-9a-f]{2})[0-9a-f]{4}$/i.exec(hex.trim());
+  if (!match) return null;
+  const l = Number.parseInt(match[1], 16) / 255;
+  const g = Math.round((0.2941 * l + 0.1882) * 255);
+  const b = Math.round((0.5961 * l + 0.4039) * 255);
+  return `rgb(0,${g},${b})`;
+}
 
-  // Every `d` this component ever sees is toPath()'s own output:
-  // "M x0,y0" followed by one or more "C cx1,cy1 cx2,cy2 x,y" commands,
-  // always starting with exactly one M. Pulling out just the M and the
-  // FIRST C's first control point is enough to get the start point and
-  // start tangent -- everything after that first C is left untouched,
-  // string-appended back on unparsed.
+// Same tangent extension as before, as a pure string -> string step. Every
+// `d` the animation produces is toPath()'s own output: "M x0,y0" followed by
+// one or more "C cx1,cy1 cx2,cy2 x,y" commands. The start point and the first
+// control point give the curve's start tangent; a straight segment continuing
+// backward along it (EXTEND_PX long) is spliced onto the front, so the line
+// runs off the left edge with no kink where the two meet.
+function extendPathD(d: string): string {
   const match = /^M(-?[\d.]+),(-?[\d.]+)C(-?[\d.]+),(-?[\d.]+)/.exec(d);
-  if (!match) return;
+  if (!match) return d;
 
   const [, mx, my, c1x, c1y] = match;
   const x0 = Number.parseFloat(mx);
@@ -403,11 +440,6 @@ function extendPathStart(pathEl: SVGPathElement) {
   const cx1 = Number.parseFloat(c1x);
   const cy1 = Number.parseFloat(c1y);
 
-  // Tangent at the start point, pointing FROM the first control point
-  // BACK THROUGH the start point (i.e. continuing in the direction the
-  // curve arrives from) -- the reverse of (c1 - start), which is the
-  // direction the curve leaves the start point heading further into the
-  // line, not back out of it.
   let tx = x0 - cx1;
   let ty = y0 - cy1;
   const len = Math.hypot(tx, ty) || 1;
@@ -416,10 +448,6 @@ function extendPathStart(pathEl: SVGPathElement) {
 
   const farX = x0 + tx * EXTEND_PX;
   const farY = y0 + ty * EXTEND_PX;
-  // Control points a third and two-thirds of the way along the same
-  // straight tangent line, so the new segment is a straight run (not a
-  // curved one) that meets the original curve's own start tangent with
-  // no kink.
   const ctrl1X = x0 + tx * (EXTEND_PX / 3);
   const ctrl1Y = y0 + ty * (EXTEND_PX / 3);
   const ctrl2X = x0 + tx * (EXTEND_PX * (2 / 3));
@@ -431,7 +459,11 @@ function extendPathStart(pathEl: SVGPathElement) {
     `${ctrl2X.toFixed(1)},${ctrl2Y.toFixed(1)} ` +
     `${x0.toFixed(1)},${y0.toFixed(1)}`;
 
-  pathEl.setAttribute("d", prefix + d);
+  return prefix + d;
+}
+
+function mapLinePath(index: number, d: string): string {
+  return LEFT_EDGE_LINE_INDICES.has(index) ? extendPathD(d) : d;
 }
 
 export function HeroLinesBackground() {
@@ -441,18 +473,10 @@ export function HeroLinesBackground() {
     const root = containerRef.current;
     if (!root) return;
 
-    // Re-crop the injected SVG before the animation starts: shrink the
-    // viewBox to the surviving left cluster's own bounding box (CROP_W x
-    // CROP_H, tightly padded) instead of the full 1639x923 source box,
-    // and switch preserveAspectRatio to "xMinYMax meet". meet (not
-    // slice) scales the whole cropped viewBox DOWN to fit the SVG
-    // element's own rendered size (h-full, width auto -- set in the JSX
-    // below, not a separate sized box; see this file's top comment,
-    // thirteenth instruction, for why there is no longer a smaller box
-    // in between). hero-lines.svg on disk is left byte-for-byte
-    // unmodified; this only edits the one injected <svg> element's
-    // attributes at runtime, the same way the animation script below
-    // only ever rewrites `d` attributes, never structure.
+    // Re-crop the injected SVG before the animation starts (see the
+    // header comment): tight viewBox on the left cluster, anchored
+    // bottom-left with "meet". hero-lines.svg on disk is untouched; only
+    // this one injected element's attributes change at runtime.
     const svgEl = root.querySelector("svg");
     if (svgEl) {
       svgEl.setAttribute(
@@ -460,116 +484,36 @@ export function HeroLinesBackground() {
         `${CROP_MIN_X} ${CROP_MIN_Y} ${CROP_W} ${CROP_H}`
       );
       svgEl.setAttribute("preserveAspectRatio", "xMinYMax meet");
+
+      // Tint the gradient stops once. The data flag keeps a second effect
+      // run (React StrictMode mounts twice in dev) from tinting the
+      // already-blue stops again, which would read their red byte as 0 and
+      // flatten every line to navy.
+      if (svgEl.dataset.tinted !== "1") {
+        svgEl.querySelectorAll("stop").forEach((stop) => {
+          const tinted = tintGray(stop.getAttribute("stop-color") ?? "");
+          if (tinted) stop.setAttribute("stop-color", tinted);
+        });
+        svgEl.dataset.tinted = "1";
+      }
     }
 
-    // The MutationObserver below is attached BEFORE
-    // startHeroLinesAnimation runs, so it already catches that
-    // function's very first frame(0) call (which paints the resting
-    // shape synchronously, see hero-lines-animation.js) -- there is no
-    // separate "extend once on mount" step needed here: every path
-    // ships with no `d` attribute at all until frame(0) sets one for
-    // the first time (hero-lines.svg's own <path> elements carry only
-    // stroke/stroke-width), and the observer's own first callback
-    // extends that first-ever `d` exactly the same way as every frame
-    // after it.
-    const isLeftEdgePath = (el: Element): el is SVGPathElement =>
-      el instanceof SVGPathElement &&
-      LEFT_EDGE_LINE_INDICES.has(Number(el.dataset.i));
-
-    const observer = new MutationObserver((records) => {
-      observer.disconnect();
-      for (const record of records) {
-        if (
-          record.type === "attributes" &&
-          record.attributeName === "d" &&
-          isLeftEdgePath(record.target as Element)
-        ) {
-          extendPathStart(record.target as SVGPathElement);
-        }
-      }
-      observer.observe(root, {
-        attributes: true,
-        attributeFilter: ["d"],
-        subtree: true,
-      });
+    return startHeroLinesAnimation(root, {
+      skip: HIDDEN_LINES,
+      mapPath: mapLinePath,
+      fps: LINE_FPS,
     });
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["d"],
-      subtree: true,
-    });
-
-    const destroy = startHeroLinesAnimation(root);
-    return () => {
-      observer.disconnect();
-      destroy?.();
-    };
   }, []);
-
-  const hideRightSideCss = RIGHT_SIDE_LINE_INDICES.map(
-    (i) => `.hero-lines-left-only [data-i="${i}"]`
-  ).join(",");
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-card">
-      {/* Right-side line cluster hidden here, in CSS, rather than by
-          editing hero-lines.svg -- see this file's own top comment. Each
-          index gets its own fully-scoped ".hero-lines-left-only [data-i]"
-          selector (not one shared ancestor prefix before a comma list),
-          since a bare comma-separated selector list only scopes the
-          first entry to that ancestor -- the rest would silently become
-          unscoped, page-wide selectors. */}
-      <style>{`${hideRightSideCss} { display: none; }`}</style>
-
-      {/* feColorMatrix remaps the source's grayscale luminance (0 = black,
-          1 = white) onto a dark-navy -> brand-blue ramp, so faint lines
-          stay a pale blue and the bold lines read as the strong brand
-          blue, matching how the original asset used luminance for depth
-          against a black page background -- here against a white one. */}
-      <svg width="0" height="0" aria-hidden="true" focusable="false">
-        <defs>
-          <filter id="hero-lines-tint" colorInterpolationFilters="sRGB">
-            {/* The source is grayscale (in_R = in_G = in_B = L, the line's
-                luminance), so each output channel is read off the input
-                RED channel only (coefficient on G and B = 0) as
-                out = slope*L + navy_floor, ramping from the navy floor
-                (0x00,0x30,0x67) at L=0 to the brand blue ceiling
-                (0x00,0x7B,0xFF) at L=1. Alpha passes through untouched. */}
-            <feColorMatrix
-              type="matrix"
-              values="
-                 0      0 0 0 0
-                 0.2941 0 0 0 0.1882
-                 0.5961 0 0 0 0.4039
-                 0      0 0 1 0
-              "
-            />
-          </filter>
-        </defs>
-      </svg>
-
-      {/* Full panel, no separate sized box -- thirteenth direct
-          instruction ("why put it in a container too when you can just
-          slap it on there since no ones occupying the space"). This div
-          now matches the outer root exactly (absolute inset-0) instead
-          of a smaller bottom-left-anchored box; see CONTENT_W/H's own
-          comment further up this file for why that box was removed
-          rather than resized again. overflow-hidden stays here as a
-          safety backstop (the hero's own real edges are still a clip
-          boundary, so nothing can spill past the hero section itself),
-          but it is no longer the boundary doing the day-to-day work of
-          keeping the artwork off the centered headline -- the SVG's own
-          sizing below (h-full, width auto) does that now, by simply
-          never scaling wider than its own fixed aspect ratio, the same
-          way a plain image element with only its height set keeps its
-          own proportions instead of stretching to fill a wider box. */}
+      {/* No CSS filter here any more (stops are tinted in the effect above)
+          and no <style> hiding the right cluster (those lines are skipped
+          by the animation and never get a `d`). */}
       <div
         ref={containerRef}
-        className="hero-lines-left-only absolute inset-0 overflow-hidden [&_svg]:absolute [&_svg]:bottom-0 [&_svg]:left-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-auto"
-        style={{
-          filter: "url(#hero-lines-tint)",
-          opacity: LINE_OPACITY,
-        }}
+        className="absolute inset-0 overflow-hidden [&_svg]:absolute [&_svg]:bottom-0 [&_svg]:left-0 [&_svg]:block [&_svg]:h-full [&_svg]:w-auto"
+        style={{ opacity: LINE_OPACITY }}
         // The SVG markup itself (gradients + animated paths) is an
         // unmodified port of the supplied background file -- see this
         // file's own top comment. Sourced from our own bundled asset,
