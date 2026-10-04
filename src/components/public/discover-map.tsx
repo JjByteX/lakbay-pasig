@@ -2,6 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
 import { GpsFix, MapPin, Plus, Minus } from "@phosphor-icons/react";
+import {
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
 import type { Coordinates } from "@/lib/discover-query";
 import {
   LATTE,
@@ -957,36 +965,216 @@ function ZoomControl({ map, grown }: Readonly<{ map: maplibregl.Map | null; grow
 // photo yet is a plain muted square, same empty-photo convention
 // discover-business-detail.tsx's item cards already use, not an invented
 // placeholder icon.
+//
+// Speech-bubble shape (direct instruction + sketch): rounded sides and a
+// small curved pointer at the bottom. The pointer is always centered on the
+// bubble. The bubble sits on top of the marker (vertically anchored to the
+// marker's visible circle, .marker-ring, which is smaller than the wrapper
+// when declutter has shrunk the pin to a dot) and follows the cursor
+// horizontally, so hovering the marker's name label or its circle moves the
+// bubble along with the mouse. Its horizontal position is a motion value
+// (DiscoverMap's previewLeft), written on every mouse move without a React
+// render.
+//
+// Two edge cases. Near a side of the map the bubble is clamped inside it, and
+// the centered pointer stays centered on the bubble rather than on the cursor.
+// Near the top of the map there is no room above, so the bubble drops below
+// the marker and the pointer flips to its top edge. The map also runs under
+// the shell's top bar, which is why the flip threshold is generous.
+//
+// The shadow is a drop-shadow filter on the wrapper rather than box-shadow on
+// the body, so the pointer casts the same shadow as the bubble. The pointer is
+// an SVG: its fill is the bubble's own bg-popover and its stroke the same
+// border color, drawn over the bubble's 1px border so the join has no seam.
+// Corner radius, pointer size and bubble width below are tied to the Tailwind
+// classes (rounded-2xl = 16px, w-80 = 320px); change them together.
+interface HoverAnchor {
+  // Marker circle's top and bottom edges, in pixels relative to the map
+  // container. The horizontal position follows the cursor and is passed
+  // separately, as a motion value.
+  top: number;
+  bottom: number;
+}
+
+const HOVER_WIDTH = 320;
+const HOVER_EDGE_PAD = 8;
+const HOVER_TAIL_W = 28;
+const HOVER_TAIL_H = 12;
+const HOVER_GAP = 6;
+const HOVER_FLIP_BELOW_PX = 200;
+
+// Jelly sway, driven by acceleration. The bubble body has inertia: when the
+// mouse speeds up to the right the body lags behind to the left, when it
+// slows down or stops the body keeps going and swings forward, and at a steady
+// speed it hangs straight. A lean that followed speed instead would stay
+// tilted for as long as the mouse kept moving, which reads as a tilt, not a
+// wobble. DiscoverMap turns the mouse's horizontal acceleration into `sway`, a
+// value from -1 (speeding up to the left) to 1 (speeding up to the right), see
+// the listeners in the marker effect. The bubble follows it through an
+// lightly damped spring: damping 22 on stiffness 260 is a damping ratio of
+// about 0.68, so it leans and settles with at most one faint overshoot instead
+// of wobbling on. It is deliberately small (HOVER_SWAY_DEG at full kick) and
+// only rotates: no scaling, which would make the browser redraw the bubble's
+// shadow every frame.
+//
+// The bubble pivots on the pointer's tip and the tip never moves sideways, so
+// the tail stays exactly under the cursor while the body rocks around it.
+//
+// SWAY_PER_ACCEL scales acceleration (px per ms squared) into the -1..1
+// range: a hard flick, 0.6 px/ms gained in 16ms, is full sway. A mouse that
+// simply stops sends no more events, so after SWAY_IDLE_MS of stillness the
+// last speed is treated as having been lost over STOP_KICK_MS, which gives
+// the stop its own kick; SWAY_KICK_HOLD_MS is how long that kick is held
+// before the spring is let go to settle back to rest.
+const HOVER_SWAY_DEG = 1.5;
+const HOVER_SWAY_SPRING = { stiffness: 260, damping: 22, mass: 1 } as const;
+const SWAY_PER_ACCEL = 30;
+const SWAY_IDLE_MS = 70;
+const STOP_KICK_MS = 30;
+const SWAY_KICK_HOLD_MS = 60;
+
+// Only a real wiggle makes the bubble jiggle. A quick hover (the mouse comes
+// in, glides across and stops) speeds up and slows down too, and used to set
+// the bubble rocking. A wiggle is the mouse going back and forth, so sway is
+// armed only after the horizontal direction has flipped WIGGLE_REVERSALS
+// times in a row, each within WIGGLE_WINDOW_MS of the last. A flip only
+// counts when the mouse is moving faster than WIGGLE_MIN_SPEED (px per ms) on
+// both sides, so jitter at rest does not count. Once the wiggle stops, the
+// window runs out and the bubble is still again.
+const WIGGLE_REVERSALS = 2;
+const WIGGLE_WINDOW_MS = 450;
+const WIGGLE_MIN_SPEED = 0.12;
+
+// Ant-Man entrance, kept subtle: the bubble grows out of the pointer's tip, at
+// the marker, from a little under full size while it fades in. A short eased
+// tween, not a spring, so it ends exactly at full size with no overshoot or
+// bounce. Reduced motion skips it.
+const HOVER_POP_FROM = 0.88;
+const HOVER_POP = { duration: 0.14, ease: [0.22, 1, 0.36, 1] } as const;
+
+// Concave sides flaring into a point. The fill starts at y=0 and the stroke at
+// y=0.5, so the fill covers the bubble's 1px border and the stroke lines up
+// with the middle of it.
+const TAIL_FILL = "M0 0 L0 .5 C8 .5 11 5.5 14 12.5 C17 5.5 20 .5 28 .5 L28 0 Z";
+const TAIL_STROKE = "M0 .5 C8 .5 11 5.5 14 12.5 C17 5.5 20 .5 28 .5";
+
 function HoverPreview({
   result,
-  x,
-  y,
-}: Readonly<{ result: DiscoverResult; x: number; y: number }>) {
+  anchor,
+  sway,
+  left,
+}: Readonly<{
+  result: DiscoverResult;
+  anchor: HoverAnchor;
+  sway: MotionValue<number>;
+  // The bubble's horizontal center in container pixels, already clamped to
+  // the map by DiscoverMap's showPreview.
+  left: MotionValue<number>;
+}>) {
+  // Motion values, so a frame of wobble writes the transform directly and
+  // never re-renders React. The body lags the acceleration, so the rotation
+  // sign differs by placement: pivoting on the tip, a counter-clockwise turn
+  // moves the top of a bubble that sits above the marker to the left, but
+  // moves the bottom of one that hangs below it to the right. Speeding up to
+  // the right must push the body left in both cases, so the above bubble
+  // turns counter-clockwise and the below bubble clockwise. Two fixed
+  // transforms rather than one that reads `above`, so a transform function
+  // never changes between renders.
+  const reduceMotion = useReducedMotion();
+  const swing = useSpring(sway, HOVER_SWAY_SPRING);
+  const rotateAbove = useTransform(swing, (v) => -v * HOVER_SWAY_DEG);
+  const rotateBelow = useTransform(swing, (v) => v * HOVER_SWAY_DEG);
+  // The cursor follow is a transform, not `left`: moving `left` makes the
+  // browser redo layout on every mouse move, and showPreview measures the
+  // marker in the same event, which forced that layout to run right away.
+  const slideX = useTransform(left, (v) => v - HOVER_WIDTH / 2);
+  const above = anchor.top >= HOVER_FLIP_BELOW_PX;
+  // The pointer is always centered on the bubble.
+  const tailCenter = HOVER_WIDTH / 2;
+  // The pointer is outside the wrapper's own box (absolute, past its edge), so
+  // the body sits one tail height plus the gap away from the marker.
+  const offset = HOVER_GAP + HOVER_TAIL_H;
+  // Both the sway and the Ant-Man growth pivot on the pointer's tip, so the
+  // bubble grows out of the marker and rocks around it.
+  const tipOrigin = above
+    ? `${tailCenter}px calc(100% + ${HOVER_TAIL_H}px)`
+    : `${tailCenter}px -${HOVER_TAIL_H}px`;
+
   return (
-    <div
-      className="pointer-events-none absolute z-[1000] flex w-80 gap-3 rounded-md border border-border bg-popover p-3 text-popover-foreground shadow-md"
-      style={{ left: x + 12, top: y + 12 }}
+    <motion.div
+      className="pointer-events-none absolute z-[1000] w-80 drop-shadow-lg"
+      style={{
+        left: 0,
+        top: above ? anchor.top - offset : anchor.bottom + offset,
+        x: slideX,
+        y: above ? "-100%" : "0%",
+      }}
     >
-      {result.coverPhotoUrl ? (
-        <img
-          src={result.coverPhotoUrl}
-          alt=""
-          className="h-20 w-20 shrink-0 rounded-md border border-border object-cover"
-        />
-      ) : (
-        <div className="h-20 w-20 shrink-0 rounded-md border border-border bg-muted" />
-      )}
-      <div className="flex min-w-0 flex-col">
-        <p className="text-sm font-semibold text-foreground">{result.name}</p>
-        <p className="text-xs text-muted-foreground">{result.category}</p>
-        {result.description && (
-          <p className="mt-1 line-clamp-3 text-xs text-foreground">{result.description}</p>
-        )}
-        <div className="mt-2">
-          <VerificationBadge status={result.verification_status} />
-        </div>
-      </div>
-    </div>
+      {/* The sway lives on this inner element: the wrapper above already
+          uses `transform` to center itself on the marker, and a second
+          transform on the same element would replace it. The pivot is the
+          pointer's tip: tailCenter across, one tail height past the bubble's
+          bottom edge (or above its top edge when it hangs below). Reduced
+          motion: no style, the bubble stays still. */}
+      {/* The growth lives on its own layer for the same reason: the sway
+          drives scaleX/scaleY from motion values, and an animated scale on
+          the same element would fight them. */}
+      <motion.div
+        className="relative"
+        initial={reduceMotion ? false : { scale: HOVER_POP_FROM, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={HOVER_POP}
+        style={{ transformOrigin: tipOrigin }}
+      >
+        <motion.div
+          className="relative"
+          style={
+            reduceMotion
+              ? undefined
+              : {
+                  rotate: above ? rotateAbove : rotateBelow,
+                  transformOrigin: tipOrigin,
+                }
+          }
+        >
+          <div className="flex gap-3 rounded-2xl border border-border bg-popover p-3 text-popover-foreground">
+            {result.coverPhotoUrl ? (
+              <img
+                src={result.coverPhotoUrl}
+                alt=""
+                className="h-20 w-20 shrink-0 rounded-lg border border-border object-cover"
+              />
+            ) : (
+              <div className="h-20 w-20 shrink-0 rounded-lg border border-border bg-muted" />
+            )}
+            <div className="flex min-w-0 flex-col">
+              <p className="text-sm font-semibold text-foreground">{result.name}</p>
+              <p className="text-xs text-muted-foreground">{result.category}</p>
+              {result.description && (
+                <p className="mt-1 line-clamp-3 text-xs text-foreground">{result.description}</p>
+              )}
+              <div className="mt-2">
+                <VerificationBadge status={result.verification_status} />
+              </div>
+            </div>
+          </div>
+          <svg
+            aria-hidden="true"
+            width={HOVER_TAIL_W}
+            height={HOVER_TAIL_H + 1}
+            viewBox={`0 0 ${HOVER_TAIL_W} ${HOVER_TAIL_H + 1}`}
+            className={cn(
+              "absolute left-1/2 -translate-x-1/2 overflow-visible",
+              above ? "" : "rotate-180",
+            )}
+            style={above ? { top: "calc(100% - 1px)" } : { bottom: "calc(100% - 1px)" }}
+          >
+            <path d={TAIL_FILL} className="fill-popover" />
+            <path d={TAIL_STROKE} className="fill-none stroke-border" strokeWidth={1} strokeLinejoin="round" />
+          </svg>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -1157,11 +1345,19 @@ export function DiscoverMap({
   // Phase 1.6: desktop only, "hover has no mobile equivalent" -- reuses the
   // existing useIsMobile hook (hooks/use-mobile.tsx) rather than a new
   // pointer-media-query check, per constraints.md's Inventory Before
-  // Suggesting rule. hovered holds both the result and the last known
-  // pointer position so HoverPreview can follow the cursor without a
+  // Suggesting rule. hovered holds the result and where its marker is on the
+  // map (HoverAnchor), so HoverPreview can point at the marker without a
   // second piece of state.
   const isMobile = useIsMobile();
-  const [hovered, setHovered] = useState<{ result: DiscoverResult; x: number; y: number } | null>(null);
+  const [hovered, setHovered] = useState<({ result: DiscoverResult } & HoverAnchor) | null>(null);
+  // How hard the hover bubble leans, -1 (left) to 1 (right). A motion value,
+  // not state: it changes on every mouse move and only HoverPreview's spring
+  // reads it, so it must not re-render this component.
+  const sway = useMotionValue(0);
+  // Where the hover bubble's center sits horizontally, in map container
+  // pixels. Follows the cursor and is clamped to the map; a motion value for
+  // the same reason as `sway`.
+  const previewLeft = useMotionValue(0);
 
   // Map instance: created once, destroyed on unmount. Dark/light palette is
   // read once at creation via the `.dark` class on <html> (this codebase's
@@ -1757,6 +1953,30 @@ export function DiscoverMap({
     const map = mapRef.current;
     if (!map) return;
 
+    // Shared by every marker's listeners below: only one marker is hovered at
+    // a time, so one timer, one clock and one speed are enough. lastVx is the
+    // smoothed horizontal speed in px per ms, signed (left negative).
+    let swayIdleTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastMoveAt = 0;
+    let lastVx = 0;
+    // Wiggle detection (see WIGGLE_REVERSALS): the last clear direction the
+    // mouse moved in (-1, 0 or 1), how many direction flips have followed one
+    // another, and when the latest flip was.
+    let dir = 0;
+    let reversals = 0;
+    let lastReversalAt = 0;
+    const isWiggling = (now: number) =>
+      reversals >= WIGGLE_REVERSALS && now - lastReversalAt <= WIGGLE_WINDOW_MS;
+    const clampSway = (v: number) => Math.max(-1, Math.min(1, v));
+    const stopSway = () => {
+      if (swayIdleTimer) clearTimeout(swayIdleTimer);
+      swayIdleTimer = null;
+      lastVx = 0;
+      dir = 0;
+      reversals = 0;
+      sway.set(0);
+    };
+
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = results
       .filter((result) => result.latitude != null && result.longitude != null)
@@ -1783,27 +2003,103 @@ export function DiscoverMap({
           setSelected(result);
         });
         if (!isMobile) {
-          el.addEventListener("mouseenter", (e: MouseEvent) => {
+          // The preview sits on top of the marker's visible circle,
+          // measured at event time so a declutter dot or a pan is always
+          // current, and follows the cursor horizontally. The horizontal
+          // position goes straight into previewLeft (clamped so the whole
+          // bubble stays inside the map) and never re-renders the map; the
+          // functional update below returns the same object when the
+          // circle did not move, so only a hover change or a pan re-renders.
+          const showPreview = (e: MouseEvent) => {
             const bounds = containerRef.current?.getBoundingClientRect();
             if (!bounds) return;
-            setHovered({ result, x: e.clientX - bounds.left, y: e.clientY - bounds.top });
+            const half = HOVER_WIDTH / 2;
+            const minLeft = half + HOVER_EDGE_PAD;
+            const maxLeft = Math.max(minLeft, bounds.width - half - HOVER_EDGE_PAD);
+            previewLeft.set(Math.round(Math.min(maxLeft, Math.max(minLeft, e.clientX - bounds.left))));
+            const circle = (el.querySelector(".marker-ring") ?? el).getBoundingClientRect();
+            const next = {
+              top: circle.top - bounds.top,
+              bottom: circle.bottom - bounds.top,
+            };
+            setHovered((prev) =>
+              prev &&
+              prev.result === result &&
+              prev.top === next.top &&
+              prev.bottom === next.bottom
+                ? prev
+                : { result, ...next },
+            );
+          };
+          // Sway: only while the mouse is wiggling (isWiggling), the mouse's
+          // horizontal acceleration, signed (speeding up
+          // to the right positive), from the change in a smoothed speed
+          // between two moves. Mouse events arrive at whole-pixel steps, so
+          // the speed is blended with the previous one first, and sway is
+          // blended with its previous value, so one jittery event cannot jolt
+          // the bubble. At a steady speed the acceleration is about 0 and
+          // sway fades out on its own. When the mouse stops, no event
+          // arrives, so a timer turns the speed that was just lost into one
+          // last kick, holds it briefly, then releases it to 0 and the
+          // bubble's spring wobbles to rest. The first move after entering
+          // sets the clock only: a gap since the last move (or none yet) has
+          // no speed.
+          el.addEventListener("mouseenter", (e: MouseEvent) => {
+            stopSway();
+            lastMoveAt = e.timeStamp;
+            showPreview(e);
           });
           el.addEventListener("mousemove", (e: MouseEvent) => {
-            const bounds = containerRef.current?.getBoundingClientRect();
-            if (!bounds) return;
-            setHovered({ result, x: e.clientX - bounds.left, y: e.clientY - bounds.top });
+            showPreview(e);
+            const dt = e.timeStamp - lastMoveAt;
+            lastMoveAt = e.timeStamp;
+            if (dt <= 0 || dt > 100) return;
+            const vx = lastVx * 0.5 + (e.movementX / dt) * 0.5;
+            const accel = (vx - lastVx) / dt;
+            lastVx = vx;
+            if (Math.abs(vx) > WIGGLE_MIN_SPEED) {
+              const heading = Math.sign(vx);
+              if (dir !== 0 && heading !== dir) {
+                reversals = e.timeStamp - lastReversalAt <= WIGGLE_WINDOW_MS ? reversals + 1 : 1;
+                lastReversalAt = e.timeStamp;
+              }
+              dir = heading;
+            }
+            sway.set(
+              isWiggling(e.timeStamp)
+                ? clampSway(sway.get() * 0.4 + accel * SWAY_PER_ACCEL * 0.6)
+                : sway.get() * 0.4,
+            );
+            if (swayIdleTimer) clearTimeout(swayIdleTimer);
+            swayIdleTimer = setTimeout(() => {
+              // A hover that ends in a stop is not a wiggle: no stop kick.
+              sway.set(
+                isWiggling(performance.now())
+                  ? clampSway((-lastVx / STOP_KICK_MS) * SWAY_PER_ACCEL)
+                  : 0,
+              );
+              lastVx = 0;
+              swayIdleTimer = setTimeout(() => {
+                swayIdleTimer = null;
+                sway.set(0);
+              }, SWAY_KICK_HOLD_MS);
+            }, SWAY_IDLE_MS);
           });
-          el.addEventListener("mouseleave", () => setHovered(null));
+          el.addEventListener("mouseleave", () => {
+            stopSway();
+            setHovered(null);
+          });
         }
         return marker;
       });
 
     return () => {
+      stopSway();
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       setHovered(null);
     };
-  }, [results, isMobile]);
+  }, [results, isMobile, sway, previewLeft]);
 
   // Declutter pass (see layoutMarkers above): a separate effect
   // from the marker-build one because it must re-run on every pan, zoom
@@ -1944,7 +2240,13 @@ export function DiscoverMap({
       )}
 
       {previewResult && (
-        <HoverPreview result={previewResult.result} x={previewResult.x} y={previewResult.y} />
+        <HoverPreview
+          key={`${previewResult.result.kind}-${previewResult.result.id}`}
+          result={previewResult.result}
+          anchor={previewResult}
+          sway={sway}
+          left={previewLeft}
+        />
       )}
 
       <ResultCard

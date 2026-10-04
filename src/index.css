@@ -303,6 +303,48 @@
   transform: translateX(-50%);
 }
 
+/* Hover bridge. The label sits a few pixels away from the circle (the
+   margins above), and a margin is not part of any element, so the pointer
+   crossing it was over the bare map for a moment: the marker's mouseleave
+   fired and the hover preview vanished. This invisible strip fills that gap
+   with the label's own box, so the pointer never leaves the marker between
+   the icon and the text. Each strip reaches 1px past the margin on the
+   circle's side so the two never leave a hairline seam at fractional zoom.
+   It inherits the label's pointer-events, so it is inert while the label is
+   hidden. The sizes must match the margins above. */
+.marker-name-label::before {
+  content: "";
+  position: absolute;
+}
+
+.marker-name-label[data-side="right"]::before {
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 5px;
+}
+
+.marker-name-label[data-side="left"]::before {
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 5px;
+}
+
+.marker-name-label[data-side="bottom"]::before {
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 3px;
+}
+
+.marker-name-label[data-side="top"]::before {
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 3px;
+}
+
 /* Pin tiers set by layoutMarkers in discover-map.tsx (data-tier on
    .marker-pin): "full" is the normal 28px circle; "dot" scales the circle
    down to a small category-colored dot and fades the glyph; "hidden"

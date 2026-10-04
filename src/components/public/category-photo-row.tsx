@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RecentlyVerifiedItem } from "@/lib/home-types";
 import { VerificationBadge } from "./result-card";
+import { PhotoCaptionOverlay } from "./photo-caption-overlay";
 import { itemKey } from "@/lib/recommendations";
 
 /**
@@ -72,11 +73,10 @@ const PHOTO_HEIGHT = "h-36 md:h-44";
 const CARD_WITH_STRIP_HEIGHT = "h-52 md:h-[248px]";
 
 // Phase 3.2: one photo card -- cover photo as the background, name
-// overlaid at the bottom over a scrim. Same scrim recipe auth-layout.tsx
-// already uses for its own image-panel tagline (decision-log.md entry #2):
-// an absolutely-positioned gradient from a dark, near-opaque base up to
-// transparent, with the label sitting inside that gradient's opaque end,
-// rather than inventing a new overlay treatment for this card.
+// overlaid at the bottom. The overlay is PhotoCaptionOverlay: white text on a
+// soft blur and a neutral black gradient, the same treatment as the landing
+// hero's caption. It replaced the navy scrim with theme-colored text, which
+// was dark text on a dark scrim in dark mode (see that file's comment).
 function PhotoCard({
   item,
   onSelect,
@@ -121,21 +121,11 @@ function PhotoCard({
           }}
         >
           {!item.coverPhotoUrl && <span className="absolute inset-0 bg-muted" />}
-          <span
-            className="absolute inset-x-0 bottom-0 h-2/3"
-            style={{
-              background: "linear-gradient(to top, rgb(0 48 103 / 0.85), transparent)",
-            }}
-          />
           {/* Phase 3.2: the verified-only rows show no badge here -- home.tsx's
               Places/Businesses framing (Phase 5.2) already states every card
               in that section is verified. A recommendation row mixes Verified
               and Pending, so its cards carry the badge in the strip below. */}
-          <span className="relative flex h-full flex-col justify-end p-3">
-            <span className="line-clamp-2 text-sm font-semibold text-primary-foreground">
-              {item.name}
-            </span>
-          </span>
+          <PhotoCaptionOverlay name={item.name} />
         </span>
         {hasStrip && (
           <span className="flex flex-1 flex-col gap-1 bg-card p-2">

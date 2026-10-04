@@ -1,4 +1,5 @@
 import { VerificationBadge } from "./result-card";
+import { PhotoCaptionOverlay } from "./photo-caption-overlay";
 import { SaveButton } from "./save-button";
 import type { DiscoverPlace } from "@/lib/discover-types";
 import type { SavedBusiness } from "@/lib/saved-businesses";
@@ -7,7 +8,8 @@ import type { SavedBusiness } from "@/lib/saved-businesses";
  * The Saved page's Places and Businesses card. Was a list row (name,
  * category, badge, heart in one line); now a photo card in the Home style
  * (category-photo-row.tsx's PhotoCard): cover photo with the name over it,
- * same scrim recipe, same hover lift. File and export keep their old names
+ * same caption overlay (photo-caption-overlay.tsx), same hover lift. File and
+ * export keep their old names
  * (constraints.md: no renames without approval), the shape is a card now.
  *
  * Not a reuse of PhotoCard itself: that card is a fixed-width strip tile
@@ -37,14 +39,8 @@ export function SavedPlaceRow({ place, kind = "place", onClick, onUnsave }: Read
         className="relative block aspect-square w-full shrink-0 bg-muted bg-cover bg-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         style={{ backgroundImage: place.coverPhotoUrl ? `url(${place.coverPhotoUrl})` : undefined }}
       >
-        {/* Same scrim as Home's PhotoCard (decision-log.md entry #2). */}
-        <span
-          className="absolute inset-x-0 bottom-0 h-2/3"
-          style={{ background: "linear-gradient(to top, rgb(0 48 103 / 0.85), transparent)" }}
-        />
-        <span className="relative flex h-full flex-col justify-end p-3">
-          <span className="line-clamp-2 text-sm font-semibold text-primary-foreground">{place.name}</span>
-        </span>
+        {/* Same caption overlay as Home's PhotoCard. */}
+        <PhotoCaptionOverlay name={place.name} />
       </button>
       <div className="flex flex-1 items-start justify-between gap-2 p-2">
         <div className="flex min-w-0 flex-col gap-1">
