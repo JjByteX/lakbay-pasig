@@ -67,15 +67,11 @@ const textEncoder = new TextEncoder();
 // Characters XML 1.0 cannot carry are dropped, the five reserved ones escaped.
 function xmlEscape(value: string): string {
   return value
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function cellText(value: string | number): string {
-  return String(value);
+    .replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 // A column is numeric when every body cell and the footer cell in it is a number.
@@ -103,7 +99,7 @@ const CRC_TABLE = (() => {
 
 function crc32(data: Uint8Array): number {
   let c = 0xffffffff;
-  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  for (const byte of data) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
@@ -190,7 +186,7 @@ function columnLetter(index: number): string {
   let n = index;
   let s = "";
   do {
-    s = String.fromCharCode(65 + (n % 26)) + s;
+    s = String.fromCodePoint(65 + (n % 26)) + s;
     n = Math.floor(n / 26) - 1;
   } while (n >= 0);
   return s;
@@ -200,7 +196,7 @@ function columnLetter(index: number): string {
 function xlsxCell(ref: string, value: string | number, style: number): string {
   const s = style ? ` s="${style}"` : "";
   if (typeof value === "number" && Number.isFinite(value)) return `<c r="${ref}"${s}><v>${value}</v></c>`;
-  return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cellText(value))}</t></is></c>`;
+  return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(String(value))}</t></is></c>`;
 }
 
 function buildXlsx(table: ReportTable): Uint8Array {
@@ -208,7 +204,7 @@ function buildXlsx(table: ReportTable): Uint8Array {
   let r = 1;
   const pushRow = (cells: [string | number, number][]) => {
     rows.push(
-      `<row r="${r}">${cells.map(([v, s], i) => xlsxCell(`${columnLetter(i)}${r}`, v, s)).join("")}</row>`,
+      `<row r="${r}">${cells.map(([v, s], i) => xlsxCell(columnLetter(i) + r, v, s)).join("")}</row>`,
     );
     r += 1;
   };
@@ -228,7 +224,7 @@ function buildXlsx(table: ReportTable): Uint8Array {
   // Widths from the table itself, not from the title or notes, which run over
   // the empty cells beside them.
   const widths = table.columns.map((c, i) => {
-    const cells = [c, ...table.rows.map((row) => cellText(row[i])), ...(table.footer ? [cellText(table.footer[i])] : [])];
+    const cells = [c, ...table.rows.map((row) => String(row[i])), ...(table.footer ? [String(table.footer[i])] : [])];
     return Math.min(60, Math.max(12, ...cells.map((t) => t.length + 3)));
   });
   const cols = widths
@@ -236,10 +232,11 @@ function buildXlsx(table: ReportTable): Uint8Array {
     .join("");
 
   const image = table.image;
+  const drawing = image ? '<drawing r:id="rId1"/>' : "";
   const sheet =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-    `<cols>${cols}</cols><sheetData>${rows.join("")}</sheetData>${image ? `<drawing r:id="rId1"/>` : ""}</worksheet>`;
+    `<cols>${cols}</cols><sheetData>${rows.join("")}</sheetData>${drawing}</worksheet>`;
 
   const styles =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -357,11 +354,11 @@ function buildXlsx(table: ReportTable): Uint8Array {
 // ---------------------------------------------------------------------------
 
 function docxParagraph(text: string, opts: { bold?: boolean; size?: number; after?: number; right?: boolean } = {}): string {
-  const rPr =
-    opts.bold || opts.size
-      ? `<w:rPr>${opts.bold ? "<w:b/>" : ""}${opts.size ? `<w:sz w:val="${opts.size}"/>` : ""}</w:rPr>`
-      : "";
-  const pPr = `<w:pPr><w:spacing w:after="${opts.after ?? 0}"/>${opts.right ? '<w:jc w:val="right"/>' : ""}</w:pPr>`;
+  const bold = opts.bold ? "<w:b/>" : "";
+  const size = opts.size ? `<w:sz w:val="${opts.size}"/>` : "";
+  const rPr = bold || size ? `<w:rPr>${bold}${size}</w:rPr>` : "";
+  const align = opts.right ? '<w:jc w:val="right"/>' : "";
+  const pPr = `<w:pPr><w:spacing w:after="${opts.after ?? 0}"/>${align}</w:pPr>`;
   return `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r></w:p>`;
 }
 
@@ -375,17 +372,18 @@ function buildDocx(table: ReportTable): Uint8Array {
   const cell = (value: string | number, i: number, opts: { bold?: boolean; shade?: boolean }) =>
     `<w:tc><w:tcPr><w:tcW w:w="${widthOf(i)}" w:type="dxa"/>` +
     (opts.shade ? `<w:shd w:val="clear" w:color="auto" w:fill="D9D9D9"/>` : "") +
-    `</w:tcPr>${docxParagraph(cellText(value), { bold: opts.bold, right: numeric[i], after: 0 })}</w:tc>`;
+    `</w:tcPr>${docxParagraph(String(value), { bold: opts.bold, right: numeric[i], after: 0 })}</w:tc>`;
 
   const rowXml = (cells: (string | number)[], opts: { bold?: boolean; shade?: boolean; header?: boolean }) =>
     `<w:tr>${opts.header ? "<w:trPr><w:tblHeader/></w:trPr>" : ""}${cells.map((c, i) => cell(c, i, opts)).join("")}</w:tr>`;
 
+  const gridCols = table.columns.map((_, i) => `<w:gridCol w:w="${widthOf(i)}"/>`).join("");
   const border = (side: string) => `<w:${side} w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>`;
   const tbl =
     `<w:tbl><w:tblPr><w:tblW w:w="${TOTAL}" w:type="dxa"/><w:tblBorders>` +
     ["top", "left", "bottom", "right", "insideH", "insideV"].map(border).join("") +
     `</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr>` +
-    `<w:tblGrid>${table.columns.map((_, i) => `<w:gridCol w:w="${widthOf(i)}"/>`).join("")}</w:tblGrid>` +
+    `<w:tblGrid>${gridCols}</w:tblGrid>` +
     rowXml(table.columns, { bold: true, shade: true, header: true }) +
     table.rows.map((r) => rowXml(r, {})).join("") +
     (table.footer ? rowXml(table.footer, { bold: true }) : "") +
@@ -482,18 +480,18 @@ const HELVETICA_WIDTHS = [
 // Typographic punctuation to its ASCII lookalike, then anything past Latin-1 to "?".
 function toLatin1(value: string): string {
   return value
-    .replace(/[\u2013\u2014]/g, "-")
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/\u2026/g, "...")
-    .replace(/[\u0000-\u001F]/g, " ")
-    .replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, "?");
+    .replaceAll(/[\u2013\u2014]/g, "-")
+    .replaceAll(/[\u2018\u2019]/g, "'")
+    .replaceAll(/[\u201C\u201D]/g, '"')
+    .replaceAll("\u2026", "...")
+    .replaceAll(/[\u0000-\u001F]/g, " ")
+    .replaceAll(/[^\u0020-\u007E\u00A0-\u00FF]/g, "?");
 }
 
 function textWidth(text: string, size: number, bold: boolean): number {
   let units = 0;
   for (const ch of text) {
-    const code = ch.charCodeAt(0);
+    const code = ch.codePointAt(0) ?? 0;
     units += code >= 32 && code <= 126 ? HELVETICA_WIDTHS[code - 32] : 556;
   }
   return (units * size * (bold ? 1.06 : 1)) / 1000;
@@ -523,14 +521,14 @@ function wrapText(text: string, maxWidth: number, size: number): string[] {
 }
 
 function pdfEscape(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  return text.replaceAll("\\", String.raw`\\`).replaceAll("(", String.raw`\(`).replaceAll(")", String.raw`\)`);
 }
 
 // Bytes as a string with one character per byte, in chunks so a large picture
-// does not overflow the argument limit of fromCharCode.
+// does not overflow the argument limit of fromCodePoint.
 function bytesToLatin1(bytes: Uint8Array): string {
   let out = "";
-  for (let i = 0; i < bytes.length; i += 8192) out += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  for (let i = 0; i < bytes.length; i += 8192) out += String.fromCodePoint(...bytes.subarray(i, i + 8192));
   return out;
 }
 
@@ -550,7 +548,7 @@ function buildPdf(table: ReportTable): Uint8Array {
 
   const pages: string[][] = [[]];
   let y = PAGE_H - MARGIN;
-  const ops = () => pages[pages.length - 1];
+  const ops = (): string[] => pages.at(-1) as string[]; // pages always holds at least one
 
   const text = (value: string, x: number, baseline: number, size: number, bold: boolean) => {
     ops().push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(2)} ${baseline.toFixed(2)} Td (${pdfEscape(toLatin1(value))}) Tj ET`);
@@ -571,7 +569,7 @@ function buildPdf(table: ReportTable): Uint8Array {
     if (opts.header) ops().push(`0.85 g ${MARGIN} ${bottom} ${CONTENT_W} ${ROW_H} re f 0 g`);
     const bold = Boolean(opts.header || opts.bold);
     cells.forEach((cell, i) => {
-      const fitted = fitText(toLatin1(cellText(cell)), colWidth[i] - 12, 10, bold);
+      const fitted = fitText(toLatin1(String(cell)), colWidth[i] - 12, 10, bold);
       const x = numeric[i] ? colLeft[i] + colWidth[i] - 6 - textWidth(fitted, 10, bold) : colLeft[i] + 6;
       text(fitted, x, bottom + 5.5, 10, bold);
     });
@@ -627,17 +625,20 @@ function buildPdf(table: ReportTable): Uint8Array {
   const pageNumbers = pages.map((_, i) => 5 + i * 2);
   const imageNumber = 5 + pages.length * 2;
   const xObjects = image ? ` /XObject << /Im1 ${imageNumber} 0 R >>` : "";
-  objects.push(`<< /Type /Catalog /Pages 2 0 R >>`);
-  objects.push(`<< /Type /Pages /Kids [${pageNumbers.map((n) => `${n} 0 R`).join(" ")}] /Count ${pages.length} >>`);
-  objects.push(`<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`);
-  objects.push(`<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`);
+  const kids = pageNumbers.map((n) => n + " 0 R").join(" ");
+  objects.push(
+    `<< /Type /Catalog /Pages 2 0 R >>`,
+    `<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`,
+    `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`,
+  );
   pages.forEach((page, i) => {
     const stream = page.join("\n");
     objects.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] ` +
         `/Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xObjects} >> /Contents ${pageNumbers[i] + 1} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
     );
-    objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
   });
   if (image) {
     // The JPEG bytes ride along as a Latin-1 string (one character per byte),
@@ -663,7 +664,7 @@ function buildPdf(table: ReportTable): Uint8Array {
   body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
 
   const bytes = new Uint8Array(body.length);
-  for (let i = 0; i < body.length; i++) bytes[i] = body.charCodeAt(i) & 0xff;
+  for (let i = 0; i < body.length; i++) bytes[i] = (body.codePointAt(i) ?? 0) & 0xff;
   return bytes;
 }
 
@@ -684,18 +685,18 @@ function demo() {
     notes: ["A note."],
   };
   assertEqual(crc32(textEncoder.encode("123456789")), 0xcbf43926, "crc32 of the standard test string");
-  assertEqual(String.fromCharCode(...buildReportFile("xlsx", sample).slice(0, 2)), "PK", "xlsx is a zip");
-  assertEqual(String.fromCharCode(...buildReportFile("docx", sample).slice(0, 2)), "PK", "docx is a zip");
-  const pdf = String.fromCharCode(...buildReportFile("pdf", sample));
+  assertEqual(String.fromCodePoint(...buildReportFile("xlsx", sample).slice(0, 2)), "PK", "xlsx is a zip");
+  assertEqual(String.fromCodePoint(...buildReportFile("docx", sample).slice(0, 2)), "PK", "docx is a zip");
+  const pdf = String.fromCodePoint(...buildReportFile("pdf", sample));
   assertEqual(pdf.startsWith("%PDF-1.4"), true, "pdf header");
   assertEqual(pdf.trimEnd().endsWith("%%EOF"), true, "pdf trailer");
   const xref = Number(/startxref\n(\d+)/.exec(pdf)?.[1]);
   assertEqual(pdf.slice(xref, xref + 4), "xref", "startxref points at the xref table");
   assertEqual(columnLetter(0) + columnLetter(25) + columnLetter(26), "AZAA", "column letters");
   const withImage: ReportTable = { ...sample, image: { jpeg: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), width: 4, height: 3 } };
-  assertEqual(String.fromCharCode(...buildReportFile("xlsx", withImage).slice(0, 2)), "PK", "xlsx with a picture is a zip");
-  assertEqual(String.fromCharCode(...buildReportFile("docx", withImage).slice(0, 2)), "PK", "docx with a picture is a zip");
-  assertEqual(String.fromCharCode(...buildReportFile("pdf", withImage)).includes("/DCTDecode"), true, "pdf carries the picture");
+  assertEqual(String.fromCodePoint(...buildReportFile("xlsx", withImage).slice(0, 2)), "PK", "xlsx with a picture is a zip");
+  assertEqual(String.fromCodePoint(...buildReportFile("docx", withImage).slice(0, 2)), "PK", "docx with a picture is a zip");
+  assertEqual(String.fromCodePoint(...buildReportFile("pdf", withImage)).includes("/DCTDecode"), true, "pdf carries the picture");
   console.log("report-files.ts demo: all checks passed");
 }
 

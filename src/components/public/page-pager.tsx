@@ -78,28 +78,42 @@ const COMMIT_VELOCITY = 0.45; // px per ms
 // Dragging past Home or Saved resists instead of following the finger.
 const RUBBER_BAND = 0.25;
 
+// Drops every trailing slash by scanning back from the end. A /\/+$/ regex
+// retries from each slash in a long run of them (super-linear), this is one pass.
+function stripTrailingSlashes(pathname: string): string {
+  let end = pathname.length;
+  while (end > 0 && pathname[end - 1] === "/") end--;
+  return pathname.slice(0, end);
+}
+
 /** Index of the pager page for a pathname, or -1 when the route isn't one. */
 export function pagerIndexFor(pathname: string): number {
-  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  const path = pathname.length > 1 ? stripTrailingSlashes(pathname) : pathname;
   if (isDiscoverDetailPath(path)) return DISCOVER;
   return (PATHS as readonly string[]).indexOf(path);
 }
 
 const restingTransform = (index: number) => `translate3d(${(-index * 100) / PANES.length}%, 0, 0)`;
 
+const FORM_FIELD_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
+// Whether this one element takes the horizontal gesture for itself: something
+// typed into, a strip that overflows sideways right now, or a touch-action
+// that takes over horizontal panning.
+function elementOwnsGesture(node: HTMLElement): boolean {
+  if (node.isContentEditable || FORM_FIELD_TAGS.has(node.tagName)) return true;
+  const style = getComputedStyle(node);
+  const scrollsX = style.overflowX === "auto" || style.overflowX === "scroll";
+  if (scrollsX && node.scrollWidth > node.clientWidth + 1) return true;
+  const touchAction = style.touchAction;
+  return touchAction !== "auto" && touchAction !== "manipulation" && !touchAction.includes("pan-x");
+}
+
 function ownsHorizontalGesture(target: EventTarget | null): boolean {
   let node = target instanceof Element ? target : null;
   while (node && !node.hasAttribute(PANE_ATTR)) {
     if (node.hasAttribute(OWNER_ATTR)) return true;
-    if (node instanceof HTMLElement) {
-      if (node.isContentEditable) return true;
-      if (node.tagName === "INPUT" || node.tagName === "TEXTAREA" || node.tagName === "SELECT") return true;
-      const style = getComputedStyle(node);
-      const scrollsX = style.overflowX === "auto" || style.overflowX === "scroll";
-      if (scrollsX && node.scrollWidth > node.clientWidth + 1) return true;
-      const touchAction = style.touchAction;
-      if (touchAction !== "auto" && touchAction !== "manipulation" && !touchAction.includes("pan-x")) return true;
-    }
+    if (node instanceof HTMLElement && elementOwnsGesture(node)) return true;
     node = node.parentElement;
   }
   return false;
@@ -176,6 +190,28 @@ interface Gesture {
   revealed: number;
 }
 
+// Which way a drag is going once it has moved far enough to tell. "vertical"
+// means a scroll, which the pager leaves alone.
+function axisFor(dx: number, dy: number): "pending" | "horizontal" | "vertical" {
+  if (Math.abs(dx) < LOCK_PX && Math.abs(dy) < LOCK_PX) return "pending";
+  return Math.abs(dx) < Math.abs(dy) * AXIS_RATIO ? "vertical" : "horizontal";
+}
+
+// Finger speed in px per ms, from the last two touch points.
+function trackVelocity(g: Gesture, clientX: number, timeStamp: number) {
+  const dt = timeStamp - g.lastT;
+  if (dt > 0) g.velocity = (clientX - g.lastX) / dt;
+  g.lastX = clientX;
+  g.lastT = timeStamp;
+}
+
+// The track's transform while dragging. Past Home or Saved it resists.
+function dragTransform(i: number, dx: number): string {
+  const atEdge = (i === 0 && dx > 0) || (i === LAST && dx < 0);
+  const shown = atEdge ? dx * RUBBER_BAND : dx;
+  return `translate3d(calc(${(-i * 100) / PANES.length}% + ${shown}px), 0, 0)`;
+}
+
 export function PagePager({ index }: Readonly<{ index: number }>) {
   const navigate = useNavigate();
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -185,6 +221,10 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
 
   const [mounted, setMounted] = useState<number[]>([index]);
   const isMounted = (i: number) => i === index || mounted.includes(i);
+  const paneContent = (Pane: ComponentType | null, i: number) => {
+    if (Pane === null) return <DiscoverPane active={i === index} />;
+    return isMounted(i) ? <Pane /> : null;
+  };
 
   // Title follows the visible page. Runs after child effects in the same
   // commit, so a pane mounted early by a drag that then cancels can't leave
@@ -225,51 +265,48 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
       };
     };
 
+    // Mounts the page being dragged toward, once per direction.
+    const reveal = (g: Gesture, i: number, dir: number) => {
+      if (dir === g.revealed) return;
+      g.revealed = dir;
+      if (i + dir >= 0 && i + dir <= LAST) {
+        setMounted((prev) => (prev.includes(i + dir) ? prev : [...prev, i + dir]));
+      }
+    };
+
     const onMove = (e: TouchEvent) => {
-      if (!gesture) return;
+      const g = gesture;
+      if (!g) return;
       if (e.touches.length !== 1) {
-        if (gesture.axis === "horizontal") settle(indexRef.current);
+        if (g.axis === "horizontal") settle(indexRef.current);
         gesture = null;
         return;
       }
       const touch = e.touches[0];
-      const dx = touch.clientX - gesture.startX;
-      const dy = touch.clientY - gesture.startY;
+      const dx = touch.clientX - g.startX;
 
-      if (gesture.axis === "pending") {
-        if (Math.abs(dx) < LOCK_PX && Math.abs(dy) < LOCK_PX) return;
-        if (Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
+      if (g.axis === "pending") {
+        const axis = axisFor(dx, touch.clientY - g.startY);
+        if (axis === "pending") return;
+        if (axis === "vertical") {
           gesture = null; // a vertical scroll, leave it alone
           return;
         }
-        gesture.axis = "horizontal";
+        g.axis = "horizontal";
         track.style.transition = "none";
       }
 
       const i = indexRef.current;
-      const dir = dx < 0 ? 1 : -1;
-      if (dir !== gesture.revealed) {
-        gesture.revealed = dir;
-        if (i + dir >= 0 && i + dir <= LAST) {
-          setMounted((prev) => (prev.includes(i + dir) ? prev : [...prev, i + dir]));
-        }
-      }
-
-      const dt = e.timeStamp - gesture.lastT;
-      if (dt > 0) gesture.velocity = (touch.clientX - gesture.lastX) / dt;
-      gesture.lastX = touch.clientX;
-      gesture.lastT = e.timeStamp;
-      gesture.dx = dx;
-
-      const atEdge = (i === 0 && dx > 0) || (i === LAST && dx < 0);
-      const shown = atEdge ? dx * RUBBER_BAND : dx;
-      track.style.transform = `translate3d(calc(${(-i * 100) / PANES.length}% + ${shown}px), 0, 0)`;
+      reveal(g, i, dx < 0 ? 1 : -1);
+      trackVelocity(g, touch.clientX, e.timeStamp);
+      g.dx = dx;
+      track.style.transform = dragTransform(i, dx);
     };
 
     const onEnd = (e: TouchEvent) => {
       const g = gesture;
       gesture = null;
-      if (!g || g.axis !== "horizontal") return;
+      if (g?.axis !== "horizontal") return;
       const i = indexRef.current;
       const next = i + (g.dx < 0 ? 1 : -1);
       const farEnough = Math.abs(g.dx) > viewport.clientWidth * COMMIT_RATIO;
@@ -319,7 +356,7 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
             className="h-full shrink-0 overflow-y-auto [scrollbar-gutter:stable]"
             style={{ width: `${100 / PANES.length}%` }}
           >
-            {Pane === null ? <DiscoverPane active={i === index} /> : isMounted(i) ? <Pane /> : null}
+            {paneContent(Pane, i)}
           </div>
         ))}
       </div>

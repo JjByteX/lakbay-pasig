@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { CaretLeft, CaretRight, Star, ShoppingBag } from "@phosphor-icons/react";
+import { Star, ShoppingBag } from "@phosphor-icons/react";
+import { StepFooter } from "@/components/admin/step-footer";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
@@ -377,6 +378,8 @@ export default function AdminBusinessDetailPage() {
     (form.latitude === null || form.longitude === null) && "Map pin",
   ].filter(Boolean) as string[];
   const canSubmit = missingStep1.length === 0 && missingStep2.length === 0 && !saving;
+  // What the current step still needs (step 3 needs nothing).
+  const missingNow = { 1: missingStep1, 2: missingStep2, 3: [] as string[] }[step];
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -628,48 +631,20 @@ export default function AdminBusinessDetailPage() {
               }
             />
 
-            {step === 1 && missingStep1.length > 0 && (
-              <p className="text-sm text-muted-foreground">Required to continue: {missingStep1.join(", ")}.</p>
-            )}
-
-            {step === 2 && missingStep2.length > 0 && (
-              <p className="text-sm text-muted-foreground">Required to continue: {missingStep2.join(", ")}.</p>
+            {missingNow.length > 0 && (
+              <p className="text-sm text-muted-foreground">Required to continue: {missingNow.join(", ")}.</p>
             )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            {/* The keys are load-bearing: Next (type="button") and the submit
-                button share a slot, and without keys React reuses the one DOM
-                button and flips its type mid-click, submitting the form. */}
-            <div className="flex justify-between gap-2">
-              {step === 1 ? (
-                <Button key="cancel" type="button" variant="outline" onClick={() => navigate("/admin/businesses")}>
-                  Cancel
-                </Button>
-              ) : (
-                <Button key="back" type="button" variant="outline" onClick={() => setStep(step === 3 ? 2 : 1)}>
-                  <CaretLeft className="h-4 w-4" />
-                  Back
-                </Button>
-              )}
-              {step === 1 && (
-                <Button key="next-1" type="button" disabled={missingStep1.length > 0} onClick={() => setStep(2)}>
-                  Next
-                  <CaretRight className="h-4 w-4" />
-                </Button>
-              )}
-              {step === 2 && (
-                <Button key="next-2" type="button" disabled={missingStep2.length > 0} onClick={() => setStep(3)}>
-                  Next
-                  <CaretRight className="h-4 w-4" />
-                </Button>
-              )}
-              {step === 3 && (
-                <Button key="save" type="submit" disabled={!canSubmit}>
-                  {saving ? "Saving…" : "Save Changes"}
-                </Button>
-              )}
-            </div>
+            <StepFooter
+              step={step}
+              missingCount={missingNow.length}
+              canSubmit={canSubmit}
+              saveLabel={saving ? "Saving…" : "Save Changes"}
+              onCancel={() => navigate("/admin/businesses")}
+              onStep={setStep}
+            />
           </form>
         </TabsContent>
 

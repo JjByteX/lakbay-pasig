@@ -93,7 +93,7 @@ export default function AdminFiestasPage() {
         })[];
         setFiestas(
           rows.map(({ fiesta_barangays, ...rest }) => {
-            const names = (fiesta_barangays ?? []).map((b) => b.barangay).sort();
+            const names = (fiesta_barangays ?? []).map((b) => b.barangay).sort((a, b) => a.localeCompare(b));
             const parts = names.length > 0 ? names : [];
             if (rest.community) parts.push(rest.community);
             return { ...rest, barangayText: parts.join(", ") };

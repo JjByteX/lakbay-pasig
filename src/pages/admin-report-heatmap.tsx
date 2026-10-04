@@ -32,6 +32,8 @@ type TypeFilter = "all" | "place" | "business";
 type StatusFilter = "verified" | "pending";
 
 const TYPE_LABEL: Record<TypeFilter, string> = { all: "All", place: "Places", business: "Businesses" };
+// The Type select's part of the download's file name.
+const FILE_TYPE: Record<TypeFilter, string> = { all: "places-and-businesses", place: "places", business: "businesses" };
 const STATUS_LABEL: Record<StatusFilter, string> = { verified: "Verified", pending: "Pending" };
 
 interface Row {
@@ -126,7 +128,7 @@ function composeMapImage(source: HTMLCanvasElement, legend: LegendSpec): ReportI
 
   const binary = atob(out.toDataURL("image/jpeg", 0.92).split(",")[1]);
   const jpeg = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) jpeg[i] = binary.charCodeAt(i);
+  for (let i = 0; i < binary.length; i++) jpeg[i] = binary.codePointAt(i) ?? 0;
   return { jpeg, width: out.width, height: out.height, alt: "Map of Pasig barangays shaded by count" };
 }
 
@@ -199,7 +201,9 @@ export default function AdminReportHeatmapPage() {
         if (!cancelled) setPointsError(messageOf(e));
       },
     );
-    Promise.all([boundaries, rows]).then(() => {
+    // Both promises above already handle their own rejection, so this one
+    // cannot reject; void marks it as deliberately not awaited.
+    void Promise.all([boundaries, rows]).then(() => {
       if (!cancelled) setLoading(false);
     });
     return () => {
@@ -550,7 +554,7 @@ export default function AdminReportHeatmapPage() {
             </Select>
             <ReportDownloadMenu
               getTable={reportTable}
-              fileBase={`barangay-heatmap-${type === "all" ? "places-and-businesses" : type === "place" ? "places" : "businesses"}`}
+              fileBase={"barangay-heatmap-" + FILE_TYPE[type]}
               disabled={loading || loadFailed || isEmpty}
             />
           </div>
@@ -602,11 +606,11 @@ export default function AdminReportHeatmapPage() {
         </div>
 
         <div className="flex min-h-0 flex-col gap-3">
-          {loadFailed ? (
-            <EmptyState icon={MapTrifold}>Counts are unavailable until the report data loads.</EmptyState>
-          ) : isEmpty ? (
+          {loadFailed && <EmptyState icon={MapTrifold}>Counts are unavailable until the report data loads.</EmptyState>}
+          {!loadFailed && isEmpty && (
             <EmptyState icon={MapTrifold}>Places and Businesses will appear here once they are added.</EmptyState>
-          ) : (
+          )}
+          {!loadFailed && !isEmpty && (
             <>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
                 <div className="grid grid-cols-[minmax(0,1fr)_72px_72px] gap-2 border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">

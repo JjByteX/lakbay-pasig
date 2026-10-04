@@ -80,6 +80,39 @@ interface PlaceOption {
   name: string;
 }
 
+// The columns the form loads for an existing fiesta, any of which may be null.
+interface FiestaRowData {
+  name: string | null;
+  patron_saint: string | null;
+  community: string | null;
+  month: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  date_label: string | null;
+  description: string | null;
+  history: string | null;
+  related_place_id: string | null;
+  source_reference: string | null;
+}
+
+// A loaded row as form state: every null becomes an empty string, and a
+// missing month the "none" choice.
+function formFromRow(data: FiestaRowData): FiestaFormState {
+  return {
+    name: data.name ?? "",
+    patron_saint: data.patron_saint ?? "",
+    community: data.community ?? "",
+    month: data.month ? String(data.month) : NO_MONTH,
+    start_date: data.start_date ?? "",
+    end_date: data.end_date ?? "",
+    date_label: data.date_label ?? "",
+    description: data.description ?? "",
+    history: data.history ?? "",
+    related_place_id: data.related_place_id ?? "",
+    source_reference: data.source_reference ?? "",
+  };
+}
+
 const monthOf = (value: string): number | null => (value === NO_MONTH ? null : Number(value));
 
 // The dates, the month they fix (the month picker's value when there is no
@@ -169,19 +202,7 @@ export default function FiestaFormDialog({
           setLoading(false);
           return;
         }
-        setForm({
-          name: data.name ?? "",
-          patron_saint: data.patron_saint ?? "",
-          community: data.community ?? "",
-          month: data.month ? String(data.month) : NO_MONTH,
-          start_date: data.start_date ?? "",
-          end_date: data.end_date ?? "",
-          date_label: data.date_label ?? "",
-          description: data.description ?? "",
-          history: data.history ?? "",
-          related_place_id: data.related_place_id ?? "",
-          source_reference: data.source_reference ?? "",
-        });
+        setForm(formFromRow(data));
         const tags = (data.fiesta_barangays ?? []) as { barangay: string }[];
         setBarangays(new Set(tags.map((t) => t.barangay)));
         setPublished(data.published);

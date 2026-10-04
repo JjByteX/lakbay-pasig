@@ -32,24 +32,46 @@ export default function FiestaDetailPage() {
     setNotFound(false);
     setPlaceName(null);
 
-    fetchPublishedFiesta(id).then((row) => {
-      if (!row) {
+    fetchPublishedFiesta(id)
+      .then((row) => {
+        if (!row) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        setFiesta(row);
+        setLoading(false);
+      })
+      .catch(() => {
         setNotFound(true);
         setLoading(false);
-        return;
-      }
-      setFiesta(row);
-      setLoading(false);
-      if (row.related_place_id) {
-        supabase
-          .from("places")
-          .select("name")
-          .eq("id", row.related_place_id)
-          .maybeSingle()
-          .then(({ data }) => setPlaceName(data?.name ?? null));
-      }
-    });
+      });
   }, [id]);
+
+  // The related place's name, looked up once the fiesta is in. Its own effect
+  // so the two requests are not nested. The name is optional: if the lookup
+  // fails the link just shows without one, so the rejection handler sets null.
+  const relatedPlaceId = fiesta?.related_place_id ?? null;
+  useEffect(() => {
+    if (!relatedPlaceId) return;
+    let cancelled = false;
+    supabase
+      .from("places")
+      .select("name")
+      .eq("id", relatedPlaceId)
+      .maybeSingle()
+      .then(
+        ({ data }) => {
+          if (!cancelled) setPlaceName(data?.name ?? null);
+        },
+        () => {
+          if (!cancelled) setPlaceName(null);
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [relatedPlaceId]);
 
   const where = fiesta ? [...fiesta.barangays, ...(fiesta.community ? [fiesta.community] : [])] : [];
 

@@ -87,8 +87,7 @@ export default function AdminPage() {
           <div className="relative">
             <SidebarTrigger />
             {pendingTotal > 0 && (
-              <span
-                role="status"
+              <output
                 aria-label={`${pendingTotal} pending`}
                 className="pointer-events-none absolute right-0 top-0 h-2 w-2 rounded-full bg-primary"
               />

@@ -19,9 +19,10 @@ export function useSelectionNavigationGuard(active: boolean) {
 
   useEffect(() => {
     if (!active) return;
+    // preventDefault alone asks for the confirmation in current browsers;
+    // setting the deprecated returnValue as well is no longer needed.
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
-      e.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);

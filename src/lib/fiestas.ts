@@ -50,7 +50,7 @@ type FiestaRow = Omit<PublicFiesta, "barangays"> & {
 
 function toPublicFiesta(row: FiestaRow): PublicFiesta {
   const { fiesta_barangays, ...rest } = row;
-  return { ...rest, barangays: (fiesta_barangays ?? []).map((b) => b.barangay).sort() };
+  return { ...rest, barangays: (fiesta_barangays ?? []).map((b) => b.barangay).sort((a, b) => a.localeCompare(b)) };
 }
 
 // One published fiesta by id. fiestas_select_staff has no published check
@@ -99,18 +99,16 @@ const BOUNDARY_URL = "/data/pasig-barangays.geojson";
 let featuresPromise: Promise<BarangayFeature[]> | null = null;
 
 function loadBarangayFeatures(): Promise<BarangayFeature[]> {
-  if (!featuresPromise) {
-    featuresPromise = fetch(BOUNDARY_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error("Could not load barangay boundaries.");
-        return res.json();
-      })
-      .then((json) => json.features as BarangayFeature[])
-      .catch((err: unknown) => {
-        featuresPromise = null;
-        throw err;
-      });
-  }
+  featuresPromise ??= fetch(BOUNDARY_URL)
+    .then((res) => {
+      if (!res.ok) throw new Error("Could not load barangay boundaries.");
+      return res.json();
+    })
+    .then((json) => json.features as BarangayFeature[])
+    .catch((err: unknown) => {
+      featuresPromise = null;
+      throw err;
+    });
   return featuresPromise;
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlagBanner } from "@phosphor-icons/react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
+import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +20,8 @@ import type { ReportTable } from "@/lib/report-files";
 // definer function, because a view_reports-only staff member cannot read draft
 // fiestas through RLS. The barangay list is the closed list in fiestas.ts.
 //
-// Layout: a table view in AdminDataTable, like the Fiestas list. admin.tsx
+// Layout: a table view in AdminDataTable, like the Fiestas list, with the same
+// toolbar: a search row (barangay name) and the status filter. admin.tsx
 // bounds this route (BOUNDED_LIST_ROUTES), so the page fits the viewport and
 // the table pages itself to the space left instead of scrolling the page.
 
@@ -36,6 +38,11 @@ const STATUS_LABEL: Record<Status, string> = {
   published: "Published",
   draft_only: "Draft only",
   none: "No fiesta",
+};
+const STATUS_BADGE: Record<Status, "default" | "outline" | "destructive"> = {
+  published: "default",
+  draft_only: "outline",
+  none: "destructive",
 };
 const FILTER_LABEL: Record<StatusFilter, string> = {
   all: "All barangays",
@@ -77,9 +84,7 @@ const COLUMNS: AdminColumn<Row>[] = [
     sortKey: "order",
     width: "170px",
     render: (r) => (
-      <Badge variant={r.status === "published" ? "default" : r.status === "draft_only" ? "outline" : "destructive"}>
-        {STATUS_LABEL[r.status]}
-      </Badge>
+      <Badge variant={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
     ),
   },
 ];
@@ -102,6 +107,7 @@ export default function AdminReportFiestasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -138,10 +144,13 @@ export default function AdminReportFiestasPage() {
     draft_only: rows.filter((r) => r.status === "draft_only").length,
     none: rows.filter((r) => r.status === "none").length,
   };
-  const shown = filter === "all" ? rows : rows.filter((r) => r.status === filter);
+  const query = search.trim().toLowerCase();
+  const shown = rows.filter(
+    (r) => (filter === "all" || r.status === filter) && (!query || r.name.toLowerCase().includes(query)),
+  );
   const loadFailed = error !== null;
 
-  // What the download holds: the rows on screen, so the filter carries over.
+  // What the download holds: the rows on screen, so the filter and the search carry over.
   function reportTable(): ReportTable {
     const notes = ["A published fiesta is one CATO confirmed. A fiesta tagged to several barangays counts under each of them."];
     if (untagged) {
@@ -154,6 +163,7 @@ export default function AdminReportFiestasPage() {
       details: [
         `${counts.published} of ${BARANGAYS.length} barangays have a published fiesta, ${counts.draft_only} have drafts only, and ${counts.none} have none.`,
         `Showing: ${FILTER_LABEL[filter]}`,
+        ...(query ? [`Search: ${search.trim()}`] : []),
         `Made: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
       ],
       columns: ["Barangay", "Published", "Draft", "Status"],
@@ -167,23 +177,7 @@ export default function AdminReportFiestasPage() {
       <AdminPageHeader
         title="Fiesta coverage"
         breadcrumb={[{ label: "Reports", to: "/admin/reports" }]}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Select value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
-              <SelectTrigger className="w-[170px]" aria-label="Show">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(FILTER_LABEL) as StatusFilter[]).map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {FILTER_LABEL[f]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <ReportDownloadMenu getTable={reportTable} fileBase="fiesta-coverage" disabled={loading || loadFailed} />
-          </div>
-        }
+        actions={<ReportDownloadMenu getTable={reportTable} fileBase="fiesta-coverage" disabled={loading || loadFailed} />}
       />
       <p className="text-sm text-muted-foreground">
         Which barangays have a fiesta entered, and which have only drafts. A published fiesta is one CATO confirmed. A
@@ -210,8 +204,25 @@ export default function AdminReportFiestasPage() {
             loading={loading}
             keyField="name"
             autoPageSize
-            empty="No barangay matches this filter."
+            empty="No barangay matches."
             emptyIcon={FlagBanner}
+            toolbar={
+              <AdminFilterBar>
+                <AdminSearchInput value={search} onChange={setSearch} placeholder="Search by barangay…" />
+                <Select value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
+                  <SelectTrigger className="w-[170px]" aria-label="Status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(FILTER_LABEL) as StatusFilter[]).map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {FILTER_LABEL[f]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </AdminFilterBar>
+            }
           />
           {untagged && !loading && (
             <p className="text-xs text-muted-foreground">

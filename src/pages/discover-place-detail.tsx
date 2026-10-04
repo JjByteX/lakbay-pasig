@@ -198,7 +198,7 @@ export default function DiscoverPlaceDetailPage() {
 
   useEffect(() => {
     setFiestas(null);
-    if (!place || place.category !== BARANGAY_HALL_CATEGORY) return;
+    if (place?.category !== BARANGAY_HALL_CATEGORY) return;
     if (place.latitude === null || place.longitude === null) {
       setFiestas([]);
       return;
