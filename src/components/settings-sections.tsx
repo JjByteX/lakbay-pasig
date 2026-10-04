@@ -320,6 +320,16 @@ export function SettingsSections({
   // sign in instead), so there is no guest branch here.
   if (!session) return null;
 
+  // A Google-only account (signed in with Google, never set a password) has
+  // no current password to re-verify, so Change Password could only ever
+  // fail with "Incorrect email or password." Supabase lists every login
+  // method on app_metadata.providers. Hide the form only when that list is
+  // present and has no "email" in it, so an account where the list is
+  // missing for any reason keeps the form it always had. An email account
+  // that later also signed in with Google has both and keeps the form too.
+  const providers: unknown = session.user.app_metadata?.providers;
+  const hasPasswordLogin = !Array.isArray(providers) || providers.includes("email");
+
   return (
     <div className="flex flex-col">
       {section === "general" && (
@@ -447,7 +457,17 @@ export function SettingsSections({
         </>
       )}
 
-      {section === "password" && (
+      {section === "password" && !hasPasswordLogin && (
+        <>
+          <SectionHeading>Change Password</SectionHeading>
+          <p className={cn(body, "text-muted-foreground")}>
+            You sign in with Google, so this account has no password to change. Manage your password and
+            sign-in security from your Google Account.
+          </p>
+        </>
+      )}
+
+      {section === "password" && hasPasswordLogin && (
         <>
           <SectionHeading>Change Password</SectionHeading>
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { GoogleButton } from "@/components/auth/google-button";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -126,6 +127,11 @@ export function SignupForm() {
           {submitting ? "Creating account..." : "Create account"}
         </Button>
       </form>
+
+      {/* Same Google option as login-form.tsx. Google needs no password or
+          confirmation email: its address is already verified, so the
+          account is usable as soon as they return. */}
+      <GoogleButton />
 
       <p className="text-base text-muted-foreground">
         Already have an account?{" "}

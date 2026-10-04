@@ -973,7 +973,10 @@ export default function LandingPage() {
         </div>
       </ScrollPanel>
     <footer className="bg-card px-6 py-6 text-center text-sm text-muted-foreground">
-        Lakbay Pasig. Places and businesses reviewed by the Pasig City Tourism Office (CATO).
+        Lakbay Pasig. Places and businesses reviewed by the Pasig City Tourism Office (CATO).{" "}
+        <Link to="/privacy" className="underline hover:text-foreground">
+          Privacy Policy
+        </Link>
       </footer>
     </div>
     </MotionConfig>

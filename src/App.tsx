@@ -6,6 +6,7 @@ import { SettingsModal } from "@/components/settings-modal";
 import { AuthModalRoute } from "@/lib/auth-modal-route";
 import { EntryGate } from "@/lib/entry-gate";
 import { AuthModal } from "@/components/auth/auth-modal";
+import { GoogleReturnHandler } from "@/components/auth/google-return-handler";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
 import TrailsPage from "@/pages/trails";
@@ -40,6 +41,7 @@ import AdminStaffPage from "@/pages/admin-staff";
 import AdminActivityPage from "@/pages/admin-activity";
 import AdminSettingsPage from "@/pages/admin-settings";
 import LandingPage from "@/pages/landing";
+import PrivacyPage from "@/pages/privacy";
 
 // Announcements modal conversion: /admin/events/new and /admin/events/:id
 // (admin-event-detail.tsx) are retired -- create/edit now happens in
@@ -123,6 +125,10 @@ export default function App() {
               render this same page underneath their popup rather than
               their own duplicate layout. */}
           <Route path="/welcome" element={<LandingPage />} />
+          {/* Public privacy policy, no auth gate, outside PublicShell like
+              /welcome. Linked from the landing footer and given to Google's
+              OAuth Branding page as the app's privacy policy URL. */}
+          <Route path="/privacy" element={<PrivacyPage />} />
           {/* landing-hero-phases.md Phase 6.8: opens the popup in the
               matching mode with the landing page rendered underneath, so
               the popup has a surface to sit on. These stay routes (not
@@ -364,6 +370,10 @@ export default function App() {
           </Route>
         </Routes>
         <AuthModal />
+        {/* Finishes a Google sign in after the redirect back: staff go to
+            /admin and get their signed_in log row, same as the password
+            flow in login-form.tsx. Renders nothing. */}
+        <GoogleReturnHandler />
         <SettingsModal />
         </SettingsModalProvider>
       </AuthModalProvider>

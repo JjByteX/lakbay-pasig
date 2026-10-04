@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { GoogleButton } from "@/components/auth/google-button";
 
 /**
  * landing-hero-phases.md Phase 5.4-5.6. Body moved verbatim from the
@@ -173,6 +174,11 @@ export function LoginForm() {
           {submitting ? "Logging in..." : "Log in"}
         </Button>
       </form>
+
+      {/* Third sign in option, after the email form. A full page redirect,
+          so staff routing for it lives in google-return-handler.tsx, not
+          in handleSubmit above. */}
+      <GoogleButton />
 
       <p className="text-base text-muted-foreground">
         Don't have an account?{" "}
