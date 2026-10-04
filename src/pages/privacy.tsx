@@ -85,7 +85,7 @@ export default function PrivacyPage() {
           <Bullets
             items={[
               "Your email address and, if you sign up with email, a password. The password is stored in scrambled (hashed) form by our sign in provider. We cannot read it.",
-              "If you continue with Google, Google shares your email address and basic profile details (name and profile picture) with us. We do not receive your Google password, and we do not read your Gmail, contacts or any other Google data.",
+              "If you continue with Google, Google shares your email address and basic profile details (name and profile picture) with us. We save that name and picture to your profile so it does not start blank, and you can change or remove them anytime. We do not receive your Google password, and we do not read your Gmail, contacts or any other Google data.",
               "Details you choose to add in Settings: username, first and last name, contact number, date of birth, profile picture and preferred categories, plus your light or dark mode and text size.",
               "What you do in the app: places, businesses and trails you save, your trail progress and completed trails, and items you mark as Not interested.",
               "If you list a business: the business details, photos and contact information you enter. These are shown publicly once CATO approves the listing.",
