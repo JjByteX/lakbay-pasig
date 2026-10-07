@@ -13,6 +13,7 @@ import { SaveRouteButton } from "@/components/public/save-route-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/public/page-container";
 import { usePageTitle } from "@/lib/page-title";
 
@@ -20,11 +21,6 @@ import { usePageTitle } from "@/lib/page-title";
 // discover.tsx's Phase 8.3 catch all already use this), no shared helper
 // exists yet to import instead, per constraints.md's Inventory Before
 // Suggesting rule this stays a local copy rather than inventing one.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
 
 // Extracted from a nested ternary (index > highestUnlockedIndex ? ... :
 // completed ? ... : ...) inline in the stop list's per-stop state below.
@@ -199,6 +195,7 @@ export default function TrailDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const [routeProgress, setRouteProgress] = useState<RouteProgress | null>(null);
   // 4.3: Start/Resume is its own async action, separate from the page's
   // own load state above, same split save-button.tsx's loading/error pair
@@ -241,9 +238,9 @@ export default function TrailDetailPage() {
         }
         setTrail(detail);
       })
-      .catch((err: unknown) => setError(errorMessageFrom(err, "Could not load this trail.")))
+      .catch(() => setError("Couldn't load this trail. Check your connection and try again."))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, reload]);
 
   // 4.2: signed-in only. No session, no fetch, no progress, matching
   // save-button.tsx's own isPlaceSaved effect exactly. Keyed on the
@@ -526,7 +523,7 @@ export default function TrailDetailPage() {
         {trail && <SaveRouteButton routeId={trail.id} />}
       </div>
 
-      {error && <p className="text-base text-destructive">{error}</p>}
+      {error && <ErrorState onRetry={() => setReload((n) => n + 1)}>{error}</ErrorState>}
 
       {!error && loading && <p className="text-base text-muted-foreground">Loading…</p>}
 

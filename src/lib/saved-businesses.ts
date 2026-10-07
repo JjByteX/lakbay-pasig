@@ -36,6 +36,18 @@ export async function isBusinessSaved(userId: string, businessId: string): Promi
   return data !== null;
 }
 
+// Every business id this user has saved, in one request: the business twin of
+// saved-places.ts's fetchSavedPlaceIds, for the Discover list's hearts.
+export async function fetchSavedBusinessIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("saved_businesses")
+    .select("business_id")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.business_id));
+}
+
 // Same contract as toggleSavedPlace: inserts or deletes the row directly and
 // returns the new saved state.
 export async function toggleSavedBusiness(

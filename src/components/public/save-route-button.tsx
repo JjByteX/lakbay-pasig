@@ -1,8 +1,7 @@
-import { Heart } from "@phosphor-icons/react";
+import { SaveHeart, useHeartPop } from "@/components/public/save-heart";
 import { Button } from "@/components/ui/button";
 import { isRouteSaved, toggleSavedRoute } from "@/lib/saved-routes";
 import { useSavedToggle } from "@/hooks/use-saved-toggle";
-import { cn } from "@/lib/utils";
 
 interface SaveRouteButtonProps {
   routeId: string;
@@ -52,6 +51,7 @@ export function SaveRouteButton({ routeId, onToggle }: Readonly<SaveRouteButtonP
     removeErrorMessage: "Couldn't remove this trail. Try again.",
     onToggle,
   });
+  const { popKey, press } = useHeartPop(saved, handleClick);
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -59,12 +59,12 @@ export function SaveRouteButton({ routeId, onToggle }: Readonly<SaveRouteButtonP
         type="button"
         variant="ghost"
         size="icon"
-        onClick={handleClick}
+        onClick={press}
         disabled={loading}
         aria-label={saved ? "Remove from saved trails" : "Save this trail"}
         aria-pressed={saved}
       >
-        <Heart weight={saved ? "fill" : "bold"} className={cn("h-5 w-5", saved && "text-primary")} />
+        <SaveHeart saved={saved} popKey={popKey} />
       </Button>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

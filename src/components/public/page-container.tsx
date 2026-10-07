@@ -23,11 +23,17 @@ const WIDTH = {
   // "List your business" stepper so it matches admin-business-detail.tsx.
   full: "max-w-md md:ml-auto md:mr-0 md:w-[calc(100%_-_(var(--sidebar-width)_-_var(--sidebar-width-icon)))] md:max-w-none",
   wide: "max-w-md md:w-[calc(100%_-_2_*_(var(--sidebar-width)_-_var(--sidebar-width-icon)))] md:max-w-5xl",
+  // detail: same rail reservation as `wide`, but up to max-w-6xl. The place
+  // and business pages use it at xl: a main column of text beside a 22rem
+  // photo column needs more than `wide`'s 1024px to leave the text a
+  // comfortable measure. Same 448px column below md.
+  detail: "max-w-md md:w-[calc(100%_-_2_*_(var(--sidebar-width)_-_var(--sidebar-width-icon)))] md:max-w-6xl",
 } as const;
 
 interface PageContainerProps {
   // narrow: simple single-column pages. form: form pages with a desktop
-  // state (Profile, Vendor). wide: feeds and grids (Home). full: edge-to-edge
+  // state (Profile, Vendor). wide: feeds and grids (Home). detail: place and
+  // business pages (text column plus photo column). full: edge-to-edge
   // desktop form (List your business). Same 448px column below md in every case.
   width?: keyof typeof WIDTH;
   className?: string;

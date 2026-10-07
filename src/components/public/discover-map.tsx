@@ -1606,7 +1606,9 @@ export function DiscoverMap({
       // after creation (see userMarkerConeRef/userMarkerAccuracyRef
       // above) -- the dot itself never changes, no ref needed for it.
       const wrapper = document.createElement("div");
-      wrapper.className = "relative flex h-4 w-4 items-center justify-center";
+      // 14px: the wrapper is exactly the dot's size, so MapLibre's center anchor
+      // keeps the dot on the coordinate. Halo and cone below are scaled with it.
+      wrapper.className = "relative flex h-3.5 w-3.5 items-center justify-center";
       wrapper.setAttribute("aria-label", "Your location");
 
       // Accuracy circle: a large, low-opacity blue disc behind everything
@@ -1618,7 +1620,7 @@ export function DiscoverMap({
       // implementation uses, not a literal accuracy radius.
       const accuracy = document.createElement("div");
       accuracy.className =
-        "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 h-16 w-16 pointer-events-none";
+        "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 h-14 w-14 pointer-events-none";
       userMarkerAccuracyRef.current = accuracy;
 
       // Direction cone: a CSS-only wedge (radial gradient clipped to a
@@ -1630,7 +1632,7 @@ export function DiscoverMap({
       // once a real heading value arrives, below.
       const cone = document.createElement("div");
       cone.className =
-        "absolute left-1/2 top-1/2 h-20 w-20 pointer-events-none opacity-0 transition-opacity duration-300";
+        "absolute left-1/2 top-1/2 h-16 w-16 pointer-events-none opacity-0 transition-opacity duration-300";
       cone.style.background =
         "conic-gradient(from 0deg, hsl(var(--primary) / 0.35) 0deg, hsl(var(--primary) / 0.35) 45deg, transparent 46deg, transparent 314deg, hsl(var(--primary) / 0.35) 315deg, hsl(var(--primary) / 0.35) 360deg)";
       cone.style.borderRadius = "50%";
@@ -1659,7 +1661,7 @@ export function DiscoverMap({
       // Google's own soft breathing animation on its blue dot.
       const dot = document.createElement("div");
       dot.className =
-        "relative h-4 w-4 rounded-full border-2 border-white bg-primary shadow-md user-location-pulse";
+        "relative h-3.5 w-3.5 rounded-full border-2 border-white bg-primary shadow-md user-location-pulse";
 
       wrapper.appendChild(accuracy);
       wrapper.appendChild(cone);

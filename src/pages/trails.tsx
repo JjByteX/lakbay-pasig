@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/public/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MapTrifold } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 2.4: same PostgrestError shape-check home.tsx's errorMessageFrom
@@ -16,11 +17,6 @@ import { usePageTitle } from "@/lib/page-title";
 // inline, so there's no shared helper to reuse yet, per constraints.md's
 // Inventory Before Suggesting rule this stays a local copy rather than
 // inventing a new shared module for one more caller.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
 
 // Phase 6.2: row-shaped skeletons matching trail-card.tsx's own row shape
 // exactly, not discover-list.tsx's skeleton copied wholesale (that list's
@@ -67,18 +63,19 @@ export default function TrailsPage() {
   const [trails, setTrails] = useState<TrailSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     fetchPublishedTrails()
       .then(setTrails)
-      .catch((err: unknown) => {
-        setError(errorMessageFrom(err, "Could not load trails."));
+      .catch(() => {
+        setError("Couldn't load trails. Check your connection and try again.");
         setTrails([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [reload]);
 
   // Extracted from a nested ternary (error ? ... : loading ? ... :
   // trails.length === 0 ? ... : ...) inline in the render below. States
@@ -87,9 +84,9 @@ export default function TrailsPage() {
   let body: ReactNode;
   if (error) {
     body = (
-      <div className="flex items-center justify-center py-10 text-center text-sm text-destructive">
+      <ErrorState className="min-h-[60dvh]" onRetry={() => setReload((n) => n + 1)}>
         {error}
-      </div>
+      </ErrorState>
     );
   } else if (loading) {
     body = <TrailListSkeleton />;

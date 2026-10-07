@@ -6,6 +6,7 @@ import { useAuthModal } from "@/lib/auth-modal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Bookmark, CheckCircle, MapTrifold, Storefront, type Icon } from "@phosphor-icons/react";
 import { fetchSavedPlaces } from "@/lib/saved-places";
@@ -56,11 +57,6 @@ import { usePageTitle } from "@/lib/page-title";
 // page-local version, per constraints.md's Inventory Before Suggesting
 // rule -- there is no existing shared helper for this, only two
 // page-local copies already.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
 
 // Grids, not lists: Saved shows cards in the Home photo-card style. Places and
 // Businesses are photo cards, two across on mobile and three at md+ (a photo
@@ -124,6 +120,8 @@ function SavedSection({
   isEmpty,
   emptyIcon,
   emptyText,
+  emptyAction,
+  onRetry,
   children,
 }: Readonly<{
   error: string | null;
@@ -132,15 +130,21 @@ function SavedSection({
   isEmpty: boolean;
   emptyIcon: Icon;
   emptyText: string;
+  emptyAction?: ReactNode;
+  onRetry: () => void;
   children: ReactNode;
 }>) {
   let body: ReactNode;
   if (error) {
-    body = <p className="text-sm text-destructive">{error}</p>;
+    body = <ErrorState onRetry={onRetry}>{error}</ErrorState>;
   } else if (loading) {
     body = skeleton;
   } else if (isEmpty) {
-    body = <EmptyState icon={emptyIcon}>{emptyText}</EmptyState>;
+    body = (
+      <EmptyState icon={emptyIcon} action={emptyAction}>
+        {emptyText}
+      </EmptyState>
+    );
   } else {
     body = children;
   }
@@ -172,6 +176,11 @@ export default function SavedPage() {
   const [completedLoading, setCompletedLoading] = useState(true);
   const [completedError, setCompletedError] = useState<string | null>(null);
 
+  // "Try again" on a section's error bumps its counter, which re-runs only that
+  // section's load effect.
+  const [retry, setRetry] = useState({ places: 0, businesses: 0, trails: 0, completed: 0 });
+  const bump = (key: keyof typeof retry) => setRetry((r) => ({ ...r, [key]: r[key] + 1 }));
+
   // Phase 2.4: signed-out users never reach this hook's fetches, App.tsx
   // renders the guest branch below before this component's body's second
   // half runs -- these effects are declared unconditionally (rules of
@@ -185,12 +194,12 @@ export default function SavedPage() {
     setPlacesError(null);
     fetchSavedPlaces(session.user.id)
       .then(setPlaces)
-      .catch((err: unknown) => {
-        setPlacesError(errorMessageFrom(err, "Could not load saved places."));
+      .catch(() => {
+        setPlacesError("Couldn't load your saved places. Check your connection and try again.");
         setPlaces([]);
       })
       .finally(() => setPlacesLoading(false));
-  }, [session]);
+  }, [session, retry.places]);
 
   useEffect(() => {
     if (!session) return;
@@ -198,12 +207,12 @@ export default function SavedPage() {
     setBusinessesError(null);
     fetchSavedBusinesses(session.user.id)
       .then(setBusinesses)
-      .catch((err: unknown) => {
-        setBusinessesError(errorMessageFrom(err, "Could not load saved businesses."));
+      .catch(() => {
+        setBusinessesError("Couldn't load your saved businesses. Check your connection and try again.");
         setBusinesses([]);
       })
       .finally(() => setBusinessesLoading(false));
-  }, [session]);
+  }, [session, retry.businesses]);
 
   useEffect(() => {
     if (!session) return;
@@ -211,12 +220,12 @@ export default function SavedPage() {
     setTrailsError(null);
     fetchSavedRoutes(session.user.id)
       .then(setTrails)
-      .catch((err: unknown) => {
-        setTrailsError(errorMessageFrom(err, "Could not load saved trails."));
+      .catch(() => {
+        setTrailsError("Couldn't load your saved trails. Check your connection and try again.");
         setTrails([]);
       })
       .finally(() => setTrailsLoading(false));
-  }, [session]);
+  }, [session, retry.trails]);
 
   useEffect(() => {
     if (!session) return;
@@ -224,12 +233,12 @@ export default function SavedPage() {
     setCompletedError(null);
     fetchCompletedRoutes(session.user.id)
       .then(setCompleted)
-      .catch((err: unknown) => {
-        setCompletedError(errorMessageFrom(err, "Could not load completed trails."));
+      .catch(() => {
+        setCompletedError("Couldn't load your completed trails. Check your connection and try again.");
         setCompleted([]);
       })
       .finally(() => setCompletedLoading(false));
-  }, [session]);
+  }, [session, retry.completed]);
 
   if (loading) return null;
 
@@ -260,11 +269,17 @@ export default function SavedPage() {
         <TabsContent value="places">
           <SavedSection
             error={placesError}
+            onRetry={() => bump("places")}
             loading={placesLoading}
             skeleton={<PhotoGridSkeleton />}
             isEmpty={places.length === 0}
             emptyIcon={Bookmark}
             emptyText="Saved places will appear here."
+            emptyAction={
+              <Button variant="outline" onClick={() => navigate("/discover")}>
+                Browse places
+              </Button>
+            }
           >
             <ul className={PHOTO_GRID}>
               {places.map((place) => (
@@ -283,11 +298,17 @@ export default function SavedPage() {
         <TabsContent value="businesses">
           <SavedSection
             error={businessesError}
+            onRetry={() => bump("businesses")}
             loading={businessesLoading}
             skeleton={<PhotoGridSkeleton />}
             isEmpty={businesses.length === 0}
             emptyIcon={Storefront}
             emptyText="Saved businesses will appear here."
+            emptyAction={
+              <Button variant="outline" onClick={() => navigate("/discover")}>
+                Browse businesses
+              </Button>
+            }
           >
             <ul className={PHOTO_GRID}>
               {businesses.map((business) => (
@@ -307,11 +328,17 @@ export default function SavedPage() {
         <TabsContent value="trails">
           <SavedSection
             error={trailsError}
+            onRetry={() => bump("trails")}
             loading={trailsLoading}
             skeleton={<TextGridSkeleton />}
             isEmpty={trails.length === 0}
             emptyIcon={MapTrifold}
             emptyText="Saved trails will appear here."
+            emptyAction={
+              <Button variant="outline" onClick={() => navigate("/trails")}>
+                Find a trail
+              </Button>
+            }
           >
             <ul className={TEXT_GRID}>
               {trails.map((trail) => (
@@ -330,11 +357,17 @@ export default function SavedPage() {
         <TabsContent value="completed">
           <SavedSection
             error={completedError}
+            onRetry={() => bump("completed")}
             loading={completedLoading}
             skeleton={<TextGridSkeleton />}
             isEmpty={completed.length === 0}
             emptyIcon={CheckCircle}
             emptyText="Completed trails will appear here."
+            emptyAction={
+              <Button variant="outline" onClick={() => navigate("/trails")}>
+                Find a trail
+              </Button>
+            }
           >
             <ul className={TEXT_GRID}>
               {completed.map((trail) => (

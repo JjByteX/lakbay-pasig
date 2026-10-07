@@ -230,11 +230,13 @@ export default function DiscoverPlaceDetailPage() {
     ? allFacilities.filter((facility) => place.facility_ids.includes(facility.id))
     : [];
 
-  // xl+: photos left (sticky), info right. No photos -> single narrow column.
+  // xl+: info and tabs in the wide left column, photos in a narrower sticky
+  // column on the right (Wikipedia's infobox layout: text leads, the picture
+  // supports it). No photos -> single narrow column.
   const hasPhotos = photos.length > 0;
 
   return (
-    <PageContainer width={hasPhotos ? "wide" : "narrow"}>
+    <PageContainer width={hasPhotos ? "detail" : "narrow"}>
       <div className="flex items-center justify-between">
         <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
@@ -249,8 +251,8 @@ export default function DiscoverPlaceDetailPage() {
       )}
 
       {!loading && place && (
-        <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-2 xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
-          <div className="flex flex-col gap-2 xl:col-start-2 xl:row-start-1">
+        <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
+          <div className="flex flex-col gap-2 xl:col-start-1 xl:row-start-1">
             <h1 className="text-xl font-semibold text-foreground">{place.name}</h1>
             <p className="text-sm text-muted-foreground">
               {joinMeta([place.category, distanceAway(userLocation, place.latitude, place.longitude)])}
@@ -292,7 +294,7 @@ export default function DiscoverPlaceDetailPage() {
               this place has no photos yet (PhotoGallery's own empty-list
               return), so a photo-less place's layout is unchanged from
               before this phase. */}
-          <PhotoGallery photoUrls={photos} className="xl:sticky xl:top-6 xl:col-start-1 xl:row-span-2 xl:row-start-1" />
+          <PhotoGallery photoUrls={photos} className="xl:sticky xl:top-6 xl:col-start-2 xl:row-span-2 xl:row-start-1" />
 
           {/* History tab phase: segmented Details / History control, same
               Tabs primitive discover.tsx already uses for map/list. Details
@@ -302,7 +304,7 @@ export default function DiscoverPlaceDetailPage() {
               public render (historical_significance, year_or_period,
               source_reference). Defaults to Details, the visit-info tab a
               user coming from a marker or list row is most likely after. */}
-          <Tabs defaultValue="details" className="xl:col-start-2 xl:row-start-2">
+          <Tabs defaultValue="details" className="xl:col-start-1 xl:row-start-2">
             <TabsList className={cn("grid w-full", showFiestaTab ? "grid-cols-3" : "grid-cols-2")}>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="history">History</TabsTrigger>

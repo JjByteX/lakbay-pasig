@@ -78,7 +78,7 @@ import { usePageTitle } from "@/lib/page-title";
  */
 export default function DiscoverPage() {
   usePageTitle("Discover");
-  const { query } = useGlobalSearchQuery();
+  const { query, setQuery } = useGlobalSearchQuery();
   // Same viewport breakpoint public-shell.tsx's own mobile/desktop shell
   // branch already uses (useIsMobile). The filter markup below is one
   // shared block registered via useDiscoverFilters for both shells (the
@@ -129,6 +129,9 @@ export default function DiscoverPage() {
   const [results, setResults] = useState<DiscoverResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(true);
   const [resultsError, setResultsError] = useState<string | null>(null);
+  // "Try again" on the list's error state bumps this, which re-runs the fetch
+  // effect below, same retry-counter shape trails.tsx and saved.tsx use.
+  const [reload, setReload] = useState(0);
   const [view, setView] = useState<"map" | "list">("map");
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
@@ -184,28 +187,20 @@ export default function DiscoverPage() {
     setResultsError(null);
     fetchDiscoverResults()
       .then(setResults)
-      .catch((err: unknown) => {
+      .catch(() => {
         // Phase 8.3: a specific message, not "something went wrong," per
-        // ux-ui-guidelines.md's State Rules. discover-query.ts's
-        // fetchPlaces/fetchBusinesses both `throw error` straight from
-        // Supabase's response, which is a PostgrestError (a plain object
-        // with a .message field, not an Error subclass), so this checks
-        // for that shape directly rather than `instanceof Error`. Anything
-        // else (e.g. a raw network failure with no PostgrestError shape,
-        // like a fetch() rejection before a response is even received)
-        // falls back to one still-specific sentence naming what failed.
-        const message =
-          err &&
-          typeof err === "object" &&
-          "message" in err &&
-          typeof err.message === "string"
-            ? err.message
-            : "Could not reach the server to load places and businesses.";
-        setResultsError(message);
+        // ux-ui-guidelines.md's State Rules. Fixed human copy now, like
+        // trails.tsx and saved.tsx, instead of the raw PostgrestError
+        // message this used to pass through: the list shows it in an
+        // ErrorState (error-state.tsx), whose own comment says callers pass
+        // fixed copy, never a raw database message, and it now comes with a
+        // "Try again" (reload above). The map's error pill shows the same
+        // text.
+        setResultsError("Couldn't load places and businesses. Check your connection and try again.");
         setResults([]);
       })
       .finally(() => setResultsLoading(false));
-  }, []);
+  }, [reload]);
 
   // Phase 7.1: raw input strings parsed to numbers at the call site, not
   // stored as numbers in state, so an in-progress edit (e.g. a lone "-" or
@@ -226,6 +221,19 @@ export default function DiscoverPage() {
     () => filterDiscoverResults(results, query, categories, priceRange, facilities),
     [results, query, categories, priceRange, facilities],
   );
+
+  // For the list's empty state: whether anything is narrowing the results,
+  // and one action that undoes all of it (search text, categories,
+  // facilities, price range) so a filtered-to-nothing list is not a dead end.
+  const hasFilters =
+    query.trim() !== "" || categories.length > 0 || facilities.length > 0 || priceRange !== null;
+  const clearFilters = () => {
+    setQuery("");
+    setCategories([]);
+    setFacilities([]);
+    setMinPrice("");
+    setMaxPrice("");
+  };
 
   useDiscoverFilters(
     // gap-4 (16px) between the two filter rows, py-4 (16px) top and bottom
@@ -520,6 +528,9 @@ export default function DiscoverPage() {
           origin={origin}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
+          onRetry={() => setReload((n) => n + 1)}
+          hasFilters={hasFilters}
+          onClearFilters={clearFilters}
           onRouteFound={(geometry, foundResult) => {
             handleRouteFound(geometry, foundResult);
             setView("map");

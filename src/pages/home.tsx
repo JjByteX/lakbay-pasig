@@ -15,6 +15,8 @@ import { PersonalizePrompt } from "@/components/auth/categories-onboarding";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Megaphone, SealCheck } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/lib/page-title";
 
 // Phase 6 (step-6-phases.md): cross-cutting loading/empty/error pass across
@@ -32,11 +34,6 @@ import { usePageTitle } from "@/lib/page-title";
 // response is even received). Reused for both sections rather than
 // duplicating the same three-line check twice, per constraints.md's
 // Inventory Before Suggesting rule.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
 
 // Phase 6.1 (step-6-phases.md): three row-shaped skeletons, same primitive
 // and row-shape pattern discover-list.tsx's own loading branch already
@@ -84,18 +81,19 @@ export default function HomePage() {
   const [fallbackItems, setFallbackItems] = useState<RecentlyVerifiedItem[]>([]);
   const [showcaseLoading, setShowcaseLoading] = useState(true);
   const [showcaseError, setShowcaseError] = useState<string | null>(null);
+  const [retry, setRetry] = useState({ announcements: 0, showcase: 0 });
 
   useEffect(() => {
     setAnnouncementsLoading(true);
     setAnnouncementsError(null);
     fetchAnnouncements()
       .then((data) => setAnnouncements(data))
-      .catch((err: unknown) => {
-        setAnnouncementsError(errorMessageFrom(err, "Could not load announcements."));
+      .catch(() => {
+        setAnnouncementsError("Couldn't load announcements. Check your connection and try again.");
         setAnnouncements([]);
       })
       .finally(() => setAnnouncementsLoading(false));
-  }, []);
+  }, [retry.announcements]);
 
   useEffect(() => {
     setShowcaseLoading(true);
@@ -106,14 +104,14 @@ export default function HomePage() {
         setBusinessCategoryRows(data.businessCategoryRows);
         setFallbackItems(data.fallbackItems);
       })
-      .catch((err: unknown) => {
-        setShowcaseError(errorMessageFrom(err, "Could not load recently verified content."));
+      .catch(() => {
+        setShowcaseError("Couldn't load recently verified places and businesses. Check your connection and try again.");
         setPlaceCategoryRows([]);
         setBusinessCategoryRows([]);
         setFallbackItems([]);
       })
       .finally(() => setShowcaseLoading(false));
-  }, []);
+  }, [retry.showcase]);
 
   // Extracted from a nested ternary (announcementsError ? ... :
   // announcementsLoading ? ... : announcements.length === 0 ? ... : ...)
@@ -123,7 +121,7 @@ export default function HomePage() {
   // waiting" or "completed with nothing to show."
   let announcementsBody: ReactNode;
   if (announcementsError) {
-    announcementsBody = <p className="text-sm text-destructive">{announcementsError}</p>;
+    announcementsBody = <ErrorState onRetry={() => setRetry((r) => ({ ...r, announcements: r.announcements + 1 }))}>{announcementsError}</ErrorState>;
   } else if (announcementsLoading) {
     announcementsBody = <SectionSkeleton />;
   } else if (announcements.length === 0) {
@@ -165,7 +163,7 @@ export default function HomePage() {
     // Phase 5.5: one error boundary for the whole section, covered by
     // fetchHomeShowcase's own single-fetch, split-after shape -- one
     // promise to catch, one error state to show here.
-    showcaseBody = <p className="text-sm text-destructive">{showcaseError}</p>;
+    showcaseBody = <ErrorState onRetry={() => setRetry((r) => ({ ...r, showcase: r.showcase + 1 }))}>{showcaseError}</ErrorState>;
   } else if (showcaseLoading) {
     showcaseBody = (
       <div className="flex flex-col gap-6">
@@ -174,7 +172,16 @@ export default function HomePage() {
       </div>
     );
   } else if (showcaseIsEmpty) {
-    showcaseBody = <EmptyState icon={SealCheck}>Recently verified places and businesses will appear here.</EmptyState>;
+    showcaseBody = <EmptyState
+        icon={SealCheck}
+        action={
+          <Button variant="outline" onClick={() => navigate("/discover")}>
+            Browse Discover
+          </Button>
+        }
+      >
+        Recently verified places and businesses will appear here.
+      </EmptyState>;
   } else {
     showcaseBody = (
       <div className="flex flex-col gap-6">

@@ -1,9 +1,8 @@
-import { Heart } from "@phosphor-icons/react";
+import { SaveHeart, useHeartPop } from "@/components/public/save-heart";
 import { Button } from "@/components/ui/button";
 import { isPlaceSaved, toggleSavedPlace } from "@/lib/saved-places";
 import { isBusinessSaved, toggleSavedBusiness } from "@/lib/saved-businesses";
 import { useSavedToggle } from "@/hooks/use-saved-toggle";
-import { cn } from "@/lib/utils";
 
 // What the heart saves. Each kind has its own table (saved_places 0007,
 // saved_businesses 0047) and its own lib functions and error copy, picked once
@@ -41,6 +40,10 @@ interface SaveButtonProps {
   // resolves), not on the optimistic flip, so a failed unsave that
   // reverts below never fires this and the row correctly stays put.
   onToggle?: (saved: boolean) => void;
+  // The Discover list's batched answer, passed straight to useSavedToggle
+  // (see its own comment for undefined / null / boolean). Every other caller
+  // omits it and the heart checks its own item on mount, as before.
+  initialSaved?: boolean | null;
 }
 
 /**
@@ -70,7 +73,7 @@ interface SaveButtonProps {
  * identical copies. This component only supplies the kind-specific
  * pieces (the KINDS table above): the lib functions and the copy.
  */
-export function SaveButton({ kind = "place", itemId, onToggle }: Readonly<SaveButtonProps>) {
+export function SaveButton({ kind = "place", itemId, onToggle, initialSaved }: Readonly<SaveButtonProps>) {
   const copy = KINDS[kind];
   const { saved, loading, error, handleClick } = useSavedToggle({
     itemId,
@@ -79,7 +82,9 @@ export function SaveButton({ kind = "place", itemId, onToggle }: Readonly<SaveBu
     saveErrorMessage: copy.saveErrorMessage,
     removeErrorMessage: copy.removeErrorMessage,
     onToggle,
+    initialSaved,
   });
+  const { popKey, press } = useHeartPop(saved, handleClick);
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -87,12 +92,12 @@ export function SaveButton({ kind = "place", itemId, onToggle }: Readonly<SaveBu
         type="button"
         variant="ghost"
         size="icon"
-        onClick={handleClick}
+        onClick={press}
         disabled={loading}
         aria-label={saved ? copy.removeLabel : copy.saveLabel}
         aria-pressed={saved}
       >
-        <Heart weight={saved ? "fill" : "bold"} className={cn("h-5 w-5", saved && "text-primary")} />
+        <SaveHeart saved={saved} popKey={popKey} />
       </Button>
       {/* Phase 8.3: specific to which direction failed (save vs remove),
           not "something went wrong," per ux-ui-guidelines.md's State

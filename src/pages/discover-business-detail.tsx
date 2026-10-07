@@ -219,7 +219,9 @@ export default function DiscoverBusinessDetailPage() {
     };
   }, [itemId, loading, itemsLoaded, business, items]);
 
-  // xl+: photos left (sticky), info right. No photos -> single narrow column.
+  // xl+: info and tabs in the wide left column, photos in a narrower sticky
+  // column on the right (Wikipedia's infobox layout: text leads, the picture
+  // supports it). No photos -> single narrow column.
   const hasPhotos = photos.length > 0;
 
   const categoryLine = business
@@ -227,7 +229,7 @@ export default function DiscoverBusinessDetailPage() {
     : "";
 
   return (
-    <PageContainer width={hasPhotos ? "wide" : "narrow"}>
+    <PageContainer width={hasPhotos ? "detail" : "narrow"}>
       <div className="flex items-center justify-between">
         <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
@@ -242,8 +244,8 @@ export default function DiscoverBusinessDetailPage() {
       )}
 
       {!loading && itemsLoaded && business && (
-        <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-2 xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
-          <div className="flex flex-col gap-2 xl:col-start-2 xl:row-start-1">
+        <div className={cn("flex flex-col gap-4", hasPhotos && "xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-8")}>
+          <div className="flex flex-col gap-2 xl:col-start-1 xl:row-start-1">
             <h1 className="text-xl font-semibold text-foreground">{business.name}</h1>
             {/* A business with no category still shows its distance, and one
                 with neither shows no line at all. */}
@@ -283,7 +285,7 @@ export default function DiscoverBusinessDetailPage() {
               place detail page's own gallery -- right under the header/
               badge block, above the tabs. Renders nothing when this
               business has no photos yet. */}
-          <PhotoGallery photoUrls={photos} className="xl:sticky xl:top-6 xl:col-start-1 xl:row-span-2 xl:row-start-1" />
+          <PhotoGallery photoUrls={photos} className="xl:sticky xl:top-6 xl:col-start-2 xl:row-span-2 xl:row-start-1" />
 
           {/* Story tab phase: segmented Details / Story control, same
               Tabs primitive discover.tsx already uses for map/list.
@@ -305,7 +307,7 @@ export default function DiscoverBusinessDetailPage() {
           <Tabs
             key={itemId ?? "none"}
             defaultValue={searchParams.get("tab") === "items" && items.length > 0 ? "items" : "details"}
-            className="xl:col-start-2 xl:row-start-2"
+            className="xl:col-start-1 xl:row-start-2"
           >
             <TabsList
               className={
@@ -368,7 +370,7 @@ export default function DiscoverBusinessDetailPage() {
                     grid for one item. */}
                 <div
                   className={
-                    items.length === 1 ? "flex" : "grid grid-cols-2 gap-3"
+                    items.length === 1 ? "flex" : "grid grid-cols-2 gap-3 xl:grid-cols-3"
                   }
                 >
                   {items.map((item) => (

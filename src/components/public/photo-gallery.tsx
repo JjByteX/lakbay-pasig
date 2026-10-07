@@ -451,8 +451,8 @@ export function PhotoGallery({ photoUrls, className }: Readonly<{ photoUrls: str
   if (photoUrls.length === 0) return null;
 
   return (
-    // xl+: place/business detail sits this in a two-column grid's left
-    // column, so the edge-to-edge bleed (-mx-6 / px-6) is dropped and the
+    // xl+: place/business detail sits this in the right-hand 22rem column of
+    // its grid, so the edge-to-edge bleed (-mx-6 / px-6) is dropped and the
     // main photo gets the card radius instead. Below xl nothing changes.
     <div className={cn("-mx-6 flex flex-col gap-2 xl:mx-0", className)}>
       {/* Fit to container, not cropped: the frame takes the photo's

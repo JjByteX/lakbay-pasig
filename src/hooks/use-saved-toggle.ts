@@ -40,6 +40,14 @@ interface UseSavedToggleOptions {
    * unsaved.
    */
   onToggle?: (saved: boolean) => void;
+  /**
+   * For a list that already knows every item's saved state from one batched
+   * request (the Discover list), so each heart does not ask on its own.
+   * undefined: no list, check this item on mount (every other caller).
+   * null: the list is still loading, so neither check nor assume yet.
+   * boolean: the known state, no per-item request.
+   */
+  initialSaved?: boolean | null;
 }
 
 export function useSavedToggle({
@@ -49,6 +57,7 @@ export function useSavedToggle({
   saveErrorMessage,
   removeErrorMessage,
   onToggle,
+  initialSaved,
 }: Readonly<UseSavedToggleOptions>) {
   const { session } = useAuth();
   const { openAuth } = useAuthModal();
@@ -63,6 +72,10 @@ export function useSavedToggle({
       setSaved(false);
       return;
     }
+    if (initialSaved !== undefined) {
+      if (initialSaved !== null) setSaved(initialSaved);
+      return;
+    }
     fetchIsSaved(session.user.id, itemId)
       .then(setSaved)
       .catch(() => setSaved(false));
@@ -71,7 +84,7 @@ export function useSavedToggle({
     // in practice -- matching both original components' own dependency
     // arrays exactly ([session, placeId] / [session, routeId]).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, itemId]);
+  }, [session, itemId, initialSaved]);
 
   function handleClick() {
     if (!session) {

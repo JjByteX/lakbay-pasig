@@ -161,7 +161,7 @@ export default function ProfilePage() {
     setSaving(false);
 
     if (error) {
-      setSaveError(error.message);
+      setSaveError("Couldn't save your changes. Check your connection and try again.");
       return;
     }
 
@@ -188,7 +188,7 @@ export default function ProfilePage() {
       .update({ profile_picture: url })
       .eq("id", session.user.id);
     if (error) {
-      setSaveError(error.message);
+      setSaveError("Couldn't update your photo. Check your connection and try again.");
       return;
     }
     await refreshProfile();

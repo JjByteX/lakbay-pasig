@@ -28,6 +28,23 @@ export async function isPlaceSaved(userId: string, placeId: string): Promise<boo
 }
 
 /**
+ * Every place id this user has saved, in one request. The Discover list draws
+ * a heart on every card, and asking isPlaceSaved once per card would be one
+ * round trip per result; the list reads this set once instead and hands each
+ * heart its answer. Same owner-only RLS as the rest of this file
+ * (saved_places_own), ids only, no places join.
+ */
+export async function fetchSavedPlaceIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("saved_places")
+    .select("place_id")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.place_id));
+}
+
+/**
  * Signed-in tap inserts or deletes the row directly, per step-5-phases.md
  * 6.5, no confirmation modal needed for a reversible personal action.
  * Returns the new saved state so the caller can update its own UI without
