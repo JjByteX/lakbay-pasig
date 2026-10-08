@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Pencil, QrCode, Trash } from "@phosphor-icons/react";
 import QRCode from "qrcode";
 import { supabase } from "@/lib/supabase";
 import { DEFAULT_UNLOCK_RADIUS } from "@/lib/trail-unlock";
+import { discardUnsavedPhoto, removeDiscoveryPhotoFile } from "@/lib/discovery-photo";
 import type { Profile } from "@/lib/auth-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CharCount } from "@/components/business/business-fields";
+import { AdminFormCard } from "./admin-form-card";
+import { DiscoveryPhotoField } from "./discovery-photo-field";
 
 /**
  * Who may write place entries: the same set migration 0013 grants
@@ -45,6 +48,7 @@ interface EntryRow {
   unlock_radius: number;
   qr_token: string | null;
   needs_place_review: boolean;
+  photo_url: string | null;
 }
 
 interface EntryForm {
@@ -52,6 +56,8 @@ interface EntryForm {
   content: string;
   unlock_radius: string;
   requires_scan: boolean;
+  // "" means no photo. The file is already uploaded once this holds a url.
+  photo_url: string;
 }
 
 const EMPTY_FORM: EntryForm = {
@@ -59,9 +65,11 @@ const EMPTY_FORM: EntryForm = {
   content: "",
   unlock_radius: String(DEFAULT_UNLOCK_RADIUS),
   requires_scan: false,
+  photo_url: "",
 };
 
-const SELECT_COLUMNS = "id, title, content, sequence_order, unlock_radius, qr_token, needs_place_review";
+const SELECT_COLUMNS =
+  "id, title, content, sequence_order, unlock_radius, qr_token, needs_place_review, photo_url";
 
 // The link the QR code holds. A phone's own camera opens it (trail-scan.tsx).
 // The host is VITE_SITE_URL when set, so a code downloaded from localhost or
@@ -136,9 +144,17 @@ export function DiscoveryEntriesPanel({
       content: entry.content,
       unlock_radius: String(entry.unlock_radius),
       requires_scan: entry.qr_token !== null,
+      photo_url: entry.photo_url ?? "",
     });
     setError(null);
     setEditingId(entry.id);
+  }
+
+  // Leaving the form without saving: a photo uploaded in this edit is not
+  // wanted, so its file goes. The entry's saved photo is untouched.
+  function handleCancel() {
+    discardUnsavedPhoto(form.photo_url, entries?.find((e) => e.id === editingId)?.photo_url ?? null);
+    setEditingId(null);
   }
 
   async function handleSave() {
@@ -151,7 +167,12 @@ export function DiscoveryEntriesPanel({
 
     setSaving(true);
     setError(null);
-    const fields = { title: form.title.trim(), content: form.content.trim(), unlock_radius: unlockRadius };
+    const fields = {
+      title: form.title.trim(),
+      content: form.content.trim(),
+      unlock_radius: unlockRadius,
+      photo_url: form.photo_url || null,
+    };
 
     if (editingId === "new") {
       const nextOrder = entries.length ? Math.max(...entries.map((e) => e.sequence_order)) + 1 : 1;
@@ -196,6 +217,10 @@ export function DiscoveryEntriesPanel({
       setError(updateError.message);
       return;
     }
+    // The photo was replaced or removed, so the old file is now unused.
+    if (current?.photo_url && current.photo_url !== fields.photo_url) {
+      void removeDiscoveryPhotoFile(current.photo_url);
+    }
     setEntries(entries.map((e) => (e.id === editingId ? { ...e, ...fields, qr_token: qrToken } : e)));
     setEditingId(null);
   }
@@ -210,6 +235,8 @@ export function DiscoveryEntriesPanel({
       setError(deleteError.message);
       return;
     }
+    const removed = entries.find((e) => e.id === entryId);
+    if (removed?.photo_url) void removeDiscoveryPhotoFile(removed.photo_url);
     setEntries(entries.filter((e) => e.id !== entryId));
   }
 
@@ -254,8 +281,16 @@ export function DiscoveryEntriesPanel({
     }
   }
 
+  // Same frame as the Current Info tab (admin-form-card.tsx): the tab fills
+  // the height under the heading, the card grows and scrolls its own
+  // content, and the action buttons sit pinned beneath it, so the page
+  // itself never scrolls. The parent TabsContent only has to be a flex
+  // column that can shrink.
+  let body: ReactNode;
+  let footer: ReactNode = null;
+
   if (loadError) {
-    return (
+    body = (
       <div role="alert" className="flex flex-col items-start gap-4">
         <p className="text-sm text-destructive">{loadError}</p>
         <Button variant="outline" size="sm" onClick={() => void load()}>
@@ -263,17 +298,15 @@ export function DiscoveryEntriesPanel({
         </Button>
       </div>
     );
-  }
+  } else if (!entries) {
+    body = <p className="text-sm text-muted-foreground">Loading…</p>;
+  } else if (editingId !== null) {
+    // The entry being edited, if it already has a code. Unticking the QR box
+    // removes the code, and ticking it later makes a new one, which breaks
+    // printed codes, so the form says so before staff save.
+    const editingEntry = entries.find((e) => e.id === editingId);
 
-  if (!entries) return <p className="text-sm text-muted-foreground">Loading…</p>;
-
-  // The entry being edited, if it already has a code. Unticking the QR box
-  // removes the code, and ticking it later makes a new one, which breaks
-  // printed codes, so the form says so before staff save.
-  const editingEntry = entries.find((e) => e.id === editingId);
-
-  if (editingId !== null) {
-    return (
+    body = (
       <div className="flex max-w-2xl flex-col gap-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="entry_title">Title</Label>
@@ -298,6 +331,12 @@ export function DiscoveryEntriesPanel({
           />
           <CharCount value={form.content} max={2000} />
         </div>
+        <DiscoveryPhotoField
+          url={form.photo_url}
+          savedUrl={editingEntry?.photo_url ?? null}
+          onChange={(photoUrl) => setForm((prev) => ({ ...prev, photo_url: photoUrl }))}
+          onError={setError}
+        />
         <div className="flex flex-col gap-2">
           <Label htmlFor="entry_unlock_radius">Unlock Radius (meters)</Label>
           <Input
@@ -327,28 +366,31 @@ export function DiscoveryEntriesPanel({
             </p>
           )}
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setEditingId(null)}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={() => void handleSave()} disabled={!canSubmit}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
       </div>
     );
-  }
-
-  return (
-    <div className="flex max-w-2xl flex-col gap-4">
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {entries.length === 0 ? (
+    footer = (
+      <div className="flex justify-between gap-2">
+        <Button type="button" variant="outline" onClick={handleCancel}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={() => void handleSave()} disabled={!canSubmit}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    );
+  } else {
+    // Rows sit directly in the card, divided by lines. No border of their
+    // own, since a bordered list inside a card is a card inside a card.
+    body =
+      entries.length === 0 ? (
         <EmptyState icon={BookOpen}>Discovery content will appear here.</EmptyState>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border">
           {entries.map((entry, index) => (
-            <li key={entry.id} className="flex items-start justify-between gap-4 p-4">
+            <li
+              key={entry.id}
+              className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
+            >
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground">
@@ -407,12 +449,21 @@ export function DiscoveryEntriesPanel({
             </li>
           ))}
         </ul>
-      )}
-      <div>
-        <Button type="button" variant="outline" onClick={startNew}>
+      );
+    footer = (
+      <div className="flex justify-end">
+        <Button type="button" onClick={startNew}>
           Add Discovery Content
         </Button>
       </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 grow flex-col gap-6">
+      <AdminFormCard>{body}</AdminFormCard>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {footer}
     </div>
   );
 }

@@ -610,8 +610,8 @@ export default function AdminBusinessDetailPage() {
       <Tabs defaultValue="info" className="flex min-h-0 grow flex-col">
         <TabsList className="shrink-0 self-start">
           <TabsTrigger value="info">Current Info</TabsTrigger>
-          <TabsTrigger value="history">Review History</TabsTrigger>
           {canEditDiscoveryContent(profile) && <TabsTrigger value="discovery">Discovery content</TabsTrigger>}
+          <TabsTrigger value="history">Review History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="flex min-h-0 grow flex-col">
@@ -650,18 +650,18 @@ export default function AdminBusinessDetailPage() {
           </form>
         </TabsContent>
 
-        <TabsContent value="history" className="flex min-h-0 grow flex-col">
-          <ReviewHistoryTable reviews={reviews} />
-        </TabsContent>
-
         {/* Place entries for a business: written once here, shown on every
             trail that stops at this business (docs/discovery-content-
             plan.md). Hidden from staff who cannot write them (0013). */}
         {canEditDiscoveryContent(profile) && id && (
-          <TabsContent value="discovery" className={ADMIN_SCROLL_CLASS}>
+          <TabsContent value="discovery" className="flex min-h-0 grow flex-col">
             <DiscoveryEntriesPanel locationType="business" locationId={id} />
           </TabsContent>
         )}
+
+        <TabsContent value="history" className="flex min-h-0 grow flex-col">
+          <ReviewHistoryTable reviews={reviews} />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={reviewAction !== null} onOpenChange={(open) => !open && setReviewAction(null)}>

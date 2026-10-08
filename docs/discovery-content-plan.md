@@ -26,12 +26,19 @@ Status: built, not yet run. Logged as decision-log.md entry #44.
 **Admin**
 - Discovery content tab on place and business pages: add, edit, delete, reorder, QR checkbox, Download QR. A warning shows before an untick removes a code. A failed reorder reloads the list.
 - Panel follows the guidelines: 8px grid spacing, the order tile matches the trail stop tile (`text-xs`, no raw size), and no explanatory lines.
+- The tab uses the same frame as Current Info: one card that fills the height and scrolls its own content, with the action buttons pinned beneath it. The page itself does not scroll.
 - Trail builder dialog is Trail Notes: no typed order, radius prefilled, place entry count shown. Its older 12px spacing and `text-[10px]` badge predate this work and are not changed.
 - "Trail Content" is "Discovery content" everywhere. Review pages handle an entry with no trail.
 
+**Photo (migration 0051, not applied)**
+- One optional photo per entry, both kinds. Staff add it in the same form as the text, in the Discovery content tab and in Trail Notes. It uploads when picked, like the landing slide image.
+- It shows in the stop card between the title and the text, only once the entry is unlocked. A QR entry's photo stays hidden until the scan.
+- Replacing, removing, cancelling and deleting an entry clean up the file, best effort.
+- `build_trails` staff get write access to the `discovery/` folder of the existing `content-photos` bucket.
+
 **Config and docs**
 - `qrcode` and `@types/qrcode` in `package.json` and installed. `VITE_SITE_URL` in `.env.example` and `vite-env.d.ts`.
-- Decision log #44 and architecture notes updated.
+- Decision log #44 and #45 and architecture notes updated.
 
 ## Left
 
@@ -40,12 +47,15 @@ Status: built, not yet run. Logged as decision-log.md entry #44.
 2. Flagged place entries do not block publishing a trail, only flagged trail notes do. Block them too?
 
 **You run**
-- Apply migration 0050 and run `db lint`.
+- Apply migrations 0050 and 0051 and run `db lint`.
 - Set `VITE_SITE_URL` wherever staff download codes.
 - Type check and lint. The panel may trip complexity rules.
 - Hand check: Saved grids at 390 px and large font, the Discovery content tab, a scan end to end on a phone, a one stop trail, a stop with no entries.
 
 **Not planned, add only if asked**
+- Show the photo on the review page, so a reviewer sees it when verifying an entry.
+- More than one photo per entry.
+- Resize on upload. Files are limited to 5 MB and JPG, PNG, WEBP or GIF, as for avatars and slides.
 - Hide a QR entry's text until scanned, which needs a server function.
 - Staff preview of place entries before a trail is published.
 - A "GPS is weak" hint on locked stops. The scan page covers its own case.
@@ -53,7 +63,7 @@ Status: built, not yet run. Logged as decision-log.md entry #44.
 - Per trail hiding of a place's entries.
 
 **Known limits**
-- Tokens and entry text are readable through the API before a scan, so the scan is a convenience gate.
+- Tokens, entry text and photo links are readable through the API before a scan, so the scan is a convenience gate.
 - A stop with no coordinates skips the GPS check on a scan.
 - A one stop trail never completes if location is denied.
 - Finishing a restarted trail again adds another `completed_routes` row. This was already so, and it inflates vendor completion counts.
@@ -135,7 +145,7 @@ GPS cannot place a visitor at one object (phone GPS is off by 10 to 20 m, and se
 - A QR entry in `trail-stop.tsx` shows as a locked line, "Scan the code at the object", until unlocked.
 
 **Admin**
-- Place and business detail pages: new Discovery content tab beside Current Info and Review History. Hidden on a new, unsaved record.
+- Place and business detail pages: new Discovery content tab between Current Info and Review History. Hidden on a new, unsaved record.
 - Trail builder dialog: edits trail notes only. Place entries show as plain text, "3 discovery content entries come from this place". No link.
 - Label "Trail Content" becomes "Discovery content" in `admin-dashboard.tsx`, `admin-places.tsx` and `admin-discovery-content-review.tsx`.
 - Place entry form: a checkbox "Unlock by QR scan" (a styled native checkbox, no Switch exists), plus "Download QR". A damaged code is reprinted from the same token. No regenerate button.

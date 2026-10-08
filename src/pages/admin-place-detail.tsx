@@ -36,7 +36,7 @@ import { DurationField } from "@/components/ui/duration-field";
 import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { ADMIN_SCROLL_CLASS, AdminFormCard } from "@/components/admin/admin-form-card";
+import { AdminFormCard } from "@/components/admin/admin-form-card";
 import { DiscoveryEntriesPanel, canEditDiscoveryContent } from "@/components/admin/discovery-entries-panel";
 import { ReviewHistoryTable } from "@/components/admin/review-history-table";
 
@@ -510,8 +510,8 @@ export default function AdminPlaceDetailPage() {
         <Tabs defaultValue="info" className="flex min-h-0 grow flex-col">
           <TabsList className="shrink-0 self-start">
             <TabsTrigger value="info">Current Info</TabsTrigger>
-            <TabsTrigger value="history">Review History</TabsTrigger>
             {canEditDiscoveryContent(profile) && <TabsTrigger value="discovery">Discovery content</TabsTrigger>}
+            <TabsTrigger value="history">Review History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className="flex min-h-0 grow flex-col">
@@ -522,7 +522,7 @@ export default function AdminPlaceDetailPage() {
               stops at this place (docs/discovery-content-plan.md). Not on a
               new place: there is no id to attach them to yet. */}
           {canEditDiscoveryContent(profile) && id && (
-            <TabsContent value="discovery" className={ADMIN_SCROLL_CLASS}>
+            <TabsContent value="discovery" className="flex min-h-0 grow flex-col">
               <DiscoveryEntriesPanel locationType="place" locationId={id} />
             </TabsContent>
           )}

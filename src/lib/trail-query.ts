@@ -182,7 +182,7 @@ async function fetchDiscoveryContentByStopId(
 ): Promise<Map<string, TrailDiscoveryContent[]>> {
   const { data, error } = await supabase
     .from("discovery_content")
-    .select("id, related_route_stop_id, title, content, unlock_radius")
+    .select("id, related_route_stop_id, title, content, unlock_radius, photo_url")
     .eq("route_id", routeId)
     .eq("status", "active")
     .order("sequence_order", { ascending: true });
@@ -199,6 +199,7 @@ async function fetchDiscoveryContentByStopId(
       content: row.content,
       unlock_radius: row.unlock_radius,
       requiresScan: false,
+      photoUrl: row.photo_url,
     });
     byStopId.set(row.related_route_stop_id, list);
   }
@@ -218,7 +219,7 @@ async function fetchPlaceEntriesByLocation(
 
   const { data, error } = await supabase
     .from("discovery_content")
-    .select("id, related_location_type, related_location_id, title, content, unlock_radius, qr_token")
+    .select("id, related_location_type, related_location_id, title, content, unlock_radius, qr_token, photo_url")
     .is("route_id", null)
     .eq("status", "active")
     .in("related_location_id", locationIds)
@@ -235,6 +236,7 @@ async function fetchPlaceEntriesByLocation(
       content: row.content,
       unlock_radius: row.unlock_radius,
       requiresScan: row.qr_token !== null,
+      photoUrl: row.photo_url,
     });
     byLocation.set(key, list);
   }

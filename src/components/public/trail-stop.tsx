@@ -205,6 +205,14 @@ export function TrailStop({
                     transition={{ ...SPRING_SETTLE, delay: 0.3 }}
                   >
                     <span className="text-sm font-semibold text-foreground">{entry.title}</span>
+                    {entry.photoUrl && (
+                      <img
+                        src={entry.photoUrl}
+                        alt={entry.title}
+                        loading="lazy"
+                        className="my-1 aspect-video w-full rounded-md object-cover"
+                      />
+                    )}
                     <p className="text-sm text-muted-foreground">{entry.content}</p>
                   </motion.li>
                 );

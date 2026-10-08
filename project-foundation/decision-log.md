@@ -362,3 +362,16 @@ Scope: phases 1 and 2 cover the public and admin global search. Not yet changed:
 **Rejected:** Putting all entries on the place (cannot link stop to stop, which CATO asked for in feature-scope-changes.md #3). Copy from another trail button, or auto copy on adding a place (still duplicates rows and drifts). Coordinates on each entry for object level GPS unlock (GPS cannot place a visitor at one object). A regenerate QR button, a typed token and a typed Sequence Order (the system can handle each). A per trail hide control for place entries (add only if CATO asks). Making each room or object its own Place (would enter the verification queue and the Discover map).
 
 ---
+
+**#:** 45
+**Milestone:** Discovery content photo (migration 0051)
+
+**Decision:** A discovery content entry, either kind, can carry one optional photo, so a visitor who unlocked it can recognise the object when they revisit the trail on a phone. `discovery_content.photo_url` holds the public url of one image in the existing `content-photos` bucket under `discovery/`, the same stored url shape as place photos and landing slides. Staff add it in the entry form (`discovery-photo-field.tsx`), in the Discovery content tab and in the trail builder's Trail Notes. The file uploads when picked and the form holds only the url, as the landing slide form does. The stop card shows it between the title and the text, only after the entry is unlocked, so a QR entry's photo stays hidden until the scan. Migration 0051 adds the column and a storage policy so `build_trails` staff can write the `discovery/` folder, since `content_photos_write_staff` (0031) covers admin, `manage_places` and `review_businesses` only.
+
+**Standing rule:** One photo per entry, never a gallery. An upload that never reaches a saved entry (replaced, removed, cancelled) has its file deleted, best effort. The saved photo is only deleted after a save succeeds, so cancelling never leaves an entry pointing at a deleted file. Deleting an entry deletes its file. File checks are the avatar rules, JPG, PNG, WEBP or GIF up to 5 MB.
+
+**Accepted limits:** Written without running the app, the database or storage, so migration 0051 and the upload flow need a hand run. The bucket is public, so a photo link is readable before unlock, like the entry text (#44). No resize on upload. The review page does not show the photo yet. A file that fails to delete is logged and left in the bucket.
+
+**Rejected:** A photo gallery per entry (more to build and keep, little gain for one object). A separate photo table. Showing the photo on a locked QR entry (it spoils the find). A required alt text field (the entry title is the alt text, one less control).
+
+---

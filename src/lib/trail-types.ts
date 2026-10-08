@@ -84,6 +84,9 @@ export interface TrailDiscoveryContent {
   // migration 0050). The token itself is not carried here, only the scan
   // page reads it.
   requiresScan: boolean;
+  // The entry's one optional photo (migration 0051), a public url, or null.
+  // Shown only once the entry is unlocked, with its text.
+  photoUrl: string | null;
 }
 
 /**

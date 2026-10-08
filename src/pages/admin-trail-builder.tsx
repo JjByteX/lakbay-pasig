@@ -28,7 +28,9 @@ import {
 } from "@/components/admin/place-business-picker";
 import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
 import { DEFAULT_UNLOCK_RADIUS } from "@/lib/trail-unlock";
+import { discardUnsavedPhoto, removeDiscoveryPhotoFile } from "@/lib/discovery-photo";
 import { CharCount } from "@/components/business/business-fields";
+import { DiscoveryPhotoField } from "@/components/admin/discovery-photo-field";
 import { DurationField } from "@/components/ui/duration-field";
 import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
 import { usePageTitle } from "@/lib/page-title";
@@ -109,6 +111,7 @@ interface DiscoveryContentRow {
   sequence_order: number;
   unlock_radius: number;
   needs_place_review: boolean;
+  photo_url: string | null;
 }
 
 // A trail note is a discovery_content row with a route: the line that links
@@ -120,12 +123,15 @@ interface DiscoveryContentFormState {
   title: string;
   content: string;
   unlock_radius: string;
+  // "" means no photo. The file is already uploaded once this holds a url.
+  photo_url: string;
 }
 
 const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
   title: "",
   content: "",
   unlock_radius: String(DEFAULT_UNLOCK_RADIUS),
+  photo_url: "",
 };
 
 // Builds the routes row payload from the Details step's form state. Pulled
@@ -282,6 +288,7 @@ function DiscoveryContentModalBody({
   onDelete,
   onCancelEdit,
   onSave,
+  onPhotoError,
 }: Readonly<{
   activeStop: StopRow;
   entriesForStop: DiscoveryContentRow[];
@@ -301,6 +308,7 @@ function DiscoveryContentModalBody({
   onDelete: (entryId: string) => void;
   onCancelEdit: () => void;
   onSave: (stop: StopRow) => void;
+  onPhotoError: (message: string | null) => void;
 }>) {
   // Extracted from a nested ternary (discoveryLoading ? ... :
   // entriesForStop.length === 0 ? ... : ...) inline in the list view below.
@@ -415,6 +423,12 @@ function DiscoveryContentModalBody({
             />
             <CharCount value={discoveryForm.content} max={2000} />
           </div>
+          <DiscoveryPhotoField
+            url={discoveryForm.photo_url}
+            savedUrl={entriesForStop.find((entry) => entry.id === editingEntryId)?.photo_url ?? null}
+            onChange={(photoUrl) => setDiscoveryForm((prev) => ({ ...prev, photo_url: photoUrl }))}
+            onError={onPhotoError}
+          />
           <div className="flex flex-col gap-2">
             <Label htmlFor="discovery_unlock_radius">Unlock Radius (meters)</Label>
             <Input
@@ -672,7 +686,7 @@ export default function AdminTrailBuilderPage() {
     setDiscoveryLoading(true);
     const { data, error: fetchError } = await supabase
       .from("discovery_content")
-      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review")
+      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url")
       .eq("route_id", forRouteId)
       .order("sequence_order", { ascending: true });
 
@@ -693,6 +707,7 @@ export default function AdminTrailBuilderPage() {
           sequence_order: row.sequence_order,
           unlock_radius: row.unlock_radius,
           needs_place_review: row.needs_place_review,
+          photo_url: row.photo_url,
         }))
     );
   }
@@ -973,7 +988,18 @@ export default function AdminTrailBuilderPage() {
   }
 
   function closeDiscoveryModal() {
+    handleCancelDiscoveryEdit();
     setDiscoveryModalStopId(null);
+  }
+
+  // Leaving the form without saving: a photo uploaded in this edit is not
+  // wanted, so its file goes. The entry's saved photo is untouched. Does
+  // nothing when no form is open.
+  function handleCancelDiscoveryEdit() {
+    if (editingEntryId !== null) {
+      const saved = discoveryContent.find((d) => d.id === editingEntryId)?.photo_url ?? null;
+      discardUnsavedPhoto(discoveryForm.photo_url, saved);
+    }
     setEditingEntryId(null);
   }
 
@@ -988,6 +1014,7 @@ export default function AdminTrailBuilderPage() {
       title: entry.title,
       content: entry.content,
       unlock_radius: String(entry.unlock_radius),
+      photo_url: entry.photo_url ?? "",
     });
     setDiscoveryError(null);
     setEditingEntryId(entry.id);
@@ -1028,6 +1055,7 @@ export default function AdminTrailBuilderPage() {
           related_route_stop_id: saved.id,
           sequence_order: draft.sequence_order,
           unlock_radius: draft.unlock_radius,
+          photo_url: draft.photo_url,
         },
       ];
     });
@@ -1036,7 +1064,7 @@ export default function AdminTrailBuilderPage() {
     const { data: inserted, error: insertError } = await supabase
       .from("discovery_content")
       .insert(rows)
-      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review");
+      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url");
     if (insertError || !inserted) return failure(insertError?.message ?? "could not save it.");
 
     setDiscoveryContent((prev) => [
@@ -1049,6 +1077,7 @@ export default function AdminTrailBuilderPage() {
         sequence_order: row.sequence_order,
         unlock_radius: row.unlock_radius,
         needs_place_review: row.needs_place_review,
+        photo_url: row.photo_url,
       })),
     ]);
     return null;
@@ -1093,6 +1122,7 @@ export default function AdminTrailBuilderPage() {
         title: discoveryForm.title.trim(),
         content: discoveryForm.content.trim(),
         unlock_radius: unlockRadius,
+        photo_url: discoveryForm.photo_url || null,
       };
       if (editingEntryId === "new") {
         draftEntryCounter.current += 1;
@@ -1128,8 +1158,9 @@ export default function AdminTrailBuilderPage() {
           related_route_stop_id: stop.id,
           sequence_order: nextOrder,
           unlock_radius: unlockRadius,
+          photo_url: discoveryForm.photo_url || null,
         })
-        .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review")
+        .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url")
         .single();
 
       setDiscoverySaving(false);
@@ -1147,6 +1178,7 @@ export default function AdminTrailBuilderPage() {
           sequence_order: inserted.sequence_order,
           unlock_radius: inserted.unlock_radius,
           needs_place_review: inserted.needs_place_review,
+          photo_url: inserted.photo_url,
         },
       ]);
       setEditingEntryId(null);
@@ -1163,6 +1195,7 @@ export default function AdminTrailBuilderPage() {
         title: discoveryForm.title.trim(),
         content: discoveryForm.content.trim(),
         unlock_radius: unlockRadius,
+        photo_url: discoveryForm.photo_url || null,
       })
       .eq("id", editingEntryId);
 
@@ -1170,6 +1203,11 @@ export default function AdminTrailBuilderPage() {
     if (updateError) {
       setDiscoveryError(updateError.message);
       return;
+    }
+    // The photo was replaced or removed, so the old file is now unused.
+    const previousPhoto = discoveryContent.find((d) => d.id === editingEntryId)?.photo_url;
+    if (previousPhoto && previousPhoto !== (discoveryForm.photo_url || null)) {
+      void removeDiscoveryPhotoFile(previousPhoto);
     }
     setDiscoveryContent((prev) =>
       prev.map((entry) =>
@@ -1179,6 +1217,7 @@ export default function AdminTrailBuilderPage() {
               title: discoveryForm.title.trim(),
               content: discoveryForm.content.trim(),
               unlock_radius: unlockRadius,
+              photo_url: discoveryForm.photo_url || null,
             }
           : entry
       )
@@ -1229,7 +1268,9 @@ export default function AdminTrailBuilderPage() {
   }
 
   async function handleDeleteDiscoveryEntry(entryId: string) {
+    const removedPhoto = discoveryContent.find((entry) => entry.id === entryId)?.photo_url;
     if (isDraftEntry(entryId)) {
+      if (removedPhoto) void removeDiscoveryPhotoFile(removedPhoto);
       setDiscoveryContent((prev) => prev.filter((entry) => entry.id !== entryId));
       return;
     }
@@ -1244,6 +1285,7 @@ export default function AdminTrailBuilderPage() {
       setDiscoveryError(deleteError.message);
       return;
     }
+    if (removedPhoto) void removeDiscoveryPhotoFile(removedPhoto);
     setDiscoveryContent((prev) => prev.filter((entry) => entry.id !== entryId));
   }
 
@@ -1579,8 +1621,9 @@ export default function AdminTrailBuilderPage() {
                   onStartEdit={startEditDiscoveryEntry}
                   onMove={handleMoveDiscoveryEntry}
                   onDelete={handleDeleteDiscoveryEntry}
-                  onCancelEdit={() => setEditingEntryId(null)}
+                  onCancelEdit={handleCancelDiscoveryEdit}
                   onSave={handleSaveDiscoveryEntry}
+                  onPhotoError={setDiscoveryError}
                 />
               );
             })()}
