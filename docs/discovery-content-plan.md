@@ -1,6 +1,63 @@
 # discovery-content-plan.md
 
-Status: built, not yet run. Logged as decision-log.md entry #44. Needs `npm install` (qrcode) and migration 0050 applied.
+Status: built, not yet run. Logged as decision-log.md entry #44.
+
+## Done
+
+**Saved page**
+- Card grids in the Home photo card style: photo cards for Places and Businesses, plain cards for Trails and Completed, matching skeletons.
+- Saved businesses fetch a cover photo. `trailMeta` is shared from `trail-card.tsx`.
+
+**Database**
+- Migration 0050 written: nullable `route_id`, `qr_token`, `entry_unlocks`, wider public read. Not applied.
+
+**Trail player**
+- Every entry of a stop shows, trail notes first. A place's own entries show on its first stop only.
+- A stop unlocks at its largest entry radius, or 25 m with no entries.
+- First stop is free. A one stop trail completes on proximity, after the completion check loads.
+- QR entries show a locked line until scanned.
+- A stop animates open when it unlocks live, not when saved progress loads (`motion.ts` tokens, reduced motion respected).
+
+**Scan page**
+- `/scan/:token` checks sign in, an unlocked stop and GPS, then saves the unlock.
+- Shows the two real steps (finding location, checking the code), a Stop unlocked confirmation, and a specific next step for each dead end: how far to move, why location failed, or which trail to open.
+- The trail opens with the scanned entry revealed and scrolled into view, once.
+
+**Admin**
+- Discovery content tab on place and business pages: add, edit, delete, reorder, QR checkbox, Download QR. A warning shows before an untick removes a code. A failed reorder reloads the list.
+- Panel follows the guidelines: 8px grid spacing, the order tile matches the trail stop tile (`text-xs`, no raw size), and no explanatory lines.
+- Trail builder dialog is Trail Notes: no typed order, radius prefilled, place entry count shown. Its older 12px spacing and `text-[10px]` badge predate this work and are not changed.
+- "Trail Content" is "Discovery content" everywhere. Review pages handle an entry with no trail.
+
+**Config and docs**
+- `qrcode` and `@types/qrcode` in `package.json` and installed. `VITE_SITE_URL` in `.env.example` and `vite-env.d.ts`.
+- Decision log #44 and architecture notes updated.
+
+## Left
+
+**Your decisions**
+1. Flagged place entries are live right away on published trails. Hide them until verified?
+2. Flagged place entries do not block publishing a trail, only flagged trail notes do. Block them too?
+
+**You run**
+- Apply migration 0050 and run `db lint`.
+- Set `VITE_SITE_URL` wherever staff download codes.
+- Type check and lint. The panel may trip complexity rules.
+- Hand check: Saved grids at 390 px and large font, the Discovery content tab, a scan end to end on a phone, a one stop trail, a stop with no entries.
+
+**Not planned, add only if asked**
+- Hide a QR entry's text until scanned, which needs a server function.
+- Staff preview of place entries before a trail is published.
+- A "GPS is weak" hint on locked stops. The scan page covers its own case.
+- A control to replace a QR token. It needs a developer today.
+- Per trail hiding of a place's entries.
+
+**Known limits**
+- Tokens and entry text are readable through the API before a scan, so the scan is a convenience gate.
+- A stop with no coordinates skips the GPS check on a scan.
+- A one stop trail never completes if location is denied.
+- Finishing a restarted trail again adds another `completed_routes` row. This was already so, and it inflates vendor completion counts.
+- Seed pins are street level, so tight radii miss until pins are surveyed.
 
 ## Goal
 

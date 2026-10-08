@@ -238,6 +238,8 @@ export function DiscoveryEntriesPanel({
     const failed = results.find((r) => r.error);
     if (failed?.error) {
       setError(failed.error.message);
+      // Some rows may have saved and some not, so show what is stored.
+      void load();
       return;
     }
     setEntries(reordered.map((e) => ({ ...e, sequence_order: nextOrderById.get(e.id) as number })));
@@ -254,7 +256,7 @@ export function DiscoveryEntriesPanel({
 
   if (loadError) {
     return (
-      <div role="alert" className="flex flex-col items-start gap-3">
+      <div role="alert" className="flex flex-col items-start gap-4">
         <p className="text-sm text-destructive">{loadError}</p>
         <Button variant="outline" size="sm" onClick={() => void load()}>
           Try again
@@ -264,6 +266,11 @@ export function DiscoveryEntriesPanel({
   }
 
   if (!entries) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  // The entry being edited, if it already has a code. Unticking the QR box
+  // removes the code, and ticking it later makes a new one, which breaks
+  // printed codes, so the form says so before staff save.
+  const editingEntry = entries.find((e) => e.id === editingId);
 
   if (editingId !== null) {
     return (
@@ -313,9 +320,12 @@ export function DiscoveryEntriesPanel({
             />
             <span>Unlock by QR scan</span>
           </label>
-          <p className="text-xs text-muted-foreground">
-            Hidden until the visitor scans a code at the object. Download the code from the list once it is saved.
-          </p>
+          {editingEntry?.qr_token && !form.requires_scan && (
+            <p className="text-xs text-destructive">
+              Saving removes this entry&apos;s code. Ticking the box again later makes a new code, and printed
+              codes stop working.
+            </p>
+          )}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex justify-end gap-2">
@@ -331,20 +341,17 @@ export function DiscoveryEntriesPanel({
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        Written once here and shown on every trail that stops at this {locationType}.
-      </p>
+    <div className="flex max-w-2xl flex-col gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
       {entries.length === 0 ? (
         <EmptyState icon={BookOpen}>Discovery content will appear here.</EmptyState>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
           {entries.map((entry, index) => (
-            <li key={entry.id} className="flex items-start justify-between gap-3 p-3">
+            <li key={entry.id} className="flex items-start justify-between gap-4 p-4">
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground">
                     {index + 1}
                   </span>
                   <span className="truncate text-sm font-semibold text-foreground">{entry.title}</span>
