@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, NavigationArrow, CheckCircle, MapPin } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
@@ -7,6 +7,7 @@ import { fetchTrailDetail } from "@/lib/trail-query";
 import { getRouteProgress, unlockStop, resetRouteProgress, type RouteProgress } from "@/lib/trail-progress";
 import { completeTrail, isRouteCompleted } from "@/lib/trail-completion";
 import { fetchUnlockedEntryIds } from "@/lib/entry-unlocks";
+import { readScanArrival } from "@/lib/trail-scan";
 import { distanceKm, type Coordinates } from "@/lib/discover-query";
 import type { TrailDetail } from "@/lib/trail-types";
 import { TrailStop } from "@/components/public/trail-stop";
@@ -195,10 +196,19 @@ function stopStateFor(index: number, highestUnlockedIndex: number, completed: bo
  * completed_routes is left untouched by a restart, that table is a
  * completion event log, not current progress, so a prior finish stays
  * on record even if the trail is walked again.
+ *
+ * Unlock motion (trail-stop.tsx): a stop that opens while the page is live
+ * animates, one that opens because saved progress just loaded does not.
+ * `progressChecked` is how the stop tells the two apart. A scan that unlocks
+ * an entry arrives here with that entry's id in router state (trail-scan.ts
+ * ScanArrival): it is read once, cleared from history so a reload never
+ * replays it, and handed down so the entry reveals itself and scrolls into
+ * view.
  */
 export default function TrailDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const routeLocation = useLocation();
   const { session } = useAuth();
   const { openAuth } = useAuthModal();
   const [trail, setTrail] = useState<TrailDetail | null>(null);
@@ -212,6 +222,26 @@ export default function TrailDetailPage() {
   // reasoning as routeProgress above.
   const [unlockedEntryIds, setUnlockedEntryIds] = useState<Set<string>>(new Set());
   const [routeProgress, setRouteProgress] = useState<RouteProgress | null>(null);
+  // True once the signed-in visitor's progress has been read for this trail.
+  // trail-stop.tsx animates a stop opening only after this is true, so stops
+  // opening because saved progress just arrived stay still.
+  const [progressChecked, setProgressChecked] = useState(false);
+  // Set when the visitor arrives from /scan having just unlocked an entry.
+  // Read once at mount, then cleared from history state so a reload does not
+  // replay the reveal.
+  const [scanArrival] = useState(() => readScanArrival(routeLocation.state));
+  useEffect(() => {
+    if (!scanArrival) return;
+    navigate(`${routeLocation.pathname}${routeLocation.search}`, { replace: true, state: null });
+  }, [scanArrival, navigate, routeLocation.pathname, routeLocation.search]);
+  // The scanned entry counts as unlocked from the first render, so it reveals
+  // with its motion instead of showing the "scan the code" line first.
+  const revealedEntryIds = useMemo(() => {
+    if (!scanArrival) return unlockedEntryIds;
+    const next = new Set(unlockedEntryIds);
+    next.add(scanArrival.entryId);
+    return next;
+  }, [unlockedEntryIds, scanArrival]);
   // 4.3: Start/Resume is its own async action, separate from the page's
   // own load state above, same split save-button.tsx's loading/error pair
   // establishes for its own signed-in write.
@@ -269,11 +299,19 @@ export default function TrailDetailPage() {
   useEffect(() => {
     if (!session || !trail) {
       setRouteProgress(null);
+      setProgressChecked(false);
       return;
     }
+    setProgressChecked(false);
     getRouteProgress(session.user.id, trail.id)
-      .then(setRouteProgress)
-      .catch(() => setRouteProgress(null));
+      .then((progress) => {
+        setRouteProgress(progress);
+        setProgressChecked(true);
+      })
+      .catch(() => {
+        setRouteProgress(null);
+        setProgressChecked(true);
+      });
   }, [session, trail]);
 
   // Scanned entries: same signed-in-only shape as the effect above. Only
@@ -719,7 +757,9 @@ export default function TrailDetailPage() {
                     stop={stop}
                     index={index}
                     state={stopStateFor(index, highestUnlockedIndex, completed)}
-                    unlockedEntryIds={unlockedEntryIds}
+                    unlockedEntryIds={revealedEntryIds}
+                    progressLive={progressChecked}
+                    celebrateEntryId={scanArrival?.entryId ?? null}
                   />
                 ))}
               </ol>

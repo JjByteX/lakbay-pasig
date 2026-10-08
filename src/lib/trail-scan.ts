@@ -3,6 +3,8 @@ import { distanceKm, type Coordinates } from "./discover-query";
 import { fetchEntryByToken, unlockEntry } from "./entry-unlocks";
 import { getRouteProgress } from "./trail-progress";
 import { fetchTrailDetail } from "./trail-query";
+import type { TrailStop } from "./trail-types";
+import { DEFAULT_UNLOCK_RADIUS } from "./trail-unlock";
 
 /**
  * What happened when a visitor scanned an object's QR code. GPS opens the
@@ -10,13 +12,48 @@ import { fetchTrailDetail } from "./trail-query";
  * only counts when the visitor is on a trail whose stop for this place is
  * already unlocked AND is inside that stop's radius right now (a saved photo
  * of the code does not work from home). docs/discovery-content-plan.md.
+ *
+ * `unlocked` carries what the confirmation and the trail page need: the stop's
+ * name for the scan page's "Stop unlocked", and the entry id so the trail page
+ * can reveal exactly that entry. `too-far` carries how far the visitor is from
+ * the nearest eligible stop and that stop's radius, so the message can say how
+ * much closer to move instead of only "too far".
  */
 export type ScanResult =
-  | { status: "unlocked"; routeId: string }
+  | { status: "unlocked"; routeId: string; stopName: string; entryId: string }
   | { status: "not-found" }
   | { status: "no-trail"; trails: { id: string; name: string }[] }
   | { status: "no-location" }
-  | { status: "too-far" };
+  | { status: "too-far"; meters: number; radius: number };
+
+/**
+ * What the scan page hands the trail page through router state when a scan
+ * unlocks an entry, so the trail page can reveal that entry once. Router state,
+ * not a URL param: it is a one-time moment, not an address, and the trail page
+ * clears it after reading it so a reload never replays it.
+ */
+export interface ScanArrival {
+  entryId: string;
+}
+
+export function scanArrivalState(arrival: ScanArrival): { scanArrival: ScanArrival } {
+  return { scanArrival: arrival };
+}
+
+export function readScanArrival(state: unknown): ScanArrival | null {
+  if (typeof state !== "object" || state === null) return null;
+  const arrival = (state as { scanArrival?: unknown }).scanArrival;
+  if (typeof arrival !== "object" || arrival === null) return null;
+  const entryId = (arrival as { entryId?: unknown }).entryId;
+  return typeof entryId === "string" ? { entryId } : null;
+}
+
+// Straight-line meters from the visitor to a stop, or null when the stop has no
+// coordinate to measure against (same case trail-detail.tsx skips).
+function metersToStop(position: Coordinates, stop: TrailStop): number | null {
+  if (stop.latitude == null || stop.longitude == null) return null;
+  return distanceKm(position, { latitude: stop.latitude, longitude: stop.longitude }) * 1000;
+}
 
 export async function scanEntry(
   token: string,
@@ -56,7 +93,9 @@ export async function scanEntry(
   );
 
   const trails = candidates.filter((c): c is NonNullable<typeof c> => c !== null);
-  const onTrail = trails.filter((t) => t.unlockedStop);
+  // Trails where this stop is already unlocked for the visitor, each paired
+  // with that stop.
+  const onTrail = trails.flatMap((t) => (t.unlockedStop ? [{ id: t.id, stop: t.unlockedStop }] : []));
   if (onTrail.length === 0) {
     return { status: "no-trail", trails: trails.map((t) => ({ id: t.id, name: t.name })) };
   }
@@ -65,15 +104,26 @@ export async function scanEntry(
 
   // A stop with no coordinate can't be distance-checked (same case
   // trail-detail.tsx skips). The stop is already unlocked, so let the scan
-  // through rather than block it forever.
-  const near = onTrail.find((t) => {
-    const stop = t.unlockedStop;
-    if (!stop || stop.latitude == null || stop.longitude == null) return true;
-    const meters = distanceKm(position, { latitude: stop.latitude, longitude: stop.longitude }) * 1000;
-    return meters <= stop.unlockRadius;
-  });
-  if (!near) return { status: "too-far" };
+  // through rather than block it forever. When no trail is in range, remember
+  // the nearest one so the message can say how far away the visitor is.
+  let near: (typeof onTrail)[number] | null = null;
+  let closest: { meters: number; radius: number } | null = null;
+  for (const candidate of onTrail) {
+    const meters = metersToStop(position, candidate.stop);
+    if (meters === null || meters <= candidate.stop.unlockRadius) {
+      near = candidate;
+      break;
+    }
+    if (!closest || meters < closest.meters) closest = { meters, radius: candidate.stop.unlockRadius };
+  }
+  if (!near) {
+    return {
+      status: "too-far",
+      meters: closest?.meters ?? 0,
+      radius: closest?.radius ?? DEFAULT_UNLOCK_RADIUS,
+    };
+  }
 
   await unlockEntry(userId, entry.id);
-  return { status: "unlocked", routeId: near.id };
+  return { status: "unlocked", routeId: near.id, stopName: near.stop.name, entryId: entry.id };
 }
