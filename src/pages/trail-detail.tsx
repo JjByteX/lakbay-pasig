@@ -6,6 +6,7 @@ import { useAuthModal } from "@/lib/auth-modal";
 import { fetchTrailDetail } from "@/lib/trail-query";
 import { getRouteProgress, unlockStop, resetRouteProgress, type RouteProgress } from "@/lib/trail-progress";
 import { completeTrail, isRouteCompleted } from "@/lib/trail-completion";
+import { fetchUnlockedEntryIds } from "@/lib/entry-unlocks";
 import { distanceKm, type Coordinates } from "@/lib/discover-query";
 import type { TrailDetail } from "@/lib/trail-types";
 import { TrailStop } from "@/components/public/trail-stop";
@@ -123,6 +124,18 @@ function stopStateFor(index: number, highestUnlockedIndex: number, completed: bo
  * attempt will trigger another the next time watchPosition fires, no
  * "try again" prompt is meaningful for a check that retries itself.
  *
+ * Discovery content (docs/discovery-content-plan.md): a stop holds a list
+ * of entries and unlocks as one unit at the largest entry radius, or at the
+ * default radius when it has none (trail-unlock.ts), so a stop with no
+ * entry no longer stalls the walk. Entries marked for a QR scan stay hidden
+ * until the visitor scans them (trail-scan.tsx); the ids scanned so far are
+ * loaded below and handed to trail-stop.tsx.
+ *
+ * Start unlocks the first stop for free, from anywhere, on every trail.
+ * Completing a one stop trail is different: its first stop is also its last,
+ * so completion waits for the visitor to be inside that stop's radius
+ * rather than firing on Start (the proximity effect handles it).
+ *
  * 4.6 (locked state, no early-force): this effect is the only thing that
  * ever calls unlockStop from proximity. Nothing else in this file offers
  * a button, link, or tap target to open a locked stop early — a stop
@@ -146,12 +159,10 @@ function stopStateFor(index: number, highestUnlockedIndex: number, completed: bo
  * table in this domain having its own lib file rather than this page
  * calling supabase directly.
  *
- * 5.1: detect last-stop unlock. Both places that can unlock a stop --
- * the proximity effect (4.5) and handleStart's first-stop unlock (4.3,
- * covers the edge case of a one-stop trail, whose first unlock is also
- * its last) -- call a shared maybeCompleteTrail helper after their own
- * unlockStop write succeeds, rather than duplicating the "is this the
- * final stop" check in two places.
+ * 5.1: detect last-stop unlock. The proximity effect (4.5) calls the
+ * maybeCompleteTrail helper when it unlocks the final stop, and again for a
+ * one stop trail whose only stop Start already unlocked (handleStart no
+ * longer completes a trail, see the note above 4.6).
  *
  * 5.2: write completion records. completeTrail inserts completed_routes,
  * then user_credentials if trail.credential exists, both owner-writable
@@ -196,6 +207,10 @@ export default function TrailDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  // Entry ids this visitor has unlocked by scanning a QR code. Empty for a
+  // guest and while loading; a failed read also falls back to empty, same
+  // reasoning as routeProgress above.
+  const [unlockedEntryIds, setUnlockedEntryIds] = useState<Set<string>>(new Set());
   const [routeProgress, setRouteProgress] = useState<RouteProgress | null>(null);
   // 4.3: Start/Resume is its own async action, separate from the page's
   // own load state above, same split save-button.tsx's loading/error pair
@@ -217,6 +232,10 @@ export default function TrailDetailPage() {
   // stop.tsx's own "completed" state (Phase 4.1) doesn't distinguish the
   // two, so this state doesn't need to either.
   const [completed, setCompleted] = useState(false);
+  // True once isRouteCompleted has answered (or failed) for this trail. The
+  // one stop completion below waits for it, so GPS arriving first cannot
+  // insert a second completed_routes row for a trail already finished.
+  const [completionChecked, setCompletionChecked] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
   // Phase 5.4: restart is its own async action, same loading/error split
@@ -257,6 +276,19 @@ export default function TrailDetailPage() {
       .catch(() => setRouteProgress(null));
   }, [session, trail]);
 
+  // Scanned entries: same signed-in-only shape as the effect above. Only
+  // entries that need a scan are looked up.
+  useEffect(() => {
+    if (!session || !trail) {
+      setUnlockedEntryIds(new Set());
+      return;
+    }
+    const scanIds = trail.stops.flatMap((s) => s.discoveryContent.filter((e) => e.requiresScan).map((e) => e.id));
+    fetchUnlockedEntryIds(session.user.id, scanIds)
+      .then(setUnlockedEntryIds)
+      .catch(() => setUnlockedEntryIds(new Set()));
+  }, [session, trail]);
+
   // Phase 5.1-5.3: same signed-in-only shape as the effect above, checks
   // whether this route is already in completed_routes for this user. No
   // session or no trail yet resets to false, matching every other
@@ -266,11 +298,14 @@ export default function TrailDetailPage() {
   useEffect(() => {
     if (!session || !trail) {
       setCompleted(false);
+      setCompletionChecked(false);
       return;
     }
+    setCompletionChecked(false);
     isRouteCompleted(session.user.id, trail.id)
       .then(setCompleted)
-      .catch(() => setCompleted(false));
+      .catch(() => setCompleted(false))
+      .finally(() => setCompletionChecked(true));
   }, [session, trail]);
 
   // 4.4: GPS proximity read, while the page is open. watchPosition (not
@@ -302,12 +337,10 @@ export default function TrailDetailPage() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [id]);
 
-  // Phase 5.1: shared by both places that can unlock the final stop --
-  // the proximity effect below (the normal multi-stop case) and
-  // handleStart below (a one-stop trail's first unlock is also its last,
-  // there is no proximity step in between the two). Keeping this as one
-  // function rather than duplicating the same "is this the last stop"
-  // check in both call sites, per ponytail's reuse-over-duplication rule.
+  // Phase 5.1: the one place that decides "is this the last stop". The
+  // proximity effect below calls it in two cases: it just unlocked the
+  // final stop of a multi-stop trail, or a one-stop trail's only stop
+  // (unlocked free by Start) now has the visitor inside its radius.
   // Guarded on !completed so a trail already finished (isRouteCompleted's
   // load, or an earlier finish this session) never inserts a second
   // completed_routes row.
@@ -349,22 +382,33 @@ export default function TrailDetailPage() {
 
     const highestIndex = trail.stops.findIndex((s) => s.id === routeProgress.highestUnlockedStopId);
     const nextStop = trail.stops[highestIndex + 1];
-    if (!nextStop) return;
+
+    // One stop trail: Start already unlocked its only stop, so there is no
+    // next stop to check. It completes here instead, once the visitor is
+    // inside that stop's radius. A multi stop trail never gets here
+    // unfinished except after a failed completion write, which
+    // completeError already marks, so this does not retry in a loop.
+    if (!nextStop) {
+      const onlyStop = trail.stops.length === 1 ? trail.stops[0] : null;
+      if (!onlyStop || !completionChecked || completed || completeError) return;
+      if (onlyStop.latitude == null || onlyStop.longitude == null) return;
+      const meters =
+        distanceKm(watchedPosition, { latitude: onlyStop.latitude, longitude: onlyStop.longitude }) * 1000;
+      if (meters <= onlyStop.unlockRadius) maybeCompleteTrail(onlyStop.id);
+      return;
+    }
 
     // No resolved coordinate for this stop (trail-query.ts's documented
     // null case, a place/business with no geocoded address yet): nothing
     // to compare against, skip rather than guessing in or out of range.
     if (nextStop.latitude == null || nextStop.longitude == null) return;
 
-    // A stop with no unlock_radius attached (no discovery_content row for
-    // it, trail-types.ts's own documented null case) has nothing to unlock
-    // against either, same skip.
-    if (!nextStop.discoveryContent) return;
-
+    // A stop unlocks at its own radius: the largest among its entries, or
+    // the default when it has none (trail-unlock.ts).
     const distanceMeters =
       distanceKm(watchedPosition, { latitude: nextStop.latitude, longitude: nextStop.longitude }) * 1000;
 
-    if (distanceMeters > nextStop.discoveryContent.unlock_radius) return;
+    if (distanceMeters > nextStop.unlockRadius) return;
 
     // Inside radius: advance route_progress to this stop. Local state
     // updates immediately so trail-stop.tsx re-renders it unlocked with no
@@ -381,7 +425,7 @@ export default function TrailDetailPage() {
         // Silent, see docblock: no user-facing retry for a check that
         // already retries itself on the next position update.
       });
-  }, [session, trail, routeProgress, watchedPosition, maybeCompleteTrail]);
+  }, [session, trail, routeProgress, watchedPosition, completed, completionChecked, completeError, maybeCompleteTrail]);
 
   // 3.4/4.3: Start button. Unauthenticated branch unchanged from Phase 3,
   // visible to everyone, never disabled, reusing save-button.tsx's exact
@@ -422,8 +466,9 @@ export default function TrailDetailPage() {
     const firstStopId = trail.stops[0].id;
     unlockStop(session.user.id, trail.id, firstStopId)
       .then(() => {
+        // No completion check here: the first stop is free, and a one stop
+        // trail completes on proximity (the effect above), not on Start.
         setRouteProgress({ highestUnlockedStopId: firstStopId, unlockedAt: new Date().toISOString() });
-        maybeCompleteTrail(firstStopId);
       })
       .catch(() => setStartError("Couldn't start this trail. Try again."))
       .finally(() => setStarting(false));
@@ -674,6 +719,7 @@ export default function TrailDetailPage() {
                     stop={stop}
                     index={index}
                     state={stopStateFor(index, highestUnlockedIndex, completed)}
+                    unlockedEntryIds={unlockedEntryIds}
                   />
                 ))}
               </ol>

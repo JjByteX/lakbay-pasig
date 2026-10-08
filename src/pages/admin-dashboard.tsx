@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 interface ActivityEntry {
   id: string;
-  section: "Places" | "Businesses" | "Trail Content";
+  section: "Places" | "Businesses" | "Discovery content";
   action: string;
   notes: string | null;
   created_at: string;
@@ -24,7 +24,7 @@ const ACTION_LABEL: Record<string, string> = {
 const ENTITY_LABEL: Record<ActivityEntry["section"], string> = {
   Places: "a place",
   Businesses: "a business",
-  "Trail Content": "Trail Content",
+  "Discovery content": "discovery content",
 };
 
 // Raw shape returned by the place_reviews and business_reviews queries
@@ -134,7 +134,7 @@ export default function AdminDashboardPage() {
         })),
         ...(discoveryRes.data ?? []).map((r: ReviewActivityRow) => ({
           id: r.id,
-          section: "Trail Content" as const,
+          section: "Discovery content" as const,
           action: r.action,
           notes: r.notes,
           created_at: r.created_at,

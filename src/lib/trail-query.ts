@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { readEmbeddedName } from "./place-categories";
+import { stopUnlockRadius } from "./trail-unlock";
 import type { TrailCredential, TrailDetail, TrailDiscoveryContent, TrailStop, TrailSummary } from "./trail-types";
 
 // Step 7, Phase 1.2: catalog fetch, mirrors discover-query.ts's
@@ -165,36 +166,79 @@ async function resolveStopLocations(
   return byId;
 }
 
-// Phase 1.4: discovery content, keyed by related_route_stop_id, same
-// filter-out-unlinked-rows step admin-trail-builder.tsx's
-// loadDiscoveryContent already applies (a row with no related_route_
-// stop_id can't be attached to a stop's render). needs_place_review is
-// deliberately not selected here, unlike the admin page's own query,
-// per trail-types.ts's TrailDiscoveryContent comment: a public read has
-// no use for a staff-only routing flag, and discovery_content_select_
-// public (0005) already gates the row on status/publication before this
-// runs.
+// Phase 1.4: trail notes (discovery_content rows with a route), keyed by
+// related_route_stop_id, same filter-out-unlinked-rows step admin-trail-
+// builder.tsx's loadDiscoveryContent already applies (a row with no
+// related_route_stop_id can't be attached to a stop's render). A stop can
+// hold several, so each key maps to a list, ordered by sequence_order (the
+// old Map kept only the last row per stop and dropped the rest).
+// needs_place_review is deliberately not selected here, unlike the admin
+// page's own query, per trail-types.ts's TrailDiscoveryContent comment:
+// a public read has no use for a staff-only routing flag, and
+// discovery_content_select_public (0005, widened in 0050) already gates the
+// row on status/publication before this runs.
 async function fetchDiscoveryContentByStopId(
   routeId: string
-): Promise<Map<string, TrailDiscoveryContent>> {
+): Promise<Map<string, TrailDiscoveryContent[]>> {
   const { data, error } = await supabase
     .from("discovery_content")
     .select("id, related_route_stop_id, title, content, unlock_radius")
-    .eq("route_id", routeId);
+    .eq("route_id", routeId)
+    .eq("status", "active")
+    .order("sequence_order", { ascending: true });
 
   if (error) throw error;
 
-  const byStopId = new Map<string, TrailDiscoveryContent>();
+  const byStopId = new Map<string, TrailDiscoveryContent[]>();
   for (const row of data ?? []) {
     if (row.related_route_stop_id === null) continue;
-    byStopId.set(row.related_route_stop_id, {
+    const list = byStopId.get(row.related_route_stop_id) ?? [];
+    list.push({
       id: row.id,
       title: row.title,
       content: row.content,
       unlock_radius: row.unlock_radius,
+      requiresScan: false,
     });
+    byStopId.set(row.related_route_stop_id, list);
   }
   return byStopId;
+}
+
+// Place entries (route_id null, migration 0050): written once on the place
+// or business, shown on every stop that points at it. Keyed by
+// "type:id", the same pair route_stops uses, since the two ids come from
+// different tables and could in theory collide.
+async function fetchPlaceEntriesByLocation(
+  stopRows: { stop_type: string; stop_id: string }[]
+): Promise<Map<string, TrailDiscoveryContent[]>> {
+  const byLocation = new Map<string, TrailDiscoveryContent[]>();
+  const locationIds = [...new Set(stopRows.map((s) => s.stop_id))];
+  if (locationIds.length === 0) return byLocation;
+
+  const { data, error } = await supabase
+    .from("discovery_content")
+    .select("id, related_location_type, related_location_id, title, content, unlock_radius, qr_token")
+    .is("route_id", null)
+    .eq("status", "active")
+    .in("related_location_id", locationIds)
+    .order("sequence_order", { ascending: true });
+
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const key = `${row.related_location_type}:${row.related_location_id}`;
+    const list = byLocation.get(key) ?? [];
+    list.push({
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      unlock_radius: row.unlock_radius,
+      requiresScan: row.qr_token !== null,
+    });
+    byLocation.set(key, list);
+  }
+  return byLocation;
 }
 
 async function fetchCredential(routeId: string): Promise<TrailCredential | null> {
@@ -238,14 +282,27 @@ export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | n
   if (stopsError) throw stopsError;
   const rows = stopRows ?? [];
 
-  const [locationByStopId, discoveryByStopId, credential] = await Promise.all([
+  const [locationByStopId, trailNotesByStopId, placeEntriesByLocation, credential] = await Promise.all([
     resolveStopLocations(rows),
     fetchDiscoveryContentByStopId(routeId),
+    fetchPlaceEntriesByLocation(rows),
     fetchCredential(routeId),
   ]);
 
+  // A trail can stop at the same place twice. Its own entries show on the
+  // first of those stops only, so the visitor does not read them twice.
+  const placeEntriesShownFor = new Set<string>();
+
   const stops: TrailStop[] = rows.map((s) => {
     const resolved = locationByStopId.get(s.stop_id);
+    const locationKey = `${s.stop_type}:${s.stop_id}`;
+    const placeEntries = placeEntriesShownFor.has(locationKey)
+      ? []
+      : (placeEntriesByLocation.get(locationKey) ?? []);
+    placeEntriesShownFor.add(locationKey);
+    // Trail notes first (they link this stop to the last one), then the
+    // place's own entries.
+    const discoveryContent = [...(trailNotesByStopId.get(s.id) ?? []), ...placeEntries];
     return {
       id: s.id,
       stop_type: s.stop_type as "place" | "business",
@@ -254,7 +311,8 @@ export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | n
       name: resolved?.name ?? "(unknown stop)",
       latitude: resolved?.latitude ?? null,
       longitude: resolved?.longitude ?? null,
-      discoveryContent: discoveryByStopId.get(s.id) ?? null,
+      discoveryContent,
+      unlockRadius: stopUnlockRadius(discoveryContent),
     };
   });
 

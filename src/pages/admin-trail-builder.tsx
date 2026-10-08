@@ -27,6 +27,7 @@ import {
   type PickedLocation,
 } from "@/components/admin/place-business-picker";
 import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
+import { DEFAULT_UNLOCK_RADIUS } from "@/lib/trail-unlock";
 import { CharCount } from "@/components/business/business-fields";
 import { DurationField } from "@/components/ui/duration-field";
 import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
@@ -35,7 +36,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminFormCard } from "@/components/admin/admin-form-card";
 
 // Trail builder: one screen, no stepper. The trail info form is the left
-// column, Stops the right, and per stop Discovery Content (5.1) is a centered
+// column, Stops the right, and per stop Trail Notes (5.1) is a centered
 // modal, per ux-ui-guidelines.md's modal rule (focused task, fits one
 // viewport), not a side panel. Publish/Unpublish sits top right beside the
 // status badge, the placement convention for a primary action, with the reason
@@ -110,18 +111,21 @@ interface DiscoveryContentRow {
   needs_place_review: boolean;
 }
 
+// A trail note is a discovery_content row with a route: the line that links
+// one stop to the next in this trail. The place's own entries (no route) are
+// written once on the place, not here. Order is not typed: a new note goes
+// last and the up and down buttons reorder (docs/discovery-content-plan.md).
+// The radius is prefilled so staff only change it when a stop needs more.
 interface DiscoveryContentFormState {
   title: string;
   content: string;
-  sequence_order: string;
   unlock_radius: string;
 }
 
 const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
   title: "",
   content: "",
-  sequence_order: "",
-  unlock_radius: "",
+  unlock_radius: String(DEFAULT_UNLOCK_RADIUS),
 };
 
 // Builds the routes row payload from the Details step's form state. Pulled
@@ -271,8 +275,10 @@ function DiscoveryContentModalBody({
   discoveryForm,
   setDiscoveryForm,
   canSubmitDiscoveryEntry,
+  placeEntryCount,
   onStartNew,
   onStartEdit,
+  onMove,
   onDelete,
   onCancelEdit,
   onSave,
@@ -286,8 +292,12 @@ function DiscoveryContentModalBody({
   discoveryForm: DiscoveryContentFormState;
   setDiscoveryForm: Dispatch<SetStateAction<DiscoveryContentFormState>>;
   canSubmitDiscoveryEntry: boolean;
-  onStartNew: (stop: StopRow) => void;
+  // How many place entries this stop's place already brings, or null while
+  // loading. Shown as text only, they are edited on the place.
+  placeEntryCount: number | null;
+  onStartNew: () => void;
   onStartEdit: (entry: DiscoveryContentRow) => void;
+  onMove: (entry: DiscoveryContentRow, direction: "up" | "down") => void;
   onDelete: (entryId: string) => void;
   onCancelEdit: () => void;
   onSave: (stop: StopRow) => void;
@@ -298,22 +308,42 @@ function DiscoveryContentModalBody({
   if (discoveryLoading) {
     entriesListBody = <p className="text-sm text-muted-foreground">Loading…</p>;
   } else if (entriesForStop.length === 0) {
-    entriesListBody = <EmptyState icon={BookOpen}>Discovery content will appear here.</EmptyState>;
+    entriesListBody = <EmptyState icon={BookOpen}>Trail notes will appear here.</EmptyState>;
   } else {
     entriesListBody = (
       <ul className="flex max-h-72 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border">
-        {entriesForStop.map((entry) => (
+        {entriesForStop.map((entry, index) => (
           <li key={entry.id} className="flex items-start justify-between gap-3 p-3">
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">
-                  {entry.sequence_order}
+                  {index + 1}
                 </span>
                 <span className="truncate text-sm font-semibold text-foreground">{entry.title}</span>
               </div>
               <p className="text-xs text-muted-foreground">Unlocks within {entry.unlock_radius}m</p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={index === 0 || discoverySaving}
+                onClick={() => onMove(entry, "up")}
+              >
+                <ArrowUp className="h-4 w-4" />
+                <span className="sr-only">Move up</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={index === entriesForStop.length - 1 || discoverySaving}
+                onClick={() => onMove(entry, "down")}
+              >
+                <ArrowDown className="h-4 w-4" />
+                <span className="sr-only">Move down</span>
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onStartEdit(entry)}>
                 <Pencil className="h-4 w-4" />
                 <span className="sr-only">Edit</span>
@@ -338,17 +368,25 @@ function DiscoveryContentModalBody({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Discovery Content: {activeStop.name}</DialogTitle>
+        <DialogTitle>Trail Notes: {activeStop.name}</DialogTitle>
       </DialogHeader>
 
       {discoveryError && <p className="text-sm text-destructive">{discoveryError}</p>}
 
       {editingEntryId === null ? (
         <div className="flex flex-col gap-3">
+          {/* Place entries are edited on the place, not here. Plain text so
+              staff know the stop already carries them. */}
+          {placeEntryCount !== null && placeEntryCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {placeEntryCount} discovery content {placeEntryCount === 1 ? "entry comes" : "entries come"} from this
+              place.
+            </p>
+          )}
           {entriesListBody}
           <div>
-            <Button type="button" variant="outline" onClick={() => onStartNew(activeStop)}>
-              Add Discovery Content
+            <Button type="button" variant="outline" onClick={onStartNew}>
+              Add Trail Note
             </Button>
           </div>
         </div>
@@ -377,33 +415,18 @@ function DiscoveryContentModalBody({
             />
             <CharCount value={discoveryForm.content} max={2000} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="discovery_sequence_order">Sequence Order</Label>
-              <Input
-                id="discovery_sequence_order"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={100}
-                value={discoveryForm.sequence_order}
-                onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, sequence_order: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="discovery_unlock_radius">Unlock Radius (meters)</Label>
-              <Input
-                id="discovery_unlock_radius"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={500}
-                value={discoveryForm.unlock_radius}
-                onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, unlock_radius: e.target.value }))}
-                required
-              />
-            </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="discovery_unlock_radius">Unlock Radius (meters)</Label>
+            <Input
+              id="discovery_unlock_radius"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={500}
+              value={discoveryForm.unlock_radius}
+              onChange={(e) => setDiscoveryForm((prev) => ({ ...prev, unlock_radius: e.target.value }))}
+              required
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onCancelEdit}>
@@ -534,6 +557,9 @@ export default function AdminTrailBuilderPage() {
   // form within it.
   const [discoveryModalStopId, setDiscoveryModalStopId] = useState<string | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  // How many place entries the open stop's place already carries (read only
+  // here, edited on the place). Null while loading or when no modal is open.
+  const [placeEntryCount, setPlaceEntryCount] = useState<number | null>(null);
   const [discoveryForm, setDiscoveryForm] = useState<DiscoveryContentFormState>(EMPTY_DISCOVERY_FORM);
 
   // 5.4: Publish. Same gate as admin-trails.tsx's list page (see
@@ -933,6 +959,17 @@ export default function AdminTrailBuilderPage() {
     setDiscoveryModalStopId(stopId);
     setEditingEntryId(null);
     setDiscoveryError(null);
+    setPlaceEntryCount(null);
+
+    const stop = stops.find((s) => s.id === stopId);
+    if (!stop) return;
+    supabase
+      .from("discovery_content")
+      .select("id", { count: "exact", head: true })
+      .is("route_id", null)
+      .eq("related_location_type", stop.stop_type)
+      .eq("related_location_id", stop.stop_id)
+      .then(({ count }) => setPlaceEntryCount(count ?? 0));
   }
 
   function closeDiscoveryModal() {
@@ -940,15 +977,8 @@ export default function AdminTrailBuilderPage() {
     setEditingEntryId(null);
   }
 
-  function startNewDiscoveryEntry(stop: StopRow) {
-    // Auto-suggest the next sequence_order within this stop's own entries,
-    // per data-model.md's Sequence Order field — staff can still override
-    // it, this just saves re-typing the obvious next number.
-    const entriesForStop = discoveryContent.filter((d) => d.route_stop_id === stop.id);
-    const nextOrder = entriesForStop.length
-      ? Math.max(...entriesForStop.map((d) => d.sequence_order)) + 1
-      : 1;
-    setDiscoveryForm({ ...EMPTY_DISCOVERY_FORM, sequence_order: String(nextOrder) });
+  function startNewDiscoveryEntry() {
+    setDiscoveryForm(EMPTY_DISCOVERY_FORM);
     setDiscoveryError(null);
     setEditingEntryId("new");
   }
@@ -957,7 +987,6 @@ export default function AdminTrailBuilderPage() {
     setDiscoveryForm({
       title: entry.title,
       content: entry.content,
-      sequence_order: String(entry.sequence_order),
       unlock_radius: String(entry.unlock_radius),
     });
     setDiscoveryError(null);
@@ -1028,7 +1057,6 @@ export default function AdminTrailBuilderPage() {
   const canSubmitDiscoveryEntry =
     discoveryForm.title.trim().length > 0 &&
     discoveryForm.content.trim().length > 0 &&
-    discoveryForm.sequence_order.trim().length > 0 &&
     discoveryForm.unlock_radius.trim().length > 0 &&
     !discoverySaving;
 
@@ -1044,12 +1072,16 @@ export default function AdminTrailBuilderPage() {
   async function handleSaveDiscoveryEntry(stop: StopRow) {
     if (!canSubmitDiscoveryEntry) return;
 
-    const sequenceOrder = Number(discoveryForm.sequence_order);
     const unlockRadius = Number(discoveryForm.unlock_radius);
-    if (!Number.isFinite(sequenceOrder) || !Number.isFinite(unlockRadius)) {
-      setDiscoveryError("Sequence order and unlock radius must be numbers.");
+    if (!Number.isFinite(unlockRadius)) {
+      setDiscoveryError("Unlock radius must be a number.");
       return;
     }
+
+    // A new note goes last in its stop. Editing never changes order, only
+    // the up and down buttons do.
+    const entriesForStop = discoveryContent.filter((d) => d.route_stop_id === stop.id);
+    const nextOrder = entriesForStop.length ? Math.max(...entriesForStop.map((d) => d.sequence_order)) + 1 : 1;
 
     // A trail and its stops are one thing, so discovery content can be written
     // before either exists. Until then the entry is a draft held on this page
@@ -1060,14 +1092,19 @@ export default function AdminTrailBuilderPage() {
       const fields = {
         title: discoveryForm.title.trim(),
         content: discoveryForm.content.trim(),
-        sequence_order: sequenceOrder,
         unlock_radius: unlockRadius,
       };
       if (editingEntryId === "new") {
         draftEntryCounter.current += 1;
         setDiscoveryContent((prev) => [
           ...prev,
-          { id: `draft-${draftEntryCounter.current}`, route_stop_id: stop.id, ...fields, needs_place_review: false },
+          {
+            id: `draft-${draftEntryCounter.current}`,
+            route_stop_id: stop.id,
+            ...fields,
+            sequence_order: nextOrder,
+            needs_place_review: false,
+          },
         ]);
       } else {
         setDiscoveryContent((prev) => prev.map((entry) => (entry.id === editingEntryId ? { ...entry, ...fields } : entry)));
@@ -1089,7 +1126,7 @@ export default function AdminTrailBuilderPage() {
           related_location_type: stop.stop_type,
           related_location_id: stop.stop_id,
           related_route_stop_id: stop.id,
-          sequence_order: sequenceOrder,
+          sequence_order: nextOrder,
           unlock_radius: unlockRadius,
         })
         .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review")
@@ -1118,14 +1155,13 @@ export default function AdminTrailBuilderPage() {
 
     // Editing an existing entry. related_location_type/id and
     // related_route_stop_id are never part of this update, per this
-    // function's header comment, an edit can only change the four fields
-    // in the form, not what the entry is attached to.
+    // function's header comment, an edit can only change the three fields
+    // in the form, not what the entry is attached to or where it sits.
     const { error: updateError } = await supabase
       .from("discovery_content")
       .update({
         title: discoveryForm.title.trim(),
         content: discoveryForm.content.trim(),
-        sequence_order: sequenceOrder,
         unlock_radius: unlockRadius,
       })
       .eq("id", editingEntryId);
@@ -1142,13 +1178,54 @@ export default function AdminTrailBuilderPage() {
               ...entry,
               title: discoveryForm.title.trim(),
               content: discoveryForm.content.trim(),
-              sequence_order: sequenceOrder,
               unlock_radius: unlockRadius,
             }
           : entry
       )
     );
     setEditingEntryId(null);
+  }
+
+  // Up and down on a stop's trail notes. Renumbers the stop's notes 1..n in
+  // their current order first, then swaps the two, so older rows that share
+  // a number (typed by hand before order was automatic) still move. A draft
+  // note only changes local state. Saved notes write just the rows whose
+  // number changed. sequence_order writes are on log_activity's ignore list,
+  // so reordering adds nothing to the activity log.
+  async function handleMoveDiscoveryEntry(entry: DiscoveryContentRow, direction: "up" | "down") {
+    const siblings = discoveryContent
+      .filter((d) => d.route_stop_id === entry.route_stop_id)
+      .sort((a, b) => a.sequence_order - b.sequence_order);
+    const from = siblings.findIndex((d) => d.id === entry.id);
+    const to = direction === "up" ? from - 1 : from + 1;
+    if (from < 0 || to < 0 || to >= siblings.length) return;
+
+    const reordered = [...siblings];
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    const nextOrderById = new Map(reordered.map((d, index) => [d.id, index + 1]));
+    const savedChanges = reordered.filter(
+      (d) => nextOrderById.get(d.id) !== d.sequence_order && !isDraftEntry(d.id)
+    );
+
+    if (savedChanges.length > 0) {
+      setDiscoverySaving(true);
+      setDiscoveryError(null);
+      const results = await Promise.all(
+        savedChanges.map((d) =>
+          supabase.from("discovery_content").update({ sequence_order: nextOrderById.get(d.id) }).eq("id", d.id)
+        )
+      );
+      setDiscoverySaving(false);
+      const failed = results.find((r) => r.error);
+      if (failed?.error) {
+        setDiscoveryError(failed.error.message);
+        return;
+      }
+    }
+
+    setDiscoveryContent((prev) =>
+      prev.map((d) => (nextOrderById.has(d.id) ? { ...d, sequence_order: nextOrderById.get(d.id) as number } : d))
+    );
   }
 
   async function handleDeleteDiscoveryEntry(entryId: string) {
@@ -1236,7 +1313,7 @@ export default function AdminTrailBuilderPage() {
                 onClick={() => openDiscoveryModal(stop.id)}
               >
                 <BookOpen className="h-4 w-4" />
-                Discovery Content
+                Trail Notes
                 {discoveryContent.some((d) => d.route_stop_id === stop.id) && (
                   <Badge variant="secondary" className="ml-1">
                     {discoveryContent.filter((d) => d.route_stop_id === stop.id).length}
@@ -1471,7 +1548,7 @@ export default function AdminTrailBuilderPage() {
 
         {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal rule,
             a focused task fitting one viewport, not a side panel. Reachable
-            from the Discovery Content button on the same stop's row. */}
+            from the Trail Notes button on the same stop's row. */}
         <Dialog
           open={discoveryModalStopId !== null}
           onOpenChange={(open) => {
@@ -1497,8 +1574,10 @@ export default function AdminTrailBuilderPage() {
                   discoveryForm={discoveryForm}
                   setDiscoveryForm={setDiscoveryForm}
                   canSubmitDiscoveryEntry={canSubmitDiscoveryEntry}
+                  placeEntryCount={placeEntryCount}
                   onStartNew={startNewDiscoveryEntry}
                   onStartEdit={startEditDiscoveryEntry}
+                  onMove={handleMoveDiscoveryEntry}
                   onDelete={handleDeleteDiscoveryEntry}
                   onCancelEdit={() => setEditingEntryId(null)}
                   onSave={handleSaveDiscoveryEntry}

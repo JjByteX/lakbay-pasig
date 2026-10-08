@@ -56,6 +56,7 @@ Reasoning: the data model is relational (Places, Trails, Businesses, and Staff p
 - Admin Businesses depends on businesses, business_items, business_reviews, business_flags (0004), business_photos and profiles_select_staff_business_submitters (0008), business_item_photos (0040, read only on this page)
 - vendor-items.ts depends on business_items (0004) and business_item_photos (0040), both through content-photos' existing storage policies (0031), no new storage policy added
 - Admin Trails depends on routes, route_stops, discovery_content (0005)
+- discovery_content has two kinds since 0050: a trail note (route_id set) and a place entry (route_id null, optional qr_token). trail-query.ts loads both per stop (trail notes first), trail-detail.tsx and trail-stop.tsx render the list, trail-unlock.ts holds the default radius (25 m) and a stop's radius. trail-scan.tsx (route `/scan/:token`) depends on trail-scan.ts, entry-unlocks.ts (entry_unlocks, 0050) and trail-progress.ts. discovery-entries-panel.tsx writes place entries on the place and business detail pages, admin-trail-builder.tsx writes trail notes. See decision-log.md entry #44
 - Admin Events depends on events (0006)
 - Public Trails/Saved depends on trail_credentials, user_credentials, completed_routes, saved_places, saved_routes (0007), route_progress (0018), saved_businesses (0047, through saved-businesses.ts)
 - saved-routes.ts, trail-completion.ts depend on trail-query.ts's exported fetchCredentialNamesByRouteId
@@ -121,7 +122,8 @@ Fields in docs/data-model.md intentionally left out of the schema, since they're
 **What Must Never Be Touched Without Human Approval:** Database schema (supabase/migrations/*.sql), auth logic (src/lib/auth-context.tsx, auth-types.ts), RLS policies.
 
 **Known Fragile Areas:**
-- route_stops.stop_id and discovery_content.related_location_id have no foreign key, since they point at either places or businesses. A bad stop_type value or a nonexistent id is not caught by the database.
+- route_stops.stop_id and discovery_content.related_location_id have no foreign key, since they point at either places or businesses. A bad stop_type value or a nonexistent id is not caught by the database. This now covers place entries too (route_id null), which no trail row cascades.
+- The text of a QR locked discovery entry is readable through the API before a scan: the lock is in the interface, like GPS locked text. Hiding it needs a server function.
 - A new staff writable table logs nothing until its `log_activity` trigger is attached. The ignore list and the flip map both live inside the one `log_activity()` function.
 - item_embeddings.item_id has no foreign key, since it points at either places or businesses. A deleted place or business leaves an orphan row until the next nightly run of `scripts/embed-items.mjs` removes it.
 - Embeddings lag edits by up to a day (nightly job, no trigger). A new or edited listing counts as neutral in recommendations until then. A model change is a re-embed, the model and dtype are stored per row.
@@ -134,6 +136,7 @@ Fields in docs/data-model.md intentionally left out of the schema, since they're
 
 Facts about the app as it stands today. Not a build log. Add a line here only if it changes how future work should read the codebase; otherwise let the code speak for itself.
 
+- The `qrcode` package (with @types/qrcode) is used only by discovery-entries-panel.tsx to download a code. Scanning needs no library: the code holds a link a phone camera opens.
 - No Switch primitive exists in src/components/ui. Every toggle uses a styled native checkbox. See decision-log.md entry #8.
 - No Popover/Command primitive exists. Search dropdowns and similar panels use a plain absolutely-positioned div, matching global-search-bar.tsx.
 - Admin lists that support manual reordering (e.g. Landing Page) use up/down icon buttons with optimistic local reorder plus persistence, not a drag library. No drag library is installed anywhere in the app.

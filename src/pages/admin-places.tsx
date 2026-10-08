@@ -53,7 +53,8 @@ interface DiscoveryContentQueueRow {
   kind: "discovery_content";
   id: string;
   title: string;
-  trail_name: string;
+  // Null for a place entry (no trail), set for a trail note.
+  trail_name: string | null;
   related_location_type: "place" | "business";
   related_location_name: string;
   updated_at: string;
@@ -89,7 +90,7 @@ const STATUS_OPTIONS = ["all", "pending", "verified", "rejected"] as const;
 function typeFilterOptionLabel(option: (typeof TYPE_OPTIONS)[number]): string {
   if (option === "all") return "All types";
   if (option === "place") return "Place";
-  return "Trail Content";
+  return "Discovery content";
 }
 
 // Discovery (trail content) rows are always reviewable; place rows only while
@@ -191,7 +192,7 @@ export default function AdminPlacesPage() {
         kind: "discovery_content",
         id: f.id,
         title: f.title,
-        trail_name: routeName ?? "Untitled trail",
+        trail_name: routeName ?? null,
         related_location_type: f.related_location_type,
         related_location_name: locationNames.get(f.related_location_id) ?? "Unknown",
         updated_at: "",
@@ -238,14 +239,16 @@ export default function AdminPlacesPage() {
     {
       key: "type",
       label: "Type",
-      render: (row) => <Badge variant="secondary">{row.kind === "place" ? "Place" : "Trail Content"}</Badge>,
+      render: (row) => <Badge variant="secondary">{row.kind === "place" ? "Place" : "Discovery content"}</Badge>,
     },
     {
       key: "category",
       label: "Category",
       sortable: false,
       render: (row) =>
-        row.kind === "place" ? row.category : `${row.trail_name} · ${row.related_location_name}`,
+        row.kind === "place"
+          ? row.category
+          : [row.trail_name, row.related_location_name].filter(Boolean).join(" · "),
     },
     {
       key: "verification_status",
@@ -413,7 +416,7 @@ export default function AdminPlacesPage() {
                 ? "Each selected place will be marked verified and visible to the public."
                 : "Explain what needs to change. The same note is recorded on every selected item."}
               {selectedDiscoveryIds.length > 0 &&
-                " Trail Content reviews are logged only; their status does not change."}
+                " Discovery content reviews are logged only; their status does not change."}
             </DialogDescription>
           </DialogHeader>
 

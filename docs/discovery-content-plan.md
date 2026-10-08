@@ -1,6 +1,6 @@
 # discovery-content-plan.md
 
-Status: decisions made, one question open. No phases yet.
+Status: built, not yet run. Logged as decision-log.md entry #44. Needs `npm install` (qrcode) and migration 0050 applied.
 
 ## Goal
 
@@ -30,6 +30,20 @@ CATO wants sequenced stories: each stop refers to the last and sets up the next 
 - Per stop, the player shows trail notes first, then place entries.
 - A stop unlocks at the largest `unlock_radius` among its entries. With no entries it uses the default radius.
 
+## Object entries: GPS at the place, QR at the object
+
+GPS cannot place a visitor at one object (phone GPS is off by 10 to 20 m, and seed pins are street level). So the two checks split the job.
+
+1. **GPS opens the stop.** Within the radius of the place pin, the stop unlocks, as above.
+2. **QR opens an object entry.** A place entry can be marked "Unlock by QR scan". It stays hidden until the visitor scans the code at the object, and only once its stop is unlocked.
+
+- The QR holds a link, `/scan/<token>`. A phone's own camera opens it, so the app needs no scanner library.
+- The token is random and made by the system. Staff never type one.
+- The code belongs to the place entry, so it is printed once and works in every trail through that place.
+- A scan is saved per visitor, like trail progress, so it stays after a reload.
+- A scan with the stop still locked, or outside a trail, shows the reason and links to trails that include the place.
+- Entries not marked for QR show as soon as the stop unlocks.
+
 ## Decided
 
 - **Names:** place entries keep "Discovery content". Trail entries are "Trail note". The admin label "Trail Content" (review queue, dashboard, review page) is wrong once place entries exist, so it becomes "Discovery content".
@@ -37,26 +51,39 @@ CATO wants sequenced stories: each stop refers to the last and sets up the next 
 - **First stop is free:** Start still unlocks stop 1 on every trail, from anywhere.
 - **One stop trail:** the stop unlocks free, but the trail only completes when the visitor is within the stop radius. Multi stop trails already gate their last stop by proximity.
 - **Write access:** unchanged. `manage_places`, `build_trails` and admin. Not `review_businesses`.
+- **Object level:** QR at the object, GPS at the place. No coordinates per entry.
+
+## Defaults (built as written)
+
+- **Scans are optional.** A trail completes without them. They add story, they do not gate the credential.
+- **A scan also checks GPS.** The visitor must be within the stop radius at scan time, so a saved photo of the code does not work from home.
 
 ## What changes
 
-**Database (needs your approval, migration 0049)**
+**Database (needs your approval, migration 0050)**
 - `discovery_content.route_id` becomes nullable.
+- `discovery_content.qr_token`, nullable and unique. Set means the entry unlocks by scan.
+- New table `entry_unlocks` (user, entry, time, one row per pair). Owner only access, same shape as `route_progress` (0018).
 - Public read: a place entry is visible when it is active and its place or business is a stop in a published trail. Secrets stay reachable only through a trail.
 - No change to the review trigger (0012, keys on the location) or the write policy (0013).
 
 **Data layer**
 - `trail-types.ts`: `TrailStop.discoveryContent` (one or null) becomes a list.
-- `trail-query.ts`: load trail notes and place entries, order them, drop nothing.
+- `trail-query.ts`: load trail notes and place entries, order them, drop nothing. Load the visitor's `entry_unlocks`.
 
 **Trail player**
 - `trail-stop.tsx`: show every entry of an unlocked stop.
 - `trail-detail.tsx`: unlock on the stop radius, default radius when empty, completion of a one stop trail on proximity.
+- New `/scan/:token` page and route in `App.tsx`. It checks sign in, the stop is unlocked and GPS, then saves the unlock and opens the trail.
+- A QR entry in `trail-stop.tsx` shows as a locked line, "Scan the code at the object", until unlocked.
 
 **Admin**
 - Place and business detail pages: new Discovery content tab beside Current Info and Review History. Hidden on a new, unsaved record.
-- Trail builder dialog: edits trail notes only. Place entries show as a count that links to the place.
+- Trail builder dialog: edits trail notes only. Place entries show as plain text, "3 discovery content entries come from this place". No link.
 - Label "Trail Content" becomes "Discovery content" in `admin-dashboard.tsx`, `admin-places.tsx` and `admin-discovery-content-review.tsx`.
+- Place entry form: a checkbox "Unlock by QR scan" (a styled native checkbox, no Switch exists), plus "Download QR". A damaged code is reprinted from the same token. No regenerate button.
+- Entry form, both kinds: the typed Sequence Order field goes. A new entry goes last, and order changes with up and down buttons, as on the Landing Page list. Unlock Radius stays, prefilled with 25 so staff do not type it.
+- QR image needs a small library (for example `qrcode`) in `package.json`. You install it, I do not.
 - The review page and any reader of `route_id` handle a null trail.
 
 **Read before editing:** `bulk-review.ts`, `admin-notifications.ts`, `admin-dashboard.tsx`, `admin-places.tsx`, `admin-trails.tsx`, `admin-activity.tsx`, migration 0037 (activity trigger on `discovery_content`).
@@ -65,7 +92,8 @@ CATO wants sequenced stories: each stop refers to the last and sets up the next 
 
 - One action, one place: each kind of entry has one edit surface.
 - One label per concept: place entries and trail notes have different names.
-- Automate: no copy button, no per-trail hide control. Add hiding only if CATO asks.
+- Automate: the system handles what it can, so there is no copy button, no per-trail hide control, no token field, no regenerate button and no typed order. Add hiding only if CATO asks.
+- Human controls kept, one each: the entry text, the QR checkbox, Download QR, Unlock Radius (prefilled), up and down order. Each needs a person's judgment.
 - No card inside a card: the stop shows its entries as one list in the stop's card.
 - Every state: loading, empty, error, and a locked stop with a clear reason.
 
@@ -75,7 +103,5 @@ CATO wants sequenced stories: each stop refers to the last and sets up the next 
 - Business entries are always flagged for review (0012). A business entry joins the Places queue, as now.
 - Existing entries all have a trail, so they become trail notes. No backfill.
 - Seed coordinates are street level, not surveyed. A tight radius will miss until pins are exact.
-
-## Open question
-
-**Object level unlock.** Should an entry unlock near its own object, not the place pin? That needs optional coordinates on each entry and a record of which entries a visitor has unlocked (new table). I recommend later, after the pins are surveyed. Until then the pin and radius apply to the whole stop.
+- QR entry text still reaches the app before the scan, same as GPS locked text today. The lock is in the interface. Hiding it for real needs a server function, a later step if CATO needs it.
+- A damaged QR code is reprinted with Download QR. A code that must be replaced has no in-app control, and needs a new token from a developer.

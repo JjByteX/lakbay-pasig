@@ -12,6 +12,7 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
 import TrailsPage from "@/pages/trails";
 import TrailDetailPage from "@/pages/trail-detail";
+import TrailScanPage from "@/pages/trail-scan";
 import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
 import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
@@ -83,6 +84,10 @@ export default function App() {
                 only gates starting/tracking/saving/finishing, Phase 4's
                 concern). Page itself is a stub until Phase 3 builds it out. */}
             <Route path="trails/:id" element={<TrailDetailPage />} />
+            {/* The link an object's QR code holds. No ProtectedRoute: a guest
+                lands here and is asked to sign in, not redirected away
+                (same guest rule as Saved). docs/discovery-content-plan.md. */}
+            <Route path="scan/:token" element={<TrailScanPage />} />
             <Route path="discover" element={<DiscoverPage />} />
             {/* Phase 6.2 (step-5-phases.md): full record detail, separate
                 from the Phase 6.1 preview card (result-card.tsx's modal).

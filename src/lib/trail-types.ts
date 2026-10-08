@@ -31,11 +31,14 @@ export interface TrailSummary {
  * from places or businesses, same as admin-trail-builder.tsx's StopRow
  * (route_stops.stop_id has no foreign key, migration 0005's own comment:
  * "app layer must guarantee stop_type/related_location_type matches a
- * real row"). `discoveryContent` is null for a stop with no attached
- * content, this is a normal, valid state, not a fetch failure: not every
- * stop in the seed data carries a discovery_content row (data-model.md's
- * rule that only proximity-triggered secrets belong there, general
- * background stays on the place/business page instead).
+ * real row"). `discoveryContent` is every entry of the stop, trail notes
+ * first, then the place's own entries, each ordered by sequence_order.
+ * An empty list is a normal, valid state, not a fetch failure: not every
+ * stop carries an entry (data-model.md's rule that only proximity-
+ * triggered secrets belong there, general background stays on the
+ * place/business page instead). `unlockRadius` is the meters the whole
+ * stop unlocks at (trail-unlock.ts: the largest entry radius, or the
+ * default when there are none).
  *
  * `latitude`/`longitude` (Phase 4.5): resolved client side from the same
  * places/businesses row `name` already comes from, added alongside it
@@ -58,7 +61,8 @@ export interface TrailStop {
   name: string;
   latitude: number | null;
   longitude: number | null;
-  discoveryContent: TrailDiscoveryContent | null;
+  discoveryContent: TrailDiscoveryContent[];
+  unlockRadius: number;
 }
 
 /**
@@ -76,6 +80,10 @@ export interface TrailDiscoveryContent {
   title: string;
   content: string;
   unlock_radius: number;
+  // True for a place entry marked "Unlock by QR scan" (qr_token set,
+  // migration 0050). The token itself is not carried here, only the scan
+  // page reads it.
+  requiresScan: boolean;
 }
 
 /**

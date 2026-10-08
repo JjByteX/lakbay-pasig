@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
+import { DiscoveryEntriesPanel, canEditDiscoveryContent } from "@/components/admin/discovery-entries-panel";
 import { ReviewHistoryTable } from "@/components/admin/review-history-table";
 
 // 6.5: read only list of business_items for staff review, name and price
@@ -610,6 +611,7 @@ export default function AdminBusinessDetailPage() {
         <TabsList className="shrink-0 self-start">
           <TabsTrigger value="info">Current Info</TabsTrigger>
           <TabsTrigger value="history">Review History</TabsTrigger>
+          {canEditDiscoveryContent(profile) && <TabsTrigger value="discovery">Discovery content</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="info" className="flex min-h-0 grow flex-col">
@@ -651,6 +653,15 @@ export default function AdminBusinessDetailPage() {
         <TabsContent value="history" className="flex min-h-0 grow flex-col">
           <ReviewHistoryTable reviews={reviews} />
         </TabsContent>
+
+        {/* Place entries for a business: written once here, shown on every
+            trail that stops at this business (docs/discovery-content-
+            plan.md). Hidden from staff who cannot write them (0013). */}
+        {canEditDiscoveryContent(profile) && id && (
+          <TabsContent value="discovery" className={ADMIN_SCROLL_CLASS}>
+            <DiscoveryEntriesPanel locationType="business" locationId={id} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <Dialog open={reviewAction !== null} onOpenChange={(open) => !open && setReviewAction(null)}>

@@ -41,8 +41,9 @@ interface DiscoveryContentDetail {
   content: string;
   unlock_radius: number;
   sequence_order: number;
-  route_id: string;
-  trail_name: string;
+  // Both null for a place entry (no trail), set for a trail note.
+  route_id: string | null;
+  trail_name: string | null;
   related_location_type: "place" | "business";
   related_location_id: string;
   related_location_name: string;
@@ -83,10 +84,10 @@ interface DiscoveryContentQueryRow {
   content: string;
   unlock_radius: number;
   sequence_order: number;
-  route_id: string;
+  route_id: string | null;
   related_location_type: "place" | "business";
   related_location_id: string;
-  routes: { name: string }[];
+  routes: { name: string }[] | null;
 }
 
 export default function AdminDiscoveryContentReviewPage() {
@@ -139,7 +140,7 @@ export default function AdminDiscoveryContentReviewPage() {
 
         if (cancelled) return;
 
-        const routeName = row.routes[0]?.name;
+        const routeName = row.routes?.[0]?.name;
 
         setEntry({
           id: row.id,
@@ -148,7 +149,7 @@ export default function AdminDiscoveryContentReviewPage() {
           unlock_radius: row.unlock_radius,
           sequence_order: row.sequence_order,
           route_id: row.route_id,
-          trail_name: routeName ?? "Untitled trail",
+          trail_name: row.route_id ? (routeName ?? "Untitled trail") : null,
           related_location_type: row.related_location_type,
           related_location_id: row.related_location_id,
           related_location_name: location?.name ?? "Unknown",
@@ -289,7 +290,7 @@ export default function AdminDiscoveryContentReviewPage() {
   }
 
   if (notFound || !entry) {
-    return <p className="text-sm text-destructive">Could not load this Trail Content entry.</p>;
+    return <p className="text-sm text-destructive">Could not load this discovery content entry.</p>;
   }
 
   // Extracted from a nested ternary (reviewSubmitting ? ... : reviewAction
@@ -310,7 +311,7 @@ export default function AdminDiscoveryContentReviewPage() {
         title={entry.title}
         badges={
           <>
-            <Badge variant="secondary">Trail Content</Badge>
+            <Badge variant="secondary">Discovery content</Badge>
             <Badge variant="outline">pending</Badge>
           </>
         }
@@ -326,16 +327,19 @@ export default function AdminDiscoveryContentReviewPage() {
 
       <AdminFormCard>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <Label>Trail</Label>
-            <button
-              type="button"
-              className="text-left text-sm font-semibold text-foreground underline-offset-2 hover:underline"
-              onClick={() => navigate(`/admin/trails/${entry.route_id}`)}
-            >
-              {entry.trail_name}
-            </button>
-          </div>
+          {/* A place entry has no trail, so there is nothing to link to. */}
+          {entry.route_id && (
+            <div className="flex flex-col gap-1">
+              <Label>Trail</Label>
+              <button
+                type="button"
+                className="text-left text-sm font-semibold text-foreground underline-offset-2 hover:underline"
+                onClick={() => navigate(`/admin/trails/${entry.route_id}`)}
+              >
+                {entry.trail_name}
+              </button>
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <Label>Related {entry.related_location_type === "place" ? "Place" : "Business"}</Label>
             <div className="flex items-center gap-2">
@@ -362,7 +366,7 @@ export default function AdminDiscoveryContentReviewPage() {
 
         <p className="text-xs text-muted-foreground">
           {entry.related_location_type === "business"
-            ? "Flagged because Trail Content tied to a business has no place-verification concept of its own."
+            ? "Flagged because discovery content tied to a business has no place-verification concept of its own."
             : "Flagged because the related place is not yet verified."}
         </p>
       </AdminFormCard>
@@ -376,12 +380,12 @@ export default function AdminDiscoveryContentReviewPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {reviewAction === "verify" ? "Verify this Trail Content?" : "Reject this Trail Content?"}
+              {reviewAction === "verify" ? "Verify this discovery content?" : "Reject this discovery content?"}
             </DialogTitle>
             <DialogDescription>
               {reviewAction === "verify"
                 ? "This logs your approval. The flag stays computed from the related location's status, it isn't cleared permanently."
-                : "This logs a rejection. It doesn't change the content itself — edit it from the trail builder, or wait for the related place to be verified. The trail can't publish while this stays flagged."}
+                : `This logs a rejection. It doesn't change the content itself. Edit it from ${entry.route_id ? "the trail builder" : "its place"}, or wait for the related place to be verified.${entry.route_id ? " The trail can't publish while this stays flagged." : ""}`}
             </DialogDescription>
           </DialogHeader>
 

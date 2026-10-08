@@ -1,4 +1,4 @@
-import { Lock, CheckCircle } from "@phosphor-icons/react";
+import { Lock, CheckCircle, QrCode } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { TrailStop as TrailStopData } from "@/lib/trail-types";
 
@@ -12,7 +12,9 @@ import type { TrailStop as TrailStopData } from "@/lib/trail-types";
  *   (that "no way to force open" rule belongs to Phase 4.6, this component
  *   only renders the state it's given, it does not decide when a stop is
  *   locked)
- * - unlocked: Discovery content shown (title + content body)
+ * - unlocked: every Discovery content entry shown (title + content body),
+ *   except an entry marked "Unlock by QR scan", which shows one line asking
+ *   for the scan until the visitor has scanned its code
  * - completed: same as unlocked, visually marked done
  *
  * Sequence marker (numbered circle) and row layout reuse trail-detail.tsx's
@@ -38,9 +40,11 @@ interface TrailStopProps {
   stop: TrailStopData;
   index: number;
   state: TrailStopState;
+  // Entry ids this visitor has unlocked by scanning (entry-unlocks.ts).
+  unlockedEntryIds: Set<string>;
 }
 
-export function TrailStop({ stop, index, state }: Readonly<TrailStopProps>) {
+export function TrailStop({ stop, index, state, unlockedEntryIds }: Readonly<TrailStopProps>) {
   const isLocked = state === "locked";
   const isCompleted = state === "completed";
 
@@ -74,15 +78,27 @@ export function TrailStop({ stop, index, state }: Readonly<TrailStopProps>) {
 
         {/* Unlocked and completed both show Discovery content, per the
             plan doc's "completed (same as unlocked, visually marked
-            done)." A stop can be unlocked/completed with no attached
-            discovery_content row (TrailStop.discoveryContent is null),
-            a normal valid state per trail-types.ts's own note, not an
-            error, so nothing renders below the name in that case. */}
-        {!isLocked && stop.discoveryContent && (
-          <div className="flex flex-col gap-1 pt-1">
-            <span className="text-sm font-semibold text-foreground">{stop.discoveryContent.title}</span>
-            <p className="text-sm text-muted-foreground">{stop.discoveryContent.content}</p>
-          </div>
+            done)." A stop holds a list of entries, trail notes first and
+            then the place's own entries (trail-query.ts). An empty list is
+            a normal valid state, not an error, so nothing renders below
+            the name in that case. An entry that needs a scan stays one
+            generic line, not its title, until its code has been scanned. */}
+        {!isLocked && stop.discoveryContent.length > 0 && (
+          <ul className="flex flex-col gap-3 pt-1">
+            {stop.discoveryContent.map((entry) =>
+              entry.requiresScan && !unlockedEntryIds.has(entry.id) ? (
+                <li key={entry.id} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <QrCode className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Scan the code at the object to read more
+                </li>
+              ) : (
+                <li key={entry.id} className="flex flex-col gap-1">
+                  <span className="text-sm font-semibold text-foreground">{entry.title}</span>
+                  <p className="text-sm text-muted-foreground">{entry.content}</p>
+                </li>
+              )
+            )}
+          </ul>
         )}
       </div>
     </li>

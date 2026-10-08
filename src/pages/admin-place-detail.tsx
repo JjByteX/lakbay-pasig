@@ -36,7 +36,8 @@ import { DurationField } from "@/components/ui/duration-field";
 import { WeeklyHoursField } from "@/components/ui/weekly-hours-field";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { AdminFormCard } from "@/components/admin/admin-form-card";
+import { ADMIN_SCROLL_CLASS, AdminFormCard } from "@/components/admin/admin-form-card";
+import { DiscoveryEntriesPanel, canEditDiscoveryContent } from "@/components/admin/discovery-entries-panel";
 import { ReviewHistoryTable } from "@/components/admin/review-history-table";
 
 interface PlaceFormState {
@@ -510,11 +511,21 @@ export default function AdminPlaceDetailPage() {
           <TabsList className="shrink-0 self-start">
             <TabsTrigger value="info">Current Info</TabsTrigger>
             <TabsTrigger value="history">Review History</TabsTrigger>
+            {canEditDiscoveryContent(profile) && <TabsTrigger value="discovery">Discovery content</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="info" className="flex min-h-0 grow flex-col">
             {placeForm}
           </TabsContent>
+
+          {/* Place entries: written once here, shown on every trail that
+              stops at this place (docs/discovery-content-plan.md). Not on a
+              new place: there is no id to attach them to yet. */}
+          {canEditDiscoveryContent(profile) && id && (
+            <TabsContent value="discovery" className={ADMIN_SCROLL_CLASS}>
+              <DiscoveryEntriesPanel locationType="place" locationId={id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="history" className="flex min-h-0 grow flex-col">
             <ReviewHistoryTable reviews={reviews} />
