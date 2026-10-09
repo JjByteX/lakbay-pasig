@@ -157,11 +157,13 @@ export default function TrailsPage() {
         <section className="flex flex-col gap-1">
           <h2 className="text-base font-semibold text-foreground">Your trails</h2>
           <p className="text-xs text-muted-foreground">Only you can see these.</p>
-          <ul className="-mx-6 flex flex-col divide-y divide-border">
+          {/* Mobile: full-width rows, the same as the catalog. md+: a grid of
+              cards, so a few trails of your own do not read as a second
+              catalog. */}
+          <ul className="-mx-6 flex flex-col divide-y divide-border md:mx-0 md:mt-2 md:grid md:grid-cols-2 md:gap-4 md:divide-y-0 lg:grid-cols-3">
             {myTrails.map((trail) => (
-              <li key={trail.id}>
+              <li key={trail.id} className="md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-card">
                 <TrailCard
-                  inline
                   trail={trail}
                   meta={stopCountLabel(trail.stopCount)}
                   onClick={() => navigate(`/trails/${trail.id}`)}

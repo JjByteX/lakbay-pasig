@@ -22,7 +22,9 @@ import {
   type LocatedPersonalStop,
 } from "@/lib/personal-trails";
 import { PlaceBusinessPicker, type PickedLocation } from "@/components/admin/place-business-picker";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { PageContainer } from "@/components/public/page-container";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,164 @@ interface BuilderStop extends LocatedPersonalStop {
 
 const sameStop = (a: BuilderStop, b: BuilderStop) => a.type === b.type && a.id === b.id;
 
+function NameField({ name, onChange }: Readonly<{ name: string; onChange: (value: string) => void }>) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="trail-name">Name</Label>
+      <Input
+        id="trail-name"
+        value={name}
+        maxLength={60}
+        placeholder={DEFAULT_PERSONAL_TRAIL_NAME}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="text-xs text-muted-foreground">Only you can see this trail.</p>
+    </div>
+  );
+}
+
+function StopRow({
+  stop,
+  index,
+  hours,
+  now,
+  onRemove,
+}: Readonly<{ stop: BuilderStop; index: number; hours: string | null | undefined; now: Date; onRemove: (stop: BuilderStop) => void }>) {
+  const status = getOpenStatus(hours, now);
+  return (
+    <li className="flex items-center gap-3 p-3">
+      <span className="w-5 shrink-0 text-sm font-semibold text-muted-foreground">{index + 1}</span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-semibold text-foreground">{stop.name}</span>
+        {status && (
+          <span className={`truncate text-xs ${status.open ? "text-primary" : "text-destructive"}`}>
+            {status.label}
+            {status.detail && ` · ${status.detail}`}
+          </span>
+        )}
+      </div>
+      <Badge variant="secondary" className="shrink-0">
+        {stop.type === "place" ? "Place" : "Business"}
+      </Badge>
+      <Button type="button" variant="ghost" size="icon" onClick={() => onRemove(stop)} aria-label={`Remove ${stop.name}`}>
+        <X className="h-4 w-4" />
+      </Button>
+    </li>
+  );
+}
+
+function StopsSection({
+  stops,
+  hoursById,
+  now,
+  onRemove,
+}: Readonly<{ stops: BuilderStop[]; hoursById: Map<string, string | null>; now: Date; onRemove: (stop: BuilderStop) => void }>) {
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-semibold text-foreground">Stops</h2>
+        <span className="text-xs text-muted-foreground">
+          {stops.length} of {PERSONAL_STOP_LIMIT}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Stops are put in order for you, nearest next, starting from the first one you pick.
+      </p>
+      {stops.length === 0 ? (
+        <EmptyState icon={MapPin}>Stops you add will appear here.</EmptyState>
+      ) : (
+        <ol className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+          {stops.map((stop, index) => (
+            <StopRow
+              key={`${stop.type}-${stop.id}`}
+              stop={stop}
+              index={index}
+              hours={hoursById.get(stop.id)}
+              now={now}
+              onRemove={onRemove}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function PickerSection({
+  stops,
+  atLimit,
+  savedIds,
+  markedIds,
+  onPick,
+}: Readonly<{
+  stops: BuilderStop[];
+  atLimit: boolean;
+  savedIds: Set<string>;
+  markedIds: Set<string>;
+  onPick: (location: PickedLocation) => void;
+}>) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-base font-semibold text-foreground">Add stops</h2>
+      {atLimit ? (
+        <p className="text-sm text-muted-foreground">You have {PERSONAL_STOP_LIMIT} stops. Remove one to add another.</p>
+      ) : (
+        <PlaceBusinessPicker
+          onPick={onPick}
+          excludeIds={new Set(stops.map((s) => s.id))}
+          includePending
+          savedIds={savedIds}
+          markedIds={markedIds}
+        />
+      )}
+    </section>
+  );
+}
+
+// What sits under Save: why it is disabled, or why the save failed.
+function SaveNotes({ empty, error }: Readonly<{ empty: boolean; error: string | null }>) {
+  return (
+    <>
+      {empty && <p className="text-xs text-muted-foreground">Add at least one stop to save.</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </>
+  );
+}
+
+function DeleteTrailDialog({
+  open,
+  deleting,
+  error,
+  onOpenChange,
+  onConfirm,
+}: Readonly<{
+  open: boolean;
+  deleting: boolean;
+  error: string | null;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}>) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !deleting && onOpenChange(next)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete this trail?</DialogTitle>
+          <DialogDescription>This removes the trail and your progress on it. It can&apos;t be undone.</DialogDescription>
+        </DialogHeader>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={deleting}>
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * A signed-in user's own trail builder: /trails/new makes one, /trails/:id/edit
  * changes one. docs/user-trails-plan.md. Both routes sit behind ProtectedRoute
@@ -60,6 +220,12 @@ const sameStop = (a: BuilderStop, b: BuilderStop) => a.type === b.type && a.id =
  * A stop that stays on the trail keeps its saved row (savePersonalTrailStops),
  * so editing does not wipe walk progress for stops that remain.
  *
+ * Two states, the same split profile.tsx and vendor-dashboard.tsx use (useIsMobile).
+ * Mobile: one stacked column with a back button, stops, then the picker, then
+ * Save. Desktop: a Trails > title breadcrumb and two cards side by side, the
+ * name and stops with Save on the left, the picker on the right, so a person
+ * sees what they have while they search for more.
+ *
  * Each stop shows open or closed as of now (getOpenStatus, from the stop's
  * stored hours), so nobody plans a walk to a closed door. A stop with no hours,
  * or hours only in old free text, shows nothing rather than a guess.
@@ -71,6 +237,7 @@ export default function TrailBuilderPage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const userId = session?.user.id;
+  const isMobile = useIsMobile();
 
   const [name, setName] = useState("");
   // The stored name, to rename only when it changed.
@@ -221,12 +388,17 @@ export default function TrailBuilderPage() {
     }
   }
 
-  const header = (
+  const title = editing ? "Edit trail" : "Make a trail";
+  // Mobile: the back button every detail page uses. Desktop: the breadcrumb
+  // heading the other desktop states use (AdminPageHeader).
+  const header = isMobile ? (
     <div className="flex items-center">
       <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
         <ArrowLeft className="h-5 w-5" />
       </Button>
     </div>
+  ) : (
+    <AdminPageHeader breadcrumb={[{ label: "Trails", to: "/trails" }]} title={title} />
   );
 
   if (loadError) {
@@ -256,122 +428,71 @@ export default function TrailBuilderPage() {
     );
   }
 
-  return (
-    <PageContainer width="form" className="gap-6">
-      {header}
-      <h1 className="text-xl font-semibold text-foreground">{editing ? "Edit trail" : "Make a trail"}</h1>
+  const nameField = <NameField name={name} onChange={setName} />;
+  const stopsSection = <StopsSection stops={stops} hoursById={hoursById} now={now} onRemove={handleRemove} />;
+  const pickerSection = (
+    <PickerSection stops={stops} atLimit={atLimit} savedIds={savedIds} markedIds={markedIds} onPick={handlePick} />
+  );
+  const saveButton = (
+    <Button type="button" onClick={handleSave} disabled={saving || stops.length === 0}>
+      {saving ? "Saving…" : "Save trail"}
+    </Button>
+  );
+  const deleteButton = editing ? (
+    <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)}>
+      Delete trail
+    </Button>
+  ) : null;
+  const saveNotes = <SaveNotes empty={stops.length === 0} error={saveError} />;
+  const deleteDialog = (
+    <DeleteTrailDialog
+      open={deleteOpen}
+      deleting={deleting}
+      error={deleteError}
+      onOpenChange={setDeleteOpen}
+      onConfirm={handleDelete}
+    />
+  );
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="trail-name">Name</Label>
-        <Input
-          id="trail-name"
-          value={name}
-          maxLength={60}
-          placeholder={DEFAULT_PERSONAL_TRAIL_NAME}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <p className="text-xs text-muted-foreground">Only you can see this trail.</p>
-      </div>
-
-      <section className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-semibold text-foreground">Stops</h2>
-          <span className="text-xs text-muted-foreground">
-            {stops.length} of {PERSONAL_STOP_LIMIT}
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Stops are put in order for you, nearest next, starting from the first one you pick.
-        </p>
-        {stops.length === 0 ? (
-          <EmptyState icon={MapPin}>Stops you add will appear here.</EmptyState>
-        ) : (
-          <ol className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-            {stops.map((stop, index) => {
-              const status = getOpenStatus(hoursById.get(stop.id), now);
-              return (
-                <li key={`${stop.type}-${stop.id}`} className="flex items-center gap-3 p-3">
-                  <span className="w-5 shrink-0 text-sm font-semibold text-muted-foreground">{index + 1}</span>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-semibold text-foreground">{stop.name}</span>
-                    {status && (
-                      <span className={`truncate text-xs ${status.open ? "text-primary" : "text-destructive"}`}>
-                        {status.label}
-                        {status.detail && ` · ${status.detail}`}
-                      </span>
-                    )}
-                  </div>
-                  <Badge variant="secondary" className="shrink-0">
-                    {stop.type === "place" ? "Place" : "Business"}
-                  </Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleRemove(stop)}
-                    aria-label={`Remove ${stop.name}`}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-foreground">Add stops</h2>
-        {atLimit ? (
-          <p className="text-sm text-muted-foreground">
-            You have {PERSONAL_STOP_LIMIT} stops. Remove one to add another.
-          </p>
-        ) : (
-          <PlaceBusinessPicker
-            onPick={handlePick}
-            excludeIds={new Set(stops.map((s) => s.id))}
-            includePending
-            savedIds={savedIds}
-            markedIds={markedIds}
-          />
-        )}
-      </section>
-
-      <div className="flex flex-col gap-1">
-        <Button type="button" onClick={handleSave} disabled={saving || stops.length === 0} className="w-full">
-          {saving ? "Saving…" : "Save trail"}
-        </Button>
-        {stops.length === 0 && <p className="text-xs text-muted-foreground">Add at least one stop to save.</p>}
-        {saveError && <p className="text-xs text-destructive">{saveError}</p>}
-      </div>
-
-      {editing && (
+  // Mobile state: one stacked column, Save and Delete full width at the end.
+  if (isMobile) {
+    return (
+      <PageContainer width="form" className="gap-6">
+        {header}
+        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+        {nameField}
+        {stopsSection}
+        {pickerSection}
         <div className="flex flex-col gap-1">
-          <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)} className="w-full">
-            Delete trail
-          </Button>
+          {saveButton}
+          {saveNotes}
         </div>
-      )}
+        {deleteButton}
+        {deleteDialog}
+      </PageContainer>
+    );
+  }
 
-      <Dialog open={deleteOpen} onOpenChange={(next) => !deleting && setDeleteOpen(next)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete this trail?</DialogTitle>
-            <DialogDescription>
-              This removes the trail and your progress on it. It can&apos;t be undone.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  // Desktop state: what the person has built on the left (name, stops, Save),
+  // the picker on the right, so adding stops never scrolls the list away.
+  return (
+    <PageContainer width="wide">
+      {header}
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-6">
+        <div className="flex flex-col gap-6 rounded-lg border border-border bg-card p-4">
+          {nameField}
+          {stopsSection}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              {deleteButton ?? <span />}
+              {saveButton}
+            </div>
+            {saveNotes}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-4">{pickerSection}</div>
+      </div>
+      {deleteDialog}
     </PageContainer>
   );
 }
