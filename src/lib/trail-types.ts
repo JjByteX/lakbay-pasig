@@ -87,6 +87,9 @@ export interface TrailDiscoveryContent {
   // The entry's one optional photo (migration 0051), a public url, or null.
   // Shown only once the entry is unlocked, with its text.
   photoUrl: string | null;
+  // The entry's one optional YouTube or Facebook link (migration 0052), or
+  // null. Shown in a frame under the photo once the entry is unlocked.
+  videoUrl: string | null;
 }
 
 /**
@@ -110,6 +113,10 @@ export interface TrailCredential {
 export interface TrailDetail {
   id: string;
   name: string;
+  // True for a user's own private trail (routes.personal, migration 0054).
+  // Walked with the same player, but it never completes, earns no credential,
+  // and cannot be saved.
+  personal: boolean;
   theme: string | null;
   estimated_duration: string | null;
   estimated_budget: string | null;

@@ -242,12 +242,12 @@ export default function AdminDiscoveryContentReviewPage() {
       return;
     }
 
-    // Both Verify and Reject are log-only here, on purpose, unlike the
-    // Place/Business review pages. needs_place_review is trigger-computed
-    // (migration 0012) and the app layer must never set it directly, per
-    // Decision 1 — so neither action can durably "clear" the flag; it's
-    // recomputed from related_location_type / the linked place's
-    // verification_status on every future save.
+    // This page never writes needs_place_review, unlike the Place/Business
+    // review pages. It is trigger-computed (migration 0012) and the app layer
+    // must never set it directly, per Decision 1. Since migration 0053 the
+    // review row inserted above does the clearing: Verify clears a business
+    // entry's flag and Reject sets it again, and a place entry follows its
+    // place's verification_status.
     //
     // Reject does NOT touch discovery_content.status. An earlier version
     // of this page set status = 'inactive' on reject, which silently
@@ -366,7 +366,7 @@ export default function AdminDiscoveryContentReviewPage() {
 
         <p className="text-xs text-muted-foreground">
           {entry.related_location_type === "business"
-            ? "Flagged because discovery content tied to a business has no place-verification concept of its own."
+            ? "Tied to a business, so it needs a Places review. Verify clears it until the text, photo or video changes."
             : "Flagged because the related place is not yet verified."}
         </p>
       </AdminFormCard>

@@ -47,6 +47,9 @@ export interface SearchTrailHit {
   id: string;
   name: string;
   theme: string | null;
+  // True for the caller's own private trail (routes.personal, migration 0054),
+  // so the dropdown can label it Yours and never pass it off as a CATO trail.
+  personal: boolean;
 }
 
 export interface SearchEventHit {
@@ -148,13 +151,16 @@ async function searchBusinesses(q: string): Promise<SearchBusinessHit[]> {
 }
 
 async function searchTrails(q: string): Promise<SearchTrailHit[]> {
-  // routes_select_public (0005): published only, same policy trail-
-  // query.ts's fetchPublishedTrails reads through, unchanged here.
+  // routes_select_public (0005) shows published trails. Since migration 0054
+  // routes_own_personal also lets the caller read their own private trails,
+  // and search_trails is SECURITY INVOKER, so those come back too. That is
+  // wanted: the row carries `personal`, so the dropdown labels it Yours.
+  // Another user's private trail is never returned (restrictive policy).
   // Category Directory Phase 1.7: theme is now a joined trail_categories.
   // name (migration 0023), flattened below.
   const { data, error } = await supabase
     .rpc("search_trails", { q, lim: RESULT_LIMIT })
-    .select("id, name, trail_categories(name)");
+    .select("id, name, personal, trail_categories(name)");
 
   if (error) throw error;
   return (Array.isArray(data) ? data : []).map((row) => ({
@@ -162,6 +168,7 @@ async function searchTrails(q: string): Promise<SearchTrailHit[]> {
     id: row.id,
     name: row.name,
     theme: readEmbeddedName(row.trail_categories),
+    personal: row.personal,
   }));
 }
 

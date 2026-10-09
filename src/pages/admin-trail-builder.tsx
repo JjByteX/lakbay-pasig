@@ -28,9 +28,12 @@ import {
 } from "@/components/admin/place-business-picker";
 import { fetchActiveCategories, type TrailCategory } from "@/lib/trail-categories";
 import { DEFAULT_UNLOCK_RADIUS } from "@/lib/trail-unlock";
+import { fetchFlaggedPlaceEntries, stopLocationKey, type FlaggedPlaceEntry } from "@/lib/trail-review-gate";
 import { discardUnsavedPhoto, removeDiscoveryPhotoFile } from "@/lib/discovery-photo";
 import { CharCount } from "@/components/business/business-fields";
 import { DiscoveryPhotoField } from "@/components/admin/discovery-photo-field";
+import { DiscoveryVideoField, isVideoLinkValid } from "@/components/admin/discovery-video-field";
+import { normalizeVideoLink } from "@/lib/video-embed";
 import { DurationField } from "@/components/ui/duration-field";
 import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
 import { usePageTitle } from "@/lib/page-title";
@@ -49,7 +52,8 @@ import { AdminFormCard } from "@/components/admin/admin-form-card";
 // admin-trails.tsx's list page has, so it was removed: ux-ui-guidelines.md's
 // "if content fits on a single screen, keep it on a single screen" and its
 // default-to-removing rule. The gate itself is unchanged, see
-// publishBlockedReason below. Flagged discovery content still links to
+// publishBlockedReason below. It now also counts flagged place and business
+// entries of the trail's stops (lib/trail-review-gate.ts). Flagged discovery content still links to
 // admin-discovery-content-review.tsx (Phase 5.3), listed under Stops.
 //
 // needs_place_review is computed by migration 0012's trigger on every insert/
@@ -112,6 +116,7 @@ interface DiscoveryContentRow {
   unlock_radius: number;
   needs_place_review: boolean;
   photo_url: string | null;
+  video_url: string | null;
 }
 
 // A trail note is a discovery_content row with a route: the line that links
@@ -125,6 +130,8 @@ interface DiscoveryContentFormState {
   unlock_radius: string;
   // "" means no photo. The file is already uploaded once this holds a url.
   photo_url: string;
+  // The link as typed. "" means no video. Stored cleaned (video-embed.ts).
+  video_url: string;
 }
 
 const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
@@ -132,6 +139,7 @@ const EMPTY_DISCOVERY_FORM: DiscoveryContentFormState = {
   content: "",
   unlock_radius: String(DEFAULT_UNLOCK_RADIUS),
   photo_url: "",
+  video_url: "",
 };
 
 // Builds the routes row payload from the Details step's form state. Pulled
@@ -429,6 +437,10 @@ function DiscoveryContentModalBody({
             onChange={(photoUrl) => setDiscoveryForm((prev) => ({ ...prev, photo_url: photoUrl }))}
             onError={onPhotoError}
           />
+          <DiscoveryVideoField
+            value={discoveryForm.video_url}
+            onChange={(video) => setDiscoveryForm((prev) => ({ ...prev, video_url: video }))}
+          />
           <div className="flex flex-col gap-2">
             <Label htmlFor="discovery_unlock_radius">Unlock Radius (meters)</Label>
             <Input
@@ -465,11 +477,13 @@ function DiscoveryContentModalBody({
 function publishBlockedReason(
   status: "draft" | "published",
   stops: StopRow[],
-  flaggedCount: number
+  flaggedCount: number,
+  placeCheckFailed: boolean
 ): string | null {
   if (status === "published") return null;
   if (stops.some((s) => s.id.startsWith("temp-"))) return "Save your stops to publish.";
   if (stops.length === 0) return "Add at least one stop to publish.";
+  if (placeCheckFailed) return "Could not check place entries. Reload and try again.";
   if (flaggedCount > 0) {
     return flaggedCount === 1
       ? "1 discovery entry still needs review."
@@ -484,11 +498,25 @@ function publishBlockedReason(
 // content that has to be fixed.
 function FlaggedForReview({
   discoveryContent,
+  placeEntries,
   stops,
-}: Readonly<{ discoveryContent: DiscoveryContentRow[]; stops: StopRow[] }>) {
-  const flaggedEntries = discoveryContent.filter((entry) => entry.needs_place_review);
-  if (flaggedEntries.length === 0) return null;
+}: Readonly<{ discoveryContent: DiscoveryContentRow[]; placeEntries: FlaggedPlaceEntry[]; stops: StopRow[] }>) {
+  const flaggedNotes = discoveryContent.filter((entry) => entry.needs_place_review);
+  if (flaggedNotes.length + placeEntries.length === 0) return null;
   const stopNameById = new Map(stops.map((s) => [s.id, s.name]));
+  const stopNameByLocation = new Map(stops.map((s) => [stopLocationKey(s.stop_type, s.stop_id), s.name]));
+  const flaggedEntries = [
+    ...flaggedNotes.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      stopName: stopNameById.get(entry.route_stop_id) ?? "(unknown stop)",
+    })),
+    ...placeEntries.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      stopName: stopNameByLocation.get(stopLocationKey(entry.locationType, entry.locationId)) ?? "(unknown stop)",
+    })),
+  ];
 
   return (
     <div className="flex flex-col gap-2">
@@ -498,9 +526,7 @@ function FlaggedForReview({
           <li key={entry.id} className="flex items-center justify-between gap-3 p-3">
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-foreground">{entry.title}</span>
-              <span className="text-xs text-muted-foreground">
-                Stop: {stopNameById.get(entry.route_stop_id) ?? "(unknown stop)"}
-              </span>
+              <span className="text-xs text-muted-foreground">Stop: {entry.stopName}</span>
             </div>
             <Link to={`/admin/places/discovery/${entry.id}`} className="text-sm underline underline-offset-2">
               Review it
@@ -574,6 +600,10 @@ export default function AdminTrailBuilderPage() {
   // How many place entries the open stop's place already carries (read only
   // here, edited on the place). Null while loading or when no modal is open.
   const [placeEntryCount, setPlaceEntryCount] = useState<number | null>(null);
+  // Place and business entries still flagged on this trail's stops. They hold up
+  // publishing like a flagged trail note does (lib/trail-review-gate.ts).
+  const [flaggedPlaceEntries, setFlaggedPlaceEntries] = useState<FlaggedPlaceEntry[]>([]);
+  const [placeCheckFailed, setPlaceCheckFailed] = useState(false);
   const [discoveryForm, setDiscoveryForm] = useState<DiscoveryContentFormState>(EMPTY_DISCOVERY_FORM);
 
   // 5.4: Publish. Same gate as admin-trails.tsx's list page (see
@@ -620,6 +650,37 @@ export default function AdminTrailBuilderPage() {
     void loadStops(routeId);
     void loadDiscoveryContent(routeId);
   }, [routeId, isNew]);
+
+  // Re-checks the place and business entries whenever the set of saved stops changes.
+  // A failed check blocks publishing instead of passing it.
+  const savedStopKey = stops
+    .filter((s) => !s.id.startsWith("temp-"))
+    .map((s) => stopLocationKey(s.stop_type, s.stop_id))
+    .sort((a, b) => a.localeCompare(b))
+    .join(",");
+
+  useEffect(() => {
+    if (!savedStopKey) {
+      setFlaggedPlaceEntries([]);
+      setPlaceCheckFailed(false);
+      return;
+    }
+    const locations = savedStopKey.split(",").map((key) => key.split(":"));
+    const idsOf = (type: string) => locations.filter(([t]) => t === type).map(([, id]) => id);
+    let cancelled = false;
+    void fetchFlaggedPlaceEntries(idsOf("place"), idsOf("business")).then((result) => {
+      if (cancelled) return;
+      if ("error" in result) {
+        setPlaceCheckFailed(true);
+        return;
+      }
+      setPlaceCheckFailed(false);
+      setFlaggedPlaceEntries(result.entries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [savedStopKey]);
 
   async function loadStops(forRouteId: string) {
     setStopsLoading(true);
@@ -686,7 +747,7 @@ export default function AdminTrailBuilderPage() {
     setDiscoveryLoading(true);
     const { data, error: fetchError } = await supabase
       .from("discovery_content")
-      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url")
+      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url, video_url")
       .eq("route_id", forRouteId)
       .order("sequence_order", { ascending: true });
 
@@ -708,6 +769,7 @@ export default function AdminTrailBuilderPage() {
           unlock_radius: row.unlock_radius,
           needs_place_review: row.needs_place_review,
           photo_url: row.photo_url,
+          video_url: row.video_url,
         }))
     );
   }
@@ -1015,6 +1077,7 @@ export default function AdminTrailBuilderPage() {
       content: entry.content,
       unlock_radius: String(entry.unlock_radius),
       photo_url: entry.photo_url ?? "",
+      video_url: entry.video_url ?? "",
     });
     setDiscoveryError(null);
     setEditingEntryId(entry.id);
@@ -1056,6 +1119,7 @@ export default function AdminTrailBuilderPage() {
           sequence_order: draft.sequence_order,
           unlock_radius: draft.unlock_radius,
           photo_url: draft.photo_url,
+          video_url: draft.video_url,
         },
       ];
     });
@@ -1064,7 +1128,7 @@ export default function AdminTrailBuilderPage() {
     const { data: inserted, error: insertError } = await supabase
       .from("discovery_content")
       .insert(rows)
-      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url");
+      .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url, video_url");
     if (insertError || !inserted) return failure(insertError?.message ?? "could not save it.");
 
     setDiscoveryContent((prev) => [
@@ -1078,6 +1142,7 @@ export default function AdminTrailBuilderPage() {
         unlock_radius: row.unlock_radius,
         needs_place_review: row.needs_place_review,
         photo_url: row.photo_url,
+        video_url: row.video_url,
       })),
     ]);
     return null;
@@ -1087,6 +1152,7 @@ export default function AdminTrailBuilderPage() {
     discoveryForm.title.trim().length > 0 &&
     discoveryForm.content.trim().length > 0 &&
     discoveryForm.unlock_radius.trim().length > 0 &&
+    isVideoLinkValid(discoveryForm.video_url) &&
     !discoverySaving;
 
   // 5.1: title, content, unlock_radius, sequence_order, tied to
@@ -1123,6 +1189,7 @@ export default function AdminTrailBuilderPage() {
         content: discoveryForm.content.trim(),
         unlock_radius: unlockRadius,
         photo_url: discoveryForm.photo_url || null,
+        video_url: normalizeVideoLink(discoveryForm.video_url),
       };
       if (editingEntryId === "new") {
         draftEntryCounter.current += 1;
@@ -1159,8 +1226,9 @@ export default function AdminTrailBuilderPage() {
           sequence_order: nextOrder,
           unlock_radius: unlockRadius,
           photo_url: discoveryForm.photo_url || null,
+          video_url: normalizeVideoLink(discoveryForm.video_url),
         })
-        .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url")
+        .select("id, related_route_stop_id, title, content, sequence_order, unlock_radius, needs_place_review, photo_url, video_url")
         .single();
 
       setDiscoverySaving(false);
@@ -1179,6 +1247,7 @@ export default function AdminTrailBuilderPage() {
           unlock_radius: inserted.unlock_radius,
           needs_place_review: inserted.needs_place_review,
           photo_url: inserted.photo_url,
+          video_url: inserted.video_url,
         },
       ]);
       setEditingEntryId(null);
@@ -1196,6 +1265,7 @@ export default function AdminTrailBuilderPage() {
         content: discoveryForm.content.trim(),
         unlock_radius: unlockRadius,
         photo_url: discoveryForm.photo_url || null,
+        video_url: normalizeVideoLink(discoveryForm.video_url),
       })
       .eq("id", editingEntryId);
 
@@ -1218,6 +1288,7 @@ export default function AdminTrailBuilderPage() {
               content: discoveryForm.content.trim(),
               unlock_radius: unlockRadius,
               photo_url: discoveryForm.photo_url || null,
+              video_url: normalizeVideoLink(discoveryForm.video_url),
             }
           : entry
       )
@@ -1292,8 +1363,13 @@ export default function AdminTrailBuilderPage() {
   // The gate is publishBlockedReason, shown beside the button while it applies.
   // The button is disabled while blocked, so the check here is only a guard.
   // Unpublishing a live trail is never blocked, matching the list page.
-  const flaggedEntries = discoveryContent.filter((entry) => entry.needs_place_review);
-  const blockedReason = publishBlockedReason(status, stops, flaggedEntries.length);
+  const flaggedNoteCount = discoveryContent.filter((entry) => entry.needs_place_review).length;
+  const blockedReason = publishBlockedReason(
+    status,
+    stops,
+    flaggedNoteCount + flaggedPlaceEntries.length,
+    placeCheckFailed
+  );
 
   async function handleTogglePublish() {
     if (!routeId || blockedReason) return;
@@ -1559,7 +1635,7 @@ export default function AdminTrailBuilderPage() {
                 </Button>
               </div>
 
-              <FlaggedForReview discoveryContent={discoveryContent} stops={stops} />
+              <FlaggedForReview discoveryContent={discoveryContent} placeEntries={flaggedPlaceEntries} stops={stops} />
             </div>
           </div>
         </AdminFormCard>

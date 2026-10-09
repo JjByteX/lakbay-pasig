@@ -4,6 +4,7 @@ import { Lock, CheckCircle, QrCode } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { DURATION, EASE_OUT, SPRING_POP, SPRING_SETTLE, haptic } from "@/lib/motion";
 import type { TrailStop as TrailStopData } from "@/lib/trail-types";
+import { VideoEmbed } from "./video-embed";
 
 /**
  * Step 7, Phase 4.1: one stop's render across its three states, branching
@@ -213,6 +214,7 @@ export function TrailStop({
                         className="my-1 aspect-video w-full rounded-md object-cover"
                       />
                     )}
+                    {entry.videoUrl && <VideoEmbed url={entry.videoUrl} title={entry.title} />}
                     <p className="text-sm text-muted-foreground">{entry.content}</p>
                   </motion.li>
                 );

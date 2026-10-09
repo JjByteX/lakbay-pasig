@@ -12,6 +12,7 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
 import TrailsPage from "@/pages/trails";
 import TrailDetailPage from "@/pages/trail-detail";
+import TrailBuilderPage from "@/pages/trail-builder";
 import TrailScanPage from "@/pages/trail-scan";
 import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
@@ -84,6 +85,29 @@ export default function App() {
                 only gates starting/tracking/saving/finishing, Phase 4's
                 concern). Page itself is a stub until Phase 3 builds it out. */}
             <Route path="trails/:id" element={<TrailDetailPage />} />
+            {/* A user's own trail builder (migration 0054, docs/user-trails-
+                plan.md). Unlike the routes around it this one needs a session
+                to render anything, and there is no page underneath to prompt
+                over, so a direct visit signed out redirects to /login, the
+                same hard gate ProtectedRoute already gives admin URLs. The
+                Make a trail button asks in place instead. "new" is a static
+                segment, so it wins over trails/:id. */}
+            <Route
+              path="trails/new"
+              element={
+                <ProtectedRoute>
+                  <TrailBuilderPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="trails/:id/edit"
+              element={
+                <ProtectedRoute>
+                  <TrailBuilderPage />
+                </ProtectedRoute>
+              }
+            />
             {/* The link an object's QR code holds. No ProtectedRoute: a guest
                 lands here and is asked to sign in, not redirected away
                 (same guest rule as Saved). docs/discovery-content-plan.md. */}

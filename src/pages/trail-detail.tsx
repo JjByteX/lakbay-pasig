@@ -204,6 +204,14 @@ function stopStateFor(index: number, highestUnlockedIndex: number, completed: bo
  * ScanArrival): it is read once, cleared from history so a reload never
  * replays it, and handed down so the entry reveals itself and scrolls into
  * view.
+ *
+ * Personal trails (migration 0054, docs/user-trails-plan.md): the owner walks
+ * their own trail on this same page, with Start, GPS unlock and scans
+ * unchanged. Three things are skipped because the database refuses them or
+ * they make no sense: no Save heart (nothing to save, it is already yours),
+ * no completion (completed_routes rejects a personal trail, so nothing is
+ * written and the Restart button, which only shows once completed, never
+ * appears), and no credential (fetchTrailDetail returns none).
  */
 export default function TrailDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -339,6 +347,12 @@ export default function TrailDetailPage() {
       setCompletionChecked(false);
       return;
     }
+    // A personal trail has no completion to look up.
+    if (trail.personal) {
+      setCompleted(false);
+      setCompletionChecked(true);
+      return;
+    }
     setCompletionChecked(false);
     isRouteCompleted(session.user.id, trail.id)
       .then(setCompleted)
@@ -387,7 +401,8 @@ export default function TrailDetailPage() {
   // same inputs the effect already re-ran on.
   const maybeCompleteTrail = useCallback(
     (unlockedStopId: string) => {
-      if (!session || !trail || completed) return;
+      // A personal trail never completes: completed_routes would refuse the row.
+      if (!session || !trail || trail.personal || completed) return;
       const isFinalStop = trail.stops[trail.stops.length - 1]?.id === unlockedStopId;
       if (!isFinalStop) return;
 
@@ -603,7 +618,13 @@ export default function TrailDetailPage() {
         <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        {trail && <SaveRouteButton routeId={trail.id} />}
+        {trail && !trail.personal && <SaveRouteButton routeId={trail.id} />}
+        {/* Change stops, rename or delete: the builder (trail-builder.tsx). */}
+        {trail?.personal && (
+          <Button type="button" variant="outline" size="sm" onClick={() => navigate(`/trails/${trail.id}/edit`)}>
+            Edit trail
+          </Button>
+        )}
       </div>
 
       {error && <ErrorState onRetry={() => setReload((n) => n + 1)}>{error}</ErrorState>}
@@ -619,6 +640,12 @@ export default function TrailDetailPage() {
           <div className="flex flex-col gap-6 xl:sticky xl:top-6">
             <div className="flex flex-col gap-2">
               <h1 className="text-xl font-semibold text-foreground">{trail.name}</h1>
+              {/* Labelled as the person's own, never as a CATO trail. */}
+              {trail.personal && (
+                <Badge variant="secondary" className="w-fit">
+                  Yours · only you can see this
+                </Badge>
+              )}
               {metaLine && <p className="text-sm text-muted-foreground">{metaLine}</p>}
               {/* Phase 5.3: once completed, the badge reads "Earned" instead
                   of the aspirational "Earn," same accent treatment reused

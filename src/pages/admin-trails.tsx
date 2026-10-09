@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { MapTrifold, Pencil, UploadSimple, DownloadSimple, Plus } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
+import { fetchFlaggedPlaceEntries, stopLocationKey } from "@/lib/trail-review-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
@@ -53,6 +54,9 @@ interface TrailRow {
   // first is needed: the gate just needs one link to start from, staff
   // reach the rest via the Places queue itself once there.
   blockingEntry: { id: string; title: string } | null;
+  // True when the place entry check failed, so the gate cannot say the trail
+  // is clear. Publish stays blocked rather than passing on a failed check.
+  gateCheckFailed: boolean;
 }
 
 const STATUS_VARIANT = {
@@ -89,9 +93,12 @@ export default function AdminTrailsPage() {
     // Category Directory Phase 1.7: theme is now a joined trail_categories.
     // name (migration 0023), flattened below so TrailRow's own theme field
     // stays string | null, unchanged.
+    // personal = false: a staff account's own private trail (migration 0054)
+    // is a draft that can never be published, so it has no place in this list.
     const { data: routes } = await supabase
       .from("routes")
       .select("id, name, status, trail_categories(name)")
+      .eq("personal", false)
       .order("updated_at", { ascending: false });
 
     if (!routes || routes.length === 0) return [];
@@ -99,7 +106,7 @@ export default function AdminTrailsPage() {
     const routeIds = routes.map((r) => r.id);
 
     const [{ data: stops }, { data: flagged }] = await Promise.all([
-      supabase.from("route_stops").select("route_id").in("route_id", routeIds),
+      supabase.from("route_stops").select("route_id, stop_type, stop_id").in("route_id", routeIds),
       // Phase 5.4: any linked discovery_content still flagged blocks
       // publish, per admin-panel-spec.md's Trail Publishing exception.
       // Ordered so the earliest-created flagged row is a stable "first"
@@ -113,14 +120,37 @@ export default function AdminTrailsPage() {
     ]);
 
     const stopCounts = new Map<string, number>();
+    const trailsByLocation = new Map<string, string[]>();
+    const placeIds = new Set<string>();
+    const businessIds = new Set<string>();
     for (const stop of stops ?? []) {
       stopCounts.set(stop.route_id, (stopCounts.get(stop.route_id) ?? 0) + 1);
+      const key = stopLocationKey(stop.stop_type, stop.stop_id);
+      trailsByLocation.set(key, [...(trailsByLocation.get(key) ?? []), stop.route_id]);
+      (stop.stop_type === "place" ? placeIds : businessIds).add(stop.stop_id);
     }
 
     const blockingByRoute = new Map<string, { id: string; title: string }>();
     for (const entry of flagged ?? []) {
       if (!blockingByRoute.has(entry.route_id)) {
         blockingByRoute.set(entry.route_id, { id: entry.id, title: entry.title });
+      }
+    }
+
+    // A place's or business's own entries have no route_id, so they reach a
+    // trail through its stops (lib/trail-review-gate.ts). A trail note still
+    // comes first when a trail has both.
+    const placeResult = await fetchFlaggedPlaceEntries([...placeIds], [...businessIds]);
+    const gateFailedRoutes = new Set<string>();
+    if ("error" in placeResult) {
+      for (const routeIdsForLocation of trailsByLocation.values()) {
+        for (const routeId of routeIdsForLocation) gateFailedRoutes.add(routeId);
+      }
+    } else {
+      for (const entry of placeResult.entries) {
+        for (const routeId of trailsByLocation.get(stopLocationKey(entry.locationType, entry.locationId)) ?? []) {
+          if (!blockingByRoute.has(routeId)) blockingByRoute.set(routeId, { id: entry.id, title: entry.title });
+        }
       }
     }
 
@@ -131,6 +161,7 @@ export default function AdminTrailsPage() {
       status: r.status,
       stop_count: stopCounts.get(r.id) ?? 0,
       blockingEntry: blockingByRoute.get(r.id) ?? null,
+      gateCheckFailed: gateFailedRoutes.has(r.id),
     }));
   }
 
@@ -150,6 +181,11 @@ export default function AdminTrailsPage() {
         message: `"${trail.blockingEntry.title}" still needs review before this trail can publish.`,
         link: { href: `/admin/places/discovery/${trail.blockingEntry.id}`, label: "Review it" },
       });
+      return;
+    }
+
+    if (trail.status === "draft" && trail.gateCheckFailed) {
+      setToggleError({ message: "Could not check this trail's place entries. Reload and try again.", link: null });
       return;
     }
 

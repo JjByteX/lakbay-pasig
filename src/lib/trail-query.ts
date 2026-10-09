@@ -11,6 +11,11 @@ import type { TrailCredential, TrailDetail, TrailDiscoveryContent, TrailStop, Tr
 // discover-query.ts's fetchPlaces gives for skipping a redundant
 // verification_status filter.
 //
+// Migration 0054 (personal trails) breaks "RLS alone": routes_own_personal
+// adds the signed-in user's own private trails to every routes read. So the
+// two list fetches below (fetchPublishedTrails, fetchRouteSummariesByIds)
+// add .eq("personal", false). Detail keeps the owner's own trail on purpose.
+//
 // Credential name is resolved with a second query rather than an embedded
 // select (`trail_credentials(credential_name)`), since trail_credentials
 // has no row for every route (the seed data's still-draft Cultural Tour
@@ -62,6 +67,7 @@ export async function fetchRouteSummariesByIds(routeIds: string[]): Promise<Trai
   const { data: routes, error: routesError } = await supabase
     .from("routes")
     .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
+    .eq("personal", false)
     .in("id", routeIds);
 
   if (routesError) throw routesError;
@@ -94,7 +100,8 @@ export async function fetchPublishedTrails(): Promise<TrailSummary[]> {
   // unchanged for every existing caller.
   const { data, error } = await supabase
     .from("routes")
-    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)");
+    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
+    .eq("personal", false);
 
   if (error) throw error;
   const routes = data ?? [];
@@ -182,7 +189,7 @@ async function fetchDiscoveryContentByStopId(
 ): Promise<Map<string, TrailDiscoveryContent[]>> {
   const { data, error } = await supabase
     .from("discovery_content")
-    .select("id, related_route_stop_id, title, content, unlock_radius, photo_url")
+    .select("id, related_route_stop_id, title, content, unlock_radius, photo_url, video_url")
     .eq("route_id", routeId)
     .eq("status", "active")
     .order("sequence_order", { ascending: true });
@@ -200,6 +207,7 @@ async function fetchDiscoveryContentByStopId(
       unlock_radius: row.unlock_radius,
       requiresScan: false,
       photoUrl: row.photo_url,
+      videoUrl: row.video_url,
     });
     byStopId.set(row.related_route_stop_id, list);
   }
@@ -219,7 +227,9 @@ async function fetchPlaceEntriesByLocation(
 
   const { data, error } = await supabase
     .from("discovery_content")
-    .select("id, related_location_type, related_location_id, title, content, unlock_radius, qr_token, photo_url")
+    .select(
+      "id, related_location_type, related_location_id, title, content, unlock_radius, qr_token, photo_url, video_url"
+    )
     .is("route_id", null)
     .eq("status", "active")
     .in("related_location_id", locationIds)
@@ -237,6 +247,7 @@ async function fetchPlaceEntriesByLocation(
       unlock_radius: row.unlock_radius,
       requiresScan: row.qr_token !== null,
       photoUrl: row.photo_url,
+      videoUrl: row.video_url,
     });
     byLocation.set(key, list);
   }
@@ -262,13 +273,18 @@ async function fetchCredential(routeId: string): Promise<TrailCredential | null>
  * routes_select_public (0005) means a draft or nonexistent id and a
  * genuinely-missing id read identically here, both are "nothing to
  * show."
+ *
+ * Migration 0054: a personal trail the caller owns also resolves here, and
+ * only for its owner (another user's id reads as not found). No filter is
+ * added on purpose: this is how the owner walks their own trail. `personal`
+ * is carried on the result so the page can skip completion and credentials.
  */
 export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | null> {
   // Category Directory Phase 1.7: same embed-and-flatten fix as
   // fetchPublishedTrails above.
   const { data: route, error: routeError } = await supabase
     .from("routes")
-    .select("id, name, estimated_duration, estimated_budget, run_type, trail_categories(name)")
+    .select("id, name, personal, estimated_duration, estimated_budget, run_type, trail_categories(name)")
     .eq("id", routeId)
     .maybeSingle();
 
@@ -288,7 +304,8 @@ export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | n
     resolveStopLocations(rows),
     fetchDiscoveryContentByStopId(routeId),
     fetchPlaceEntriesByLocation(rows),
-    fetchCredential(routeId),
+    // A personal trail never has a credential, skip the round trip.
+    route.personal ? Promise.resolve(null) : fetchCredential(routeId),
   ]);
 
   // A trail can stop at the same place twice. Its own entries show on the
@@ -321,6 +338,7 @@ export async function fetchTrailDetail(routeId: string): Promise<TrailDetail | n
   return {
     id: route.id,
     name: route.name,
+    personal: route.personal,
     theme: readEmbeddedName(route.trail_categories),
     estimated_duration: route.estimated_duration,
     estimated_budget: route.estimated_budget,

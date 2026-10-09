@@ -31,8 +31,9 @@ export async function unlockEntry(userId: string, entryId: string): Promise<void
 
 // What the scan page needs from a scanned code: which entry it opens and
 // which place or business it belongs to. Read through
-// discovery_content_select_public (0050), so a code whose place is in no
-// published trail finds nothing, same as a code that does not exist.
+// discovery_content_select_public (0050, widened in 0054), so a code whose
+// place is in no published trail and none of the caller's own personal trails
+// finds nothing, same as a code that does not exist.
 export interface ScannedEntry {
   id: string;
   related_location_type: "place" | "business";

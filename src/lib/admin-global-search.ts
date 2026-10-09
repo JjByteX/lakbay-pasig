@@ -156,10 +156,13 @@ async function searchBusinesses(q: string): Promise<AdminSearchBusinessHit[]> {
 
 async function searchTrails(q: string): Promise<AdminSearchTrailHit[]> {
   // routes_select_staff (0005): build_trails or admin. Same fields
-  // admin-trails.tsx's own load query selects.
+  // admin-trails.tsx's own load query selects. personal = false: a staff
+  // account's own private trail (migration 0054) is not an official trail and
+  // has no admin page, so it stays out of this list.
   const { data, error } = await supabase
     .rpc("search_trails", { q, lim: RESULT_LIMIT })
-    .select("id, name, trail_categories(name), status");
+    .select("id, name, trail_categories(name), status")
+    .eq("personal", false);
 
   if (error) throw error;
   return (Array.isArray(data) ? data : []).map((row) => ({

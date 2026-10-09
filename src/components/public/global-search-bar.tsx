@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CircleNotch, MagnifyingGlass, Microphone, Stop } from "@phosphor-icons/react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { VerificationBadge } from "./result-card";
@@ -248,6 +249,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                   key={trail.id}
                   title={trail.name}
                   subtitle={trail.theme}
+                  badge={trail.personal ? <Badge variant="secondary">Yours</Badge> : undefined}
                   onClick={() => goTo(`/trails/${trail.id}`)}
                 />
               ))}

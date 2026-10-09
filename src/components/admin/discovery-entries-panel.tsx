@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Pencil, QrCode, Trash } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, BookOpen, Pencil, Printer, QrCode, Trash } from "@phosphor-icons/react";
 import QRCode from "qrcode";
 import { supabase } from "@/lib/supabase";
 import { DEFAULT_UNLOCK_RADIUS } from "@/lib/trail-unlock";
@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { CharCount } from "@/components/business/business-fields";
 import { AdminFormCard } from "./admin-form-card";
 import { DiscoveryPhotoField } from "./discovery-photo-field";
+import { DiscoveryVideoField, isVideoLinkValid } from "./discovery-video-field";
+import { normalizeVideoLink } from "@/lib/video-embed";
 
 /**
  * Who may write place entries: the same set migration 0013 grants
@@ -49,6 +51,7 @@ interface EntryRow {
   qr_token: string | null;
   needs_place_review: boolean;
   photo_url: string | null;
+  video_url: string | null;
 }
 
 interface EntryForm {
@@ -58,6 +61,8 @@ interface EntryForm {
   requires_scan: boolean;
   // "" means no photo. The file is already uploaded once this holds a url.
   photo_url: string;
+  // The link as typed. "" means no video. Stored cleaned (video-embed.ts).
+  video_url: string;
 }
 
 const EMPTY_FORM: EntryForm = {
@@ -66,10 +71,11 @@ const EMPTY_FORM: EntryForm = {
   unlock_radius: String(DEFAULT_UNLOCK_RADIUS),
   requires_scan: false,
   photo_url: "",
+  video_url: "",
 };
 
 const SELECT_COLUMNS =
-  "id, title, content, sequence_order, unlock_radius, qr_token, needs_place_review, photo_url";
+  "id, title, content, sequence_order, unlock_radius, qr_token, needs_place_review, photo_url, video_url";
 
 // The link the QR code holds. A phone's own camera opens it (trail-scan.tsx).
 // The host is VITE_SITE_URL when set, so a code downloaded from localhost or
@@ -94,6 +100,51 @@ async function downloadQr(entry: EntryRow): Promise<void> {
   link.href = dataUrl;
   link.download = qrFileName(entry.title);
   link.click();
+}
+
+// Entry titles are staff typed, so they are escaped before going into the
+// print page's markup.
+function escapeHtml(text: string): string {
+  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+// Opens the browser's print dialog for one code: the title and the code on a
+// plain page, nothing else. Prints from a hidden frame, so no pop-up window
+// is opened and the admin page is untouched. The frame is removed after the
+// dialog closes.
+async function printQr(entry: EntryRow): Promise<void> {
+  if (!entry.qr_token) return;
+  const dataUrl = await QRCode.toDataURL(scanUrl(entry.qr_token), { width: 768, margin: 2 });
+
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(frame);
+
+  const doc = frame.contentDocument;
+  if (!doc) {
+    frame.remove();
+    throw new Error("Print frame unavailable");
+  }
+  doc.open();
+  doc.write(
+    `<!doctype html><html><head><title>${escapeHtml(entry.title)}</title><style>
+      @page { margin: 16mm; }
+      body { margin: 0; font-family: system-ui, sans-serif; text-align: center; }
+      h1 { font-size: 20pt; font-weight: 600; margin: 0 0 8mm; }
+      img { width: 120mm; height: 120mm; }
+    </style></head><body><h1>${escapeHtml(entry.title)}</h1><img id="qr" alt="" src="${dataUrl}"></body></html>`
+  );
+  doc.close();
+
+  const img = doc.getElementById("qr") as HTMLImageElement | null;
+  const startPrint = () => {
+    frame.contentWindow?.addEventListener("afterprint", () => frame.remove());
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+  };
+  if (img?.complete) startPrint();
+  else img?.addEventListener("load", startPrint, { once: true });
 }
 
 export function DiscoveryEntriesPanel({
@@ -130,7 +181,11 @@ export function DiscoveryEntriesPanel({
   }, [load]);
 
   const canSubmit =
-    form.title.trim().length > 0 && form.content.trim().length > 0 && form.unlock_radius.trim().length > 0 && !saving;
+    form.title.trim().length > 0 &&
+    form.content.trim().length > 0 &&
+    form.unlock_radius.trim().length > 0 &&
+    isVideoLinkValid(form.video_url) &&
+    !saving;
 
   function startNew() {
     setForm(EMPTY_FORM);
@@ -145,6 +200,7 @@ export function DiscoveryEntriesPanel({
       unlock_radius: String(entry.unlock_radius),
       requires_scan: entry.qr_token !== null,
       photo_url: entry.photo_url ?? "",
+      video_url: entry.video_url ?? "",
     });
     setError(null);
     setEditingId(entry.id);
@@ -172,6 +228,7 @@ export function DiscoveryEntriesPanel({
       content: form.content.trim(),
       unlock_radius: unlockRadius,
       photo_url: form.photo_url || null,
+      video_url: normalizeVideoLink(form.video_url),
     };
 
     if (editingId === "new") {
@@ -272,6 +329,15 @@ export function DiscoveryEntriesPanel({
     setEntries(reordered.map((e) => ({ ...e, sequence_order: nextOrderById.get(e.id) as number })));
   }
 
+  async function handlePrint(entry: EntryRow) {
+    setError(null);
+    try {
+      await printQr(entry);
+    } catch {
+      setError("Couldn't print the QR code. Try again.");
+    }
+  }
+
   async function handleDownload(entry: EntryRow) {
     setError(null);
     try {
@@ -336,6 +402,10 @@ export function DiscoveryEntriesPanel({
           savedUrl={editingEntry?.photo_url ?? null}
           onChange={(photoUrl) => setForm((prev) => ({ ...prev, photo_url: photoUrl }))}
           onError={setError}
+        />
+        <DiscoveryVideoField
+          value={form.video_url}
+          onChange={(video) => setForm((prev) => ({ ...prev, video_url: video }))}
         />
         <div className="flex flex-col gap-2">
           <Label htmlFor="entry_unlock_radius">Unlock Radius (meters)</Label>
@@ -426,10 +496,16 @@ export function DiscoveryEntriesPanel({
                   <span className="sr-only">Move down</span>
                 </Button>
                 {entry.qr_token && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handleDownload(entry)}>
-                    <QrCode className="h-4 w-4" />
-                    <span className="sr-only">Download QR</span>
-                  </Button>
+                  <>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handlePrint(entry)}>
+                      <Printer className="h-4 w-4" />
+                      <span className="sr-only">Print QR</span>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void handleDownload(entry)}>
+                      <QrCode className="h-4 w-4" />
+                      <span className="sr-only">Download QR</span>
+                    </Button>
+                  </>
                 )}
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(entry)}>
                   <Pencil className="h-4 w-4" />

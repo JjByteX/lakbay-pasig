@@ -15,7 +15,8 @@ import { usePageTitle } from "@/lib/page-title";
  * tiles, the FOSSGIS routing servers, Photon, Groq through
  * api/transcribe.js, Google for sign in and the landing map embed), which
  * tables hold personal records (profiles, saved_places, saved_businesses,
- * route_progress, completed_routes, rec_hides, activity_log) and that no
+ * route_progress, completed_routes, rec_hides, activity_log, plus the private
+ * trails a user builds, which sit in routes and route_stops flagged personal) and that no
  * analytics or advertising script exists in the app. If any of those
  * change, this page has to change with them. Update LAST_UPDATED too.
  *
@@ -87,7 +88,7 @@ export default function PrivacyPage() {
               "Your email address and, if you sign up with email, a password. The password is stored in scrambled (hashed) form by our sign in provider. We cannot read it.",
               "If you continue with Google, Google shares your email address and basic profile details (name and profile picture) with us. We save that name and picture to your profile so it does not start blank, and you can change or remove them anytime. We do not receive your Google password, and we do not read your Gmail, contacts or any other Google data.",
               "Details you choose to add in Settings: username, first and last name, contact number, date of birth, profile picture and preferred categories, plus your light or dark mode and text size.",
-              "What you do in the app: places, businesses and trails you save, your trail progress and completed trails, and items you mark as Not interested.",
+              "What you do in the app: places, businesses and trails you save, the private trails you build (only you can see them), your trail progress and completed trails, and items you mark as Not interested.",
               "If you list a business: the business details, photos and contact information you enter. These are shown publicly once CATO approves the listing.",
               "For CATO staff accounts: a record of staff actions (who did what, and when), kept for accountability.",
             ]}
@@ -141,8 +142,8 @@ export default function PrivacyPage() {
 
         <Section title="How long we keep it">
           <P>
-            We keep your account data while your account exists. If your account is deleted, your profile, saved items
-            and trail progress are deleted with it. Records of staff actions may be kept longer for accountability.
+            We keep your account data while your account exists. If your account is deleted, your profile, saved items,
+            private trails and trail progress are deleted with it. Records of staff actions may be kept longer for accountability.
           </P>
         </Section>
 

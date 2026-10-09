@@ -17,31 +17,65 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 export type PickableLocationType = "place" | "business";
 
+// latitude/longitude ride along so a caller that orders stops by distance (the
+// personal trail builder, trail-builder.tsx) needs no second lookup. Null when
+// the row has no geocoded address yet.
 export interface PickedLocation {
   type: PickableLocationType;
   id: string;
   name: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface PlaceRow {
   id: string;
   name: string;
   category: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface BusinessRow {
   id: string;
   name: string;
   category: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  pending: boolean;
 }
 
 interface PlaceBusinessPickerProps {
   onPick: (location: PickedLocation) => void;
   /** ids already used elsewhere (e.g. already added as a stop), hidden from results so the same row can't be picked twice. */
   excludeIds?: Set<string>;
+  /**
+   * Also list businesses still pending CATO review (migration 0015 makes them
+   * public). Off by default: staff building an official trail want verified
+   * rows only. Places have no public pending state, so this never affects them.
+   */
+  includePending?: boolean;
+  /** ids (places and businesses) to list first with a "Saved" tag, so a person can pick from what they saved. */
+  savedIds?: Set<string>;
+  /** ids that hold a secret to unlock (locations_with_entries, 0055). Tagged "Has a secret" and listed right after the saved ones. */
+  markedIds?: Set<string>;
 }
 
-export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusinessPickerProps>) {
+// Saved rows first, then rows with a secret, each group keeping its name order
+// (Array.sort is stable).
+function listFirst<T extends { id: string }>(rows: T[], savedIds?: Set<string>, markedIds?: Set<string>): T[] {
+  if (!savedIds?.size && !markedIds?.size) return rows;
+  const rank = (id: string) => (savedIds?.has(id) ? 2 : 0) + (markedIds?.has(id) ? 1 : 0);
+  return [...rows].sort((a, b) => rank(b.id) - rank(a.id));
+}
+
+export function PlaceBusinessPicker({
+  onPick,
+  excludeIds,
+  includePending = false,
+  savedIds,
+  markedIds,
+}: Readonly<PlaceBusinessPickerProps>) {
   const [query, setQuery] = useState("");
   const [places, setPlaces] = useState<PlaceRow[] | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRow[] | null>(null);
@@ -61,22 +95,29 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
     // a joined business_categories.name (migration 0027, category_id
     // replaces the old plain text column), flattened the same way, same
     // pattern the places query above already uses for place_categories.
+    //
+    // includePending (personal trails): businesses may also be pending, the
+    // same two statuses the Saved page and 0015's public read allow.
+    const businessQuery = supabase
+      .from("businesses")
+      .select("id, name, latitude, longitude, verification_status, business_categories(name)");
     void Promise.all([
       supabase
         .from("places")
-        .select("id, name, place_categories(name)")
+        .select("id, name, latitude, longitude, place_categories(name)")
         .eq("verification_status", "verified")
         .order("name", { ascending: true }),
-      supabase
-        .from("businesses")
-        .select("id, name, business_categories(name)")
-        .eq("verification_status", "verified")
-        .order("name", { ascending: true }),
+      (includePending
+        ? businessQuery.in("verification_status", ["verified", "pending"])
+        : businessQuery.eq("verification_status", "verified")
+      ).order("name", { ascending: true }),
     ]).then(([placesRes, businessesRes]) => {
       if (cancelled) return;
       const placeRows = (placesRes.data ?? []) as {
         id: string;
         name: string;
+        latitude: number | null;
+        longitude: number | null;
         place_categories: { name: string } | { name: string }[] | null;
       }[];
       setPlaces(
@@ -88,12 +129,16 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
       const businessRows = (businessesRes.data ?? []) as {
         id: string;
         name: string;
+        latitude: number | null;
+        longitude: number | null;
+        verification_status: string;
         business_categories: { name: string } | { name: string }[] | null;
       }[];
       setBusinesses(
-        businessRows.map(({ business_categories, ...b }) => ({
+        businessRows.map(({ business_categories, verification_status, ...b }) => ({
           ...b,
           category: readEmbeddedName(business_categories),
+          pending: verification_status === "pending",
         }))
       );
     });
@@ -101,16 +146,24 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [includePending]);
 
   const loading = places === null || businesses === null;
   const normalizedQuery = query.trim().toLowerCase();
 
-  const filteredPlaces = (places ?? []).filter(
-    (p) => !excludeIds?.has(p.id) && (!normalizedQuery || p.name.toLowerCase().includes(normalizedQuery))
+  const filteredPlaces = listFirst(
+    (places ?? []).filter(
+      (p) => !excludeIds?.has(p.id) && (!normalizedQuery || p.name.toLowerCase().includes(normalizedQuery))
+    ),
+    savedIds,
+    markedIds
   );
-  const filteredBusinesses = (businesses ?? []).filter(
-    (b) => !excludeIds?.has(b.id) && (!normalizedQuery || b.name.toLowerCase().includes(normalizedQuery))
+  const filteredBusinesses = listFirst(
+    (businesses ?? []).filter(
+      (b) => !excludeIds?.has(b.id) && (!normalizedQuery || b.name.toLowerCase().includes(normalizedQuery))
+    ),
+    savedIds,
+    markedIds
   );
 
   const isEmpty = filteredPlaces.length === 0 && filteredBusinesses.length === 0;
@@ -122,7 +175,13 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
   if (loading) {
     pickerBody = <p className="text-sm text-muted-foreground">Loading…</p>;
   } else if (isEmpty) {
-    pickerBody = <EmptyState icon={MagnifyingGlass}>Matching verified places and businesses will appear here.</EmptyState>;
+    pickerBody = (
+      <EmptyState icon={MagnifyingGlass}>
+        {includePending
+          ? "Matching places and businesses will appear here."
+          : "Matching verified places and businesses will appear here."}
+      </EmptyState>
+    );
   } else {
     pickerBody = (
       <div className="flex max-h-80 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card">
@@ -132,7 +191,17 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
             name={place.name}
             category={place.category}
             typeLabel="Place"
-            onClick={() => onPick({ type: "place", id: place.id, name: place.name })}
+            saved={savedIds?.has(place.id) ?? false}
+            hasSecret={markedIds?.has(place.id) ?? false}
+            onClick={() =>
+              onPick({
+                type: "place",
+                id: place.id,
+                name: place.name,
+                latitude: place.latitude,
+                longitude: place.longitude,
+              })
+            }
           />
         ))}
         {filteredBusinesses.map((business) => (
@@ -141,7 +210,18 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
             name={business.name}
             category={business.category}
             typeLabel="Business"
-            onClick={() => onPick({ type: "business", id: business.id, name: business.name })}
+            saved={savedIds?.has(business.id) ?? false}
+            hasSecret={markedIds?.has(business.id) ?? false}
+            pending={business.pending}
+            onClick={() =>
+              onPick({
+                type: "business",
+                id: business.id,
+                name: business.name,
+                latitude: business.latitude,
+                longitude: business.longitude,
+              })
+            }
           />
         ))}
       </div>
@@ -153,7 +233,7 @@ export function PlaceBusinessPicker({ onPick, excludeIds }: Readonly<PlaceBusine
       <div className="relative">
         <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search verified places and businesses"
+          placeholder={includePending ? "Search places and businesses" : "Search verified places and businesses"}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-9"
@@ -169,11 +249,17 @@ function PickerRow({
   name,
   category,
   typeLabel,
+  saved = false,
+  hasSecret = false,
+  pending = false,
   onClick,
 }: Readonly<{
   name: string;
   category: string | null;
   typeLabel: string;
+  saved?: boolean;
+  hasSecret?: boolean;
+  pending?: boolean;
   onClick: () => void;
 }>) {
   return (
@@ -186,9 +272,12 @@ function PickerRow({
         <span className="truncate text-sm font-semibold text-foreground">{name}</span>
         {category && <span className="truncate text-xs text-muted-foreground">{category}</span>}
       </div>
-      <Badge variant="secondary" className="shrink-0">
-        {typeLabel}
-      </Badge>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        {hasSecret && <Badge variant="default">Has a secret</Badge>}
+        {saved && <Badge variant="accent">Saved</Badge>}
+        {pending && <Badge variant="outline">Pending</Badge>}
+        <Badge variant="secondary">{typeLabel}</Badge>
+      </div>
     </button>
   );
 }

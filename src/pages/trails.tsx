@@ -1,11 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchPublishedTrails } from "@/lib/trail-query";
+import { fetchMyTrails, type PersonalTrailSummary } from "@/lib/personal-trails";
+import { useAuth } from "@/lib/auth-context";
+import { useAuthModal } from "@/lib/auth-modal";
 import type { TrailSummary } from "@/lib/trail-types";
 import { TrailCard } from "@/components/public/trail-card";
 import { PageContainer } from "@/components/public/page-container";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapTrifold } from "@phosphor-icons/react";
+import { MapTrifold, Plus } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { usePageTitle } from "@/lib/page-title";
@@ -41,6 +45,10 @@ function TrailListSkeleton() {
   );
 }
 
+function stopCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "stop" : "stops"}`;
+}
+
 /**
  * Step 7, Phase 2.3-2.4: replaces the stub (step-5-phases.md Phase 2.5),
  * per build-order.md item 7 and step-7-trail-plan.md's Trail catalog
@@ -56,10 +64,21 @@ function TrailListSkeleton() {
  * trail-plan.md's own States section. This is a first correct pass per
  * Phase 2.4's own note, not a placeholder to redo later; the full
  * cross-cutting polish pass is Phase 6.
+ *
+ * Personal trails (migration 0054, docs/user-trails-plan.md): a "Make a
+ * trail" button for everyone (a guest is asked to sign in, in place, same as
+ * Save and Start) and, for a signed-in person who has made some, a "Your
+ * trails" section above the catalog. The section is private to them and
+ * labelled as theirs, and the catalog is headed "CATO trails" once it shows.
+ * A failed read of the section leaves it out and never blocks the catalog.
  */
 export default function TrailsPage() {
   usePageTitle("Trails");
   const navigate = useNavigate();
+  const { session } = useAuth();
+  const { openAuth } = useAuthModal();
+  const userId = session?.user.id;
+  const [myTrails, setMyTrails] = useState<PersonalTrailSummary[]>([]);
   const [trails, setTrails] = useState<TrailSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +95,25 @@ export default function TrailsPage() {
       })
       .finally(() => setLoading(false));
   }, [reload]);
+
+  // Signed-in only. Reloaded with the catalog's retry, and cleared on sign out.
+  useEffect(() => {
+    if (!userId) {
+      setMyTrails([]);
+      return;
+    }
+    fetchMyTrails(userId)
+      .then(setMyTrails)
+      .catch(() => setMyTrails([]));
+  }, [userId, reload]);
+
+  function handleMakeTrail() {
+    if (!session) {
+      openAuth("login");
+      return;
+    }
+    navigate("/trails/new");
+  }
 
   // Extracted from a nested ternary (error ? ... : loading ? ... :
   // trails.length === 0 ? ... : ...) inline in the render below. States
@@ -108,7 +146,32 @@ export default function TrailsPage() {
 
   return (
     <PageContainer width="wide" className="gap-4">
-      <h1 className="text-xl font-semibold text-foreground">Trails</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-foreground">Trails</h1>
+        <Button type="button" variant="outline" size="sm" onClick={handleMakeTrail}>
+          <Plus weight="bold" className="mr-1 h-3 w-3" aria-hidden="true" />
+          Make a trail
+        </Button>
+      </div>
+      {myTrails.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h2 className="text-base font-semibold text-foreground">Your trails</h2>
+          <p className="text-xs text-muted-foreground">Only you can see these.</p>
+          <ul className="-mx-6 flex flex-col divide-y divide-border">
+            {myTrails.map((trail) => (
+              <li key={trail.id}>
+                <TrailCard
+                  inline
+                  trail={trail}
+                  meta={stopCountLabel(trail.stopCount)}
+                  onClick={() => navigate(`/trails/${trail.id}`)}
+                />
+              </li>
+            ))}
+          </ul>
+          <h2 className="mt-4 text-base font-semibold text-foreground">CATO trails</h2>
+        </section>
+      )}
       {body}
     </PageContainer>
   );

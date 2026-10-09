@@ -38,6 +38,9 @@ export async function fetchTrailInclusions(businessId: string): Promise<TrailInc
     .from("routes")
     .select("id, name, trail_categories(name)")
     .eq("status", "published")
+    // Migration 0054: a personal trail is always a draft, so the status filter
+    // already drops it. Kept explicit so this count never leans on that alone.
+    .eq("personal", false)
     .in("id", routeIds);
 
   if (routesError) throw routesError;

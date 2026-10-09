@@ -25,6 +25,9 @@ interface TrailCardProps {
   // One line at md+ (name left, meta right). Opt-in: the Trails catalog
   // passes it; stacked below md.
   inline?: boolean;
+  // Replaces the theme, duration and budget line. A personal trail has none of
+  // those, so the Trails tab shows its stop count here instead.
+  meta?: string;
 }
 
 // Theme, duration and budget on one line. Shared with the Saved page's trail
@@ -34,8 +37,8 @@ export function trailMeta(trail: TrailSummary): string {
   return [trail.theme, trail.estimated_duration, trail.estimated_budget].filter(Boolean).join(" · ");
 }
 
-export function TrailCard({ trail, onClick, inline = false }: Readonly<TrailCardProps>) {
-  const meta = trailMeta(trail);
+export function TrailCard({ trail, onClick, inline = false, meta: metaOverride }: Readonly<TrailCardProps>) {
+  const meta = metaOverride ?? trailMeta(trail);
 
   return (
     <button

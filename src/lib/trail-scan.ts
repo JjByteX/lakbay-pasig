@@ -63,8 +63,11 @@ export async function scanEntry(
   const entry = await fetchEntryByToken(token);
   if (!entry) return { status: "not-found" };
 
-  // Every published trail with a stop at this place or business. route_stops
-  // is public-read for published routes only (0005), so a draft never shows.
+  // Every trail the visitor can see with a stop at this place or business:
+  // published trails (0005), plus the visitor's own personal trails (0054,
+  // route_stops_own_personal). Nobody else's draft shows, so no filter is
+  // needed here. A personal trail then goes through the same unlock and
+  // radius checks below as an official one.
   const { data: stopRows, error } = await supabase
     .from("route_stops")
     .select("route_id")

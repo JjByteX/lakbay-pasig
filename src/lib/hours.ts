@@ -254,6 +254,76 @@ export function getHoursDisplay(value: string | null | undefined): HoursDisplay 
 }
 
 // ---------------------------------------------------------------------------
+// Open or closed right now
+// ---------------------------------------------------------------------------
+
+// Every place and business is in Pasig, so "now" is read on Manila's clock and
+// not the device's, which could be set to another zone.
+const MANILA_TIME_ZONE = "Asia/Manila";
+
+export interface OpenStatus {
+  open: boolean;
+  /** "Open now", "Closed now", "Temporarily closed" or "Permanently closed". */
+  label: string;
+  /** "until 5:00 PM", "opens 9:00 AM", "opens Tue 9:00 AM", "open 24 hours", or null. */
+  detail: string | null;
+}
+
+function manilaClock(now: Date): { dayIndex: number; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: MANILA_TIME_ZONE,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    dayIndex: DAYS.findIndex((day) => day.short === part("weekday")),
+    minutes: (Number(part("hour")) * 60 + Number(part("minute"))) % MINUTES_PER_DAY,
+  };
+}
+
+// When it next opens: later today, else the first opening in the next seven
+// days. null when no day has any hours.
+function describeNextOpening(days: WeeklyDays, dayIndex: number, minutes: number): string | null {
+  const later = days[DAYS[dayIndex].key].find(([opens]) => timeToMinutes(opens) > minutes);
+  if (later) return `opens ${formatTime12(later[0])}`;
+
+  for (let step = 1; step <= DAYS.length; step += 1) {
+    const day = DAYS[(dayIndex + step) % DAYS.length];
+    const first = days[day.key][0];
+    if (first) return `opens ${step === 1 ? "tomorrow" : day.short} ${formatTime12(first[0])}`;
+  }
+  return null;
+}
+
+/**
+ * Whether a place or business is open at `now`, from the same stored hours the
+ * public pages print. null when there is nothing reliable to say: no hours, or
+ * legacy free text (see the note at the top of this file), since guessing a
+ * schedule out of text could send someone to a closed door. A range runs from
+ * its opening time up to, not including, its closing time.
+ */
+export function getOpenStatus(value: string | null | undefined, now: Date = new Date()): OpenStatus | null {
+  const parsed = parseHoursValue(value);
+  if (parsed.kind !== "schedule") return null;
+  if (parsed.mode === "temp_closed") return { open: false, label: "Temporarily closed", detail: null };
+  if (parsed.mode === "perm_closed") return { open: false, label: "Permanently closed", detail: null };
+
+  const { dayIndex, minutes } = manilaClock(now);
+  if (dayIndex < 0) return null;
+
+  const ranges = parsed.days[DAYS[dayIndex].key];
+  const current = ranges.find(([opens, closes]) => minutes >= timeToMinutes(opens) && minutes < timeToMinutes(closes));
+  if (current) {
+    const allDay = ranges.length === 1 && current[0] === "00:00" && current[1] === END_OF_DAY;
+    return { open: true, label: "Open now", detail: allDay ? "open 24 hours" : `until ${formatTime12(current[1])}` };
+  }
+  return { open: false, label: "Closed now", detail: describeNextOpening(parsed.days, dayIndex, minutes) };
+}
+
+// ---------------------------------------------------------------------------
 // Durations ("Estimated Visit Duration", "Estimated Duration")
 // ---------------------------------------------------------------------------
 

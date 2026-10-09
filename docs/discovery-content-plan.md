@@ -1,6 +1,6 @@
 # discovery-content-plan.md
 
-Status: built, not yet run. Logged as decision-log.md entry #44.
+Status: built, not yet run. Logged as decision-log.md entries #44 to #47.
 
 ## Done
 
@@ -24,7 +24,7 @@ Status: built, not yet run. Logged as decision-log.md entry #44.
 - The trail opens with the scanned entry revealed and scrolled into view, once.
 
 **Admin**
-- Discovery content tab on place and business pages: add, edit, delete, reorder, QR checkbox, Download QR. A warning shows before an untick removes a code. A failed reorder reloads the list.
+- Discovery content tab on place and business pages: add, edit, delete, reorder, QR checkbox, Download QR and Print QR (the title and the code on a plain page, through the browser print dialog). A warning shows before an untick removes a code. A failed reorder reloads the list.
 - Panel follows the guidelines: 8px grid spacing, the order tile matches the trail stop tile (`text-xs`, no raw size), and no explanatory lines.
 - The tab uses the same frame as Current Info: one card that fills the height and scrolls its own content, with the action buttons pinned beneath it. The page itself does not scroll.
 - Trail builder dialog is Trail Notes: no typed order, radius prefilled, place entry count shown. Its older 12px spacing and `text-[10px]` badge predate this work and are not changed.
@@ -36,25 +36,40 @@ Status: built, not yet run. Logged as decision-log.md entry #44.
 - Replacing, removing, cancelling and deleting an entry clean up the file, best effort.
 - `build_trails` staff get write access to the `discovery/` folder of the existing `content-photos` bucket.
 
+**Video (migration 0052, not applied)**
+- One optional YouTube or Facebook link per entry, both kinds. Staff paste a normal link in the same form as the photo. The app cleans it (`video-embed.ts`) and keeps only the cleaned link. Any other site is refused, in the form and by a database check.
+- It plays inside the stop card, after the photo and before the text, only once the entry is unlocked. A QR entry's video stays hidden until the scan.
+- YouTube uses the no-cookie embed. Facebook uses its video plugin. Under the frame sits a "Watch on YouTube" or "Watch on Facebook" link, which is also the fallback when a frame will not load.
+- `normalizeVideoLink`, `parseVideoLink` and `VideoEmbed` are shared, so places and events can reuse them later.
+
+**Review gate (migration 0053, not applied)**
+- Flagged place and business entries now hold up publishing, like flagged trail notes. The check runs on the Trails list and in the builder, through `lib/trail-review-gate.ts`. The builder lists them under Flagged for review, with a link to each.
+- Inactive entries are skipped. If the check fails, publish stays blocked.
+- The flag clears by itself (the app still never sets it). A place entry follows its place: verify the place and its entries clear, un-verify and they flag again. A business entry follows its latest review: Verify clears it, Reject sets it again, and any change to its title, content, photo, video or business sets it again. This also clears flagged trail notes on a business stop.
+- Only the trigger can clear a flag. A direct write from a client cannot.
+- Existing business entries stay flagged until verified once more.
+- Flagged entries stay visible on published trails. The gate is at publish, not on live content.
+
 **Config and docs**
 - `qrcode` and `@types/qrcode` in `package.json` and installed. `VITE_SITE_URL` in `.env.example` and `vite-env.d.ts`.
-- Decision log #44 and #45 and architecture notes updated.
+- Decision log #44 to #47 and architecture notes updated.
 
 ## Left
 
 **Your decisions**
-1. Flagged place entries are live right away on published trails. Hide them until verified?
-2. Flagged place entries do not block publishing a trail, only flagged trail notes do. Block them too?
+- None open. Tell CATO that a business entry needs a Places review (Verify) before its trail can publish, and that editing it asks for a new one.
 
 **You run**
-- Apply migrations 0050 and 0051 and run `db lint`.
+- Apply migrations 0050 to 0053 in order and run `db lint`.
 - Set `VITE_SITE_URL` wherever staff download codes.
 - Type check and lint. The panel may trip complexity rules.
-- Hand check: Saved grids at 390 px and large font, the Discovery content tab, a scan end to end on a phone, a one stop trail, a stop with no entries.
+- Hand check: Saved grids at 390 px and large font, the Discovery content tab, a scan end to end on a phone, a one stop trail, a stop with no entries, a YouTube and a Facebook link in a stop card, publish blocked by a flagged place entry, then verify the place and publish. Verify a business entry, publish, then edit its text and see it flag again.
 
 **Not planned, add only if asked**
 - Show the photo on the review page, so a reviewer sees it when verifying an entry.
 - More than one photo per entry.
+- Video on places, businesses and events. The shared pieces are ready.
+- Uploaded video files and audio narration.
 - Resize on upload. Files are limited to 5 MB and JPG, PNG, WEBP or GIF, as for avatars and slides.
 - Hide a QR entry's text until scanned, which needs a server function.
 - Staff preview of place entries before a trail is published.
@@ -68,6 +83,9 @@ Status: built, not yet run. Logged as decision-log.md entry #44.
 - A one stop trail never completes if location is denied.
 - Finishing a restarted trail again adds another `completed_routes` row. This was already so, and it inflates vendor completion counts.
 - Seed pins are street level, so tight radii miss until pins are surveyed.
+- Video lives on the staff member's own YouTube or Facebook account. If it is made private or deleted, the frame goes blank and the link under it stops working.
+- Facebook embeds fail for private or restricted videos and for some regions. YouTube is the reliable choice.
+- Video needs a connection. It does not play offline.
 
 ## Goal
 
@@ -167,7 +185,7 @@ GPS cannot place a visitor at one object (phone GPS is off by 10 to 20 m, and se
 ## Risks
 
 - No foreign key on the location (known fragile area). Places cannot be deleted in the admin today, so no orphans yet.
-- Business entries are always flagged for review (0012). A business entry joins the Places queue, as now.
+- Business entries are flagged on insert (0012) and join the Places queue. A Verify on one clears it (0053), so it needs a person with manage_places or admin, as the Places queue does.
 - Existing entries all have a trail, so they become trail notes. No backfill.
 - Seed coordinates are street level, not surveyed. A tight radius will miss until pins are exact.
 - QR entry text still reaches the app before the scan, same as GPS locked text today. The lock is in the interface. Hiding it for real needs a server function, a later step if CATO needs it.
