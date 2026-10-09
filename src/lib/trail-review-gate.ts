@@ -25,8 +25,8 @@ export function stopLocationKey(type: StopLocationType, id: string): string {
   return `${type}:${id}`;
 }
 
-async function fetchFlaggedFor(type: StopLocationType, ids: string[]) {
-  if (ids.length === 0) return { data: [], error: null };
+function fetchFlaggedFor(type: StopLocationType, ids: string[]) {
+  if (ids.length === 0) return Promise.resolve({ data: [], error: null });
   return supabase
     .from("discovery_content")
     .select("id, title, related_location_id")

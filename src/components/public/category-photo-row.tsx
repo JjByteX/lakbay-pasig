@@ -96,9 +96,7 @@ function PhotoCard({
       <div
         className={`flex shrink-0 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-muted p-3 ${CARD_WIDTH}`}
       >
-        <p role="status" className="text-sm text-foreground">
-          Hidden.
-        </p>
+        <output className="text-sm text-foreground">Hidden.</output>
         <Button type="button" variant="outline" size="sm" onClick={() => onUndo?.(item)}>
           Undo
         </Button>
@@ -172,6 +170,7 @@ function PhotoCard({
 // loaded PhotoCard above, laid out as a row instead of stacked -- widened
 // from SectionSkeleton's vertical shape rather than a new pattern.
 export function CategoryPhotoRowSkeleton({ withStrip = false }: Readonly<{ withStrip?: boolean }> = {}) {
+  const skeletonSize = withStrip ? `${CARD_WIDTH} ${CARD_WITH_STRIP_HEIGHT}` : CARD_SIZE;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center md:min-h-8">
@@ -179,10 +178,7 @@ export function CategoryPhotoRowSkeleton({ withStrip = false }: Readonly<{ withS
       </div>
       <div className="-mx-6 flex gap-3 overflow-x-auto px-6 pb-1">
         {[0, 1, 2].map((i) => (
-          <Skeleton
-            key={i}
-            className={`shrink-0 rounded-lg ${withStrip ? `${CARD_WIDTH} ${CARD_WITH_STRIP_HEIGHT}` : CARD_SIZE}`}
-          />
+          <Skeleton key={i} className={`shrink-0 rounded-lg ${skeletonSize}`} />
         ))}
       </div>
     </div>

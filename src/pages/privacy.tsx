@@ -43,11 +43,12 @@ function P({ children }: Readonly<{ children: ReactNode }>) {
   return <p className="text-base text-muted-foreground">{children}</p>;
 }
 
-function Bullets({ items }: Readonly<{ items: ReactNode[] }>) {
+// Every bullet is plain text and unique within its list, so the text is the key.
+function Bullets({ items }: Readonly<{ items: string[] }>) {
   return (
     <ul className="flex list-disc flex-col gap-2 pl-6 text-base text-muted-foreground">
-      {items.map((item, i) => (
-        <li key={i}>{item}</li>
+      {items.map((item) => (
+        <li key={item}>{item}</li>
       ))}
     </ul>
   );

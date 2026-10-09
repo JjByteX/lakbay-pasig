@@ -158,6 +158,12 @@ function useCoverData(attempt: number): CoverData {
   return data;
 }
 
+// Click handlers only, never onAuthStateChange (auth-context.tsx). A failed
+// flag write just means the flow is offered once more next load.
+async function markDone() {
+  await supabase.auth.updateUser({ data: { onboarding_done: true } });
+}
+
 function resolvePicks(chosen: string[], placeList: CategoryNames, businessList: CategoryNames, covers: Covers): Pick[] {
   return chosen.map((name) => {
     const place = placeList.status === "ready" ? placeList.items.find((i) => i.name === name) : undefined;
@@ -305,7 +311,8 @@ function OnboardingHeader({
   return (
     <header className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 pt-4">
       {stepIndex >= 0 && (
-        <div className="flex gap-2" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={stepIndex + 1}>
+        <div className="flex gap-2">
+          <progress className="sr-only" value={stepIndex + 1} max={PROGRESS_STEPS.length} />
           {PROGRESS_STEPS.map((s, i) => (
             <span key={s} className="h-1 flex-1 overflow-hidden rounded-lg bg-border">
               <motion.span
@@ -456,12 +463,6 @@ function OnboardingFlow({ userId, onDone }: Readonly<{ userId: string; onDone: (
 
   const picks = resolvePicks(chosen, placeList, businessList, covers);
 
-  // Click handlers only, never onAuthStateChange (auth-context.tsx). A failed
-  // flag write just means the flow is offered once more next load.
-  async function markDone() {
-    await supabase.auth.updateUser({ data: { onboarding_done: true } });
-  }
-
   async function handleSkip() {
     if (busy) return;
     setBusy(true);
@@ -556,7 +557,13 @@ const SCENE: Record<Step, { x: string; y: string; s: number }[]> = {
   businesses: [{ x: "-10vw", y: "50vh", s: 1.2 }, { x: "60vw", y: "-10vh", s: 0.9 }, { x: "20vw", y: "-35vh", s: 0.7 }],
   finishing: [{ x: "20vw", y: "10vh", s: 2.4 }, { x: "30vw", y: "20vh", s: 1.7 }, { x: "36vw", y: "26vh", s: 1 }],
 };
-const SCENE_TINTS = [16, 26, 11];
+// The same three shapes glide from one composition to the next, so each keeps
+// its own id across steps.
+const SCENE_SHAPES = [
+  { id: "shape-a", tint: 16 },
+  { id: "shape-b", tint: 26 },
+  { id: "shape-c", tint: 11 },
+] as const;
 
 function Scene({ step, reduceMotion }: Readonly<{ step: Step; reduceMotion: boolean | null }>) {
   const idle = !reduceMotion && (step === "welcome" || step === "finishing");
@@ -564,7 +571,7 @@ function Scene({ step, reduceMotion }: Readonly<{ step: Step; reduceMotion: bool
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       {SCENE[step].map((pos, i) => (
         <motion.div
-          key={i}
+          key={SCENE_SHAPES[i].id}
           className="absolute left-0 top-0"
           initial={false}
           animate={{ x: pos.x, y: pos.y, scale: pos.s }}
@@ -572,7 +579,7 @@ function Scene({ step, reduceMotion }: Readonly<{ step: Step; reduceMotion: bool
         >
           <motion.div
             className="h-[42vmin] w-[42vmin] rounded-full"
-            style={{ backgroundColor: `color-mix(in srgb, hsl(var(--primary)) ${SCENE_TINTS[i]}%, hsl(var(--background)))` }}
+            style={{ backgroundColor: `color-mix(in srgb, hsl(var(--primary)) ${SCENE_SHAPES[i].tint}%, hsl(var(--background)))` }}
             animate={idle ? { y: [0, -18, 0], x: [0, 10, 0] } : { y: 0, x: 0 }}
             transition={idle ? { duration: 7 + i * 2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.6 }}
           />

@@ -581,18 +581,18 @@ function ScrollPanel({
   const ref = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
   const exiting = mode === "exit";
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: exiting
-      ? ["start start", "end start"]
-      : settleAtEnd
-        ? ["start end", "end end"]
-        : ["start end", "start 0.3"],
-  });
+  let offset: NonNullable<Parameters<typeof useScroll>[0]>["offset"];
+  if (exiting) offset = ["start start", "end start"];
+  else if (settleAtEnd) offset = ["start end", "end end"];
+  else offset = ["start end", "start 0.3"];
+  const { scrollYProgress } = useScroll({ target: ref, offset });
   const scale = useTransform(scrollYProgress, [0, 1], exiting ? [1, 0.93] : [0.9, 1]);
   const borderRadius = useTransform(scrollYProgress, [0, 1], [56, 0]);
   // Reduced motion: no scroll-driven style at all. Exit: scale only.
-  const layerStyle = reduceMotion ? undefined : exiting ? { scale } : { scale, borderRadius };
+  let layerStyle;
+  if (reduceMotion) layerStyle = undefined;
+  else if (exiting) layerStyle = { scale };
+  else layerStyle = { scale, borderRadius };
   return (
     <section ref={ref} id={id} className={`relative isolate ${className ?? ""}`}>
       <motion.div

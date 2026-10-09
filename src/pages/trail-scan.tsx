@@ -47,7 +47,7 @@ function readPosition(): Promise<{ position: Coordinates | null; issue: Location
 // The two real steps of a scan, shown as they happen, not as fake progress.
 function Progress({ label, hint }: Readonly<{ label: string; hint?: string }>) {
   return (
-    <div role="status" className="flex flex-col gap-1">
+    <output className="flex flex-col gap-1">
       <div className="flex items-center gap-2 text-base text-muted-foreground">
         <CircleNotch
           weight="bold"
@@ -57,7 +57,7 @@ function Progress({ label, hint }: Readonly<{ label: string; hint?: string }>) {
         <span>{label}</span>
       </div>
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
-    </div>
+    </output>
   );
 }
 
@@ -67,7 +67,7 @@ function Progress({ label, hint }: Readonly<{ label: string; hint?: string }>) {
 function Unlocked({ stopName }: Readonly<{ stopName: string }>) {
   const reduceMotion = useReducedMotion();
   return (
-    <div role="status" className="flex flex-col items-center gap-4 py-10 text-center">
+    <output className="flex flex-col items-center gap-4 py-10 text-center">
       <span className="relative flex h-16 w-16 items-center justify-center">
         {!reduceMotion && (
           <motion.span
@@ -96,7 +96,7 @@ function Unlocked({ stopName }: Readonly<{ stopName: string }>) {
         <p className="text-base font-semibold text-foreground">Stop unlocked</p>
         <p className="text-sm text-muted-foreground">{stopName}</p>
       </motion.div>
-    </div>
+    </output>
   );
 }
 

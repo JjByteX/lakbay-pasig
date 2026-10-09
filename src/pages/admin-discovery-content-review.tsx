@@ -90,6 +90,17 @@ interface DiscoveryContentQueryRow {
   routes: { name: string }[] | null;
 }
 
+// The line under the dialog title. A rejection changes nothing on the content
+// itself, so it says where to fix it, and that a trail note blocks publishing.
+function reviewDescription(action: "verify" | "reject" | null, onTrail: boolean): string {
+  if (action === "verify") {
+    return "This logs your approval. The flag stays computed from the related location's status, it isn't cleared permanently.";
+  }
+  const editFrom = onTrail ? "the trail builder" : "its place";
+  const publishNote = onTrail ? " The trail can't publish while this stays flagged." : "";
+  return `This logs a rejection. It doesn't change the content itself. Edit it from ${editFrom}, or wait for the related place to be verified.${publishNote}`;
+}
+
 export default function AdminDiscoveryContentReviewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -383,9 +394,7 @@ export default function AdminDiscoveryContentReviewPage() {
               {reviewAction === "verify" ? "Verify this discovery content?" : "Reject this discovery content?"}
             </DialogTitle>
             <DialogDescription>
-              {reviewAction === "verify"
-                ? "This logs your approval. The flag stays computed from the related location's status, it isn't cleared permanently."
-                : `This logs a rejection. It doesn't change the content itself. Edit it from ${entry.route_id ? "the trail builder" : "its place"}, or wait for the related place to be verified.${entry.route_id ? " The trail can't publish while this stays flagged." : ""}`}
+              {reviewDescription(reviewAction, Boolean(entry.route_id))}
             </DialogDescription>
           </DialogHeader>
 
