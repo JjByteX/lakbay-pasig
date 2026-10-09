@@ -82,14 +82,24 @@ const SELECT_COLUMNS =
 // a preview link still points at the live site. Without it, the address
 // staff are on is used, which is only right on the live site.
 function scanUrl(token: string): string {
-  const host = import.meta.env.VITE_SITE_URL?.replace(/\/+$/, "") || window.location.origin;
+  let host = import.meta.env.VITE_SITE_URL || window.location.origin;
+  // Trailing slashes are cut with a loop, not a regex, which can backtrack.
+  while (host.endsWith("/")) host = host.slice(0, -1);
   return `${host}/scan/${token}`;
 }
 
 // File name for the downloaded code: the entry title, lowercased and
 // reduced to letters, numbers and dashes.
 function qrFileName(title: string): string {
-  const slug = title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-+|-+$/g, "");
+  // One pass, no regex that can backtrack: every run of other characters
+  // becomes a single dash, and a dash is never first or last.
+  let slug = "";
+  for (const ch of title.toLowerCase()) {
+    const keep = (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9");
+    if (keep) slug += ch;
+    else if (slug && !slug.endsWith("-")) slug += "-";
+  }
+  if (slug.endsWith("-")) slug = slug.slice(0, -1);
   return `${slug || "discovery-entry"}-qr.png`;
 }
 
@@ -119,32 +129,31 @@ async function printQr(entry: EntryRow): Promise<void> {
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-  document.body.appendChild(frame);
-
-  const doc = frame.contentDocument;
-  if (!doc) {
-    frame.remove();
-    throw new Error("Print frame unavailable");
-  }
-  doc.open();
-  doc.write(
+  // srcdoc instead of document.write (deprecated). The frame's load event
+  // fires once the page and its image are in, so printing waits for it.
+  frame.srcdoc =
     `<!doctype html><html><head><title>${escapeHtml(entry.title)}</title><style>
       @page { margin: 16mm; }
       body { margin: 0; font-family: system-ui, sans-serif; text-align: center; }
       h1 { font-size: 20pt; font-weight: 600; margin: 0 0 8mm; }
       img { width: 120mm; height: 120mm; }
-    </style></head><body><h1>${escapeHtml(entry.title)}</h1><img id="qr" alt="" src="${dataUrl}"></body></html>`
-  );
-  doc.close();
+    </style></head><body><h1>${escapeHtml(entry.title)}</h1><img id="qr" alt="" src="${dataUrl}"></body></html>`;
 
-  const img = doc.getElementById("qr") as HTMLImageElement | null;
-  const startPrint = () => {
-    frame.contentWindow?.addEventListener("afterprint", () => frame.remove());
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
-  };
-  if (img?.complete) startPrint();
-  else img?.addEventListener("load", startPrint, { once: true });
+  frame.addEventListener(
+    "load",
+    () => {
+      const win = frame.contentWindow;
+      if (!win) {
+        frame.remove();
+        return;
+      }
+      win.addEventListener("afterprint", () => frame.remove());
+      win.focus();
+      win.print();
+    },
+    { once: true },
+  );
+  document.body.appendChild(frame);
 }
 
 export function DiscoveryEntriesPanel({

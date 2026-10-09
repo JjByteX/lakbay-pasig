@@ -227,6 +227,10 @@ function prependReview(
 const STEP_LABELS = { 1: "Business", 2: "Location", 3: "Rules and story" } as const;
 const STEP_SECTIONS = { 1: "business", 2: "location", 3: "story" } as const;
 
+function categoriesErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Could not load categories.";
+}
+
 export default function AdminBusinessDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -268,11 +272,7 @@ export default function AdminBusinessDetailPage() {
   useEffect(() => {
     fetchActiveCategories()
       .then(setCategories)
-      .catch((err: unknown) => {
-        setCategoriesError(
-          err instanceof Error ? err.message : "Could not load categories."
-        );
-      });
+      .catch((err: unknown) => setCategoriesError(categoriesErrorMessage(err)));
   }, []);
 
   useEffect(() => {

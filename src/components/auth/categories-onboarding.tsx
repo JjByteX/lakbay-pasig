@@ -135,6 +135,298 @@ function PickFace({ pick, iconClass }: Readonly<{ pick: Pick; iconClass: string 
   return <span>{pick.name.charAt(0).toUpperCase()}</span>;
 }
 
+type CoverData = { covers: Covers; counts: Counts; samples: string[] };
+
+// Cover photos and listing counts for the tiles. loadCovers catches each
+// source itself; the last catch keeps the color tiles if anything else slips
+// through. Reloads when the person retries a failed category load.
+function useCoverData(attempt: number): CoverData {
+  const [data, setData] = useState<CoverData>(() => ({ covers: new Map(), counts: new Map(), samples: [] }));
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCovers()
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  return data;
+}
+
+function resolvePicks(chosen: string[], placeList: CategoryNames, businessList: CategoryNames, covers: Covers): Pick[] {
+  return chosen.map((name) => {
+    const place = placeList.status === "ready" ? placeList.items.find((i) => i.name === name) : undefined;
+    const biz = businessList.status === "ready" ? businessList.items.find((i) => i.name === name) : undefined;
+    const item = place ?? biz;
+    return { name, color: item?.color ?? "hsl(var(--primary))", Icon: item?.Icon, cover: covers.get(`${place ? "place" : "business"}:${name}`) };
+  });
+}
+
+function statusLine(step: Step, count: number, error: string | null): string {
+  if (error) return error;
+  if (step === "places") return count === 0 ? "Nothing picked yet." : "picked";
+  if (step === "businesses") return count === 0 ? "Pick at least one to continue." : "picked";
+  return "";
+}
+
+// The short beat after the save, so the "Saved" state can be seen before the
+// iris closes.
+function savedBeat(reduceMotion: boolean | null): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, reduceMotion ? 200 : SAVED_BEAT_MS));
+}
+
+function WelcomeScreen({
+  dir,
+  reduceMotion,
+  sample,
+  fallback,
+  firstName,
+}: Readonly<{ dir: number; reduceMotion: boolean | null; sample: string[]; fallback: CategoryItem[]; firstName: string | undefined }>) {
+  return (
+    <Screen dir={dir} reduceMotion={reduceMotion}>
+      <div className="flex flex-1 flex-col items-center justify-center gap-12 text-center">
+        <WelcomeCards sample={sample} fallback={fallback} reduceMotion={reduceMotion} />
+        <div className="flex flex-col gap-3">
+          <DialogPrimitive.Title className="text-3xl font-semibold tracking-tight sm:text-4xl text-foreground">
+            <Words text={firstName ? `Welcome, ${firstName}!` : "Welcome!"} reduceMotion={reduceMotion} delay={0.45} />
+          </DialogPrimitive.Title>
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...SPRING, delay: 0.8 }}
+          >
+            <DialogPrimitive.Description className="mx-auto max-w-sm text-balance text-base text-muted-foreground">
+              Pick what you like and we&apos;ll set up your Home. It takes under a minute.
+            </DialogPrimitive.Description>
+          </motion.div>
+        </div>
+      </div>
+    </Screen>
+  );
+}
+
+function PickScreen({
+  step,
+  dir,
+  reduceMotion,
+  list,
+  covers,
+  counts,
+  selected,
+  onToggle,
+  onRetry,
+}: Readonly<{
+  step: "places" | "businesses";
+  dir: number;
+  reduceMotion: boolean | null;
+  list: CategoryNames;
+  covers: Covers;
+  counts: Counts;
+  selected: string[];
+  onToggle: (name: string) => void;
+  onRetry: () => void;
+}>) {
+  const isPlaces = step === "places";
+  return (
+    <Screen dir={dir} reduceMotion={reduceMotion}>
+      <div className="flex flex-col gap-2">
+        <DialogPrimitive.Title className="text-3xl font-semibold tracking-tight sm:text-4xl text-foreground">
+          <Words text={isPlaces ? "What do you want to find in Pasig?" : "Which local businesses interest you?"} reduceMotion={reduceMotion} />
+        </DialogPrimitive.Title>
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...SPRING, delay: 0.35 }}
+        >
+          <DialogPrimitive.Description className="text-base text-muted-foreground">
+            Pick as many as you like. You can change this anytime in Profile.
+          </DialogPrimitive.Description>
+        </motion.div>
+      </div>
+      <PhotoTiles
+        list={list}
+        kind={isPlaces ? "place" : "business"}
+        covers={covers}
+        counts={counts}
+        selected={selected}
+        onToggle={onToggle}
+        onRetry={onRetry}
+        reduceMotion={reduceMotion}
+      />
+    </Screen>
+  );
+}
+
+// The iris: the whole screen shrinks to a point, revealing Home.
+function OnboardingShell({
+  step,
+  leaving,
+  reduceMotion,
+  onDone,
+  children,
+}: Readonly<{ step: Step; leaving: boolean; reduceMotion: boolean | null; onDone: () => void; children: ReactNode }>) {
+  return (
+    <DialogPrimitive.Root open>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Content onEscapeKeyDown={(e) => e.preventDefault()} className="fixed inset-0 z-50 outline-none">
+          <motion.div
+            className="relative flex h-full flex-col overflow-hidden"
+            style={{ backgroundColor: BG }}
+            initial={false}
+            animate={{ clipPath: leaving ? "circle(0% at 50% 55%)" : "circle(150% at 50% 55%)" }}
+            transition={{ duration: reduceMotion ? 0 : 0.5, ease: [0.7, 0, 0.3, 1] }}
+            onAnimationComplete={() => {
+              if (leaving) onDone();
+            }}
+          >
+            <Scene step={step} reduceMotion={reduceMotion} />
+            {children}
+          </motion.div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+function OnboardingHeader({
+  step,
+  busy,
+  reduceMotion,
+  go,
+  onSkip,
+}: Readonly<{ step: Step; busy: boolean; reduceMotion: boolean | null; go: (next: Step, d: 1 | -1) => void; onSkip: () => void }>) {
+  const stepIndex = PROGRESS_STEPS.indexOf(step);
+  const picking = step === "places" || step === "businesses";
+  return (
+    <header className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 pt-4">
+      {stepIndex >= 0 && (
+        <div className="flex gap-2" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={stepIndex + 1}>
+          {PROGRESS_STEPS.map((s, i) => (
+            <span key={s} className="h-1 flex-1 overflow-hidden rounded-lg bg-border">
+              <motion.span
+                className="block h-full origin-left bg-primary"
+                initial={false}
+                animate={{ scaleX: i <= stepIndex ? 1 : 0 }}
+                transition={{ ...SPRING, stiffness: 140 }}
+              />
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex h-10 items-center justify-between">
+        {picking ? (
+          <Button variant="ghost" onClick={() => go(step === "places" ? "welcome" : "places", -1)} disabled={busy}>
+            <ArrowLeft weight="bold" className="mr-1 h-4 w-4" aria-hidden="true" />
+            Back
+          </Button>
+        ) : (
+          <motion.img
+            src={logo}
+            alt="Lakbay Pasig"
+            className="h-8 w-8"
+            initial={reduceMotion ? false : { rotate: -90, scale: 0 }}
+            animate={{ rotate: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 14 }}
+          />
+        )}
+        {step !== "finishing" && (
+          <Button variant="ghost" onClick={onSkip} disabled={busy}>
+            Skip setup
+          </Button>
+        )}
+      </div>
+    </header>
+  );
+}
+
+// The picked count rolls over like a counter when it changes.
+function PickedCount({ count, reduceMotion }: Readonly<{ count: number; reduceMotion: boolean | null }>) {
+  return (
+    <span className="relative inline-flex h-5 min-w-[1ch] overflow-hidden font-semibold text-foreground">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={count}
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -16, opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0 : 0.18 }}
+        >
+          {count}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+const NEXT_LABEL: Partial<Record<Step, string>> = { welcome: "Let's go", places: "Next", businesses: "Go to Home" };
+
+function NextButton({
+  step,
+  busy,
+  count,
+  go,
+  onFinish,
+}: Readonly<{ step: Step; busy: boolean; count: number; go: (next: Step, d: 1 | -1) => void; onFinish: () => Promise<void> }>) {
+  function handleNext() {
+    if (step === "welcome") go("places", 1);
+    else if (step === "places") go("businesses", 1);
+    else void onFinish();
+  }
+  return (
+    <Button
+      size="lg"
+      className="h-11 w-full sm:h-9 sm:w-auto"
+      onClick={handleNext}
+      disabled={step === "businesses" && (busy || count === 0)}
+    >
+      {NEXT_LABEL[step]}
+      {step !== "businesses" && <ArrowRight weight="bold" className="ml-2 h-4 w-4" aria-hidden="true" />}
+    </Button>
+  );
+}
+
+function OnboardingFooter({
+  step,
+  picks,
+  count,
+  error,
+  busy,
+  reduceMotion,
+  go,
+  onFinish,
+}: Readonly<{
+  step: Step;
+  picks: Pick[];
+  count: number;
+  error: string | null;
+  busy: boolean;
+  reduceMotion: boolean | null;
+  go: (next: Step, d: 1 | -1) => void;
+  onFinish: () => Promise<void>;
+}>) {
+  const showCount = count > 0 && !error && (step === "places" || step === "businesses");
+  const welcome = step === "welcome";
+  return (
+    <footer className="relative z-10 bg-background">
+      <div className={cn("mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center", welcome ? "sm:justify-center" : "sm:justify-between")}>
+        <div className={cn("flex min-h-9 items-center justify-center gap-3 sm:justify-start", welcome && "hidden")}>
+          <Tray picks={picks} reduceMotion={reduceMotion} />
+          <p aria-live="polite" className={cn("flex items-center gap-1.5 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
+            {showCount && <PickedCount count={count} reduceMotion={reduceMotion} />}
+            <span>{statusLine(step, count, error)}</span>
+          </p>
+        </div>
+        <NextButton step={step} busy={busy} count={count} go={go} onFinish={onFinish} />
+      </div>
+    </footer>
+  );
+}
+
 function OnboardingFlow({ userId, onDone }: Readonly<{ userId: string; onDone: () => void }>) {
   const { profile, refreshProfile } = useAuth();
   const reduceMotion = useReducedMotion();
@@ -147,15 +439,7 @@ function OnboardingFlow({ userId, onDone }: Readonly<{ userId: string; onDone: (
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { placeList, businessList } = useCategoryNames(true, attempt);
-  const [data, setData] = useState<{ covers: Covers; counts: Counts; samples: string[] }>({ covers: new Map(), counts: new Map(), samples: [] });
-
-  useEffect(() => {
-    let cancelled = false;
-    loadCovers().then((d) => !cancelled && setData(d));
-    return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
+  const data = useCoverData(attempt);
 
   const { covers, counts } = data;
   const firstName = (profile?.display_name ?? "").trim().split(/\s+/)[0];
@@ -170,12 +454,7 @@ function OnboardingFlow({ userId, onDone }: Readonly<{ userId: string; onDone: (
     setChosen((prev) => (prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]));
   }
 
-  const picks: Pick[] = chosen.map((name) => {
-    const place = placeList.status === "ready" ? placeList.items.find((i) => i.name === name) : undefined;
-    const biz = businessList.status === "ready" ? businessList.items.find((i) => i.name === name) : undefined;
-    const item = place ?? biz;
-    return { name, color: item?.color ?? "hsl(var(--primary))", Icon: item?.Icon, cover: covers.get(`${place ? "place" : "business"}:${name}`) };
-  });
+  const picks = resolvePicks(chosen, placeList, businessList, covers);
 
   // Click handlers only, never onAuthStateChange (auth-context.tsx). A failed
   // flag write just means the flow is offered once more next load.
@@ -205,41 +484,18 @@ function OnboardingFlow({ userId, onDone }: Readonly<{ userId: string; onDone: (
       return;
     }
 
-    // Waits only on the real work. The short beat after it is there so the
-    // "Saved" state can be seen before the iris closes.
+    // Waits only on the real work, then the short beat.
     await Promise.all([markDone(), refreshProfile()]);
     setSaved(true);
-    await new Promise((r) => setTimeout(r, reduceMotion ? 200 : SAVED_BEAT_MS));
+    await savedBeat(reduceMotion);
     setLeaving(true);
   }
 
-  const stepIndex = PROGRESS_STEPS.indexOf(step);
-  const sample = data.samples;
   const fallback = placeList.status === "ready" ? placeList.items.slice(0, 3) : [];
 
   let screen: ReactNode;
   if (step === "welcome") {
-    screen = (
-      <Screen key="welcome" dir={dir} reduceMotion={reduceMotion}>
-        <div className="flex flex-1 flex-col items-center justify-center gap-12 text-center">
-          <WelcomeCards sample={sample} fallback={fallback} reduceMotion={reduceMotion} />
-          <div className="flex flex-col gap-3">
-            <DialogPrimitive.Title className="text-3xl font-semibold tracking-tight sm:text-4xl text-foreground">
-              <Words text={firstName ? `Welcome, ${firstName}!` : "Welcome!"} reduceMotion={reduceMotion} delay={0.45} />
-            </DialogPrimitive.Title>
-            <motion.div
-              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...SPRING, delay: 0.8 }}
-            >
-              <DialogPrimitive.Description className="mx-auto max-w-sm text-balance text-base text-muted-foreground">
-                Pick what you like and we&apos;ll set up your Home. It takes under a minute.
-              </DialogPrimitive.Description>
-            </motion.div>
-          </div>
-        </div>
-      </Screen>
-    );
+    screen = <WelcomeScreen key="welcome" dir={dir} reduceMotion={reduceMotion} sample={data.samples} fallback={fallback} firstName={firstName} />;
   } else if (step === "finishing") {
     screen = (
       <Screen key="finishing" dir={dir} reduceMotion={reduceMotion}>
@@ -247,149 +503,47 @@ function OnboardingFlow({ userId, onDone }: Readonly<{ userId: string; onDone: (
       </Screen>
     );
   } else {
-    const isPlaces = step === "places";
     screen = (
-      <Screen key={step} dir={dir} reduceMotion={reduceMotion}>
-        <div className="flex flex-col gap-2">
-          <DialogPrimitive.Title className="text-3xl font-semibold tracking-tight sm:text-4xl text-foreground">
-            <Words text={isPlaces ? "What do you want to find in Pasig?" : "Which local businesses interest you?"} reduceMotion={reduceMotion} />
-          </DialogPrimitive.Title>
-          <motion.div
-            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...SPRING, delay: 0.35 }}
-          >
-            <DialogPrimitive.Description className="text-base text-muted-foreground">
-              Pick as many as you like. You can change this anytime in Profile.
-            </DialogPrimitive.Description>
-          </motion.div>
-        </div>
-        <PhotoTiles
-          list={isPlaces ? placeList : businessList}
-          kind={isPlaces ? "place" : "business"}
-          covers={covers}
-          counts={counts}
-          selected={chosen}
-          onToggle={toggle}
-          onRetry={() => setAttempt((a) => a + 1)}
-          reduceMotion={reduceMotion}
-        />
-      </Screen>
+      <PickScreen
+        key={step}
+        step={step}
+        dir={dir}
+        reduceMotion={reduceMotion}
+        list={step === "places" ? placeList : businessList}
+        covers={covers}
+        counts={counts}
+        selected={chosen}
+        onToggle={toggle}
+        onRetry={() => setAttempt((a) => a + 1)}
+      />
     );
   }
 
-  let status = "";
-  if (step === "places") status = count === 0 ? "Nothing picked yet." : "picked";
-  if (step === "businesses") status = count === 0 ? "Pick at least one to continue." : "picked";
-  if (error) status = error;
-  const showCount = count > 0 && !error && (step === "places" || step === "businesses");
-
   return (
-    <DialogPrimitive.Root open>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Content onEscapeKeyDown={(e) => e.preventDefault()} className="fixed inset-0 z-50 outline-none">
-          {/* The iris: the whole screen shrinks to a point, revealing Home. */}
-          <motion.div
-            className="relative flex h-full flex-col overflow-hidden"
-            style={{ backgroundColor: BG }}
-            initial={false}
-            animate={{ clipPath: leaving ? "circle(0% at 50% 55%)" : "circle(150% at 50% 55%)" }}
-            transition={{ duration: reduceMotion ? 0 : 0.5, ease: [0.7, 0, 0.3, 1] }}
-            onAnimationComplete={() => {
-              if (leaving) onDone();
-            }}
-          >
-            <Scene step={step} reduceMotion={reduceMotion} />
+    <OnboardingShell step={step} leaving={leaving} reduceMotion={reduceMotion} onDone={onDone}>
+      <OnboardingHeader step={step} busy={busy} reduceMotion={reduceMotion} go={go} onSkip={handleSkip} />
 
-            <header className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 pt-4">
-              {stepIndex >= 0 && (
-                <div className="flex gap-2" role="progressbar" aria-valuemin={1} aria-valuemax={3} aria-valuenow={stepIndex + 1}>
-                  {PROGRESS_STEPS.map((s, i) => (
-                    <span key={s} className="h-1 flex-1 overflow-hidden rounded-lg bg-border">
-                      <motion.span
-                        className="block h-full origin-left bg-primary"
-                        initial={false}
-                        animate={{ scaleX: i <= stepIndex ? 1 : 0 }}
-                        transition={{ ...SPRING, stiffness: 140 }}
-                      />
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="flex h-10 items-center justify-between">
-                {step === "places" || step === "businesses" ? (
-                  <Button variant="ghost" onClick={() => go(step === "places" ? "welcome" : "places", -1)} disabled={busy}>
-                    <ArrowLeft weight="bold" className="mr-1 h-4 w-4" aria-hidden="true" />
-                    Back
-                  </Button>
-                ) : (
-                  <motion.img
-                    src={logo}
-                    alt="Lakbay Pasig"
-                    className="h-8 w-8"
-                    initial={reduceMotion ? false : { rotate: -90, scale: 0 }}
-                    animate={{ rotate: 0, scale: 1 }}
-                    transition={{ type: "spring", stiffness: 200, damping: 14 }}
-                  />
-                )}
-                {step !== "finishing" && (
-                  <Button variant="ghost" onClick={handleSkip} disabled={busy}>
-                    Skip setup
-                  </Button>
-                )}
-              </div>
-            </header>
+      <div className="relative z-10 flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-8 px-6 py-6">
+          <AnimatePresence mode="wait" initial={false} custom={dir}>
+            {screen}
+          </AnimatePresence>
+        </div>
+      </div>
 
-            <div className="relative z-10 flex-1 overflow-y-auto">
-              <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-8 px-6 py-6">
-                <AnimatePresence mode="wait" initial={false} custom={dir}>
-                  {screen}
-                </AnimatePresence>
-              </div>
-            </div>
-
-            {step !== "finishing" && (
-              <footer className="relative z-10 bg-background">
-                <div className={cn("mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center", step === "welcome" ? "sm:justify-center" : "sm:justify-between")}>
-                  <div className={cn("flex min-h-9 items-center justify-center gap-3 sm:justify-start", step === "welcome" && "hidden")}>
-                    <Tray picks={picks} reduceMotion={reduceMotion} />
-                    <p aria-live="polite" className={cn("flex items-center gap-1.5 text-sm", error ? "text-destructive" : "text-muted-foreground")}>
-                      {showCount && (
-                        <span className="relative inline-flex h-5 min-w-[1ch] overflow-hidden font-semibold text-foreground">
-                          <AnimatePresence mode="popLayout" initial={false}>
-                            <motion.span
-                              key={count}
-                              initial={{ y: 16, opacity: 0 }}
-                              animate={{ y: 0, opacity: 1 }}
-                              exit={{ y: -16, opacity: 0 }}
-                              transition={{ duration: reduceMotion ? 0 : 0.18 }}
-                            >
-                              {count}
-                            </motion.span>
-                          </AnimatePresence>
-                        </span>
-                      )}
-                      <span>{status}</span>
-                    </p>
-                  </div>
-                  <Button
-                    size="lg"
-                    className="h-11 w-full sm:h-9 sm:w-auto"
-                    onClick={step === "welcome" ? () => go("places", 1) : step === "places" ? () => go("businesses", 1) : handleFinish}
-                    disabled={step === "businesses" && (busy || count === 0)}
-                  >
-                    {step === "welcome" && "Let's go"}
-                    {step === "places" && "Next"}
-                    {step === "businesses" && "Go to Home"}
-                    {step !== "businesses" && <ArrowRight weight="bold" className="ml-2 h-4 w-4" aria-hidden="true" />}
-                  </Button>
-                </div>
-              </footer>
-            )}
-          </motion.div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      {step !== "finishing" && (
+        <OnboardingFooter
+          step={step}
+          picks={picks}
+          count={count}
+          error={error}
+          busy={busy}
+          reduceMotion={reduceMotion}
+          go={go}
+          onFinish={handleFinish}
+        />
+      )}
+    </OnboardingShell>
   );
 }
 
@@ -744,16 +898,16 @@ function PhotoTile({
   onToggle: (name: string) => void;
   reduceMotion: boolean | null;
 }>) {
-  const { Icon } = item;
+  const tilt = index % 2 ? 1 : -1;
   return (
     <motion.button
       type="button"
       aria-pressed={selected}
       onClick={() => onToggle(item.name)}
-      initial={reduceMotion ? false : { opacity: 0, y: 28, rotate: index % 2 ? 3 : -3, scale: 0.92 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 28, rotate: tilt * 3, scale: 0.92 }}
       animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 200, damping: 18, delay: Math.min(index, 14) * 0.045 }}
-      whileHover={reduceMotion ? undefined : { y: -5, rotate: index % 2 ? 1.2 : -1.2 }}
+      whileHover={reduceMotion ? undefined : { y: -5, rotate: tilt * 1.2 }}
       whileTap={reduceMotion ? undefined : { scale: 0.95 }}
       className="relative aspect-[4/5] rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
@@ -766,65 +920,87 @@ function PhotoTile({
           selected ? "ring-2 ring-primary" : "ring-1 ring-border"
         )}
       >
-        <span
-          className="relative flex flex-1 items-center justify-center overflow-hidden"
-          style={{ backgroundColor: `color-mix(in srgb, ${item.color} 24%, hsl(var(--background)))` }}
-        >
-          {cover ? (
-            <motion.img
-              src={cover}
-              alt=""
-              loading="lazy"
-              className="absolute inset-0 h-full w-full object-cover"
-              animate={{ scale: selected ? 1.12 : 1 }}
-              transition={{ type: "spring", stiffness: 120, damping: 18 }}
-            />
-          ) : (
-            <motion.span
-              aria-hidden="true"
-              animate={{ scale: selected ? 1.2 : 1, rotate: selected ? -6 : 0 }}
-              transition={{ type: "spring", stiffness: 220, damping: 12 }}
-            >
-              <Icon className="h-12 w-12" style={{ color: item.color }} />
-            </motion.span>
-          )}
-          {lots && (
-            <span className="absolute left-2 top-2 rounded-lg bg-background px-2 py-0.5 text-sm font-semibold text-foreground">
-              Lots to explore
-            </span>
-          )}
-          <AnimatePresence>
-            {selected && (
-              <motion.span
-                initial={reduceMotion ? false : { scale: 0, rotate: -90 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={reduceMotion ? undefined : { scale: 0, rotate: 90 }}
-                transition={{ type: "spring", stiffness: 500, damping: 16 }}
-                className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-              >
-                <Check weight="bold" className="h-4 w-4" aria-hidden="true" />
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </span>
-        <span className="relative overflow-hidden bg-card px-3 py-2.5">
-          <AnimatePresence>
-            {selected && (
-              <motion.span
-                aria-hidden="true"
-                className="absolute inset-0 origin-bottom bg-primary"
-                initial={reduceMotion ? false : { scaleY: 0 }}
-                animate={{ scaleY: 1 }}
-                exit={reduceMotion ? undefined : { scaleY: 0 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              />
-            )}
-          </AnimatePresence>
-          <span className={cn("relative block text-sm font-semibold transition-colors duration-200", selected ? "text-primary-foreground" : "text-foreground")}>
-            {item.name}
-          </span>
-        </span>
+        <TileArt item={item} cover={cover} lots={lots} selected={selected} reduceMotion={reduceMotion} />
+        <TileLabel name={item.name} selected={selected} reduceMotion={reduceMotion} />
       </motion.span>
     </motion.button>
+  );
+}
+
+// The picture half of a tile: the cover photo or the category icon, the
+// Lots to explore flag, and the check once selected.
+function TileArt({
+  item,
+  cover,
+  lots,
+  selected,
+  reduceMotion,
+}: Readonly<{ item: CategoryItem; cover: string | undefined; lots: boolean; selected: boolean; reduceMotion: boolean | null }>) {
+  const { Icon } = item;
+  return (
+    <span
+      className="relative flex flex-1 items-center justify-center overflow-hidden"
+      style={{ backgroundColor: `color-mix(in srgb, ${item.color} 24%, hsl(var(--background)))` }}
+    >
+      {cover ? (
+        <motion.img
+          src={cover}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+          animate={{ scale: selected ? 1.12 : 1 }}
+          transition={{ type: "spring", stiffness: 120, damping: 18 }}
+        />
+      ) : (
+        <motion.span
+          aria-hidden="true"
+          animate={{ scale: selected ? 1.2 : 1, rotate: selected ? -6 : 0 }}
+          transition={{ type: "spring", stiffness: 220, damping: 12 }}
+        >
+          <Icon className="h-12 w-12" style={{ color: item.color }} />
+        </motion.span>
+      )}
+      {lots && (
+        <span className="absolute left-2 top-2 rounded-lg bg-background px-2 py-0.5 text-sm font-semibold text-foreground">
+          Lots to explore
+        </span>
+      )}
+      <AnimatePresence>
+        {selected && (
+          <motion.span
+            initial={reduceMotion ? false : { scale: 0, rotate: -90 }}
+            animate={{ scale: 1, rotate: 0 }}
+            exit={reduceMotion ? undefined : { scale: 0, rotate: 90 }}
+            transition={{ type: "spring", stiffness: 500, damping: 16 }}
+            className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+          >
+            <Check weight="bold" className="h-4 w-4" aria-hidden="true" />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
+  );
+}
+
+// The name half of a tile; the primary color wipes up behind it when selected.
+function TileLabel({ name, selected, reduceMotion }: Readonly<{ name: string; selected: boolean; reduceMotion: boolean | null }>) {
+  return (
+    <span className="relative overflow-hidden bg-card px-3 py-2.5">
+      <AnimatePresence>
+        {selected && (
+          <motion.span
+            aria-hidden="true"
+            className="absolute inset-0 origin-bottom bg-primary"
+            initial={reduceMotion ? false : { scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            exit={reduceMotion ? undefined : { scaleY: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          />
+        )}
+      </AnimatePresence>
+      <span className={cn("relative block text-sm font-semibold transition-colors duration-200", selected ? "text-primary-foreground" : "text-foreground")}>
+        {name}
+      </span>
+    </span>
   );
 }

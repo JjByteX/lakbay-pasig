@@ -317,20 +317,27 @@ export async function savePersonalTrailStops(
     return row && row.sequence_order !== index ? [{ id: row.id, to: index }] : [];
   });
 
-  for (const [i, move] of moves.entries()) {
-    const { error: offsetError } = await supabase
-      .from("route_stops")
-      .update({ sequence_order: -(i + 1) })
-      .eq("id", move.id);
-    if (offsetError) rethrow(offsetError);
-  }
-  for (const move of moves) {
-    const { error: moveError } = await supabase
-      .from("route_stops")
-      .update({ sequence_order: move.to })
-      .eq("id", move.id);
-    if (moveError) rethrow(moveError);
-  }
+  // Two passes, each run together: every moving row goes to its own negative
+  // slot first, then to its final one. Rows are distinct and the targets are
+  // unique, so the updates in one pass cannot collide with each other.
+  const offsets = await Promise.all(
+    moves.map((move, i) =>
+      supabase
+        .from("route_stops")
+        .update({ sequence_order: -(i + 1) })
+        .eq("id", move.id)
+    )
+  );
+  const offsetFailed = offsets.find((res) => res.error);
+  if (offsetFailed?.error) rethrow(offsetFailed.error);
+
+  const finals = await Promise.all(
+    moves.map((move) =>
+      supabase.from("route_stops").update({ sequence_order: move.to }).eq("id", move.id)
+    )
+  );
+  const finalFailed = finals.find((res) => res.error);
+  if (finalFailed?.error) rethrow(finalFailed.error);
 
   if (added.length > 0) {
     const { error: insertError } = await supabase.from("route_stops").insert(

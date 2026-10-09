@@ -140,6 +140,53 @@ function missingRequiredFieldsFor(form: FiestaFormState, hasEndDate: boolean): s
   return missing;
 }
 
+type FiestaSpan = ReturnType<typeof spanFor>;
+
+function fiestaPayload(form: FiestaFormState, span: FiestaSpan) {
+  return {
+    name: form.name.trim(),
+    patron_saint: form.patron_saint.trim() || null,
+    community: form.community.trim() || null,
+    month: span.month,
+    start_date: span.start || null,
+    end_date: span.end || null,
+    date_label: span.derivedLabel ?? form.date_label.trim(),
+    description: form.description || null,
+    history: form.history || null,
+    related_place_id: form.related_place_id || null,
+    source_reference: form.source_reference.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+// Insert (no id) or update (id) the fiesta row. Returns the row id, or the
+// message to show when the write failed.
+async function writeFiesta(
+  fiestaId: string | null,
+  payload: ReturnType<typeof fiestaPayload>
+): Promise<{ id: string | null; error: string | null }> {
+  if (fiestaId === null) {
+    const { data, error } = await supabase.from("fiestas").insert(payload).select("id").single();
+    if (error || !data) return { id: null, error: error?.message ?? "Could not create this fiesta." };
+    return { id: data.id as string, error: null };
+  }
+  const { error } = await supabase.from("fiestas").update(payload).eq("id", fiestaId);
+  return { id: fiestaId, error: error ? error.message : null };
+}
+
+// Replace the tag set. Delete-then-insert is two calls, so a failure on the
+// second leaves the fiesta untagged (city-wide) until the next save; the
+// error line tells staff to save again.
+async function replaceBarangays(id: string, barangays: Set<string>): Promise<string | null> {
+  const { error: deleteError } = await supabase.from("fiesta_barangays").delete().eq("fiesta_id", id);
+  if (deleteError) return deleteError.message;
+  if (barangays.size === 0) return null;
+  const { error: insertError } = await supabase
+    .from("fiesta_barangays")
+    .insert([...barangays].map((barangay) => ({ fiesta_id: id, barangay })));
+  return insertError ? insertError.message : null;
+}
+
 interface FiestaFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -237,19 +284,6 @@ export default function FiestaFormDialog({
     setHasEndDate(false);
   }
 
-  // Replace the tag set. Delete-then-insert is two calls, so a failure on the
-  // second leaves the fiesta untagged (city-wide) until the next save; the
-  // error line tells staff to save again.
-  async function saveBarangays(id: string): Promise<string | null> {
-    const { error: deleteError } = await supabase.from("fiesta_barangays").delete().eq("fiesta_id", id);
-    if (deleteError) return deleteError.message;
-    if (barangays.size === 0) return null;
-    const { error: insertError } = await supabase
-      .from("fiesta_barangays")
-      .insert([...barangays].map((barangay) => ({ fiesta_id: id, barangay })));
-    return insertError ? insertError.message : null;
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -257,40 +291,14 @@ export default function FiestaFormDialog({
     setSaving(true);
     setError(null);
 
-    const payload = {
-      name: form.name.trim(),
-      patron_saint: form.patron_saint.trim() || null,
-      community: form.community.trim() || null,
-      month: span.month,
-      start_date: span.start || null,
-      end_date: span.end || null,
-      date_label: span.derivedLabel ?? form.date_label.trim(),
-      description: form.description || null,
-      history: form.history || null,
-      related_place_id: form.related_place_id || null,
-      source_reference: form.source_reference.trim() || null,
-      updated_at: new Date().toISOString(),
-    };
-
-    let id = fiestaId;
-    if (isNew) {
-      const { data, error: insertError } = await supabase.from("fiestas").insert(payload).select("id").single();
-      if (insertError || !data) {
-        setSaving(false);
-        setError(insertError?.message ?? "Could not create this fiesta.");
-        return;
-      }
-      id = data.id as string;
-    } else {
-      const { error: updateError } = await supabase.from("fiestas").update(payload).eq("id", fiestaId);
-      if (updateError) {
-        setSaving(false);
-        setError(updateError.message);
-        return;
-      }
+    const written = await writeFiesta(fiestaId, fiestaPayload(form, span));
+    if (written.error) {
+      setSaving(false);
+      setError(written.error);
+      return;
     }
 
-    const tagError = id ? await saveBarangays(id) : null;
+    const tagError = written.id ? await replaceBarangays(written.id, barangays) : null;
     setSaving(false);
     if (tagError) {
       setError(`Saved, but the barangays did not save: ${tagError}. Save again to retry.`);

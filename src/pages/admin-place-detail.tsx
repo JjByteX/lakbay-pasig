@@ -176,6 +176,11 @@ function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
+// The ids with one added, or removed if it was already there.
+function withFacilityToggled(ids: string[], facilityId: string): string[] {
+  return ids.includes(facilityId) ? ids.filter((f) => f !== facilityId) : [...ids, facilityId];
+}
+
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -326,9 +331,7 @@ export default function AdminPlaceDetailPage() {
   function toggleFacility(facilityId: string) {
     setForm((prev) => ({
       ...prev,
-      facility_ids: prev.facility_ids.includes(facilityId)
-        ? prev.facility_ids.filter((f) => f !== facilityId)
-        : [...prev.facility_ids, facilityId],
+      facility_ids: withFacilityToggled(prev.facility_ids, facilityId),
     }));
   }
 

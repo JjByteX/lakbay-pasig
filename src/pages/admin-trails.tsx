@@ -66,6 +66,59 @@ const STATUS_VARIANT = {
 
 const STATUS_OPTIONS = ["all", "draft", "published"] as const;
 
+type BlockingEntry = { id: string; title: string };
+type StopLocationKind = Parameters<typeof stopLocationKey>[0];
+
+// Stop count per trail, the trails each location sits on, and the place and
+// business ids the entry gate has to check.
+function tallyStops(stops: { route_id: string; stop_type: StopLocationKind; stop_id: string }[]) {
+  const stopCounts = new Map<string, number>();
+  const trailsByLocation = new Map<string, string[]>();
+  const placeIds = new Set<string>();
+  const businessIds = new Set<string>();
+  for (const stop of stops) {
+    stopCounts.set(stop.route_id, (stopCounts.get(stop.route_id) ?? 0) + 1);
+    const key = stopLocationKey(stop.stop_type, stop.stop_id);
+    trailsByLocation.set(key, [...(trailsByLocation.get(key) ?? []), stop.route_id]);
+    (stop.stop_type === "place" ? placeIds : businessIds).add(stop.stop_id);
+  }
+  return { stopCounts, trailsByLocation, placeIds, businessIds };
+}
+
+// The first flagged trail note per trail (the rows arrive in a stable order).
+function firstBlockingByRoute(flagged: { id: string; title: string; route_id: string }[]) {
+  const blockingByRoute = new Map<string, BlockingEntry>();
+  for (const entry of flagged) {
+    if (!blockingByRoute.has(entry.route_id)) {
+      blockingByRoute.set(entry.route_id, { id: entry.id, title: entry.title });
+    }
+  }
+  return blockingByRoute;
+}
+
+// Adds flagged place and business entries to blockingByRoute (a trail note
+// still comes first when a trail has both) and returns the trails the check
+// could not clear: every trail with a stop when the check itself failed.
+function applyPlaceGate(
+  placeResult: Awaited<ReturnType<typeof fetchFlaggedPlaceEntries>>,
+  trailsByLocation: Map<string, string[]>,
+  blockingByRoute: Map<string, BlockingEntry>
+): Set<string> {
+  const gateFailedRoutes = new Set<string>();
+  if ("error" in placeResult) {
+    for (const routeIdsForLocation of trailsByLocation.values()) {
+      for (const routeId of routeIdsForLocation) gateFailedRoutes.add(routeId);
+    }
+    return gateFailedRoutes;
+  }
+  for (const entry of placeResult.entries) {
+    for (const routeId of trailsByLocation.get(stopLocationKey(entry.locationType, entry.locationId)) ?? []) {
+      if (!blockingByRoute.has(routeId)) blockingByRoute.set(routeId, { id: entry.id, title: entry.title });
+    }
+  }
+  return gateFailedRoutes;
+}
+
 export default function AdminTrailsPage() {
   usePageTitle("Trails");
   const navigate = useNavigate();
@@ -119,40 +172,13 @@ export default function AdminTrailsPage() {
         .order("id", { ascending: true }),
     ]);
 
-    const stopCounts = new Map<string, number>();
-    const trailsByLocation = new Map<string, string[]>();
-    const placeIds = new Set<string>();
-    const businessIds = new Set<string>();
-    for (const stop of stops ?? []) {
-      stopCounts.set(stop.route_id, (stopCounts.get(stop.route_id) ?? 0) + 1);
-      const key = stopLocationKey(stop.stop_type, stop.stop_id);
-      trailsByLocation.set(key, [...(trailsByLocation.get(key) ?? []), stop.route_id]);
-      (stop.stop_type === "place" ? placeIds : businessIds).add(stop.stop_id);
-    }
-
-    const blockingByRoute = new Map<string, { id: string; title: string }>();
-    for (const entry of flagged ?? []) {
-      if (!blockingByRoute.has(entry.route_id)) {
-        blockingByRoute.set(entry.route_id, { id: entry.id, title: entry.title });
-      }
-    }
+    const { stopCounts, trailsByLocation, placeIds, businessIds } = tallyStops(stops ?? []);
+    const blockingByRoute = firstBlockingByRoute(flagged ?? []);
 
     // A place's or business's own entries have no route_id, so they reach a
-    // trail through its stops (lib/trail-review-gate.ts). A trail note still
-    // comes first when a trail has both.
+    // trail through its stops (lib/trail-review-gate.ts).
     const placeResult = await fetchFlaggedPlaceEntries([...placeIds], [...businessIds]);
-    const gateFailedRoutes = new Set<string>();
-    if ("error" in placeResult) {
-      for (const routeIdsForLocation of trailsByLocation.values()) {
-        for (const routeId of routeIdsForLocation) gateFailedRoutes.add(routeId);
-      }
-    } else {
-      for (const entry of placeResult.entries) {
-        for (const routeId of trailsByLocation.get(stopLocationKey(entry.locationType, entry.locationId)) ?? []) {
-          if (!blockingByRoute.has(routeId)) blockingByRoute.set(routeId, { id: entry.id, title: entry.title });
-        }
-      }
-    }
+    const gateFailedRoutes = applyPlaceGate(placeResult, trailsByLocation, blockingByRoute);
 
     return routes.map((r) => ({
       id: r.id,

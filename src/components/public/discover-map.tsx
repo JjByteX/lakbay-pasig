@@ -1978,6 +1978,22 @@ export function DiscoverMap({
       reversals = 0;
       sway.set(0);
     };
+    // The mouse stopped moving: turn the speed just lost into one last kick,
+    // hold it briefly, then release it to 0. Kept out of the mousemove
+    // listener so the timers do not nest inside it.
+    const endSway = () => {
+      // A hover that ends in a stop is not a wiggle: no stop kick.
+      sway.set(
+        isWiggling(performance.now())
+          ? clampSway((-lastVx / STOP_KICK_MS) * SWAY_PER_ACCEL)
+          : 0,
+      );
+      lastVx = 0;
+      swayIdleTimer = setTimeout(() => {
+        swayIdleTimer = null;
+        sway.set(0);
+      }, SWAY_KICK_HOLD_MS);
+    };
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = results
@@ -2025,8 +2041,7 @@ export function DiscoverMap({
               bottom: circle.bottom - bounds.top,
             };
             setHovered((prev) =>
-              prev &&
-              prev.result === result &&
+              prev?.result === result &&
               prev.top === next.top &&
               prev.bottom === next.bottom
                 ? prev
@@ -2073,19 +2088,7 @@ export function DiscoverMap({
                 : sway.get() * 0.4,
             );
             if (swayIdleTimer) clearTimeout(swayIdleTimer);
-            swayIdleTimer = setTimeout(() => {
-              // A hover that ends in a stop is not a wiggle: no stop kick.
-              sway.set(
-                isWiggling(performance.now())
-                  ? clampSway((-lastVx / STOP_KICK_MS) * SWAY_PER_ACCEL)
-                  : 0,
-              );
-              lastVx = 0;
-              swayIdleTimer = setTimeout(() => {
-                swayIdleTimer = null;
-                sway.set(0);
-              }, SWAY_KICK_HOLD_MS);
-            }, SWAY_IDLE_MS);
+            swayIdleTimer = setTimeout(endSway, SWAY_IDLE_MS);
           });
           el.addEventListener("mouseleave", () => {
             stopSway();

@@ -100,6 +100,72 @@ function Unlocked({ stopName }: Readonly<{ stopName: string }>) {
   );
 }
 
+// A scan that did not unlock: what went wrong and the one next step.
+function ScanResultView({
+  result,
+  issue,
+  onRetry,
+  onOpen,
+}: Readonly<{
+  result: Exclude<ScanResult, { status: "unlocked" }>;
+  issue: LocationIssue | null;
+  onRetry: () => void;
+  onOpen: (path: string) => void;
+}>) {
+  const tryAgain = (
+    <Button variant="outline" onClick={onRetry}>
+      Try again
+    </Button>
+  );
+
+  if (result.status === "not-found") {
+    return (
+      <EmptyState
+        icon={QrCode}
+        action={
+          <Button variant="outline" onClick={() => onOpen("/trails")}>
+            Browse trails
+          </Button>
+        }
+      >
+        This code isn&apos;t part of a trail right now.
+      </EmptyState>
+    );
+  }
+  if (result.status === "no-location") {
+    const reason = issue ?? "unavailable";
+    return (
+      <EmptyState icon={MapPin} action={reason === "unsupported" ? undefined : tryAgain}>
+        {LOCATION_COPY[reason]}
+      </EmptyState>
+    );
+  }
+  if (result.status === "too-far") {
+    return (
+      <EmptyState icon={MapPin} action={tryAgain}>
+        You&apos;re about {formatDistance(result.meters)} from this stop. Move within {Math.round(result.radius)} m and
+        try again.
+      </EmptyState>
+    );
+  }
+  return (
+    <EmptyState
+      icon={MapTrifold}
+      action={
+        <div className="flex flex-col gap-2">
+          {result.trails.map((t) => (
+            <Button key={t.id} variant="outline" onClick={() => onOpen(`/trails/${t.id}`)}>
+              {t.name}
+            </Button>
+          ))}
+        </div>
+      }
+    >
+      Start a trail that includes this place and reach its stop, then scan again.
+    </EmptyState>
+  );
+}
+
 /**
  * /scan/:token, the link a QR code at an object holds. A phone's own camera
  * opens it, so the app needs no scanner. Everything is checked for the
@@ -178,11 +244,7 @@ export default function TrailScanPage() {
 
   if (loading) return null;
 
-  const tryAgain = (
-    <Button variant="outline" onClick={() => setAttempt((n) => n + 1)}>
-      Try again
-    </Button>
-  );
+  const retry = () => setAttempt((n) => n + 1);
 
   let body;
   if (!session) {
@@ -194,66 +256,23 @@ export default function TrailScanPage() {
     );
   } else if (error) {
     body = (
-      <ErrorState onRetry={() => setAttempt((n) => n + 1)}>
+      <ErrorState onRetry={retry}>
         Couldn&apos;t check this code. Check your connection and try again.
       </ErrorState>
     );
   } else if (unlocked) {
     body = <Unlocked stopName={unlocked.stopName} />;
-  } else if (!result) {
-    body =
-      step === "locating" ? (
-        <Progress
-          label="Finding your location…"
-          hint={slow ? "Still looking for a GPS signal. An open area works best." : undefined}
-        />
-      ) : (
-        <Progress label="Checking the code…" />
-      );
-  } else if (result.status === "not-found") {
+  } else if (result) {
+    body = <ScanResultView result={result} issue={issue} onRetry={retry} onOpen={navigate} />;
+  } else if (step === "locating") {
     body = (
-      <EmptyState
-        icon={QrCode}
-        action={
-          <Button variant="outline" onClick={() => navigate("/trails")}>
-            Browse trails
-          </Button>
-        }
-      >
-        This code isn&apos;t part of a trail right now.
-      </EmptyState>
-    );
-  } else if (result.status === "no-location") {
-    const reason = issue ?? "unavailable";
-    body = (
-      <EmptyState icon={MapPin} action={reason === "unsupported" ? undefined : tryAgain}>
-        {LOCATION_COPY[reason]}
-      </EmptyState>
-    );
-  } else if (result.status === "too-far") {
-    body = (
-      <EmptyState icon={MapPin} action={tryAgain}>
-        You&apos;re about {formatDistance(result.meters)} from this stop. Move within {Math.round(result.radius)} m and
-        try again.
-      </EmptyState>
+      <Progress
+        label="Finding your location…"
+        hint={slow ? "Still looking for a GPS signal. An open area works best." : undefined}
+      />
     );
   } else {
-    body = (
-      <EmptyState
-        icon={MapTrifold}
-        action={
-          <div className="flex flex-col gap-2">
-            {result.trails.map((t) => (
-              <Button key={t.id} variant="outline" onClick={() => navigate(`/trails/${t.id}`)}>
-                {t.name}
-              </Button>
-            ))}
-          </div>
-        }
-      >
-        Start a trail that includes this place and reach its stop, then scan again.
-      </EmptyState>
-    );
+    body = <Progress label="Checking the code…" />;
   }
 
   return (

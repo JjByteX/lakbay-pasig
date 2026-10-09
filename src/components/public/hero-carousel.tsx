@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import {
   motion,
   useMotionValue,
@@ -451,13 +451,18 @@ function HeroFilmstripInner({
   // changes (an identical string bails out). What is rendered is always
   // derived from the live value, so a change in slide count or tile layout
   // can never leave a stale mask on screen.
-  const [, setMountedSet] = useState(() =>
-    mountedMask(combined.get(), count, tilesInViewport)
-  );
-  useMotionValueEvent(combined, "change", (live) =>
-    setMountedSet(mountedMask(live, count, tilesInViewport))
-  );
+  // A reducer tick, not a useState with a value nobody reads: the tick only
+  // asks for a re-render, and lastMask remembers the set last drawn so an
+  // identical set skips it. It is refreshed on every render, so a change in
+  // slide count or tile layout cannot leave it stale.
   const mask = mountedMask(combined.get(), count, tilesInViewport);
+  const [, rerender] = useReducer((tick: number) => tick + 1, 0);
+  const lastMask = useRef(mask);
+  lastMask.current = mask;
+  useMotionValueEvent(combined, "change", (live) => {
+    const next = mountedMask(live, count, tilesInViewport);
+    if (next !== lastMask.current) rerender();
+  });
 
   return (
     <>
