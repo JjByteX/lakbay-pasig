@@ -118,6 +118,16 @@ Phase 7, done (gaps found in review):
 - `privacy.tsx`: names private trails in the list of what the app stores and in the deletion line. Wording only, deletion already removed them.
 - `decision-log.md`: entry #48.
 
+Phase 8, done (cards in the picker):
+
+- The builder's picker is a photo card grid, in the Home and Saved style, instead of a scroll list. `place-business-picker.tsx` has a `variant` prop: `list` (default, the staff trail builder is unchanged) and `cards` (this builder).
+- Six cards show first and a View more button adds six. Search resets to six.
+- A cover photo is read only for the cards on screen, one read per kind each time the visible set grows (`fetchCoverPhotoUrls`). Before, nothing loaded photos, and a long list would have loaded every one.
+- A card is one button with the name over the photo. The footer has one muted line (type and category) and a badge only for Has a secret, Saved or Pending.
+- The desktop picker no longer sits inside a card, so cards do not nest (ux-ui-guidelines.md).
+- Desktop fits the viewport like the stepped forms: the page never scrolls, the left card (name and stops) and the picker scroll their own content, and Delete and Save stay pinned under the left card. The stops list drops its own border there. Mobile scrolls as before.
+- Not changed: the place and business names still load in one read, which is small. Server side search and paging is the next step if the list grows into the hundreds.
+
 ## Check
 
 `supabase/personal_trails_check.sql`, same shape as `activity_log_check.sql`. Eight groups:

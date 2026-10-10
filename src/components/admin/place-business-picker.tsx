@@ -1,10 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PhotoCaptionOverlay } from "@/components/public/photo-caption-overlay";
+import { fetchCoverPhotoUrls } from "@/lib/home-query";
 
 // Phase 4.4 (step-4-phases.md): one shared component, used by the Stop
 // sequence step (4.5) and, in Phase 5, the Discovery content modal (5.1),
@@ -59,6 +62,27 @@ interface PlaceBusinessPickerProps {
   savedIds?: Set<string>;
   /** ids that hold a secret to unlock (locations_with_entries, 0055). Tagged "Has a secret" and listed right after the saved ones. */
   markedIds?: Set<string>;
+  /**
+   * "list" (default) is the dense scroll list the staff trail builder uses.
+   * "cards" is the photo card grid the personal trail builder uses: six cards
+   * at a time with a View more button, and a cover photo is read only for the
+   * cards on screen.
+   */
+  variant?: "list" | "cards";
+}
+
+// Cards shown before View more, and added by each press. Six fills two
+// columns and three columns evenly.
+const CARD_PAGE_SIZE = 6;
+
+interface PickerCardData {
+  type: PickableLocationType;
+  id: string;
+  name: string;
+  category: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  pending: boolean;
 }
 
 // Saved rows first, then rows with a secret, each group keeping its name order
@@ -75,8 +99,10 @@ export function PlaceBusinessPicker({
   includePending = false,
   savedIds,
   markedIds,
+  variant = "list",
 }: Readonly<PlaceBusinessPickerProps>) {
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(CARD_PAGE_SIZE);
   const [places, setPlaces] = useState<PlaceRow[] | null>(null);
   const [businesses, setBusinesses] = useState<BusinessRow[] | null>(null);
 
@@ -182,6 +208,21 @@ export function PlaceBusinessPicker({
           : "Matching verified places and businesses will appear here."}
       </EmptyState>
     );
+  } else if (variant === "cards") {
+    const cards: PickerCardData[] = [
+      ...filteredPlaces.map((p) => ({ ...p, type: "place" as const, pending: false })),
+      ...filteredBusinesses.map((b) => ({ ...b, type: "business" as const })),
+    ];
+    pickerBody = (
+      <PickerCards
+        cards={cards}
+        visibleCount={visibleCount}
+        savedIds={savedIds}
+        markedIds={markedIds}
+        onPick={onPick}
+        onViewMore={() => setVisibleCount((n) => n + CARD_PAGE_SIZE)}
+      />
+    );
   } else {
     pickerBody = (
       <div className="flex max-h-80 flex-col divide-y divide-border overflow-y-auto rounded-lg border border-border bg-card">
@@ -235,7 +276,10 @@ export function PlaceBusinessPicker({
         <Input
           placeholder={includePending ? "Search places and businesses" : "Search verified places and businesses"}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setVisibleCount(CARD_PAGE_SIZE);
+          }}
           className="pl-9"
         />
       </div>
@@ -278,6 +322,141 @@ function PickerRow({
         {pending && <Badge variant="outline">Pending</Badge>}
         <Badge variant="secondary">{typeLabel}</Badge>
       </div>
+    </button>
+  );
+}
+
+// The photo card grid. Shows `visibleCount` cards and a View more button for
+// the rest, so a long list of places never loads every cover photo at once: a
+// photo is read only for the cards on screen, in one request per kind each time
+// the visible set grows. A card the person picks leaves the list (excludeIds),
+// so the next one slides up and the count of cards on screen stays the same.
+function PickerCards({
+  cards,
+  visibleCount,
+  savedIds,
+  markedIds,
+  onPick,
+  onViewMore,
+}: Readonly<{
+  cards: PickerCardData[];
+  visibleCount: number;
+  savedIds?: Set<string>;
+  markedIds?: Set<string>;
+  onPick: (location: PickedLocation) => void;
+  onViewMore: () => void;
+}>) {
+  const [covers, setCovers] = useState<Map<string, string>>(new Map());
+  const requested = useRef(new Set<string>());
+  // Not tied to the visible set: a read that is still running when the set
+  // changes must still land, since its ids are already marked as requested.
+  const mounted = useRef(true);
+  const visible = cards.slice(0, visibleCount);
+  // A string, so the effect below re-runs only when the cards on screen change.
+  const visibleKey = visible.map((card) => `${card.type}:${card.id}`).join(",");
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const fresh = visibleKey
+      .split(",")
+      .filter((key) => key && !requested.current.has(key))
+      .map((key) => key.split(":"));
+    if (fresh.length === 0) return;
+    for (const [type, id] of fresh) requested.current.add(`${type}:${id}`);
+
+    const idsOf = (kind: string) => fresh.filter(([type]) => type === kind).map(([, id]) => id);
+    void Promise.all([
+      fetchCoverPhotoUrls("place_photos", "place_id", idsOf("place")),
+      fetchCoverPhotoUrls("business_photos", "business_id", idsOf("business")),
+    ])
+      .then(([placeCovers, businessCovers]) => {
+        if (!mounted.current) return;
+        setCovers((current) => new Map([...current, ...placeCovers, ...businessCovers]));
+      })
+      .catch(() => {
+        // No photo on these cards. The card still works.
+      });
+  }, [visibleKey]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        {visible.map((card) => (
+          <PickerCard
+            key={`${card.type}-${card.id}`}
+            card={card}
+            coverPhotoUrl={covers.get(card.id) ?? null}
+            saved={savedIds?.has(card.id) ?? false}
+            hasSecret={markedIds?.has(card.id) ?? false}
+            onClick={() =>
+              onPick({
+                type: card.type,
+                id: card.id,
+                name: card.name,
+                latitude: card.latitude,
+                longitude: card.longitude,
+              })
+            }
+          />
+        ))}
+      </div>
+      {cards.length > visibleCount && (
+        <Button type="button" variant="outline" className="self-center" onClick={onViewMore}>
+          View more
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// One whole-card button, so only spans sit inside it (a div in a button is not
+// valid HTML, and the Badge component renders a div). The badges use
+// badgeVariants for the same look. Type and category share one muted line, so
+// the statuses are the only badges.
+function PickerCard({
+  card,
+  coverPhotoUrl,
+  saved,
+  hasSecret,
+  onClick,
+}: Readonly<{
+  card: PickerCardData;
+  coverPhotoUrl: string | null;
+  saved: boolean;
+  hasSecret: boolean;
+  onClick: () => void;
+}>) {
+  const typeLabel = card.type === "place" ? "Place" : "Business";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span
+        className="relative block aspect-square w-full shrink-0 bg-muted bg-cover bg-center"
+        style={{ backgroundImage: coverPhotoUrl ? `url(${coverPhotoUrl})` : undefined }}
+      >
+        <PhotoCaptionOverlay name={card.name} />
+      </span>
+      <span className="flex flex-1 flex-col gap-1 p-2">
+        <span className="truncate text-xs text-muted-foreground">
+          {card.category ? `${typeLabel} · ${card.category}` : typeLabel}
+        </span>
+        {(hasSecret || saved || card.pending) && (
+          <span className="flex flex-wrap gap-1">
+            {hasSecret && <span className={badgeVariants({ variant: "default" })}>Has a secret</span>}
+            {saved && <span className={badgeVariants({ variant: "accent" })}>Saved</span>}
+            {card.pending && <span className={badgeVariants({ variant: "outline" })}>Pending</span>}
+          </span>
+        )}
+      </span>
     </button>
   );
 }

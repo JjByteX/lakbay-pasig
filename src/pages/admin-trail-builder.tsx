@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowDown, ArrowUp, BookOpen, Pencil, Trash } from "@phosphor-icons/react";
+import { ArrowDown, ArrowUp, BookOpen, MapPin, Pencil, Trash } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -38,14 +38,21 @@ import { DurationField } from "@/components/ui/duration-field";
 import { RecommendedTimeField } from "@/components/ui/recommended-time-field";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { AdminFormCard } from "@/components/admin/admin-form-card";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
+import { cn } from "@/lib/utils";
+import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-// Trail builder: one screen, no stepper. The trail info form is the left
-// column, Stops the right, and per stop Trail Notes (5.1) is a centered
-// modal, per ux-ui-guidelines.md's modal rule (focused task, fits one
-// viewport), not a side panel. Publish/Unpublish sits top right beside the
-// status badge, the placement convention for a primary action, with the reason
-// shown next to it whenever it is unavailable (Disabled/gated rule).
+// Trail builder: one screen, no stepper. Laid out like the resident trail
+// builder (trail-builder.tsx): one card on the left holds the trail's details
+// and its Stops list, and the photo card picker (search and pictures) sits
+// open on the right, so staff see what the trail has while they search for
+// more. Per stop, Trail
+// Notes (5.1) is a centered modal, per ux-ui-guidelines.md's modal rule
+// (focused task, fits one viewport), not a side panel. Publish/Unpublish sits
+// top right beside the status badge, the placement convention for a primary
+// action, with the reason shown next to it whenever it is unavailable
+// (Disabled/gated rule).
 //
 // This used to be two steps, Details then Review and Publish. The second step
 // only mirrored what Details already shows and repeated the publish action
@@ -543,6 +550,7 @@ export default function AdminTrailBuilderPage() {
   const isNew = id === undefined;
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const isMobile = useIsMobile();
 
   const [infoSaved, setInfoSaved] = useState(false);
   const [routeId, setRouteId] = useState<string | null>(isNew ? null : id ?? null);
@@ -577,7 +585,6 @@ export default function AdminTrailBuilderPage() {
 
   const [stops, setStops] = useState<StopRow[]>([]);
   const [stopsLoading, setStopsLoading] = useState(!isNew);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [stopsError, setStopsError] = useState<string | null>(null);
   const [savingStops, setSavingStops] = useState(false);
 
@@ -1000,8 +1007,12 @@ export default function AdminTrailBuilderPage() {
     return true;
   }
 
+  // The picker stays open beside the stops, so a second pick can arrive while
+  // the first is still being written. persistStops numbers new stops from the
+  // list it was given, so a pick during a write is ignored (the picker is also
+  // dimmed meanwhile, see pickerSection).
   function handlePick(location: PickedLocation) {
-    setPickerOpen(false);
+    if (savingStops) return;
     const next = [
       ...stops,
       {
@@ -1397,126 +1408,134 @@ export default function AdminTrailBuilderPage() {
     return status === "published" ? "Unpublish" : "Publish";
   }
 
-  // Extracted from a nested ternary (stopsLoading ? ... : stops.length
-  // === 0 ? ... : ...) inline in the Stops step's list below.
+  // Stops list in the resident builder's row shape (trail-builder.tsx's
+  // StopRow): number, name, then the row's controls. Staff set the order by
+  // hand, so each row also carries up and down, and the stop's Trail Notes.
   function stopsListBody(): ReactNode {
     if (stopsLoading) {
       return <p className="text-sm text-muted-foreground">Loading…</p>;
     }
-    // No empty state: zero stops renders nothing above the Add Stop button
-    // (a bordered empty list would read as a broken box).
-    if (stops.length === 0) return null;
+    if (stops.length === 0) {
+      return <EmptyState icon={MapPin}>Stops you add will appear here.</EmptyState>;
+    }
     return (
-      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
-        {stops.map((stop, index) => (
-          <li key={stop.id} className="flex items-center justify-between gap-3 p-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-                {index + 1}
-              </span>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-foreground">{stop.name}</span>
-                <Badge variant="secondary" className="mt-1 w-fit capitalize">
+      <ol className="flex flex-col divide-y divide-border">
+        {stops.map((stop, index) => {
+          const noteCount = discoveryContent.filter((d) => d.route_stop_id === stop.id).length;
+          return (
+            <li key={stop.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
+              <span className="w-5 shrink-0 text-sm font-semibold text-muted-foreground">{index + 1}</span>
+              <div className="flex min-w-32 flex-1 flex-col gap-1">
+                <span className="truncate text-sm font-semibold text-foreground">{stop.name}</span>
+                <Badge variant="secondary" className="w-fit capitalize">
                   {stop.stop_type}
                 </Badge>
               </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={savingStops}
-                onClick={() => openDiscoveryModal(stop.id)}
-              >
-                <BookOpen className="h-4 w-4" />
-                Trail Notes
-                {discoveryContent.some((d) => d.route_stop_id === stop.id) && (
-                  <Badge variant="secondary" className="ml-1">
-                    {discoveryContent.filter((d) => d.route_stop_id === stop.id).length}
-                  </Badge>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={index === 0 || savingStops}
-                onClick={() => handleMoveStop(index, -1)}
-              >
-                <ArrowUp className="h-4 w-4" />
-                <span className="sr-only">Move up</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={index === stops.length - 1 || savingStops}
-                onClick={() => handleMoveStop(index, 1)}
-              >
-                <ArrowDown className="h-4 w-4" />
-                <span className="sr-only">Move down</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive"
-                disabled={savingStops}
-                onClick={() => handleRemoveStop(stop.id)}
-              >
-                <Trash className="h-4 w-4" />
-                <span className="sr-only">Remove stop</span>
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={savingStops}
+                  aria-label={`Trail notes for ${stop.name}`}
+                  onClick={() => openDiscoveryModal(stop.id)}
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  Notes
+                  {noteCount > 0 && <span className={badgeVariants({ variant: "secondary" })}>{noteCount}</span>}
+                </Button>
+                <AdminIconActions>
+                  <AdminIconAction
+                    icon={ArrowUp}
+                    label="Move up"
+                    disabled={index === 0 || savingStops}
+                    onClick={() => handleMoveStop(index, -1)}
+                  />
+                  <AdminIconAction
+                    icon={ArrowDown}
+                    label="Move down"
+                    disabled={index === stops.length - 1 || savingStops}
+                    onClick={() => handleMoveStop(index, 1)}
+                  />
+                  <AdminIconAction
+                    icon={Trash}
+                    label="Remove stop"
+                    destructive
+                    disabled={savingStops}
+                    onClick={() => handleRemoveStop(stop.id)}
+                  />
+                </AdminIconActions>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     );
   }
 
+  const headerTitle = isNew && !routeId ? "New Trail" : info.name || "Edit Trail";
+  const breadcrumb = [{ label: "Trails", to: "/admin/trails" }];
+
+  // Loading and not found keep the heading, as the resident builder does, so
+  // the page never drops to a bare line of text.
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return (
+      <div className="flex min-h-0 grow flex-col gap-6">
+        <AdminPageHeader breadcrumb={breadcrumb} title={headerTitle} />
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    );
   }
 
   if (notFound) {
-    return <p className="text-sm text-destructive">Could not load this trail.</p>;
+    return (
+      <div className="flex min-h-0 grow flex-col gap-6">
+        <AdminPageHeader breadcrumb={breadcrumb} title={headerTitle} />
+        <p className="text-sm text-destructive">Could not load this trail.</p>
+      </div>
+    );
   }
 
-  return (
-    <div className="flex min-h-0 grow flex-col gap-6">
-      {/* Publish/Unpublish (the actions slot): top right, only once the trail
-          exists. While it is unavailable the reason sits directly under it,
-          never a silently disabled button. */}
-      <AdminPageHeader
-        breadcrumb={[{ label: "Trails", to: "/admin/trails" }]}
-        title={isNew && !routeId ? "New Trail" : info.name || "Edit Trail"}
-        badges={routeId && <Badge variant={status === "published" ? "default" : "outline"}>{status}</Badge>}
-        actions={
-          routeId && (
-            <div className="flex max-w-sm flex-col items-end gap-1">
-              <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null}>
-                {publishButtonLabel()}
-              </Button>
-              {blockedReason && <p className="text-right text-sm text-muted-foreground">{blockedReason}</p>}
-              {publishError && <p className="text-right text-sm text-destructive">{publishError}</p>}
-            </div>
-          )
-        }
-      />
+  const stopsSection = (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-semibold text-foreground">Stops</h2>
+        <span className="text-xs text-muted-foreground">
+          {stops.length} {stops.length === 1 ? "stop" : "stops"}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">Stops run in this order. Use the arrows to change it.</p>
+      {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
 
-      <div className="flex min-h-0 grow flex-col gap-6">
-        {/* Info fields and Stops share one card -- per ux-ui-guidelines.md's
-            card fragmentation rule, this is one logical "edit this trail"
-            context, not two. Info is the left column and Stops the right,
-            split by a vertical divider (same layout as the place form's
-            step 1 and the business page), stacked below lg. The grid grows
-            with the card so the divider runs its full height. The error
-            line and the Cancel/Save row stay outside the card. */}
-        <AdminFormCard>
-          <div className="grid grow grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
-            <div className="flex flex-col gap-4 lg:pr-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {stopsListBody()}
+
+      {routeId && stops.some((s) => s.id.startsWith("temp-")) && (
+        <p className="text-xs text-muted-foreground">Some stops are not saved yet. Press Save Changes to save them.</p>
+      )}
+
+      <FlaggedForReview discoveryContent={discoveryContent} placeEntries={flaggedPlaceEntries} stops={stops} />
+    </section>
+  );
+
+  // The photo card picker (the same one the resident builder shows), open
+  // beside the stops. Dimmed and unclickable while a stop is being written.
+  const pickerSection = (
+    <section className="flex flex-col gap-2" aria-busy={savingStops}>
+      <h2 className="text-base font-semibold text-foreground">Add Stops</h2>
+      <div className={cn(savingStops && "pointer-events-none opacity-60")}>
+        <PlaceBusinessPicker
+          variant="cards"
+          onPick={handlePick}
+          excludeIds={new Set(stops.map((s) => s.stop_id))}
+        />
+      </div>
+    </section>
+  );
+
+  const detailsFieldsBlock = (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="name">Route Name</Label>
                   <Input
@@ -1546,7 +1565,7 @@ export default function AdminTrailBuilderPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="estimated_duration">Estimated Duration</Label>
                   <DurationField
@@ -1596,7 +1615,7 @@ export default function AdminTrailBuilderPage() {
                 />
               </div>
 
-              <div className="flex flex-col gap-2 sm:w-60">
+              <div className="flex flex-col gap-2 2xl:w-60">
                 <Label htmlFor="run_type">Run Type</Label>
                 <Select value={info.run_type} onValueChange={(v) => updateInfoField("run_type", v)}>
                   <SelectTrigger id="run_type">
@@ -1613,99 +1632,119 @@ export default function AdminTrailBuilderPage() {
               </div>
 
             </div>
+  );
 
-            {/* Stops: the right column of the same card. Available before the
-                trail is created, stops picked now are saved together with the
-                trail. */}
-            <div className="flex flex-col gap-4 lg:pl-4">
-              <h2 className="text-base font-semibold text-foreground">Stops</h2>
-              {stopsError && <p className="text-sm text-destructive">{stopsError}</p>}
+  // Desktop: the card scrolls its own content (ADMIN_SCROLL_CLASS). Mobile:
+  // it is as tall as its content and the page column scrolls instead.
+  const detailsCard = (
+    <div className={cn("flex flex-col gap-6 rounded-lg border border-border bg-card p-4", !isMobile && ADMIN_SCROLL_CLASS)}>
+      {detailsFieldsBlock}
+      {stopsSection}
+    </div>
+  );
 
-              {stopsListBody()}
-
-              {routeId && stops.some((s) => s.id.startsWith("temp-")) && (
-                <p className="text-xs text-muted-foreground">
-                  Some stops are not saved yet. Press Save Changes to save them.
-                </p>
-              )}
-
-              <div>
-                <Button type="button" variant="outline" onClick={() => setPickerOpen(true)} disabled={savingStops}>
-                  Add Stop
-                </Button>
-              </div>
-
-              <FlaggedForReview discoveryContent={discoveryContent} placeEntries={flaggedPlaceEntries} stops={stops} />
-            </div>
-          </div>
-        </AdminFormCard>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex items-center justify-end gap-2">
-          {infoSaved && <span className="text-sm text-muted-foreground">Saved</span>}
-          <Button type="button" variant="outline" onClick={() => navigate("/admin/trails")}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo}>
-            {saveInfoButtonLabel()}
-          </Button>
-        </div>
-
-        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add a stop</DialogTitle>
-            </DialogHeader>
-            <PlaceBusinessPicker
-              onPick={handlePick}
-              excludeIds={new Set(stops.map((s) => s.stop_id))}
-            />
-          </DialogContent>
-        </Dialog>
-
-        {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal rule,
-            a focused task fitting one viewport, not a side panel. Reachable
-            from the Trail Notes button on the same stop's row. */}
-        <Dialog
-          open={discoveryModalStopId !== null}
-          onOpenChange={(open) => {
-            if (!open) closeDiscoveryModal();
-          }}
-        >
-          <DialogContent>
-            {(() => {
-              const activeStop = stops.find((s) => s.id === discoveryModalStopId);
-              if (!activeStop) return null;
-              const entriesForStop = discoveryContent
-                .filter((d) => d.route_stop_id === activeStop.id)
-                .sort((a, b) => a.sequence_order - b.sequence_order);
-
-              return (
-                <DiscoveryContentModalBody
-                  activeStop={activeStop}
-                  entriesForStop={entriesForStop}
-                  discoveryError={discoveryError}
-                  discoveryLoading={discoveryLoading}
-                  discoverySaving={discoverySaving}
-                  editingEntryId={editingEntryId}
-                  discoveryForm={discoveryForm}
-                  setDiscoveryForm={setDiscoveryForm}
-                  canSubmitDiscoveryEntry={canSubmitDiscoveryEntry}
-                  placeEntryCount={placeEntryCount}
-                  onStartNew={startNewDiscoveryEntry}
-                  onStartEdit={startEditDiscoveryEntry}
-                  onMove={handleMoveDiscoveryEntry}
-                  onDelete={handleDeleteDiscoveryEntry}
-                  onCancelEdit={handleCancelDiscoveryEdit}
-                  onSave={handleSaveDiscoveryEntry}
-                  onPhotoError={setDiscoveryError}
-                />
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
+  const saveRow = (
+    <div className="flex shrink-0 flex-col gap-2">
+      <div className="flex items-center justify-end gap-2">
+        {infoSaved && <span className="text-sm text-muted-foreground">Saved</span>}
+        <Button type="button" variant="outline" onClick={() => navigate("/admin/trails")}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo}>
+          {saveInfoButtonLabel()}
+        </Button>
       </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-0 grow flex-col gap-6">
+      {/* Publish/Unpublish (the actions slot): top right, only once the trail
+          exists. While it is unavailable the reason sits directly under it,
+          never a silently disabled button. */}
+      <AdminPageHeader
+        breadcrumb={breadcrumb}
+        title={headerTitle}
+        badges={routeId && <Badge variant={status === "published" ? "default" : "outline"}>{status}</Badge>}
+        actions={
+          routeId && (
+            <div className="flex max-w-sm flex-col items-end gap-1">
+              <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null}>
+                {publishButtonLabel()}
+              </Button>
+              {blockedReason && <p className="text-right text-sm text-muted-foreground">{blockedReason}</p>}
+              {publishError && <p className="text-right text-sm text-destructive">{publishError}</p>}
+            </div>
+          )
+        }
+      />
+
+      {/* Same two states as the resident builder (trail-builder.tsx), picked
+          with useIsMobile. Mobile: one stacked column that scrolls. Desktop:
+          fit to the viewport, the page never scrolls. The details and Stops
+          are one card on the left that scrolls its own content when there is
+          too much, with Cancel and Save pinned under it, and the picker
+          (search and pictures) scrolls on its own on the right. The picker's
+          -m-2 p-2 leaves room inside its scroll area so a card's lift and
+          focus ring are not clipped. */}
+      {isMobile ? (
+        <div className="flex min-h-0 grow flex-col gap-6 overflow-y-auto">
+          {detailsCard}
+          {pickerSection}
+          {saveRow}
+        </div>
+      ) : (
+        <div className="grid min-h-0 grow grid-cols-2 grid-rows-[minmax(0,1fr)] gap-6">
+          <div className="flex min-h-0 min-w-0 flex-col gap-4">
+            {detailsCard}
+            {saveRow}
+          </div>
+          <div className={cn(ADMIN_SCROLL_CLASS, "-m-2 min-w-0 p-2")}>{pickerSection}</div>
+        </div>
+      )}
+
+      {/* 5.1: centered modal per stop, per ux-ui-guidelines.md's modal rule,
+          a focused task fitting one viewport, not a side panel. Reachable
+          from the Notes button on the same stop's row. */}
+      <Dialog
+        open={discoveryModalStopId !== null}
+        onOpenChange={(open) => {
+          if (!open) closeDiscoveryModal();
+        }}
+      >
+        <DialogContent>
+          {(() => {
+            const activeStop = stops.find((s) => s.id === discoveryModalStopId);
+            if (!activeStop) return null;
+            const entriesForStop = discoveryContent
+              .filter((d) => d.route_stop_id === activeStop.id)
+              .sort((a, b) => a.sequence_order - b.sequence_order);
+
+            return (
+              <DiscoveryContentModalBody
+                activeStop={activeStop}
+                entriesForStop={entriesForStop}
+                discoveryError={discoveryError}
+                discoveryLoading={discoveryLoading}
+                discoverySaving={discoverySaving}
+                editingEntryId={editingEntryId}
+                discoveryForm={discoveryForm}
+                setDiscoveryForm={setDiscoveryForm}
+                canSubmitDiscoveryEntry={canSubmitDiscoveryEntry}
+                placeEntryCount={placeEntryCount}
+                onStartNew={startNewDiscoveryEntry}
+                onStartEdit={startEditDiscoveryEntry}
+                onMove={handleMoveDiscoveryEntry}
+                onDelete={handleDeleteDiscoveryEntry}
+                onCancelEdit={handleCancelDiscoveryEdit}
+                onSave={handleSaveDiscoveryEntry}
+                onPhotoError={setDiscoveryError}
+              />
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

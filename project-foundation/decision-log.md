@@ -428,3 +428,17 @@ Scope: phases 1 and 2 cover the public and admin global search. Not yet changed:
 **Accepted limits:** Written without running the database. `supabase/personal_trails_check.sql` has new checks 5.11 to 5.16 for it, not run. Entry text and QR tokens of unflagged entries on any verified place are readable through the API once the place is on a private trail, as #48 already accepts. A flagged entry already visible on a published trail stays visible, as in #47.
 
 **Rejected:** Leaving the personal path open until CATO reviews it (an unreviewed claim goes live to any signed in user). Blocking pending businesses from private trails (they are public, and the Saved page shows them).
+
+---
+
+**#:** 49
+**Milestone:** Photo cards and View more in the personal trail picker
+
+**Decision:** The picker in the personal trail builder shows photo cards, not a scroll list, to match Home and Saved. `PlaceBusinessPicker` gets a `variant` prop. `list` stays the default so the staff trail builder is unchanged, `cards` is used by `trail-builder.tsx`. Six cards show first and a View more button adds six, and typing in search resets to six. A cover photo is read only for the cards on screen, through the existing `fetchCoverPhotoUrls`, so a long list does not load every photo at once. The desktop picker no longer sits in a card, since photo cards inside a card would nest. The desktop builder fits the viewport like the vendor stepper and the admin pages: the page root is h-full, the name and stops card and the picker scroll their own content (ADMIN_SCROLL_CLASS), and Save and Delete are pinned under the left card. Mobile keeps normal scrolling.
+
+**Standing rule:** A list of places that shows photos loads them for the visible cards only and pages with View more. Do not wrap a card grid in another card.
+
+**Accepted limits:** Written without running the app. The names of all verified places and businesses still load in one read, which is small today. If it grows into the hundreds, move search and paging to the server. A card whose photo read fails shows without a photo and is not retried.
+
+**Rejected:** Infinite scroll (harder to reach the buttons below the picker, and it loads without a choice). Cards in the staff builder (it is dense work, and a list is faster there). Loading all photos up front.
+

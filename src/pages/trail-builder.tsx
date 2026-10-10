@@ -31,6 +31,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -92,12 +94,21 @@ function StopRow({
   );
 }
 
+// plain: the stops sit inside a card already (desktop), so the list drops its
+// own border and fill instead of nesting a card in a card.
 function StopsSection({
   stops,
   hoursById,
   now,
   onRemove,
-}: Readonly<{ stops: BuilderStop[]; hoursById: Map<string, string | null>; now: Date; onRemove: (stop: BuilderStop) => void }>) {
+  plain = false,
+}: Readonly<{
+  stops: BuilderStop[];
+  hoursById: Map<string, string | null>;
+  now: Date;
+  onRemove: (stop: BuilderStop) => void;
+  plain?: boolean;
+}>) {
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
@@ -112,7 +123,12 @@ function StopsSection({
       {stops.length === 0 ? (
         <EmptyState icon={MapPin}>Stops you add will appear here.</EmptyState>
       ) : (
-        <ol className="flex flex-col divide-y divide-border rounded-lg border border-border bg-card">
+        <ol
+          className={cn(
+            "flex flex-col divide-y divide-border",
+            !plain && "rounded-lg border border-border bg-card"
+          )}
+        >
           {stops.map((stop, index) => (
             <StopRow
               key={`${stop.type}-${stop.id}`}
@@ -152,6 +168,7 @@ function PickerSection({
           onPick={onPick}
           excludeIds={new Set(stops.map((s) => s.id))}
           includePending
+          variant="cards"
           savedIds={savedIds}
           markedIds={markedIds}
         />
@@ -430,6 +447,9 @@ export default function TrailBuilderPage() {
 
   const nameField = <NameField name={name} onChange={setName} />;
   const stopsSection = <StopsSection stops={stops} hoursById={hoursById} now={now} onRemove={handleRemove} />;
+  const desktopStopsSection = (
+    <StopsSection stops={stops} hoursById={hoursById} now={now} onRemove={handleRemove} plain />
+  );
   const pickerSection = (
     <PickerSection stops={stops} atLimit={atLimit} savedIds={savedIds} markedIds={markedIds} onPick={handlePick} />
   );
@@ -473,16 +493,26 @@ export default function TrailBuilderPage() {
     );
   }
 
-  // Desktop state: what the person has built on the left (name, stops, Save),
-  // the picker on the right, so adding stops never scrolls the list away.
+  // Desktop state, fit to the viewport like the stepped forms (vendor-dashboard.tsx,
+  // admin pages): the page never scrolls. h-full bounds it, the left card
+  // (name and stops) and the picker on the right scroll their own content
+  // (ADMIN_SCROLL_CLASS), and Delete and Save stay pinned under the left card.
+  // The picker has no card around it: its photo cards are the surface.
   return (
-    <PageContainer width="wide">
+    <PageContainer width="wide" className="h-full min-h-0">
       {header}
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-6">
-        <div className="flex flex-col gap-6 rounded-lg border border-border bg-card p-4">
-          {nameField}
-          {stopsSection}
-          <div className="flex flex-col gap-2">
+      <div className="grid min-h-0 grow grid-cols-[minmax(0,2fr)_minmax(0,3fr)] grid-rows-[minmax(0,1fr)] gap-6">
+        <div className="flex min-h-0 flex-col gap-4">
+          <div
+            className={cn(
+              "flex flex-col gap-6 rounded-lg border border-border bg-card p-4",
+              ADMIN_SCROLL_CLASS
+            )}
+          >
+            {nameField}
+            {desktopStopsSection}
+          </div>
+          <div className="flex shrink-0 flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               {deleteButton ?? <span />}
               {saveButton}
@@ -490,7 +520,8 @@ export default function TrailBuilderPage() {
             {saveNotes}
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">{pickerSection}</div>
+        {/* -m-2 p-2: room inside the scroll area so a card's lift and focus ring are not clipped. */}
+        <div className={cn(ADMIN_SCROLL_CLASS, "-m-2 p-2")}>{pickerSection}</div>
       </div>
       {deleteDialog}
     </PageContainer>

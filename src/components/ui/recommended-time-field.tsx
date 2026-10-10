@@ -72,9 +72,9 @@ export function RecommendedTimeField({
         </div>
       )}
 
-      {/* Days and the time range share one row, and only wrap onto a second
-          when the column is too narrow for both. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* Days on one line (wrapping if the column is narrow), the time range
+          on its own line below, so the field never forces its column wider. */}
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
           {DAYS.map((day) => {
             const active = current.days.includes(day.key);
