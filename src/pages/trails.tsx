@@ -130,7 +130,17 @@ export default function TrailsPage() {
     body = <TrailListSkeleton />;
   } else if (trails.length === 0) {
     body = (
-      <EmptyState icon={MapTrifold} className="min-h-[60dvh]">Published trails will appear here.</EmptyState>
+      <EmptyState
+        icon={MapTrifold}
+        className="min-h-[60dvh]"
+        action={
+          <Button variant="outline" onClick={() => navigate("/discover")}>
+            Browse places
+          </Button>
+        }
+      >
+        Published trails will appear here.
+      </EmptyState>
     );
   } else {
     body = (

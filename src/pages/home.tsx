@@ -125,7 +125,18 @@ export default function HomePage() {
   } else if (announcementsLoading) {
     announcementsBody = <SectionSkeleton />;
   } else if (announcements.length === 0) {
-    announcementsBody = <EmptyState icon={Megaphone}>Announcements will appear here.</EmptyState>;
+    announcementsBody = (
+      <EmptyState
+        icon={Megaphone}
+        action={
+          <Button variant="outline" onClick={() => navigate("/trails")}>
+            Explore trails
+          </Button>
+        }
+      >
+        Announcements will appear here.
+      </EmptyState>
+    );
   } else {
     announcementsBody = (
       <AnnouncementCarousel

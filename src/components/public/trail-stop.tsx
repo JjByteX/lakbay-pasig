@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Lock, CheckCircle, QrCode } from "@phosphor-icons/react";
+import { Lock, LockOpen, CheckCircle, QrCode } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { DURATION, EASE_OUT, SPRING_POP, SPRING_SETTLE, haptic } from "@/lib/motion";
+import { DURATION, EASE_OUT, SPRING_ARRIVE, SPRING_STAMP, haptic } from "@/lib/motion";
+import { RevealWords } from "./text-motion";
 import type { TrailStop as TrailStopData } from "@/lib/trail-types";
 import { VideoEmbed } from "./video-embed";
 
@@ -38,19 +39,25 @@ import { VideoEmbed } from "./video-embed";
  * other "inactive/inert" treatment already in this codebase (e.g.
  * discover-list.tsx's empty-state copy).
  *
- * Motion (lib/motion.ts), for the two moments that deserve it, and only
- * when they actually happen, never on page load:
+ * Motion (lib/motion.ts, onboarding's springs), for the two moments that
+ * deserve it, and only when they actually happen, never on page load:
  *
  * - A stop opening. When a stop goes from locked to unlocked while the page
  *   is live (Start, or walking into range), the number tile fills with the
- *   primary color and its number pops (the heart's pop spring), the lock
- *   fades out, the content opens downward, and a 10ms haptic ticks. The row
- *   scrolls into view if it was off screen. A stop that opens only because
- *   the visitor's saved progress just loaded stays still: `progressLive`
- *   must already be true on the render before the flip.
+ *   primary color, a ring leaves it and the number stamps in with a half turn,
+ *   the lock flicks away, the content opens downward and its entries rise in
+ *   one after another, and a 10ms haptic ticks. The row scrolls into view if
+ *   it was off screen. A stop that opens only because the visitor's saved
+ *   progress just loaded stays still: `progressLive` must already be true on
+ *   the render before the flip.
  * - An entry just unlocked by a scan. Arriving from the scan page, the
- *   entry (`celebrateEntryId`) fades up into place and its row scrolls to the
- *   middle of the screen, once.
+ *   entry (`celebrateEntryId`) rises in with its title revealed word by word,
+ *   a "found it" sticker stamps onto its corner for a couple of seconds, and
+ *   its row scrolls to the middle of the screen, once.
+ *
+ * - A trail finishing. When every stop flips to completed while the page is
+ *   live, each stop's check pops in with a half turn, one after another down
+ *   the list (80ms apart), instead of all appearing at once.
  *
  * All of it is off under reduced motion. Flat color and movement only: no
  * glow, no gradient (ux-ui-guidelines.md).
@@ -69,6 +76,34 @@ interface TrailStopProps {
   // The entry the visitor just unlocked by scanning, when they arrived from
   // the scan page. Revealed with motion and scrolled to, once.
   celebrateEntryId?: string | null;
+}
+
+// The scanned entry's "found it" mark: a flat primary tile with an open lock
+// stamps onto the corner (onboarding's sticker: scale and tilt with overshoot),
+// stays a couple of seconds, then pops away so the entry reads clean. Only
+// rendered when motion is on.
+function FoundSticker() {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(false), 2600);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.span
+          aria-hidden="true"
+          className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+          initial={{ scale: 0, rotate: -30 }}
+          animate={{ scale: 1, rotate: 6 }}
+          exit={{ scale: 0, rotate: 30, transition: { duration: DURATION.base } }}
+          transition={{ ...SPRING_STAMP, delay: 0.7 }}
+        >
+          <LockOpen weight="bold" className="h-5 w-5" />
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
 }
 
 export function TrailStop({
@@ -91,13 +126,20 @@ export function TrailStop({
   // live on the previous render.
   const [seen, setSeen] = useState({ state, live: progressLive });
   const [unlockPlays, setUnlockPlays] = useState(0);
+  const [completePlays, setCompletePlays] = useState(0);
   if (seen.state !== state || seen.live !== progressLive) {
     setSeen({ state, live: progressLive });
     if (seen.live && progressLive && seen.state === "locked" && state !== "locked") {
       setUnlockPlays((n) => n + 1);
     }
+    // The trail just finished: every stop flips to completed together, and
+    // each one's check pops in a beat after the one before it.
+    if (seen.live && progressLive && state === "completed" && seen.state !== "completed") {
+      setCompletePlays((n) => n + 1);
+    }
   }
   const animateUnlock = unlockPlays > 0 && !reduceMotion;
+  const animateComplete = completePlays > 0 && !reduceMotion;
 
   useEffect(() => {
     if (unlockPlays === 0) return;
@@ -126,19 +168,30 @@ export function TrailStop({
     <li ref={rowRef} className="flex gap-3 py-3">
       <span
         className={cn(
-          "flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors duration-300",
+          "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors duration-300",
           isLocked && "bg-muted text-muted-foreground",
           !isLocked && "bg-primary text-primary-foreground"
         )}
       >
-        {/* Keyed on the unlock count so each real unlock remounts the number
-            and pops it, the same way save-heart.tsx pops on a save. */}
+        {/* Keyed on the unlock count so each real unlock sends a fresh ring
+            outward and remounts the number to stamp it in with a half turn,
+            the way onboarding's finish check lands. */}
+        {animateUnlock && (
+          <motion.span
+            key={`ring-${unlockPlays}`}
+            aria-hidden="true"
+            className="absolute inset-0 rounded-md border-2 border-primary"
+            initial={{ scale: 1, opacity: 0.7 }}
+            animate={{ scale: 2.2, opacity: 0 }}
+            transition={{ duration: DURATION.moment - 0.1, ease: EASE_OUT }}
+          />
+        )}
         <motion.span
           key={unlockPlays}
           className="flex"
-          initial={animateUnlock ? { scale: 0.4 } : false}
-          animate={{ scale: 1 }}
-          transition={SPRING_POP}
+          initial={animateUnlock ? { scale: 0, rotate: -45 } : false}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={SPRING_STAMP}
         >
           {index + 1}
         </motion.span>
@@ -159,7 +212,7 @@ export function TrailStop({
               <motion.span
                 key="lock"
                 className="flex shrink-0"
-                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.6 }}
+                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.6, rotate: -25, y: -4 }}
                 transition={{ duration: DURATION.fast }}
               >
                 <Lock className="h-4 w-4 text-muted-foreground" aria-label="Locked" />
@@ -167,7 +220,15 @@ export function TrailStop({
             )}
           </AnimatePresence>
           {isCompleted && (
-            <CheckCircle weight="fill" className="h-4 w-4 shrink-0 text-primary" aria-label="Completed" />
+            <motion.span
+              key={completePlays}
+              className="flex shrink-0"
+              initial={animateComplete ? { scale: 0, rotate: -45 } : false}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ ...SPRING_STAMP, delay: animateComplete ? Math.min(index * 0.08, 0.64) : 0 }}
+            >
+              <CheckCircle weight="fill" className="h-4 w-4 text-primary" aria-label="Completed" />
+            </motion.span>
           )}
         </div>
 
@@ -187,7 +248,7 @@ export function TrailStop({
               animate={{ height: "auto", opacity: 1 }}
               transition={{ duration: DURATION.slow, ease: EASE_OUT }}
             >
-              {stop.discoveryContent.map((entry) => {
+              {stop.discoveryContent.map((entry, entryIndex) => {
                 if (entry.requiresScan && !unlockedEntryIds.has(entry.id)) {
                   return (
                     <li key={entry.id} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -197,15 +258,22 @@ export function TrailStop({
                   );
                 }
                 const celebrate = entry.id === celebrateEntryId && !reduceMotion;
+                // A stop that just opened brings its entries in one after
+                // another once the content has started to open. A scanned
+                // entry waits a beat longer so the page has scrolled to it.
+                const rise = celebrate || animateUnlock;
                 return (
                   <motion.li
                     key={entry.id}
-                    className="flex flex-col gap-1"
-                    initial={celebrate ? { opacity: 0, y: 8 } : false}
+                    className="relative flex flex-col gap-1"
+                    initial={rise ? { opacity: 0, y: 10 } : false}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...SPRING_SETTLE, delay: 0.3 }}
+                    transition={{ ...SPRING_ARRIVE, delay: celebrate ? 0.3 : 0.2 + entryIndex * 0.08 }}
                   >
-                    <span className="text-sm font-semibold text-foreground">{entry.title}</span>
+                    {celebrate && <FoundSticker />}
+                    <span className={cn("text-sm font-semibold text-foreground", celebrate && "pr-12")}>
+                      {celebrate ? <RevealWords text={entry.title} delay={0.45} /> : entry.title}
+                    </span>
                     {entry.photoUrl && (
                       <img
                         src={entry.photoUrl}

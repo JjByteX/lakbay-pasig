@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, NavigationArrow, CheckCircle, MapPin } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
@@ -11,6 +12,10 @@ import { readScanArrival } from "@/lib/trail-scan";
 import { distanceKm, type Coordinates } from "@/lib/discover-query";
 import type { TrailDetail } from "@/lib/trail-types";
 import { TrailStop } from "@/components/public/trail-stop";
+import { RollingText } from "@/components/public/text-motion";
+import { SquareLoader } from "@/components/public/square-loader";
+import { TrailCompleteMoment } from "@/components/public/trail-complete-moment";
+import { SPRING_ARRIVE } from "@/lib/motion";
 import { SaveRouteButton } from "@/components/public/save-route-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -276,6 +281,10 @@ export default function TrailDetailPage() {
   const [completionChecked, setCompletionChecked] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
+  // True once a completion write has just succeeded on this visit, so the
+  // completion moment (postcard, stamp, next trail) plays once, here and now.
+  // A trail finished on an earlier visit never sets it.
+  const [justCompleted, setJustCompleted] = useState(false);
   // Phase 5.4: restart is its own async action, same loading/error split
   // as starting/startError (4.3) and the save button's own pattern.
   const [resetting, setResetting] = useState(false);
@@ -286,6 +295,7 @@ export default function TrailDetailPage() {
     setLoading(true);
     setNotFound(false);
     setError(null);
+    setJustCompleted(false);
 
     fetchTrailDetail(id)
       .then((detail) => {
@@ -410,6 +420,7 @@ export default function TrailDetailPage() {
       setCompleting(true);
       setCompleteError(null);
       completeTrail(session.user.id, trail.id, trail.credential?.id)
+        .then(() => setJustCompleted(true))
         .catch(() => {
           setCompleted(false); // revert: completion write failed
           setCompleteError("Couldn't record your completion. Try again.");
@@ -562,6 +573,7 @@ export default function TrailDetailPage() {
       .then(() => {
         setRouteProgress(null);
         setCompleted(false);
+        setJustCompleted(false);
       })
       .catch(() => setResetError("Couldn't restart this trail. Try again."))
       .finally(() => setResetting(false));
@@ -666,7 +678,7 @@ export default function TrailDetailPage() {
                   codebase for the same reason. */}
               {trail.credential && (
                 <Badge variant="accent" className="w-fit max-w-full break-words">
-                  {completed ? "Earned" : "Earn"}: {trail.credential.credential_name}
+                  <RollingText text={completed ? "Earned" : "Earn"} />: {trail.credential.credential_name}
                 </Badge>
               )}
               {/* Phase 5.3: "show the credential earned" for a completed
@@ -702,13 +714,46 @@ export default function TrailDetailPage() {
                   and noUnusedLocals (tsconfig.app.json) requires this
                   state have a genuine consumer, not just a setter call,
                   same reasoning Phase 4.2's own routeProgress fix used. */}
-              {completing && <p className="text-xs text-muted-foreground">Saving your completion…</p>}
+              <AnimatePresence initial={false}>
+                {completing && (
+                  <motion.div
+                    key="saving"
+                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={SPRING_ARRIVE}
+                  >
+                    <SquareLoader size="xs" />
+                    Saving your completion…
+                  </motion.div>
+                )}
+              </AnimatePresence>
               {completeError && <p className="text-xs text-destructive">{completeError}</p>}
             </div>
 
+            {/* The finish: only on the visit the walk was recorded, official
+                trails only (a personal trail never completes). */}
+            <AnimatePresence>
+              {justCompleted && completed && !trail.personal && session && (
+                <motion.div key="complete-moment" exit={{ opacity: 0, transition: { duration: 0.2 } }}>
+                  <TrailCompleteMoment
+                    userId={session.user.id}
+                    trail={{
+                      id: trail.id,
+                      name: trail.name,
+                      theme: trail.theme,
+                      credentialName: trail.credential?.credential_name ?? null,
+                    }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="flex flex-col gap-1">
               <Button type="button" onClick={handleStart} disabled={!hasStops || starting} className="w-full">
-                {startLabel}
+                {/* "Start trail" rolls up into "Resume trail" once the first stop opens. */}
+                <RollingText text={startLabel} />
               </Button>
               {/* Specific to the start/resume write failing, not a generic
                   message, matching save-button.tsx's error-message

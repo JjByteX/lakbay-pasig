@@ -71,16 +71,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
  * scrolling form is unchanged. The edit form is unchanged on both.
  */
 
-// Shared with saved.tsx, trails.tsx, and profile.tsx's own page-local
-// copies, same PostgrestError shape check. Kept page-local, matching this
-// codebase's existing convention (no shared helper exists for this),
-// per constraints.md's Inventory Before Suggesting rule.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
-
 // 4.1: same mapping admin-business-detail.tsx's own STATUS_VARIANT uses,
 // reused rather than redefined, per constraints.md's Inventory Before
 // Suggesting rule -- this is the vendor's own read of the identical
@@ -332,8 +322,8 @@ function useOwnBusiness(session: Session | null) {
     setCheckError(null);
     fetchOwnBusiness(session.user.id)
       .then(setBusiness)
-      .catch((err: unknown) => {
-        setCheckError(errorMessageFrom(err, "Could not load your business."));
+      .catch(() => {
+        setCheckError("Couldn't load your business. Check your connection and try again.");
       })
       .finally(() => setChecking(false));
   }, [session]);
@@ -364,8 +354,8 @@ function useVendorMetrics(businessId: string | undefined) {
     setTrailsError(null);
     fetchTrailInclusions(businessId)
       .then(setTrails)
-      .catch((err: unknown) => {
-        setTrailsError(errorMessageFrom(err, "Could not load trail inclusions."));
+      .catch(() => {
+        setTrailsError("Couldn't load your trail inclusions. Check your connection and try again.");
         setTrails([]);
       })
       .finally(() => setTrailsLoading(false));
@@ -377,8 +367,8 @@ function useVendorMetrics(businessId: string | undefined) {
     setItemsError(null);
     fetchItems(businessId)
       .then(setItems)
-      .catch((err: unknown) => {
-        setItemsError(errorMessageFrom(err, "Could not load your items."));
+      .catch(() => {
+        setItemsError("Couldn't load your items. Check your connection and try again.");
         setItems([]);
       })
       .finally(() => setItemsLoading(false));
@@ -674,8 +664,8 @@ export default function VendorDashboardPage() {
   useEffect(() => {
     fetchActiveCategories()
       .then(setCategories)
-      .catch((err: unknown) => {
-        setCategoriesError(errorMessageFrom(err, "Could not load categories."));
+      .catch(() => {
+        setCategoriesError("Couldn't load categories. Check your connection and try again.");
       });
   }, []);
 
@@ -749,8 +739,8 @@ export default function VendorDashboardPage() {
       const created = await fetchOwnBusiness(session.user.id);
       setBusiness(created);
       setChecking(false);
-    } catch (err: unknown) {
-      setCreateError(errorMessageFrom(err, "Could not create your listing."));
+    } catch {
+      setCreateError("Couldn't create your listing. Check your connection and try again.");
     } finally {
       setCreating(false);
     }
@@ -780,8 +770,8 @@ export default function VendorDashboardPage() {
       // untouched by this write and stay as they were on the loaded row.
       setBusiness((prev) => (prev ? { ...prev, ...formToPayload(editForm) } : prev));
       setEditing(false);
-    } catch (err: unknown) {
-      setSaveError(errorMessageFrom(err, "Could not save your changes."));
+    } catch {
+      setSaveError("Couldn't save your changes. Check your connection and try again.");
     } finally {
       setSaving(false);
     }

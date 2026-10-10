@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { CircleNotch, Pencil, X, ShoppingBag } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
@@ -18,6 +18,7 @@ import type { ItemPhoto, VendorItem } from "@/lib/vendor-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { FieldLabel } from "@/components/business/business-fields";
 import {
   Dialog,
@@ -51,16 +52,6 @@ import { usePageTitle } from "@/lib/page-title";
  * submitted_by, so a write here can never touch another vendor's items,
  * the RLS policy would reject it regardless of what this page sends.
  */
-
-// Shared with saved.tsx, trails.tsx, profile.tsx, and vendor-dashboard.tsx's
-// own page-local copies, same PostgrestError shape check. Kept page-local,
-// matching this codebase's existing convention (no shared helper exists
-// for this), per constraints.md's Inventory Before Suggesting rule.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
 
 // 5.3: exact wording from vendor-mode-spec.md's Warning, Not a Block
 // section -- tied to the actual consequence, not a generic required-field
@@ -268,6 +259,11 @@ export default function VendorItemsPage() {
   const [business, setBusiness] = useState<VendorBusiness | null>(null);
   const [businessChecked, setBusinessChecked] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  // Bumped by the Try again buttons so a failed load can be retried in place.
+  const [businessReload, setBusinessReload] = useState(0);
+  const [itemsReload, setItemsReload] = useState(0);
+  // The add form, so the empty state's button can bring the person to it.
+  const addFormRef = useRef<HTMLFormElement>(null);
 
   const [items, setItems] = useState<VendorItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
@@ -308,11 +304,11 @@ export default function VendorItemsPage() {
     setCheckError(null);
     getVendorBusiness(session.user.id)
       .then(setBusiness)
-      .catch((err: unknown) => {
-        setCheckError(errorMessageFrom(err, "Could not load your business."));
+      .catch(() => {
+        setCheckError("Couldn't load your business. Check your connection and try again.");
       })
       .finally(() => setBusinessChecked(true));
-  }, [session]);
+  }, [session, businessReload]);
 
   useEffect(() => {
     if (!business) return;
@@ -320,12 +316,12 @@ export default function VendorItemsPage() {
     setItemsError(null);
     fetchItems(business.id)
       .then(setItems)
-      .catch((err: unknown) => {
-        setItemsError(errorMessageFrom(err, "Could not load your items."));
+      .catch(() => {
+        setItemsError("Couldn't load your items. Check your connection and try again.");
         setItems([]);
       })
       .finally(() => setItemsLoading(false));
-  }, [business]);
+  }, [business, itemsReload]);
 
   if (loading) return null;
 
@@ -356,7 +352,7 @@ export default function VendorItemsPage() {
     return (
       <PageContainer width="narrow">
         <h1 className="text-xl font-semibold text-foreground">Items</h1>
-        <p className="text-base text-destructive">{checkError}</p>
+        <ErrorState onRetry={() => setBusinessReload((n) => n + 1)}>{checkError}</ErrorState>
       </PageContainer>
     );
   }
@@ -366,6 +362,16 @@ export default function VendorItemsPage() {
   // navigate() call in an effect.
   if (!business) {
     return <Navigate to="/vendor" replace />;
+  }
+
+  // The empty state's way out: bring the add form to the middle of the screen
+  // and put the cursor in its first field.
+  function focusAddForm() {
+    const form = addFormRef.current;
+    if (!form) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    form.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+    form.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
   }
 
   async function handleAdd(e: FormEvent) {
@@ -383,8 +389,8 @@ export default function VendorItemsPage() {
       setItems((prev) => [...prev, created]);
       setAddName("");
       setAddPrice("");
-    } catch (err: unknown) {
-      setAddError(errorMessageFrom(err, "Could not add this item."));
+    } catch {
+      setAddError("Couldn't add this item. Check your connection and try again.");
     } finally {
       setAdding(false);
     }
@@ -422,8 +428,8 @@ export default function VendorItemsPage() {
         )
       );
       setEditingId(null);
-    } catch (err: unknown) {
-      setEditError(errorMessageFrom(err, "Could not save this item."));
+    } catch {
+      setEditError("Couldn't save this item. Check your connection and try again.");
     } finally {
       setSavingEdit(false);
     }
@@ -446,8 +452,8 @@ export default function VendorItemsPage() {
       await deleteItem(deleteTarget.id);
       setItems((prev) => prev.filter((item) => item.id !== deleteTarget.id));
       setDeleteTarget(null);
-    } catch (err: unknown) {
-      setDeleteError(errorMessageFrom(err, "Could not delete this item."));
+    } catch {
+      setDeleteError("Couldn't delete this item. Check your connection and try again.");
     } finally {
       setDeleting(false);
     }
@@ -467,11 +473,20 @@ export default function VendorItemsPage() {
         {itemsLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
         {!itemsLoading && itemsError && (
-          <p className="text-sm text-destructive">{itemsError}</p>
+          <ErrorState onRetry={() => setItemsReload((n) => n + 1)}>{itemsError}</ErrorState>
         )}
 
         {!itemsLoading && !itemsError && items.length === 0 && (
-          <EmptyState icon={ShoppingBag}>Your items will appear here.</EmptyState>
+          <EmptyState
+            icon={ShoppingBag}
+            action={
+              <Button variant="outline" onClick={focusAddForm}>
+                Add your first item
+              </Button>
+            }
+          >
+            Your items will appear here.
+          </EmptyState>
         )}
 
         {!itemsLoading && !itemsError && items.length > 0 && (
@@ -605,7 +620,7 @@ export default function VendorItemsPage() {
           renders ItemFormFields, already sitting inside the item list's
           own bg-card <li>, so carding ItemFormFields directly would
           double the card there. */}
-      <form onSubmit={handleAdd} className="flex flex-col gap-3 border-t border-border pt-6">
+      <form ref={addFormRef} onSubmit={handleAdd} className="flex flex-col gap-3 border-t border-border pt-6">
         <h2 className="text-base font-semibold text-foreground">Add an item</h2>
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
           <ItemFormFields

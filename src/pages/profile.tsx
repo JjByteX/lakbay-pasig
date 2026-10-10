@@ -25,25 +25,12 @@ import { usePageTitle } from "@/lib/page-title";
 // matching until the person picks it again, and the stale name stays stored,
 // unseen and harmless. Switch to ids if CATO renames often.
 
-// Shared with saved.tsx and trails.tsx's own page-local copies (same
-// PostgrestError shape check, not an Error subclass). Kept as a local copy
-// rather than a new shared module, matching those files' own choice not to
-// import each other's version, per constraints.md's Inventory Before
-// Suggesting rule -- no existing shared helper for this exists yet, only
-// page-local copies.
-function errorMessageFrom(err: unknown, fallback: string): string {
-  return err && typeof err === "object" && "message" in err && typeof err.message === "string"
-    ? err.message
-    : fallback;
-}
-
 // admin-form-fields-plan.md #2: every maxLength needs a visible counter
 // nearby so the cap isn't a silent wall. Step 8 cleanup: this was a
 // page-local CharCount, byte-identical to business-fields.tsx's own and
 // four admin detail pages' own copies -- now imported from business-
-// fields.tsx, the one place it's kept. Unlike errorMessageFrom above,
-// CharCount has zero page-specific variation across any of its six
-// former copies, so it doesn't share that helper's stay-local reasoning.
+// fields.tsx, the one place it's kept, since it has zero page-specific
+// variation across any of its six former copies.
 
 /**
  * Step 8, Phase 4: Profile page, loaded state. Guest-locked branch (Phase
@@ -108,8 +95,8 @@ export default function ProfilePage() {
     if (!session) return;
     getVendorBusiness(session.user.id)
       .then(setVendorBusiness)
-      .catch((err: unknown) => {
-        setVendorError(errorMessageFrom(err, "Could not check vendor status."));
+      .catch(() => {
+        setVendorError("Couldn't check your vendor status. Check your connection and try again.");
       })
       .finally(() => setVendorChecked(true));
   }, [session]);

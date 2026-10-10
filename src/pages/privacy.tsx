@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { usePageTitle } from "@/lib/page-title";
+import { CATO_EMAIL, CATO_NAME } from "@/lib/cato-contact";
 
 /**
  * Route /privacy, public, outside PublicShell and outside any auth gate.
@@ -20,14 +21,13 @@ import { usePageTitle } from "@/lib/page-title";
  * analytics or advertising script exists in the app. If any of those
  * change, this page has to change with them. Update LAST_UPDATED too.
  *
- * The CATO details match landing.tsx's own constants (those are private to
- * that file, so they are repeated here rather than widening its exports).
+ * The CATO name and email come from lib/cato-contact.ts, shared with
+ * landing.tsx and the Help page. The address is still repeated in
+ * landing.tsx and here.
  * This is a plain language draft: CATO or its legal counsel should review
  * it before it is relied on. No em dashes, per the landing copy rules.
  */
 const LAST_UPDATED = "October 5, 2026";
-const CATO_NAME = "City Culture, Arts, Tourism and Old Pasig Office (CATO)";
-const CATO_EMAIL = "cato@pasigcity.gov.ph";
 const CATO_ADDRESS = "4th Floor, Pasig Revolving Tower, Market Avenue, Barangay San Nicolas, Pasig City, 1600 Metro Manila";
 
 function Section({ title, children }: Readonly<{ title: string; children: ReactNode }>) {

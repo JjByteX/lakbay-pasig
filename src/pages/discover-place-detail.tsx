@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, FlagBanner, Info, Scroll } from "@phosphor-icons/react";
+import { ArrowLeft, Info } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import {
@@ -121,6 +121,9 @@ export default function DiscoverPlaceDetailPage() {
   // (or the pin falls outside every barangay, or the lookup failed -- all
   // read the same to a resident, so one empty state).
   const [fiestas, setFiestas] = useState<PublicFiesta[] | null>(null);
+  // The tab the visitor picked. The tab actually shown falls back to the first
+  // one that has content (activeTab below), so it never points at a hidden one.
+  const [chosenTab, setChosenTab] = useState<string | null>(null);
 
   useEffect(() => {
     fetchActiveFacilities()
@@ -230,6 +233,24 @@ export default function DiscoverPlaceDetailPage() {
     ? allFacilities.filter((facility) => place.facility_ids.includes(facility.id))
     : [];
 
+  // A tab exists only when it has something to show, so nobody taps into an
+  // empty panel. Fiesta waits for its fetch before it counts. When no tab has
+  // content, one empty state with a way back replaces the whole block (below),
+  // except while the fiesta fetch could still add a tab.
+  const hasDetails =
+    place !== null &&
+    Boolean(place.description || place.operating_hours || place.entrance_fee || placeFacilities.length > 0 || place.rules);
+  const hasHistory =
+    place !== null &&
+    Boolean(place.historical_background || place.historical_significance || place.year_or_period || place.source_reference);
+  const hasFiesta = showFiestaTab && fiestas !== null && fiestas.length > 0;
+  const fiestaPending = showFiestaTab && fiestas === null;
+  const tabs: { value: string; label: string }[] = [];
+  if (hasDetails) tabs.push({ value: "details", label: "Details" });
+  if (hasHistory) tabs.push({ value: "history", label: "History" });
+  if (hasFiesta) tabs.push({ value: "fiesta", label: "Fiesta" });
+  const activeTab = tabs.find((tab) => tab.value === chosenTab)?.value ?? tabs[0]?.value ?? "details";
+
   // xl+: info and tabs in the wide left column, photos in a narrower sticky
   // column on the right (Wikipedia's infobox layout: text leads, the picture
   // supports it). No photos -> single narrow column.
@@ -304,12 +325,36 @@ export default function DiscoverPlaceDetailPage() {
               public render (historical_significance, year_or_period,
               source_reference). Defaults to Details, the visit-info tab a
               user coming from a marker or list row is most likely after. */}
-          <Tabs defaultValue="details" className="xl:col-start-1 xl:row-start-2">
-            <TabsList className={cn("grid w-full", showFiestaTab ? "grid-cols-3" : "grid-cols-2")}>
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
-              {showFiestaTab && <TabsTrigger value="fiesta">Fiesta</TabsTrigger>}
-            </TabsList>
+          {tabs.length === 0 && !fiestaPending && (
+            <div className="xl:col-start-1 xl:row-start-2">
+              <EmptyState
+                icon={Info}
+                className="text-base"
+                action={
+                  <Button variant="outline" onClick={goBack}>
+                    Back to Discover
+                  </Button>
+                }
+              >
+                Details will appear here.
+              </EmptyState>
+            </div>
+          )}
+
+          <Tabs
+            value={activeTab}
+            onValueChange={setChosenTab}
+            className={cn("xl:col-start-1 xl:row-start-2", tabs.length === 0 && "hidden")}
+          >
+            {tabs.length > 1 && (
+              <TabsList className={cn("grid w-full", tabs.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            )}
 
             <TabsContent value="details" className="flex flex-col gap-4">
               {place.description && (
@@ -357,14 +402,6 @@ export default function DiscoverPlaceDetailPage() {
                   <p className="whitespace-pre-line text-base text-muted-foreground">{place.rules}</p>
                 </div>
               )}
-
-              {!place.description &&
-                !place.operating_hours &&
-                !place.entrance_fee &&
-                placeFacilities.length === 0 &&
-                !place.rules && (
-                  <EmptyState icon={Info} className="text-base">Details will appear here.</EmptyState>
-                )}
             </TabsContent>
 
             <TabsContent value="history" className="flex flex-col gap-4">
@@ -395,19 +432,10 @@ export default function DiscoverPlaceDetailPage() {
                   <p className="text-base text-muted-foreground">{place.source_reference}</p>
                 </div>
               )}
-
-              {!place.historical_background &&
-                !place.historical_significance &&
-                !place.year_or_period &&
-                !place.source_reference && (
-                  <EmptyState icon={Scroll} className="text-base">The history of this place will appear here.</EmptyState>
-                )}
             </TabsContent>
 
             {showFiestaTab && (
               <TabsContent value="fiesta" className="flex flex-col gap-4">
-                {fiestas === null && <p className="text-base text-muted-foreground">Loading…</p>}
-
                 {fiestas?.map((fiesta) => (
                   <div key={fiesta.id} className="flex flex-col gap-1">
                     <Link
@@ -422,12 +450,6 @@ export default function DiscoverPlaceDetailPage() {
                     {fiesta.description && <p className="text-base text-muted-foreground">{fiesta.description}</p>}
                   </div>
                 ))}
-
-                {fiestas?.length === 0 && (
-                  <EmptyState icon={FlagBanner} className="text-base">
-                    The fiesta of this barangay will appear here.
-                  </EmptyState>
-                )}
               </TabsContent>
             )}
           </Tabs>

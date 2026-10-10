@@ -36,17 +36,27 @@ export const SPRING_POP = { type: "spring", stiffness: 420, damping: 10 } as con
 // A calm settle with no bounce: content arriving.
 export const SPRING_SETTLE = { type: "spring", stiffness: 300, damping: 30 } as const;
 
+// Onboarding's own springs (categories-onboarding.tsx), so a screen outside
+// onboarding moves like onboarding does. ARRIVE is content landing; STAMP is a
+// mark pressed onto the page (the finish check and the sticker).
+export const SPRING_ARRIVE = { type: "spring", stiffness: 260, damping: 22 } as const;
+export const SPRING_STAMP = { type: "spring", stiffness: 300, damping: 12 } as const;
+
 export const EASE_OUT: [number, number, number, number] = [0.4, 0, 0.2, 1];
 
+// Screen-to-screen travel, the same ease and distance onboarding's Screen uses.
+export const EASE_SCREEN: [number, number, number, number] = [0.22, 1, 0.36, 1];
+export const SCREEN_SHIFT = 48;
+
 // How long the scan page holds its "Stop unlocked" confirmation before it
-// opens the trail. Long enough to read and feel, short enough to never be
-// waited on.
-export const SCAN_SUCCESS_HOLD_MS = 700;
+// opens the trail. Long enough for the burst and the words to land, short
+// enough to never be waited on.
+export const SCAN_SUCCESS_HOLD_MS = 1000;
 
 /**
  * A short haptic tick on devices that support it (Android; iOS Safari has no
  * vibrate API and skips it). Reserved for a real event, never a frequent one.
  */
-export function haptic(ms = 10): void {
-  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(ms);
+export function haptic(pattern: number | number[] = 10): void {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(pattern);
 }

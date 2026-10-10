@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Info, BookOpen } from "@phosphor-icons/react";
+import { ArrowLeft, Info } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
@@ -228,6 +228,21 @@ export default function DiscoverBusinessDetailPage() {
     ? joinMeta([business.category, distanceAway(userLocation, business.latitude, business.longitude)])
     : "";
 
+
+  // A tab exists only when it has something to show, so nobody taps into an
+  // empty panel (same rule as the place page). Items already worked this way.
+  // When no tab has content, one empty state with a way back replaces the
+  // block. The set is stable once this renders: the Tabs mount after items load.
+  const hasDetails =
+    business !== null && Boolean(business.description || business.opening_hours || business.contact || business.rules);
+  const hasStory = business !== null && Boolean(business.business_story || business.unique_specialty);
+  const tabs: { value: string; label: string }[] = [];
+  if (hasDetails) tabs.push({ value: "details", label: "Details" });
+  if (business && items.length > 0) tabs.push({ value: "items", label: itemsTabLabel(business.business_type) });
+  if (hasStory) tabs.push({ value: "story", label: "Story" });
+  const wantsItems = searchParams.get("tab") === "items" && items.length > 0;
+  const defaultTab = wantsItems ? "items" : (tabs[0]?.value ?? "details");
+
   return (
     <PageContainer width={hasPhotos ? "detail" : "narrow"}>
       <div className="flex items-center justify-between">
@@ -304,22 +319,36 @@ export default function DiscoverBusinessDetailPage() {
               (vendor-mode-spec.md's Business Listing Type), the stable
               field for this, not the open-ended category text. */}
           {/* ?tab=items (item search rows) opens the items tab, only when it exists. Tabs mount after items load. Those rows also pass ?item=<id>, and the effect above scrolls to that card. Tabs reads defaultValue once, so key it on item: picking a second item of this same store remounts it, reopens Items and lets the effect find the card. */}
+          {tabs.length === 0 && (
+            <div className="xl:col-start-1 xl:row-start-2">
+              <EmptyState
+                icon={Info}
+                className="text-base"
+                action={
+                  <Button variant="outline" onClick={goBack}>
+                    Back to Discover
+                  </Button>
+                }
+              >
+                Details will appear here.
+              </EmptyState>
+            </div>
+          )}
+
           <Tabs
             key={itemId ?? "none"}
-            defaultValue={searchParams.get("tab") === "items" && items.length > 0 ? "items" : "details"}
-            className="xl:col-start-1 xl:row-start-2"
+            defaultValue={defaultTab}
+            className={cn("xl:col-start-1 xl:row-start-2", tabs.length === 0 && "hidden")}
           >
-            <TabsList
-              className={
-                items.length > 0 ? "grid w-full grid-cols-3" : "grid w-full grid-cols-2"
-              }
-            >
-              <TabsTrigger value="details">Details</TabsTrigger>
-              {items.length > 0 && (
-                <TabsTrigger value="items">{itemsTabLabel(business.business_type)}</TabsTrigger>
-              )}
-              <TabsTrigger value="story">Story</TabsTrigger>
-            </TabsList>
+            {tabs.length > 1 && (
+              <TabsList className={tabs.length === 3 ? "grid w-full grid-cols-3" : "grid w-full grid-cols-2"}>
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value}>
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            )}
 
             <TabsContent value="details" className="flex flex-col gap-4">
               {business.description && (
@@ -351,13 +380,6 @@ export default function DiscoverBusinessDetailPage() {
                   <p className="whitespace-pre-line text-base text-muted-foreground">{business.rules}</p>
                 </div>
               )}
-
-              {!business.description &&
-                !business.opening_hours &&
-                !business.contact &&
-                !business.rules && (
-                  <EmptyState icon={Info} className="text-base">Details will appear here.</EmptyState>
-                )}
             </TabsContent>
 
             {items.length > 0 && (
@@ -426,10 +448,6 @@ export default function DiscoverBusinessDetailPage() {
                   <h2 className="text-base font-semibold text-foreground">Unique specialty</h2>
                   <p className="text-base text-muted-foreground">{business.unique_specialty}</p>
                 </div>
-              )}
-
-              {!business.business_story && !business.unique_specialty && (
-                <EmptyState icon={BookOpen} className="text-base">The story of this business will appear here.</EmptyState>
               )}
             </TabsContent>
           </Tabs>

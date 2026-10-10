@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { fetchActiveSlides, type LandingSlide } from "@/lib/landing-slides";
 import { fetchHomeShowcase } from "@/lib/home-query";
+import { CATO_EMAIL, CATO_FACEBOOK, CATO_NAME, CATO_PHONE } from "@/lib/cato-contact";
 import type { CategoryRow } from "@/lib/home-types";
 import {
   CategoryPhotoRow,
@@ -154,9 +155,6 @@ import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-e
  * exactly when content volume exceeds a single screen, not before.
  */
 const CATO_ADDRESS = "4th Floor, Pasig Revolving Tower, Market Avenue, Barangay San Nicolas, Pasig City, 1600 Metro Manila";
-const CATO_EMAIL = "cato@pasigcity.gov.ph";
-const CATO_PHONE = "+63 2 8643 1111";
-const CATO_FACEBOOK = "https://www.facebook.com/CATOPasig/";
 // Plain Google Maps embed, no API key: maps.google.com/maps?q=<address>&output=embed
 // resolves the same free-text address CATO_ADDRESS already carries, same
 // URL shape Google documents for a keyless iframe embed.
@@ -913,7 +911,7 @@ export default function LandingPage() {
           <div className="flex flex-col gap-6">
             <h2 className="text-2xl font-semibold text-foreground">Contact</h2>
             <p className="text-base text-muted-foreground">
-              City Culture, Arts, Tourism and Old Pasig Office (CATO)
+              {CATO_NAME}
             </p>
 
             <div className="flex flex-col gap-4">
