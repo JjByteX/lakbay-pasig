@@ -7,6 +7,7 @@ import type { DiscoverResult } from "@/lib/discover-types";
 import type { RouteGeometry } from "@/lib/directions";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { categoryColor } from "@/lib/category-colors";
+import { PRESS_CARD, PRESS_TARGET } from "@/lib/motion";
 import { useAuth } from "@/lib/auth-context";
 import { fetchSavedPlaceIds } from "@/lib/saved-places";
 import { fetchSavedBusinessIds } from "@/lib/saved-businesses";
@@ -137,11 +138,11 @@ function ResultPhotoCard({
   const distance = distanceAway(userLocation, result.latitude, result.longitude);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition-transform hover:-translate-y-0.5">
+    <div className={`flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card hover:-translate-y-0.5 ${PRESS_CARD}`}>
       <button
         type="button"
         onClick={onSelect}
-        className="relative block aspect-square w-full shrink-0 overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className={`${PRESS_TARGET} relative block aspect-square w-full shrink-0 overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
       >
         {result.coverPhotoUrl ? (
           <img
@@ -162,7 +163,7 @@ function ResultPhotoCard({
         <button
           type="button"
           onClick={onSelect}
-          className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`${PRESS_TARGET} flex min-w-0 flex-1 flex-col items-start gap-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
         >
           {result.category && (
             <span className="flex max-w-full items-center gap-1 text-xs text-muted-foreground">

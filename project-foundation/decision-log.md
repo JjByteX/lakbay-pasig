@@ -442,3 +442,29 @@ Scope: phases 1 and 2 cover the public and admin global search. Not yet changed:
 
 **Rejected:** Infinite scroll (harder to reach the buttons below the picker, and it loads without a choice). Cards in the staff builder (it is dense work, and a list is faster there). Loading all photos up front.
 
+---
+
+**#:** 50
+**Milestone:** Help & FAQ page (`docs/help-faq-plan.md`)
+
+**Decision:** A public page at `/help`, opened from the profile menu, answers the common questions in one place. It is a page, not a modal, because the list scrolls and a modal is for content that fits one screen. It sits inside `PublicShell` with no auth gate, like Profile, so guests can read it. It is not a tab. The menu item reads "Help & FAQ" with the Phosphor `Question` icon, after Settings in the signed in menus and between Home Page and Sign in for guests, on mobile (`public-shell.tsx`) and desktop (`public-sidebar.tsx`). Questions open with native `<details>`, so there is no accordion dependency. The copy is in `src/lib/help-content.ts`, and the unlock distance and trail limits in it are read from `trail-unlock.ts` and `personal-trails.ts`. CATO's name, email, phone and Facebook page moved to `src/lib/cato-contact.ts`, read by `landing.tsx`, `privacy.tsx` and the Help page. The street address stays in the two pages that print it. English only, residents only.
+
+**Standing rule:** Contact details for CATO come from `lib/cato-contact.ts`, not a new copy in a page. When a screen's wording changes (Start trail, Restart trail, Directions, Not interested, List your business), update the matching answer in `help-content.ts`.
+
+**Accepted limits:** Written without running the app. The answers were written from the code and docs, and the label names in them are typed text that can drift. The question about a problem points to CATO contact, because the report or flag action (build-order step 10) does not exist yet. No search box, no link to a single question, no admin version.
+
+**Rejected:** A modal (the list is long). A Radix accordion (a new dependency for a plain list). A third copy of the CATO contact constants. A Help item in the admin menu for now (the content is for residents, and it would pull staff out of the admin shell). A Filipino version.
+
+---
+
+**#:** 51
+**Milestone:** Admin Help & FAQ (`docs/help-faq-plan.md`, Phase 4)
+
+**Decision:** Staff and admins get their own Help & FAQ at `/admin/help`, inside the admin shell, so opening it does not send them to the resident app (the reason #50 left admin out of the resident menu). Every staff account sees it, with no `requiredPermission`, like the Dashboard and Settings. The entry is Help & FAQ after Settings in the admin account menu at the bottom of the sidebar. It is not a sidebar row, because Settings is not one either and the Tools list is for work sections. On a phone the item closes the sidebar sheet first, like the Search row. The copy is its own file, `src/lib/admin-help-content.ts`, since staff ask different questions. The question list moved out of `help.tsx` into `src/components/help-topic-list.tsx`, shared by both pages, so the markup exists once. Its `dense` option sets the admin body size, `text-sm`. The page uses `AdminPageHeader` and scrolls, since it is not in `admin.tsx`'s bounded list. It has no contact block: staff are CATO, so the answers send them to an Admin.
+
+**Standing rule:** When an admin section, button, or permission label changes, update the matching answer in `admin-help-content.ts`. A new admin section gets a question there.
+
+**Accepted limits:** Written without running the app. The answers come from the admin screens and `admin-panel-spec.md`, and the label names in them are typed text that can drift. The Discovery content tab shows only to some accounts, so the QR answer tells a reader without it to ask an Admin. No search box and no link to a single question, as in #50.
+
+**Rejected:** Reusing `/help` for staff (it would pull them out of the admin shell and the content is for residents). A row in the Tools list (it is not a work section). A second copy of the accordion markup. A permission for the page (it holds no private data).
+

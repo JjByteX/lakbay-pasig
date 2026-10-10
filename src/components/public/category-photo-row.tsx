@@ -7,6 +7,7 @@ import type { RecentlyVerifiedItem } from "@/lib/home-types";
 import { VerificationBadge } from "./result-card";
 import { PhotoCaptionOverlay } from "./photo-caption-overlay";
 import { itemKey } from "@/lib/recommendations";
+import { PRESS } from "@/lib/motion";
 
 /**
  * home-photo-showcase-phases.md Phase 3.1: one row for the Home photo
@@ -110,7 +111,7 @@ function PhotoCard({
       <button
         type="button"
         onClick={() => onSelect(item)}
-        className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={`flex h-full w-full flex-col overflow-hidden rounded-lg border border-border bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${PRESS}`}
       >
         <span
           className={`relative block w-full shrink-0 bg-cover bg-center ${PHOTO_HEIGHT}`}

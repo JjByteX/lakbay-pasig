@@ -1,5 +1,6 @@
 import type { TrailSummary } from "@/lib/trail-types";
 import { cn } from "@/lib/utils";
+import { PRESS } from "@/lib/motion";
 
 /**
  * Step 7, Phase 2.2: catalog row, name/theme/duration, same row-button
@@ -45,7 +46,8 @@ export function TrailCard({ trail, onClick, inline = false, meta: metaOverride }
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted",
+        "flex w-full flex-col items-start gap-1 px-6 py-4 text-left hover:bg-muted active:bg-muted",
+        PRESS,
         inline && "md:flex-row md:items-center md:justify-between md:gap-6",
       )}
     >

@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { trailMeta } from "./trail-card";
 import type { TrailSummary } from "@/lib/trail-types";
+import { PRESS_CARD, PRESS_TARGET } from "@/lib/motion";
 
 /**
  * The Saved page's Completed card. Was a TrailCard row with a date and
@@ -38,11 +39,11 @@ export function CompletedTrailRow({ trail, onClick }: Readonly<CompletedTrailRow
   const meta = trailMeta(trail);
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-border bg-card transition-transform hover:-translate-y-0.5">
+    <div className={`flex h-full flex-col rounded-lg border border-border bg-card hover:-translate-y-0.5 ${PRESS_CARD}`}>
       <button
         type="button"
         onClick={onClick}
-        className="flex flex-1 flex-col items-start gap-1 rounded-lg p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className={`${PRESS_TARGET} flex flex-1 flex-col items-start gap-1 rounded-lg p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
       >
         <span className="line-clamp-2 text-base font-semibold text-foreground">{trail.name}</span>
         {meta && <span className="text-sm text-muted-foreground">{meta}</span>}

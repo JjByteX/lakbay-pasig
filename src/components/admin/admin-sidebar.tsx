@@ -1,4 +1,4 @@
-import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, FlagBanner, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
+import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, FlagBanner, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown, Question } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -308,6 +308,15 @@ export function AdminSidebar({
             <DropdownMenuItem onClick={() => openSettings()}>
               <SettingsIcon className="mr-2 h-4 w-4" />
               Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                if (isMobile) setOpenMobile(false);
+                navigate("/admin/help");
+              }}
+            >
+              <Question className="mr-2 h-4 w-4" />
+              Help & FAQ
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/")}>
               <ArrowsLeftRight className="mr-2 h-4 w-4" />

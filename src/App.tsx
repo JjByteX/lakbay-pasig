@@ -21,6 +21,7 @@ import EventDetailPage from "@/pages/event-detail";
 import FiestaDetailPage from "@/pages/fiesta-detail";
 import SavedPage from "@/pages/saved";
 import ProfilePage from "@/pages/profile";
+import HelpPage from "@/pages/help";
 import SettingsPage from "@/pages/settings";
 import VendorDashboardPage from "@/pages/vendor-dashboard";
 import VendorItemsPage from "@/pages/vendor-items";
@@ -43,6 +44,7 @@ import AdminReportFiestasPage from "@/pages/admin-report-fiestas";
 import AdminStaffPage from "@/pages/admin-staff";
 import AdminActivityPage from "@/pages/admin-activity";
 import AdminSettingsPage from "@/pages/admin-settings";
+import AdminHelpPage from "@/pages/admin-help";
 import LandingPage from "@/pages/landing";
 import PrivacyPage from "@/pages/privacy";
 
@@ -141,6 +143,9 @@ export default function App() {
                 since Settings lives inside Profile per settings-
                 personalization-plan.md, not a sixth bottom-nav destination. */}
             <Route path="profile/settings" element={<SettingsPage />} />
+            {/* Help & FAQ: public, no ProtectedRoute, guests read it too.
+                Not a tab, same as profile. docs/help-faq-plan.md. */}
+            <Route path="help" element={<HelpPage />} />
             {/* Step 9, Phase 2.1: no ProtectedRoute wrapper, same reasoning
                 as saved and profile above, navigation-and-access-control.md
                 treats Vendor entry as locked-with-prompt, not redirected.
@@ -397,6 +402,9 @@ export default function App() {
                 requiredPermission and no adminOnly, confirmed directly
                 against admin-panel-spec.md's Access Rule before adding. */}
             <Route path="settings" element={<AdminSettingsPage />} />
+            {/* Admin Help & FAQ: every staff account, same as the Dashboard
+                and Settings, so no requiredPermission. docs/help-faq-plan.md. */}
+            <Route path="help" element={<AdminHelpPage />} />
           </Route>
         </Routes>
         <AuthModal />

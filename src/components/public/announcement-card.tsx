@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { Announcement } from "@/lib/home-types";
 import { hasTimeOfDay } from "@/lib/datetime";
+import { PRESS } from "@/lib/motion";
 
 /**
  * Phase 3.4 (step-6-phases.md): row, not a card wrapper, same
@@ -39,7 +40,7 @@ export function AnnouncementCard({ announcement, onClick }: Readonly<Announcemen
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted"
+      className={`flex w-full flex-col items-start gap-1 px-6 py-4 text-left hover:bg-muted active:bg-muted ${PRESS}`}
     >
       <span className="text-base font-semibold text-foreground">{announcement.title}</span>
       {(formattedDate || announcement.location) && (

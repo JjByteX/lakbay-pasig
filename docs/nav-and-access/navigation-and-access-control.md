@@ -54,6 +54,10 @@ Account info and preferences. Vendor accounts get business management tools here
 - Same access as Registered User
 - Profile includes business management: listing status, views/saves count, trail inclusion metrics
 
+## Help & FAQ
+
+A public page at `/help`, opened from the account menu (the Help & FAQ item), not a tab. Guest and Registered User both see it, and the guest menu carries the item too, so no sign-in is needed. It answers common questions by topic and ends with CATO's contact details. The Guest rules above are unchanged.
+
 ## Landing Page and Auth Popup
 
 The existing Guest rules above (Home, Discover, Trails, Saved, Profile) are unchanged by this section — nothing here is a rewrite of them.

@@ -11,7 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon } from "@phosphor-icons/react";
+import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon, Question } from "@phosphor-icons/react";
 import { BottomNav } from "./bottom-nav";
 import { PagePager } from "./page-pager";
 import { pagerIndexFor } from "@/lib/pager-index";
@@ -660,6 +660,10 @@ function AccountMenu() {
             <HomeIcon className="mr-2 h-4 w-4" />
             Home Page
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate("/help")}>
+            <Question className="mr-2 h-4 w-4" />
+            Help & FAQ
+          </DropdownMenuItem>
           {/* landing-hero-phases.md Phase 7.1: opens the shared auth
               popup in place instead of navigating away to /login, so
               whatever the guest was looking at (a Discover result, an
@@ -702,6 +706,10 @@ function AccountMenu() {
           <DropdownMenuItem onClick={() => openSettings()}>
             <SettingsIcon className="mr-2 h-4 w-4" />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate("/help")}>
+            <Question className="mr-2 h-4 w-4" />
+            Help & FAQ
           </DropdownMenuItem>
           {/* View switcher, staff/admin accounts only: same session, same
               account, just "/admin" instead of "/" -- not a role change,

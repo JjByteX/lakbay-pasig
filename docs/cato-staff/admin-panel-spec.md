@@ -34,6 +34,9 @@ Admin only, Staff role has no access and the item does not appear. A read only t
 ### Landing Page
 Manage the image carousel shown on the public landing page (`/welcome`). Upload, caption, reorder, and activate/deactivate slides. Gated on the `manage_landing` system permission (Admin or a Staff member holding it).
 
+### Help & FAQ
+Opened from the account menu at the bottom of the sidebar, not a sidebar row. A page at `/admin/help` with common questions for staff and admins, by topic. Visible to every staff member, same as the Dashboard, with no permission needed.
+
 ## Review Queues
 
 Separate queue per content type: Places, Businesses. Not one shared queue.

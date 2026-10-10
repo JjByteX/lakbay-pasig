@@ -1,5 +1,6 @@
 import { VerificationBadge } from "./result-card";
 import type { RecentlyVerifiedItem } from "@/lib/home-types";
+import { PRESS } from "@/lib/motion";
 
 /**
  * Phase 5.2 (step-6-phases.md): row, same shape as announcement-card.tsx
@@ -25,7 +26,7 @@ export function VerifiedItemCard({ item, onClick }: Readonly<VerifiedItemCardPro
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full flex-col items-start gap-1 px-6 py-4 text-left transition-colors hover:bg-muted md:grid md:grid-cols-[1fr_12rem_auto] md:items-center md:gap-6"
+      className={`flex w-full flex-col items-start gap-1 px-6 py-4 text-left hover:bg-muted active:bg-muted ${PRESS} md:grid md:grid-cols-[1fr_12rem_auto] md:items-center md:gap-6`}
     >
       <span className="text-base font-semibold text-foreground md:min-w-0 md:truncate">{item.name}</span>
       <span className="text-sm text-muted-foreground md:min-w-0 md:truncate">{item.category}</span>

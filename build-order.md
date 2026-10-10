@@ -37,3 +37,9 @@ What to build, in order. Each step assumes the ones before it exist.
 
 - [x] 12. **Activity log**
       Admin only, append only table of staff and admin actions, captured by database triggers plus one sign in and sign out RPC.
+
+- [x] 13. **Help & FAQ**
+      Public page at `/help`, opened from the profile menu for guests and signed in users. Questions grouped by topic, CATO contact at the bottom. Plan in `docs/help-faq-plan.md`.
+
+- [x] 14. **Admin Help & FAQ**
+      Page at `/admin/help` for staff and admins, opened from the admin account menu. Questions on sections, permissions, reviewing, content, QR codes, and staff accounts. Every staff account sees it.

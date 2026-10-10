@@ -1,4 +1,4 @@
-import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown } from "@phosphor-icons/react";
+import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, Question } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -143,6 +143,12 @@ export function PublicSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => navigate("/help")} tooltip="Help & FAQ">
+                <Question className="h-4 w-4 shrink-0" />
+                <span>Help & FAQ</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton onClick={() => openAuth("login")} tooltip="Sign in">
                 <UserIcon className="h-4 w-4 shrink-0" />
                 <span>Sign in</span>
@@ -211,6 +217,10 @@ export function PublicSidebar({
               <DropdownMenuItem onClick={() => openSettings()}>
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/help")}>
+                <Question className="mr-2 h-4 w-4" />
+                Help & FAQ
               </DropdownMenuItem>
               {/* View switcher, staff/admin accounts only: same session,
                   same account, just "/admin" instead of "/" -- not a role

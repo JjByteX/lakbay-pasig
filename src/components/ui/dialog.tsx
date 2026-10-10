@@ -42,7 +42,13 @@ const DialogContent = React.forwardRef<
         // guidelines.md's Spacing and Symmetry Rules. max-w-lg still
         // caps width on wider viewports, this only changes the narrow
         // case where w-full previously touched both edges.
-        "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        //
+        // origin-top-left: the box is centered by translating it back by half
+        // its own size, so the zoom (tailwind.config.ts's overlay animations)
+        // has to scale around that same top-left point to stay centered. The
+        // default center origin makes it drift toward the bottom right as it
+        // opens.
+        "fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 origin-top-left gap-4 rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
       {...props}

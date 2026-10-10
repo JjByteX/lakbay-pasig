@@ -53,6 +53,25 @@ export const SCREEN_SHIFT = 48;
 // enough to never be waited on.
 export const SCAN_SUCCESS_HOLD_MS = 1000;
 
+// Touch press feedback. Phones have no hover, so a tap that only changed color
+// on hover gave nothing back until the next screen. 100ms is DURATION.press, and
+// 0.98 is a squeeze you feel more than see. Tailwind scans this file, so the
+// class names below are generated. Reduced motion keeps the color change and
+// drops the squeeze.
+//
+// PRESS goes on the tappable thing itself: a Button, a full-width row.
+export const PRESS =
+  "transition-[transform,background-color,color,border-color] duration-100 active:scale-[0.98] motion-reduce:active:scale-100";
+
+// PRESS_CARD goes on a card that holds the tap target plus other controls (a
+// save heart, a badge). Squeezing the whole card only when a `.press-target`
+// inside it is pressed means tapping the heart squishes the heart (its own
+// whileTap), not the card around it. Mark each tap target with PRESS_TARGET.
+// transition-transform keeps the hover lift the cards already have.
+export const PRESS_CARD =
+  "transition-transform duration-100 has-[.press-target:active]:scale-[0.98] motion-reduce:has-[.press-target:active]:scale-100";
+export const PRESS_TARGET = "press-target";
+
 /**
  * A short haptic tick on devices that support it (Android; iOS Safari has no
  * vibrate API and skips it). Reserved for a real event, never a frequent one.

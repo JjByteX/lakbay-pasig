@@ -3,6 +3,7 @@ import { PhotoCaptionOverlay } from "./photo-caption-overlay";
 import { SaveButton } from "./save-button";
 import type { DiscoverPlace } from "@/lib/discover-types";
 import type { SavedBusiness } from "@/lib/saved-businesses";
+import { PRESS_CARD, PRESS_TARGET } from "@/lib/motion";
 
 /**
  * The Saved page's Places and Businesses card. Was a list row (name,
@@ -32,11 +33,11 @@ interface SavedPlaceRowProps {
 
 export function SavedPlaceRow({ place, kind = "place", onClick, onUnsave }: Readonly<SavedPlaceRowProps>) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card transition-transform hover:-translate-y-0.5">
+    <div className={`flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card hover:-translate-y-0.5 ${PRESS_CARD}`}>
       <button
         type="button"
         onClick={onClick}
-        className="relative block aspect-square w-full shrink-0 bg-muted bg-cover bg-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className={`${PRESS_TARGET} relative block aspect-square w-full shrink-0 bg-muted bg-cover bg-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
         style={{ backgroundImage: place.coverPhotoUrl ? `url(${place.coverPhotoUrl})` : undefined }}
       >
         {/* Same caption overlay as Home's PhotoCard. */}
