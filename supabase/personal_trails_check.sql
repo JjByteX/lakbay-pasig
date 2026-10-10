@@ -199,6 +199,41 @@ select pg_temp.expect_count($$select count(*) from public.locations_with_entries
 
 select pg_temp.as_owner();
 update public.places set verification_status = 'verified' where id = 'a1e10005-0005-4c1a-9c1a-000000000005';
+
+-- 5b. A flagged entry stays hidden through a personal trail (0056, 0053). A
+-- business entry is flagged when it is written. Verify clears it, any change to
+-- its text flags it again, and a direct write cannot clear it.
+insert into pg_temp.ids (name, id)
+select 'biz_a', id from public.businesses where verification_status in ('verified', 'pending') order by id limit 1;
+insert into public.discovery_content (title, content, related_location_type, related_location_id, sequence_order, unlock_radius)
+select 'Check biz entry', 'Check biz entry text', 'business', id, 1, 25 from pg_temp.ids where name = 'biz_a';
+
+select pg_temp.as_user((select id from pg_temp.ids where name = 'resident1'));
+insert into public.route_stops (route_id, stop_type, stop_id, sequence_order)
+select '00000000-0000-4000-8000-0000000000a1', 'business', id, 90 from pg_temp.ids where name = 'biz_a';
+select pg_temp.expect_count($$select count(*) from public.discovery_content where title = 'Check biz entry'$$, 0, '5.11 a flagged business entry is hidden through an owned trail');
+select pg_temp.expect_count($$select count(*) from public.locations_with_entries() where location_id = (select id from pg_temp.ids where name = 'biz_a')$$, 0, '5.12 a flagged entry does not mark its business');
+
+select pg_temp.as_user((select id from pg_temp.ids where name = 'admin1'));
+insert into public.place_reviews (reviewed_type, reviewed_id, staff_id, action)
+select 'discovery_content', id, 'f25e552f-e90c-4fc4-884e-02f46c40a47f', 'verify' from public.discovery_content where title = 'Check biz entry';
+select pg_temp.as_user((select id from pg_temp.ids where name = 'resident1'));
+select pg_temp.expect_count($$select count(*) from public.discovery_content where title = 'Check biz entry'$$, 1, '5.13 Verify clears the flag, so the entry shows through the owned trail');
+select pg_temp.expect_count($$select count(*) from public.locations_with_entries() where location_id = (select id from pg_temp.ids where name = 'biz_a')$$, 1, '5.14 and its business is marked');
+
+select pg_temp.as_user((select id from pg_temp.ids where name = 'admin1'));
+update public.discovery_content set content = 'Changed text' where title = 'Check biz entry';
+select pg_temp.as_user((select id from pg_temp.ids where name = 'resident1'));
+select pg_temp.expect_count($$select count(*) from public.discovery_content where title = 'Check biz entry'$$, 0, '5.15 changing the text flags it again');
+
+select pg_temp.as_user((select id from pg_temp.ids where name = 'admin1'));
+update public.discovery_content set needs_place_review = false where title = 'Check biz entry';
+select pg_temp.as_user((select id from pg_temp.ids where name = 'resident1'));
+select pg_temp.expect_count($$select count(*) from public.discovery_content where title = 'Check biz entry'$$, 0, '5.16 a direct write cannot clear the flag');
+
+delete from public.route_stops where route_id = '00000000-0000-4000-8000-0000000000a1' and sequence_order = 90;
+select pg_temp.as_owner();
+delete from public.discovery_content where title = 'Check biz entry';
 select pg_temp.as_user((select id from pg_temp.ids where name = 'resident1'));
 
 -- ---------------------------------------------------------------------------

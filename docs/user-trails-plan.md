@@ -45,7 +45,7 @@ A signed-in user builds a private trail from places and businesses, walks it alo
 1. `routes.personal` flag, plus a constraint: a personal trail is a draft and has an owner. It can never be published.
 2. Owner policies on `routes` and `route_stops`. `with check` pins personal and owner, so a user cannot spoof an owner or flip a trail to official.
 3. One restrictive policy on each table: a personal row is visible and writable only to its owner. Needed because the staff policies are `for all` and grant read too. This hides personal trails from staff and everyone else.
-4. `discovery_content` select: place entries also show through a personal trail the caller owns.
+4. `discovery_content` select: place entries also show through a personal trail the caller owns, but only while they are not flagged (`needs_place_review`, migration 0056). A published trail has the publish gate. A personal trail has none, so without this a user could add a pending business and read history no reviewer has checked.
 5. `completed_routes` restrictive insert and update: the route must be visible and official. A made-up id or another user's trail fails. Update is covered too, because `completed_routes_own` is `for all`: without it a user could insert an official completion and then point it at their personal trail.
 6. Cap triggers on `routes` and `route_stops`. A trigger, not a policy, because a count policy would also block editing a trail at the cap. The stop cap also fires when a stop's `route_id` changes, so a stop cannot be moved into a full trail. A reorder does not fire it.
 7. `delete_my_account()` deletes personal trails first. `routes.created_by` has no cascade, so account deletion would fail without it.
@@ -83,7 +83,7 @@ Phase 4, done (builder page):
 Phase 4b, done (mark places that hold a secret). Approved after the first cut found it could not work without a database change:
 
 - Place entries are readable only through a published trail or the caller's own trail (0050, 0054), so before a place is on a trail the app could not tell whether it has entries.
-- `supabase/migrations/0055_locations_with_entries.sql`: `locations_with_entries()`, security definer, returns `(location_type, location_id)` only, never text. Active place entries only. Lists only places the caller could already read (verified places, verified or pending businesses), so it cannot reveal the id of an unverified place. Signed in only, anon cannot call it. Check groups 5.6 to 5.10 cover it.
+- `supabase/migrations/0055_locations_with_entries.sql`: `locations_with_entries()`, security definer, returns `(location_type, location_id)` only, never text. Active, unflagged place entries only. Lists only places the caller could already read (verified places, verified or pending businesses), so it cannot reveal the id of an unverified place. Signed in only, anon cannot call it. Check groups 5.6 to 5.10 cover it, and 5.11 to 5.16 cover flagged entries (the flagged rule is 0056).
 - `fetchLocationsWithEntries()` in `personal-trails.ts`. The picker takes a `markedIds` prop: a "Has a secret" tag, listed right after the saved ones. The wording is one string in `place-business-picker.tsx`.
 - Known and accepted: any signed in user can learn which places hold a secret, not what it says. That is the point, and the text stays hidden until unlock.
 
@@ -126,7 +126,7 @@ Phase 7, done (gaps found in review):
 2. Other user, staff, and anon cannot read, update, or delete it. Official trails stay visible.
 3. A user cannot publish a trail, flip it to official, own it as someone else, or touch official or other users' trails.
 4. No completion row for a personal trail, by insert or by update. Official completion still works.
-5. Entries show through an owned trail and nowhere else. Anon's entry count is unchanged.
+5. Entries show through an owned trail and nowhere else. Anon's entry count is unchanged. A flagged entry stays hidden even through an owned trail, Verify shows it, a text change hides it again, and a direct write cannot clear the flag.
 6. Search finds your own trail, not anyone else's.
 7. Caps hold, editing and reordering at the cap works, a stop cannot be moved into a full trail, one user's cap does not limit another.
 8. Account deletion removes personal trails.

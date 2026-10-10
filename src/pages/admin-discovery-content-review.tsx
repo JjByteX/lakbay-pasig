@@ -90,15 +90,26 @@ interface DiscoveryContentQueryRow {
   routes: { name: string }[] | null;
 }
 
-// The line under the dialog title. A rejection changes nothing on the content
-// itself, so it says where to fix it, and that a trail note blocks publishing.
-function reviewDescription(action: "verify" | "reject" | null, onTrail: boolean): string {
+// The line under the dialog title (migration 0053). Verify clears a business
+// entry's flag until its text, photo or video changes, and a place entry's
+// flag follows its place. A rejection changes nothing on the content itself,
+// so it says where to fix it, and that the flag holds publishing back.
+function reviewDescription(
+  action: "verify" | "reject" | null,
+  onTrail: boolean,
+  locationType: "place" | "business"
+): string {
   if (action === "verify") {
-    return "This logs your approval. The flag stays computed from the related location's status, it isn't cleared permanently.";
+    return locationType === "business"
+      ? "This logs your approval and clears the flag. It comes back if the text, photo or video changes."
+      : "This logs your approval. The flag clears when the related place is verified.";
   }
   const editFrom = onTrail ? "the trail builder" : "its place";
-  const publishNote = onTrail ? " The trail can't publish while this stays flagged." : "";
-  return `This logs a rejection. It doesn't change the content itself. Edit it from ${editFrom}, or wait for the related place to be verified.${publishNote}`;
+  const waitNote = locationType === "place" ? ", or wait for the related place to be verified" : "";
+  const publishNote = onTrail
+    ? " The trail can't publish while this stays flagged."
+    : " Trails that stop here can't publish while this stays flagged.";
+  return `This logs a rejection and keeps it flagged. It doesn't change the content itself. Edit it from ${editFrom}${waitNote}.${publishNote}`;
 }
 
 export default function AdminDiscoveryContentReviewPage() {
@@ -394,7 +405,7 @@ export default function AdminDiscoveryContentReviewPage() {
               {reviewAction === "verify" ? "Verify this discovery content?" : "Reject this discovery content?"}
             </DialogTitle>
             <DialogDescription>
-              {reviewDescription(reviewAction, Boolean(entry.route_id))}
+              {reviewDescription(reviewAction, Boolean(entry.route_id), entry.related_location_type)}
             </DialogDescription>
           </DialogHeader>
 

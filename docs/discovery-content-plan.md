@@ -49,6 +49,7 @@ Status: built, not yet run. Logged as decision-log.md entries #44 to #47.
 - Only the trigger can clear a flag. A direct write from a client cannot.
 - Existing business entries stay flagged until verified once more.
 - Flagged entries stay visible on published trails. The gate is at publish, not on live content.
+- A private trail (0054) has no publish gate, so there a flagged entry stays hidden until it is verified (`not needs_place_review` in the policy and in `locations_with_entries()`, migration 0056).
 
 **Config and docs**
 - `qrcode` and `@types/qrcode` in `package.json` and installed. `VITE_SITE_URL` in `.env.example` and `vite-env.d.ts`.
@@ -60,7 +61,7 @@ Status: built, not yet run. Logged as decision-log.md entries #44 to #47.
 - None open. Tell CATO that a business entry needs a Places review (Verify) before its trail can publish, and that editing it asks for a new one.
 
 **You run**
-- Apply migrations 0050 to 0053 in order and run `db lint`.
+- Apply migrations 0050 to 0056 in order and run `db lint`.
 - Set `VITE_SITE_URL` wherever staff download codes.
 - Type check and lint. The panel may trip complexity rules.
 - Hand check: Saved grids at 390 px and large font, the Discovery content tab, a scan end to end on a phone, a one stop trail, a stop with no entries, a YouTube and a Facebook link in a stop card, publish blocked by a flagged place entry, then verify the place and publish. Verify a business entry, publish, then edit its text and see it flag again.
