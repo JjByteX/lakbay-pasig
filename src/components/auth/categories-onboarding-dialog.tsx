@@ -81,7 +81,7 @@ export function CategoriesOnboardingDialog({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Skip
           </Button>
-          <Button onClick={handleSave} disabled={saving || chosen.length === 0}>
+          <Button onClick={handleSave} disabled={saving || chosen.length === 0} loading={saving}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>

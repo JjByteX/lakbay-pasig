@@ -226,7 +226,7 @@ export default function SlideFormDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
+          <Button type="button" onClick={handleSubmit} disabled={!canSubmit} loading={saving}>
             {submitLabel}
           </Button>
         </DialogFooter>

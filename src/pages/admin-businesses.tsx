@@ -467,6 +467,7 @@ export default function AdminBusinessesPage() {
               variant={bulkAction === "reject" ? "destructive" : "default"}
               onClick={handleBulkSubmit}
               disabled={bulkSubmitting || (bulkAction === "reject" && bulkNotes.trim().length === 0)}
+              loading={bulkSubmitting}
             >
               {bulkSubmitLabel}
             </Button>

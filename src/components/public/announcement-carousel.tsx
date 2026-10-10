@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   motion,
   useMotionValueEvent,
+  useReducedMotion,
   useSpring,
   type MotionValue,
 } from "motion/react";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "./announcement-card";
 import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from "@/lib/filmstrip";
 import type { Announcement } from "@/lib/home-types";
+import { SPRING_PRESS } from "@/lib/motion";
 
 /**
  * Ported from Qula's src/components/sections/work.tsx "Our Work" carousel
@@ -137,11 +139,16 @@ interface AnnouncementTileProps {
 // row.
 function AnnouncementTile({ announcement, slotOffset, containerWidthPx, tilesInViewport, onClick }: Readonly<AnnouncementTileProps>) {
   const formattedDate = formatDateTime(announcement.date_time);
+  const reduceMotion = useReducedMotion();
 
   return (
     <motion.button
       type="button"
       onClick={onClick}
+      // A CSS active:scale would lose to the inline transform the filmstrip
+      // sets through `x`, so the press squeeze is Motion's, like save-heart.tsx.
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      transition={SPRING_PRESS}
       className="group absolute top-0 flex h-full w-full flex-col items-start justify-center gap-1 overflow-hidden rounded-lg border border-border bg-card px-6 py-4 text-left transition-colors hover:bg-muted"
       style={{
         width: tileWidthPx(containerWidthPx, tilesInViewport, TILE_GAP_PX),

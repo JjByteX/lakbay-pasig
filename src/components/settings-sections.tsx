@@ -553,6 +553,7 @@ export function SettingsSections({
                 type="button"
                 variant="secondary"
                 disabled={!canSavePassword}
+                loading={passwordSaving}
                 title={passwordBlockedReason ?? undefined}
                 onClick={onChangePassword}
               >
@@ -946,6 +947,7 @@ function AccountField({
             type="button"
             variant="secondary"
             disabled={!canSave}
+            loading={state.saving}
             title={blockedReason ?? undefined}
             onClick={() => onSave(state.value)}
           >

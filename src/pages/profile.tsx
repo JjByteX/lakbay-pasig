@@ -15,6 +15,7 @@ import { CharCount } from "@/components/business/business-fields";
 import { PageContainer } from "@/components/public/page-container";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePageTitle } from "@/lib/page-title";
+import { PRESS } from "@/lib/motion";
 
 // Preferred Categories (the picker itself is category-chip-group.tsx, shared
 // with the onboarding screen). The choice is stored as names in
@@ -240,7 +241,7 @@ export default function ProfilePage() {
       {vendorBusiness && (
         <Link
           to="/vendor"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
+          className={`flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted ${PRESS}`}
         >
           <Storefront className="h-4 w-4 shrink-0" />
           <span className="min-w-0 break-words">Managing {vendorBusiness.name}</span>
@@ -249,7 +250,7 @@ export default function ProfilePage() {
       {!vendorError && vendorChecked && vendorBusiness === null && (
         <Link
           to="/vendor"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted"
+          className={`flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-base font-semibold text-foreground hover:bg-muted ${PRESS}`}
         >
           <Storefront className="h-4 w-4 shrink-0" />
           <span>List your business</span>
@@ -276,7 +277,7 @@ export default function ProfilePage() {
             {saveErrorText}
           </div>
 
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving} loading={saving}>
             {saving ? "Saving..." : "Save changes"}
           </Button>
         </form>
@@ -310,7 +311,7 @@ export default function ProfilePage() {
           {saveErrorText}
         </div>
 
-        <Button type="submit" disabled={saving} className="self-end">
+        <Button type="submit" disabled={saving} loading={saving} className="self-end">
           {saving ? "Saving..." : "Save changes"}
         </Button>
       </form>

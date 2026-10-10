@@ -432,6 +432,7 @@ export default function AdminDiscoveryContentReviewPage() {
               variant={reviewAction === "reject" ? "destructive" : "default"}
               onClick={handleReviewSubmit}
               disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
+              loading={reviewSubmitting}
             >
               {reviewSubmitLabel}
             </Button>

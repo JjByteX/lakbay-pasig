@@ -212,7 +212,7 @@ function DeleteTrailDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={deleting}>
+          <Button variant="destructive" onClick={onConfirm} disabled={deleting} loading={deleting}>
             {deleting ? "Deleting…" : "Delete"}
           </Button>
         </DialogFooter>
@@ -454,7 +454,7 @@ export default function TrailBuilderPage() {
     <PickerSection stops={stops} atLimit={atLimit} savedIds={savedIds} markedIds={markedIds} onPick={handlePick} />
   );
   const saveButton = (
-    <Button type="button" onClick={handleSave} disabled={saving || stops.length === 0}>
+    <Button type="button" onClick={handleSave} disabled={saving || stops.length === 0} loading={saving}>
       {saving ? "Saving…" : "Save trail"}
     </Button>
   );

@@ -5,6 +5,7 @@ import { GpsFix, MapPin, MagnifyingGlass } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SquareLoader } from "@/components/public/square-loader";
 // FieldLabel and CharCount live in business-fields.tsx, which imports this
 // picker, so the two files import each other. Safe: each side only uses
 // the other's exports while rendering, never at module load, and both are
@@ -386,7 +387,8 @@ export function LocationPicker({
         {open && searchStatus !== "idle" && (
           <div className="absolute inset-x-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-md">
             {searchStatus === "searching" && (
-              <output className="block px-4 py-3 text-sm text-muted-foreground">
+              <output className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+                <SquareLoader size="xs" />
                 Searching…
               </output>
             )}

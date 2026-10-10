@@ -185,7 +185,7 @@ export function LoginForm() {
 
         {error && <p className="text-base text-destructive">{error}</p>}
 
-        <Button type="submit" disabled={!canSubmit}>
+        <Button type="submit" disabled={!canSubmit} loading={submitting}>
           {submitting ? "Logging in..." : "Log in"}
         </Button>
       </form>

@@ -110,7 +110,7 @@ export function DeleteAccountDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={!confirmed || deleting}>
+          <Button variant="destructive" onClick={handleDelete} disabled={!confirmed || deleting} loading={deleting}>
             {deleting ? "Deleting..." : "Delete account"}
           </Button>
         </DialogFooter>

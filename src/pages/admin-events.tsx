@@ -777,7 +777,7 @@ export default function AdminEventsPage() {
             <Button variant="outline" onClick={() => setBulkAction(null)} disabled={bulkSubmitting}>
               Cancel
             </Button>
-            <Button onClick={handleBulkSubmit} disabled={bulkSubmitting || bulkTargetCount === 0}>
+            <Button onClick={handleBulkSubmit} disabled={bulkSubmitting || bulkTargetCount === 0} loading={bulkSubmitting}>
               {bulkSubmitLabel}
             </Button>
           </DialogFooter>

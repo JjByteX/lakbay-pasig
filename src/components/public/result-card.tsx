@@ -218,10 +218,11 @@ export function ResultCard({
                         size="sm"
                         className="gap-2"
                         disabled={directionsStatus === "loading"}
+                        loading={directionsStatus === "loading"}
                         onClick={handleDirections}
                       >
                         {directionsStatus === "loading" ? "Getting directions…" : "Directions"}
-                        <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+                        {directionsStatus !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
                       </Button>
                     </>
                   ) : (

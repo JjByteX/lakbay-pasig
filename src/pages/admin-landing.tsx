@@ -204,7 +204,7 @@ export default function AdminLandingPage() {
             <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
+            <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting} loading={deleting}>
               {deleting ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>

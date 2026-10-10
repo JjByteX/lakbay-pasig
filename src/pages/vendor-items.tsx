@@ -544,6 +544,7 @@ export default function VendorItemsPage() {
                           type="submit"
                           size="sm"
                           disabled={editName.trim().length === 0 || savingEdit}
+                          loading={savingEdit}
                         >
                           {savingEdit ? "Saving…" : "Save"}
                         </Button>
@@ -635,7 +636,7 @@ export default function VendorItemsPage() {
 
         <p className="text-xs text-muted-foreground">* Required</p>
 
-        <Button type="submit" disabled={addName.trim().length === 0 || adding}>
+        <Button type="submit" disabled={addName.trim().length === 0 || adding} loading={adding}>
           {adding ? "Adding…" : "Add item"}
         </Button>
       </form>
@@ -668,7 +669,7 @@ export default function VendorItemsPage() {
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting} loading={deleting}>
               {deleting ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>

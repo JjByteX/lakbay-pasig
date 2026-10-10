@@ -1,6 +1,6 @@
 # help-faq-plan.md
 
-Status: Phases 1 to 3 (residents) and Phase 4 (admin) built, not yet run.
+Status: Phases 1 to 3 (residents), Phase 4 (admin), and Phase 5 (search) built, not yet run.
 
 ## Goal
 
@@ -57,6 +57,7 @@ Typed label names in answers (Start trail, Restart trail, Directions, Not intere
 2. **Menu.** Add the item to the mobile and desktop profile menus, signed in and guest.
 3. **Docs.** `navigation-and-access-control.md` lists `/help` as public. `build-order.md` adds the step. `decision-log.md` adds the entry.
 4. **Admin.** Shared list component, `/admin/help`, admin copy, menu item, and the docs for it.
+5. **Search.** A search box at the top of the shared list, so both pages get it. See Search.
 
 ## Admin (Phase 4)
 
@@ -68,9 +69,27 @@ Typed label names in answers (Start trail, Restart trail, Directions, Not intere
 - No contact block. Staff are CATO, so the answers send them to an Admin.
 - Same upkeep as the resident copy: section, button, and permission names are typed text.
 
+## Search (Phase 5)
+
+- The box lives in `src/components/help-topic-list.tsx`, above the topics, so the resident and admin pages both get it with no change to either page file. The matching is `src/lib/help-search.ts`.
+- Filters as you type, no button and no debounce: the copy is a few dozen strings in memory.
+- Every word of the query must be found, in any order, in the question, the answer, or the topic title. "trails" brings up the whole Trails topic.
+- Typo tolerant, on the same rules as the global search (`0042_fuzzy_search.sql`): lowercase, accents and apostrophes dropped, a word matches inside the text or within a few edits of one of its words, and short words get none. Edits allowed: 0 up to 4 letters, 1 for 5 to 8, 2 from 9. A swapped pair counts as one edit. "signin" finds "Sign in".
+- The edit allowance is stricter than the database's (1 from 4, 2 from 5), because whole answers hold many more words than a place name and a looser rule matches unrelated ones.
+- A small synonym map in the same file turns what people type into the copy's word: trip, tour, journey to trail; login to sign; shop, store to business; badge to credential; remove to delete; bug, issue to problem, and so on. One way, single words. Add a line when a real search finds nothing.
+- Results keep the page's order, not ranked.
+- Topics with no matching question drop out. Matching answers open by themselves while a search is active, and close again when it is cleared.
+- Nothing found: the shared `EmptyState` with "No answers for ...".
+- Clear button appears once there is text. Escape also clears.
+- Screen readers hear the match count through a hidden status line.
+- Size follows `dense`: resident `h-11 text-base` (no iOS zoom), admin `h-9 text-sm`.
+- Not the global search bar. That one queries the database for places, businesses, items, trails, and events, and the shell hides it on Profile. This one filters the page's own copy, in the browser.
+- Check: `node scripts/help-search-check.mjs` (Node 22.18+). It asserts the rules above on a few lines of copy.
+
 ## Files
 
 New:
+- Phase 5: `src/lib/help-search.ts`, `scripts/help-search-check.mjs`.
 - `src/pages/help.tsx`
 - `src/lib/help-content.ts`
 - `src/components/help-topic-list.tsx`
@@ -78,6 +97,7 @@ New:
 - `src/lib/admin-help-content.ts`
 
 Edited:
+- Phase 5: `src/components/help-topic-list.tsx`.
 - `src/App.tsx`: `help` route under the shell, no `ProtectedRoute`. `help` route under `/admin`, no permission.
 - Phase 2: `public-shell.tsx`, `public-sidebar.tsx`.
 - Phase 4: `admin-sidebar.tsx`.
@@ -87,7 +107,8 @@ Already done in the project:
 
 ## Left out
 
-- Search box inside the FAQ.
+- Highlighting the matched words in answers.
+- Ranking results. Tagalog or other languages in the synonym map (copy is English only).
 - Link to a single question (`/help#...`).
 - "Was this helpful" voting.
 - Contact form or chat.

@@ -58,7 +58,7 @@ export function SignOutDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={signingOut}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleConfirm} disabled={signingOut}>
+          <Button variant="destructive" onClick={handleConfirm} disabled={signingOut} loading={signingOut}>
             {signingOut ? "Signing out…" : "Sign out"}
           </Button>
         </DialogFooter>

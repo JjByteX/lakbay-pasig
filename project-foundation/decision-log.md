@@ -468,3 +468,28 @@ Scope: phases 1 and 2 cover the public and admin global search. Not yet changed:
 
 **Rejected:** Reusing `/help` for staff (it would pull them out of the admin shell and the content is for residents). A row in the Tools list (it is not a work section). A second copy of the accordion markup. A permission for the page (it holds no private data).
 
+---
+
+**#:** 52
+**Milestone:** Help & FAQ search (`docs/help-faq-plan.md`, Phase 5)
+
+**Decision:** Both Help & FAQ pages get a search box above the topics. The box is part of `src/components/help-topic-list.tsx`, the list #51 already shared, so the resident page (`help.tsx`) and the admin page (`admin-help.tsx`) are unchanged and the box exists once. It filters as you type. Every word of the query must be found, in any order, in the question, the answer, or the topic title. Matching is `src/lib/help-search.ts`, typo tolerant on the same rules as the global search (`0042_fuzzy_search.sql`, #31): lowercase, accents and apostrophes dropped, a word matches inside the text or within a few edits of one of its words, short words get no tolerance. Edits allowed are 0 up to 4 letters, 1 for 5 to 8, 2 from 9, with a swapped pair counting as one. That is stricter than the database (1 from 4, 2 from 5) on purpose: it runs over whole answers, not short names, and the looser rule would match unrelated words. A small one way synonym map (trip to trail, login to sign, shop to business, badge to credential, bug to problem, and so on) covers words people type that the copy does not use. Topics with no match drop out, matching answers open on their own while a search is active, and a search with no match shows the shared `EmptyState`. The clear button and Escape both empty the box, and a hidden status line gives screen readers the match count. The box follows the list's `dense` option: `h-11 text-base` for residents, `h-9 text-sm` for admin. `scripts/help-search-check.mjs` is the one runnable check (`node scripts/help-search-check.mjs`).
+
+**Standing rule:** A new Help topic or question needs no search wiring. It is found by the same filter as long as it is in `help-content.ts` or `admin-help-content.ts`. Keep the topic title in plain words people would type, since it is searched too. When a real search finds nothing, add the word people used to `SYNONYMS` in `help-search.ts` and a line to the check. The matching rules (edit allowance, normalization) stay in step with the global search's, apart from the stricter allowance above.
+
+**Accepted limits:** Written without running the app. The check was run on a few lines of copy, not on the real topics, because `help-content.ts` imports through the `@/` alias that plain node cannot resolve. Synonyms are English and one way. Results keep the page's order, not ranked. No highlighting of matched words. The query is not kept in the URL, so it resets when the page is left. This replaces the "no search box" limit in #50 and #51.
+
+**Rejected:** Reusing the global search bar (different data, and it is hidden on Profile where Help sits). Calling the database's fuzzy functions (the copy is a few dozen strings already in the browser, and a round trip per keystroke buys nothing). A fuzzy search package (the rules are about forty lines and match the database's). A debounce (nothing to wait for). A second copy of the list markup for search.
+
+---
+
+**#:** 53
+**Milestone:** Button loading state and the Searching mark (motion audit items 9 and 10)
+
+**Decision:** `Button` (`components/ui/button.tsx`) takes a `loading` prop. While it is true the button shows a spinner (Phosphor `CircleNotch`, `currentColor`, so it reads on every variant) before the label, disables itself, and sets `aria-busy`. It does nothing with `asChild`, since a Slot takes exactly one child and a link is not submitted. The caller still swaps the label ("Saving…") and still passes its own `disabled`, so no existing logic moved. The spinner adds `gap-2` only while loading, so a caller's own `gap-2` does not double. Where a button also holds an icon (Google logo, the Directions arrow, the Feature star), the icon is hidden while loading so the spinner replaces it. Every submit, save, delete, review, and bulk action button that swapped its label now passes `loading`, including the shared `StepFooter` (new optional `saving` prop). The four "Searching…" lines (global search, admin search, the From search, the location picker) show `SquareLoader` at `xs` beside the text, because `square-loader.tsx` is the app's mark for waiting in a panel and does not sit on a button.
+
+**Standing rule:** A button that waits on a request passes `loading` and keeps its label change. A new submit or confirm button does the same. Waiting in a panel or page uses `SquareLoader`, not a spinner.
+
+**Accepted limits:** Written without running the app. Two loaders exist on purpose: `SquareLoader` is a filled primary tile and would vanish on a default button, so buttons use the `currentColor` spinner. The spinner does not stop under reduced motion, as the upload and voice spinners already do not. Buttons whose busy state has no label swap (a disabled-only Cancel) were left alone.
+
+**Rejected:** Putting `SquareLoader` inside `Button` (invisible on primary, wrong colour on destructive). A `loading` label prop on `Button` (the callers' labels already change, and a second source for the text would drift). Converting only the public screens (a half-converted admin would look unfinished).

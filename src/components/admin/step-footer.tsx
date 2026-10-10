@@ -15,6 +15,7 @@ export function StepFooter({
   missingCount,
   canSubmit,
   saveLabel,
+  saving = false,
   onCancel,
   onStep,
 }: Readonly<{
@@ -23,6 +24,8 @@ export function StepFooter({
   missingCount: number;
   canSubmit: boolean;
   saveLabel: string;
+  /** Shows the busy spinner on the save button. */
+  saving?: boolean;
   onCancel: () => void;
   onStep: (step: Step) => void;
 }>) {
@@ -45,7 +48,7 @@ export function StepFooter({
         </Button>
       )}
       {step === 3 && (
-        <Button key="save" type="submit" disabled={!canSubmit}>
+        <Button key="save" type="submit" disabled={!canSubmit} loading={saving}>
           {saveLabel}
         </Button>
       )}

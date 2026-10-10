@@ -4,6 +4,7 @@ import { CircleNotch, MagnifyingGlass, Microphone, Stop } from "@phosphor-icons/
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SquareLoader } from "./square-loader";
 import { VerificationBadge } from "./result-card";
 import { ItemRow, ResultGroup, ResultRow } from "./search-result-list";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
@@ -179,7 +180,10 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
       {showPanel && (
         <div className="absolute inset-x-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md">
           {loading && (
-            <p className="px-4 py-3 text-sm text-muted-foreground">Searching…</p>
+            <p className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+              <SquareLoader size="xs" />
+              Searching…
+            </p>
           )}
 
           {!loading && !hasAnyResults(results) && (

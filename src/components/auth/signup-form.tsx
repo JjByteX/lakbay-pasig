@@ -156,7 +156,7 @@ export function SignupForm() {
 
         {error && <p className="text-base text-destructive">{error}</p>}
 
-        <Button type="submit" disabled={!canSubmit}>
+        <Button type="submit" disabled={!canSubmit} loading={submitting}>
           {submitting ? "Creating account..." : "Create account"}
         </Button>
       </form>

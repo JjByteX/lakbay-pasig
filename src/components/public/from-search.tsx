@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { GpsFix, MapPin, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SquareLoader } from "@/components/public/square-loader";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import type { CustomFrom } from "@/components/public/public-shell";
 import { GeocodeError, searchPlaces, type PlaceResult } from "@/lib/geocode";
@@ -224,7 +225,10 @@ export function FromSearch({
 
         {/* Idle renders nothing: no results block until a search runs. */}
         {searchStatus === "searching" && (
-          <output className="block px-4 py-3 text-sm text-muted-foreground">Searching…</output>
+          <output className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+            <SquareLoader size="xs" />
+            Searching…
+          </output>
         )}
         {searchStatus === "error" && (
           <output className="block px-4 py-3 text-sm text-destructive">{searchError}</output>

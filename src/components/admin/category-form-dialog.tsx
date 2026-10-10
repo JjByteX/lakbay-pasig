@@ -291,7 +291,7 @@ export default function CategoryFormDialog({
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={!canSubmit}>
+                  <Button type="submit" disabled={!canSubmit} loading={saving}>
                     {submitLabel}
                   </Button>
                 </div>

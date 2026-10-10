@@ -452,7 +452,7 @@ export function DiscoveryEntriesPanel({
         <Button type="button" variant="outline" onClick={handleCancel}>
           Cancel
         </Button>
-        <Button type="button" onClick={() => void handleSave()} disabled={!canSubmit}>
+        <Button type="button" onClick={() => void handleSave()} disabled={!canSubmit} loading={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>

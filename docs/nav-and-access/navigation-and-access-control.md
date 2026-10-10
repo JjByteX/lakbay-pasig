@@ -56,7 +56,7 @@ Account info and preferences. Vendor accounts get business management tools here
 
 ## Help & FAQ
 
-A public page at `/help`, opened from the account menu (the Help & FAQ item), not a tab. Guest and Registered User both see it, and the guest menu carries the item too, so no sign-in is needed. It answers common questions by topic and ends with CATO's contact details. The Guest rules above are unchanged.
+A public page at `/help`, opened from the account menu (the Help & FAQ item), not a tab. Guest and Registered User both see it, and the guest menu carries the item too, so no sign-in is needed. It answers common questions by topic, has a search box above the topics, and ends with CATO's contact details. The Guest rules above are unchanged.
 
 ## Landing Page and Auth Popup
 

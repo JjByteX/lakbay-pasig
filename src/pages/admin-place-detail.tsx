@@ -483,6 +483,7 @@ export default function AdminPlaceDetailPage() {
         missingCount={missingNow.length}
         canSubmit={canSubmit}
         saveLabel={submitLabel}
+        saving={saving}
         onCancel={() => navigate("/admin/places")}
         onStep={setStep}
       />
@@ -572,6 +573,7 @@ export default function AdminPlaceDetailPage() {
               variant={reviewAction === "reject" ? "destructive" : "default"}
               onClick={handleReviewSubmit}
               disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
+              loading={reviewSubmitting}
             >
               {reviewSubmitLabel}
             </Button>

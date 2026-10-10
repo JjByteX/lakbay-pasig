@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
+import { CircleNotch } from "@phosphor-icons/react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
@@ -35,17 +36,32 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  // Shows a spinner before the label, disables the button, and marks it busy.
+  // The caller still changes the label ("Saving...") as before. Ignored with
+  // asChild: a Slot takes exactly one child, and a link is not submitted.
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(buttonVariants({ variant, size, className }), loading && !asChild && "gap-2")}
         ref={ref}
+        disabled={disabled || (loading && !asChild)}
+        aria-busy={loading && !asChild ? true : undefined}
         {...props}
-      />
+      >
+        {asChild ? (
+          children
+        ) : (
+          <>
+            {loading && <CircleNotch className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />}
+            {children}
+          </>
+        )}
+      </Comp>
     );
   }
 );

@@ -57,10 +57,11 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
         size="sm"
         className="gap-2"
         disabled={status === "loading"}
+        loading={status === "loading"}
         onClick={handleClick}
       >
         {status === "loading" ? "Getting directions…" : "Directions"}
-        <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+        {status !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
       </Button>
     </div>
   );

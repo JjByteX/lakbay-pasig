@@ -590,9 +590,10 @@ export default function AdminBusinessDetailPage() {
                 variant={featuredStatus === "featured" ? "secondary" : "outline"}
                 onClick={handleFeatureToggle}
                 disabled={featureSubmitting}
+                loading={featureSubmitting}
                 className="gap-2"
               >
-                <Star className="h-4 w-4" />
+                {!featureSubmitting && <Star className="h-4 w-4" />}
                 {featureToggleLabel}
               </Button>
             )}
@@ -644,6 +645,7 @@ export default function AdminBusinessDetailPage() {
               missingCount={missingNow.length}
               canSubmit={canSubmit}
               saveLabel={saving ? "Saving…" : "Save Changes"}
+              saving={saving}
               onCancel={() => navigate("/admin/businesses")}
               onStep={setStep}
             />
@@ -700,6 +702,7 @@ export default function AdminBusinessDetailPage() {
               variant={reviewAction === "reject" ? "destructive" : "default"}
               onClick={handleReviewSubmit}
               disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
+              loading={reviewSubmitting}
             >
               {reviewSubmitLabel}
             </Button>

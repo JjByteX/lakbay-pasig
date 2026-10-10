@@ -77,8 +77,8 @@ export function GoogleButton() {
         <span className="h-px flex-1 bg-border" />
       </div>
 
-      <Button type="button" variant="outline" className="w-full gap-2" onClick={handleClick} disabled={redirecting}>
-        <GoogleLogo />
+      <Button type="button" variant="outline" className="w-full gap-2" onClick={handleClick} disabled={redirecting} loading={redirecting}>
+        {!redirecting && <GoogleLogo />}
         {redirecting ? "Redirecting to Google..." : "Continue with Google"}
       </Button>
 

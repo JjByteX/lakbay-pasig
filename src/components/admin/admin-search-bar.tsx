@@ -16,6 +16,7 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SquareLoader } from "@/components/public/square-loader";
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import {
   EMPTY_ADMIN_SEARCH_RESULTS,
@@ -356,7 +357,12 @@ export function AdminSearchBar({
               aria-label="Results"
               className="max-h-[60vh] overflow-y-auto border-t border-border p-2"
             >
-              {loading && <p className="px-4 py-2 text-sm text-muted-foreground">Searching…</p>}
+              {loading && (
+                <p className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+                  <SquareLoader size="xs" />
+                  Searching…
+                </p>
+              )}
 
               {!loading && error && (
                 <p className="px-4 py-2 text-sm text-muted-foreground">Search failed. Try again.</p>

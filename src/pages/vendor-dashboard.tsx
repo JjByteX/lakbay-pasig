@@ -521,7 +521,7 @@ function CreateBusinessStepper({
           </Button>
         )}
         {step === 3 && (
-          <Button key="save" type="submit" disabled={!canSubmit}>
+          <Button key="save" type="submit" disabled={!canSubmit} loading={creating}>
             {creating ? "Listing…" : "List my business"}
           </Button>
         )}
@@ -592,7 +592,7 @@ function EditListingView({
           <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" disabled={!canSave}>
+          <Button type="submit" disabled={!canSave} loading={saving}>
             {saving ? "Saving…" : "Save changes"}
           </Button>
         </div>
@@ -866,7 +866,7 @@ export default function VendorDashboardPage() {
 
           <p className="text-xs text-muted-foreground">* Required</p>
 
-          <Button type="submit" disabled={!canSubmit}>
+          <Button type="submit" disabled={!canSubmit} loading={creating}>
             {creating ? "Listing…" : "List my business"}
           </Button>
         </form>

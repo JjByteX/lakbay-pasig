@@ -465,7 +465,7 @@ function DiscoveryContentModalBody({
             <Button type="button" variant="outline" onClick={onCancelEdit}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => onSave(activeStop)} disabled={!canSubmitDiscoveryEntry}>
+            <Button type="button" onClick={() => onSave(activeStop)} disabled={!canSubmitDiscoveryEntry} loading={discoverySaving}>
               {discoveryEntrySaveLabel(discoverySaving, editingEntryId)}
             </Button>
           </div>
@@ -1650,7 +1650,7 @@ export default function AdminTrailBuilderPage() {
         <Button type="button" variant="outline" onClick={() => navigate("/admin/trails")}>
           Cancel
         </Button>
-        <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo}>
+        <Button type="button" onClick={handleSaveInfo} disabled={!canSaveInfo} loading={saving}>
           {saveInfoButtonLabel()}
         </Button>
       </div>
@@ -1670,7 +1670,7 @@ export default function AdminTrailBuilderPage() {
         actions={
           routeId && (
             <div className="flex max-w-sm flex-col items-end gap-1">
-              <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null}>
+              <Button type="button" onClick={handleTogglePublish} disabled={publishSaving || blockedReason !== null} loading={publishSaving}>
                 {publishButtonLabel()}
               </Button>
               {blockedReason && <p className="text-right text-sm text-muted-foreground">{blockedReason}</p>}
