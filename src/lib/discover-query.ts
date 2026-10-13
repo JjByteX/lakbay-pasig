@@ -3,6 +3,7 @@ import { readEmbeddedName, readEmbeddedIcon, readEmbeddedColor } from "./place-c
 import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover-types";
 import { matchingItem } from "./item-match";
+import { distanceKm, type BoundingBox } from "./geo";
 
 // Phase 3.1: places (places_select_public, migration 0003, verified only,
 // unchanged this step) and businesses (businesses_select_public, migration
@@ -12,19 +13,112 @@ import { matchingItem } from "./item-match";
 // same for a Guest session and a signed-in one. Field list is summary-only:
 // name, category, coordinates, verification_status, plus a one-line
 // description for the result card. Full detail fields are Phase 6's concern.
-async function fetchPlaces(): Promise<DiscoverPlace[]> {
+//
+// Itinerary generator (build order step 3): both fetchers take the options
+// resolved below. With no options they behave exactly as before. With `bounds`
+// they read a latitude/longitude box in stable pages instead of one unbounded
+// select, so a hosted row cap (typically 1,000) can never silently truncate
+// the result.
+export interface DiscoverFetchOptions {
+  /** [west, south, east, north]. Omit to read everything, as Discover does. */
+  bounds?: BoundingBox;
+  /** Rows per page when `bounds` is set. Keep at or under 500. */
+  pageSize?: number;
+  /** Load one cover photo per result. Defaults to true, or false when `bounds` is set. */
+  coverPhotos?: boolean;
+}
+
+export const POOL_PAGE_SIZE = 500;
+// Safety stop for the page loop (500 rows x 200 pages = 100,000 rows).
+const MAX_PAGES = 200;
+
+interface ResolvedDiscoverOptions {
+  bounds: BoundingBox | undefined;
+  pageSize: number;
+  coverPhotos: boolean;
+}
+
+function resolveOptions(options: DiscoverFetchOptions): ResolvedDiscoverOptions {
+  return {
+    bounds: options.bounds,
+    pageSize: Math.min(Math.max(options.pageSize ?? POOL_PAGE_SIZE, 1), POOL_PAGE_SIZE),
+    coverPhotos: options.coverPhotos ?? options.bounds === undefined,
+  };
+}
+
+// Reads every page of an ordered query with .range. `fetchPage` must build a
+// fresh query each call (a Supabase query builder is one use) and order by a
+// unique column, so pages never overlap or skip. A short page is the last one.
+async function readAllPages<Row>(
+  fetchPage: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>,
+  pageSize: number
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const from = page * pageSize;
+    const { data, error } = await fetchPage(from, from + pageSize - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return rows;
+}
+
+function placesQuery(bounds: BoundingBox | undefined) {
+  let query = supabase
+    .from("places")
+    .select(
+      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon, color), facility_ids"
+    );
+  if (bounds) {
+    const [west, south, east, north] = bounds;
+    query = query.gte("latitude", south).lte("latitude", north).gte("longitude", west).lte("longitude", east);
+  }
+  return query;
+}
+
+async function loadPlaceRows({ bounds, pageSize }: ResolvedDiscoverOptions) {
+  if (bounds) {
+    return readAllPages((from, to) => placesQuery(bounds).order("id").range(from, to), pageSize);
+  }
+  const { data, error } = await placesQuery(undefined);
+  if (error) throw error;
+  return data ?? [];
+}
+
+function businessesQuery(bounds: BoundingBox | undefined) {
+  let query = supabase
+    .from("businesses")
+    .select(
+      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, business_items(name, price)"
+    );
+  if (bounds) {
+    const [west, south, east, north] = bounds;
+    query = query.gte("latitude", south).lte("latitude", north).gte("longitude", west).lte("longitude", east);
+  }
+  return query;
+}
+
+async function loadBusinessRows({ bounds, pageSize }: ResolvedDiscoverOptions) {
+  if (bounds) {
+    return readAllPages((from, to) => businessesQuery(bounds).order("id").range(from, to), pageSize);
+  }
+  const { data, error } = await businessesQuery(undefined);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchPlaces(options: ResolvedDiscoverOptions): Promise<DiscoverPlace[]> {
   // Phase 1.4 (place-category-directory-phases.md): category is now a
   // joined place_categories.name (migration 0022, category_id replaces
   // the old plain text column), embedded here rather than a flat select,
   // flattened right below so DiscoverPlace's own category field stays
   // string, unchanged for every existing caller.
-  const { data, error } = await supabase
-    .from("places")
-    .select(
-      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon, color), facility_ids"
-    );
-
-  if (error) throw error;
+  const data = await loadPlaceRows(options);
 
   // Map hover/full-details photos phase: one cover photo per place, same
   // fetchCoverPhotoUrls helper home-query.ts's fetchHomeShowcase already
@@ -34,11 +128,13 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
   // places themselves resolve (needs their ids), not in parallel with
   // them, same ordering fetchHomeShowcase's own two-step shape already
   // uses for this helper.
-  const coverPhotos = await fetchCoverPhotoUrls(
-    "place_photos",
-    "place_id",
-    (data ?? []).map((row) => row.id)
-  );
+  const coverPhotos = options.coverPhotos
+    ? await fetchCoverPhotoUrls(
+        "place_photos",
+        "place_id",
+        (data ?? []).map((row) => row.id)
+      )
+    : new Map<string, string>();
 
   return (data ?? []).map((row) => ({
     kind: "place" as const,
@@ -68,7 +164,7 @@ async function fetchPlaces(): Promise<DiscoverPlace[]> {
   }));
 }
 
-async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
+async function fetchBusinesses(options: ResolvedDiscoverOptions): Promise<DiscoverBusiness[]> {
   // Phase 7.1: business_items joined in the same query, embedded select
   // per Supabase's foreign-table syntax, rather than a second round-trip
   // per business. business_items_select_public (migration 0016) already
@@ -82,21 +178,17 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
   // flattened right below so DiscoverBusiness's own category field stays
   // string | null, unchanged for every existing caller, same pattern
   // fetchPlaces above already uses for place_categories.
-  const { data, error } = await supabase
-    .from("businesses")
-    .select(
-      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, business_items(name, price)"
-    );
-
-  if (error) throw error;
+  const data = await loadBusinessRows(options);
 
   // Map hover/full-details photos phase: same cover-photo lookup as
   // fetchPlaces above, against business_photos instead.
-  const coverPhotos = await fetchCoverPhotoUrls(
-    "business_photos",
-    "business_id",
-    (data ?? []).map((row) => row.id)
-  );
+  const coverPhotos = options.coverPhotos
+    ? await fetchCoverPhotoUrls(
+        "business_photos",
+        "business_id",
+        (data ?? []).map((row) => row.id)
+      )
+    : new Map<string, string>();
 
   return (data ?? []).map((row) => ({
     kind: "business" as const,
@@ -119,8 +211,9 @@ async function fetchBusinesses(): Promise<DiscoverBusiness[]> {
  * list, per step-5-plan.md's Shape section (one combined view, not separate
  * data paths per surface).
  */
-export async function fetchDiscoverResults(): Promise<DiscoverResult[]> {
-  const [places, businesses] = await Promise.all([fetchPlaces(), fetchBusinesses()]);
+export async function fetchDiscoverResults(options: DiscoverFetchOptions = {}): Promise<DiscoverResult[]> {
+  const resolved = resolveOptions(options);
+  const [places, businesses] = await Promise.all([fetchPlaces(resolved), fetchBusinesses(resolved)]);
   return [...places, ...businesses];
 }
 
@@ -141,25 +234,9 @@ export interface Coordinates {
   heading?: number | null;
 }
 
-// Phase 3.3: straight-line (haversine) distance in kilometers. This is a
-// sort order for a list, not turn-by-turn routing, per step-5-phases.md, so
-// great-circle distance is sufficient, no routing API needed.
-//
-// Exported as of Step 7, Phase 4.5: trail-detail.tsx's proximity unlock
-// check reuses this exact function rather than reimplementing haversine a
-// second time, per step-7-phases.md's own 4.5 instruction ("same distanceKm
-// logic already in discover-query.ts, reused not reinvented") and
-// constraints.md's Inventory Before Suggesting rule.
-export function distanceKm(a: Coordinates, b: Coordinates): number {
-  const R = 6371;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const lat1 = (a.latitude * Math.PI) / 180;
-  const lat2 = (b.latitude * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
+// distanceKm now lives in geo.ts so plain-Node code can import it without
+// pulling in supabase.ts. Re-exported here so existing importers are unchanged.
+export { distanceKm };
 
 /**
  * Phase 3.3: sort by distance when a user coordinate is known, by name
