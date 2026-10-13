@@ -176,32 +176,66 @@ export async function fetchLocationsWithEntries(): Promise<Set<string>> {
   return new Set(((data ?? []) as { location_id: string }[]).map((row) => row.location_id));
 }
 
+// Ids per .in() lookup. An id list goes in the request URL, so a pool of
+// thousands (the itinerary generator) is read in batches, run together.
+export const ID_BATCH_SIZE = 100;
+
+export function chunkIds(ids: string[], size: number = ID_BATCH_SIZE): string[][] {
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) batches.push(ids.slice(i, i + size));
+  return batches;
+}
+
 /**
  * Stored opening hours for the given stops, by id, for the builder's open or
  * closed mark (getOpenStatus in hours.ts reads the text). One lookup serves a
  * stop just picked and a stop loaded from a saved trail, so the picker needs
  * no extra columns. A stop that can no longer be read (RLS) is simply absent.
+ *
+ * Ids are read in batches of ID_BATCH_SIZE, so the itinerary generator can
+ * pass a whole pool. Same result and same signature for the builder's few ids.
  */
 export async function fetchStopHours(stops: PersonalStop[]): Promise<Map<string, string | null>> {
   const placeIds = stops.filter((s) => s.type === "place").map((s) => s.id);
   const businessIds = stops.filter((s) => s.type === "business").map((s) => s.id);
 
   const [places, businesses] = await Promise.all([
-    placeIds.length > 0
-      ? supabase.from("places").select("id, operating_hours").in("id", placeIds)
-      : Promise.resolve({ data: [] as { id: string; operating_hours: string | null }[], error: null }),
-    businessIds.length > 0
-      ? supabase.from("businesses").select("id, opening_hours").in("id", businessIds)
-      : Promise.resolve({ data: [] as { id: string; opening_hours: string | null }[], error: null }),
+    Promise.all(chunkIds(placeIds).map((ids) => supabase.from("places").select("id, operating_hours").in("id", ids))),
+    Promise.all(
+      chunkIds(businessIds).map((ids) => supabase.from("businesses").select("id, opening_hours").in("id", ids))
+    ),
   ]);
 
-  if (places.error) throw places.error;
-  if (businesses.error) throw businesses.error;
-
   const hours = new Map<string, string | null>();
-  for (const row of places.data ?? []) hours.set(row.id, row.operating_hours);
-  for (const row of businesses.data ?? []) hours.set(row.id, row.opening_hours);
+  for (const batch of places) {
+    if (batch.error) throw batch.error;
+    for (const row of batch.data ?? []) hours.set(row.id, row.operating_hours);
+  }
+  for (const batch of businesses) {
+    if (batch.error) throw batch.error;
+    for (const row of batch.data ?? []) hours.set(row.id, row.opening_hours);
+  }
   return hours;
+}
+
+/**
+ * Stored visit duration text (places.visit_duration) by place id, for the
+ * itinerary generator's dwell times. Businesses have no such field. Raw text:
+ * itinerary.ts parses it with parseDurationMinutes and falls back to its
+ * default when that returns null. A place that can no longer be read (RLS) is
+ * simply absent.
+ */
+export async function fetchVisitDurations(placeIds: string[]): Promise<Map<string, string | null>> {
+  const batches = await Promise.all(
+    chunkIds(placeIds).map((ids) => supabase.from("places").select("id, visit_duration").in("id", ids))
+  );
+
+  const durations = new Map<string, string | null>();
+  for (const batch of batches) {
+    if (batch.error) throw batch.error;
+    for (const row of batch.data ?? []) durations.set(row.id, row.visit_duration);
+  }
+  return durations;
 }
 
 // ---------------------------------------------------------------------------

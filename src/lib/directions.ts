@@ -42,6 +42,14 @@ const OSRM_BASE_URL = "https://routing.openstreetmap.de";
 // the URL built below.
 export type TravelMode = "foot" | "bike" | "car";
 
+// Itinerary generator (build order step 4): one leg of a multi-stop route, in
+// the order the points were given. Meters and seconds, straight from OSRM's
+// route.legs, so the generator can re-check feasibility on road numbers.
+export interface RouteLeg {
+  distance: number;
+  duration: number;
+}
+
 export interface RouteGeometry {
   type: "LineString";
   coordinates: [number, number][]; // [longitude, latitude] pairs, GeoJSON order
@@ -54,6 +62,10 @@ export interface RouteGeometry {
   // distanceKm used elsewhere (discover-query.ts), so it matches the route
   // actually drawn.
   distance: number;
+  // One entry per leg between consecutive points (origin, each `via` point in
+  // order, destination), so a two-point route has one. Optional: absent if the
+  // service omits it. Existing callers never read it.
+  legs?: RouteLeg[];
 }
 
 // Distinguishable failure shapes so result-card.tsx can render a specific
@@ -74,12 +86,20 @@ export class DirectionsError extends Error {
 // given travel mode. Throws DirectionsError with a specific reason on any
 // known failure path; callers branch on `.reason` rather than parsing the
 // message string.
+//
+// Itinerary generator (build order step 4): `via` is an optional list of
+// stops between origin and destination, visited in order, in the same single
+// request (OSRM takes several waypoints natively). Omitted, it is empty and
+// the call is the two-point one every existing caller makes, unchanged.
+// duration and distance then cover the whole route, and `legs` splits them
+// per leg.
 export async function fetchRoute(
   origin: Coordinates,
   destination: Coordinates,
   mode: TravelMode,
+  via: Coordinates[] = [],
 ): Promise<RouteGeometry> {
-  const coords = `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
+  const coords = [origin, ...via, destination].map((p) => `${p.longitude},${p.latitude}`).join(";");
   const url = `${OSRM_BASE_URL}/routed-${mode}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
 
   let response: Response;
@@ -114,7 +134,20 @@ export async function fetchRoute(
     ...data.routes[0].geometry,
     duration: data.routes[0].duration,
     distance: data.routes[0].distance,
+    legs: readLegs(data.routes[0].legs),
   } as RouteGeometry;
+}
+
+// OSRM's route.legs, kept to the two numbers the app reads. Undefined when the
+// field is missing or malformed, so an odd response never breaks a plain route.
+function readLegs(raw: unknown): RouteLeg[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const legs: RouteLeg[] = [];
+  for (const leg of raw) {
+    if (typeof leg?.distance !== "number" || typeof leg?.duration !== "number") return undefined;
+    legs.push({ distance: leg.distance, duration: leg.duration });
+  }
+  return legs;
 }
 
 // directions-distance-and-from-phases.md Phase 1.2: lives here, not in

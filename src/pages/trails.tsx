@@ -9,7 +9,7 @@ import { TrailCard } from "@/components/public/trail-card";
 import { PageContainer } from "@/components/public/page-container";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapTrifold, Plus } from "@phosphor-icons/react";
+import { MapTrifold, Plus, Sparkle } from "@phosphor-icons/react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { usePageTitle } from "@/lib/page-title";
@@ -158,10 +158,16 @@ export default function TrailsPage() {
     <PageContainer width="wide" className="gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-foreground">Trails</h1>
-        <Button type="button" variant="outline" size="sm" onClick={handleMakeTrail}>
-          <Plus weight="bold" className="mr-1 h-3 w-3" aria-hidden="true" />
-          Make a trail
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => navigate("/trails/suggest")}>
+            <Sparkle weight="bold" className="mr-1 h-3 w-3" aria-hidden="true" />
+            Suggest a trail
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleMakeTrail}>
+            <Plus weight="bold" className="mr-1 h-3 w-3" aria-hidden="true" />
+            Make a trail
+          </Button>
+        </div>
       </div>
       {myTrails.length > 0 && (
         <section className="flex flex-col gap-1">

@@ -13,6 +13,7 @@ import { PublicShell } from "@/components/public/public-shell";
 import TrailsPage from "@/pages/trails";
 import TrailDetailPage from "@/pages/trail-detail";
 import TrailBuilderPage from "@/pages/trail-builder";
+import TrailSuggestPage from "@/pages/trail-suggest";
 import TrailScanPage from "@/pages/trail-scan";
 import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
@@ -87,6 +88,11 @@ export default function App() {
                 only gates starting/tracking/saving/finishing, Phase 4's
                 concern). Page itself is a stub until Phase 3 builds it out. */}
             <Route path="trails/:id" element={<TrailDetailPage />} />
+            {/* Itinerary generator. Public: a guest can preview a suggested
+                trail and is asked to sign in only when saving it (plan
+                decision 2). "suggest" is a static segment, so it wins over
+                trails/:id. */}
+            <Route path="trails/suggest" element={<TrailSuggestPage />} />
             {/* A user's own trail builder (migration 0054, docs/user-trails-
                 plan.md). Unlike the routes around it this one needs a session
                 to render anything, and there is no page underneath to prompt

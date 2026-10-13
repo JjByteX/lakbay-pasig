@@ -269,7 +269,9 @@ export interface OpenStatus {
   detail: string | null;
 }
 
-function manilaClock(now: Date): { dayIndex: number; minutes: number } {
+// Exported for the itinerary generator (itinerary.ts), which reads the start
+// time on the same Manila clock.
+export function manilaClock(now: Date): { dayIndex: number; minutes: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: MANILA_TIME_ZONE,
     weekday: "short",
