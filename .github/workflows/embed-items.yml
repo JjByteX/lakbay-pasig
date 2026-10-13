@@ -32,8 +32,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      # --ignore-scripts skips onnxruntime-node's install script, which only
+      # downloads optional CUDA binaries from a Microsoft host (it timed out
+      # and failed CI). This runner has no GPU. The CPU binaries the embed
+      # script uses ship inside the package.
       - name: Install
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # ponytail: no model cache, the quantized model (about 118 MB) is
       # downloaded on every run that has something to embed. Add an

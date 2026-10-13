@@ -24,8 +24,15 @@ jobs:
           node-version: 22
           cache: npm
 
+      # --ignore-scripts: lint, typecheck and build need no install scripts.
+      # onnxruntime-node (a dependency of @huggingface/transformers, used only
+      # by the embed script) downloads optional CUDA binaries from a
+      # Microsoft host in its install script, and that download timed out and
+      # failed the whole job. Its CPU binaries ship inside the package, and
+      # the supabase package's CLI download is not used here either (the
+      # migration jobs use supabase/setup-cli).
       - name: Install
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Lint
         run: npm run lint
