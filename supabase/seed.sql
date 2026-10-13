@@ -543,7 +543,7 @@ insert into public.businesses (
   ('b2e20003-0003-4c1a-9c1a-000000000003', 'Ado''s Panciteria', 'Service', 'Restaurant',
    (select id from public.business_categories where name = 'Restaurant'),
    'A historic neighborhood noodle house delivering authentic Pasig-style pancit dishes and local comfort meals since 1952.',
-   '126 A. Luna St. cor. R. Jabson St., Brgy. Malinao, Pasig City, 1600 Metro Manila', 14.5586, 121.0765,
+   '126 A. Luna St. cor. R. Jabson St., Brgy. Malinao, Pasig City, 1600 Metro Manila', 14.5575, 121.0760,
    '+63 966 882 1759', '6:30 AM – 10:00 PM, Monday to Sunday',
    'Founded in 1952 by local barber-turned-cook Ado, the panciteria originated near the historic town square of Pasig. Built on affordable, flavorful noodle dishes, it grew from a simple neighborhood counter into a beloved culinary institution frequented by generations of Pasigueños.',
    'Pasig-style Pancit Bihon and Pancit Canton topped with toasted garlic and savory pork bits.',
