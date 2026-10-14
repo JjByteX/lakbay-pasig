@@ -46,7 +46,7 @@ export function BottomNav() {
                 {/* Regular weight at rest, filled when the tab
                     is active, per direct request (reverses the earlier
                     outline-only rule, decision-log.md #24). */}
-                <tab.icon weight={isActive ? "fill" : "bold"} className="h-5 w-5 shrink-0" />
+                <tab.icon weight={isActive ? "fill" : "bold"} className="h-6 w-6 shrink-0" />
                 <span>{tab.label}</span>
               </>
             )}
