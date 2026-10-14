@@ -151,7 +151,7 @@ To change which URL/key `dev:hosted` uses, edit `.env.hosted.local` directly. To
 
 ## Demo Data
 
-`supabase/seed.sql` is applied automatically by `npm run db:start` (first run) and `npm run db:reset` on the local Docker stack. It's dev-only — never runs against the hosted project, so it's safe to keep in the repo. No sign-up needed: log in as any account below.
+`supabase/seed/01_demo_accounts.sql` (demo accounts) and `supabase/seed/02_content.sql` (sample content) are applied in that order automatically by `npm run db:start` (first run) and `npm run db:reset` on the local Docker stack. It's dev-only — never runs against the hosted project, so it's safe to keep in the repo. No sign-up needed: log in as any account below.
 
 **Password for every account:** `Demo!Password123`
 
