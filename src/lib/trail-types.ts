@@ -3,6 +3,8 @@
 // already draws between a summary shape (catalog row) and a full-detail
 // shape (single record page), not one shape trying to serve both.
 
+import type { DiscoverPlace } from "./discover-types";
+
 /**
  * Catalog row, trail-card.tsx's render. Summary fields only, matching
  * step-7-trail-plan.md's Trail catalog page: "Name, theme, duration,
@@ -63,6 +65,50 @@ export interface TrailStop {
   longitude: number | null;
   discoveryContent: TrailDiscoveryContent[];
   unlockRadius: number;
+}
+
+/**
+ * Wraps a trail stop as a DiscoverPlace so it can be handed to the
+ * Directions session (public-shell.tsx's useDirections/handleRouteFound),
+ * which is typed around DiscoverResult (discover-types.ts) and knows
+ * nothing about trails. Trail stops never got their own routing path
+ * (discover.tsx's trail mode drew the stop markers/line but never
+ * produced a DiscoverResult to route to), so this reuses the existing
+ * place/business Directions UI instead of building a second one.
+ *
+ * Deliberately minimal and inert rather than guessing real values: every
+ * field below that a real DiscoverPlace carries but a TrailStop has no
+ * equivalent for (category, categoryIcon, categoryColor, description,
+ * facility_ids, coverPhotoUrl) is set to its empty/absent value. This is
+ * safe only because the Directions path (directions-panel.tsx,
+ * public-shell.tsx's useDirectionsState) is grepped-confirmed to read
+ * just `.name`, `.latitude` and `.longitude` off a DiscoverResult; if a
+ * future caller starts reading e.g. `.category` for display, it would
+ * silently show nothing for a trail stop rather than throw, so re-check
+ * this comment's claim before trusting a new field here.
+ *
+ * `verification_status: "verified"` is not a claim about the stop's
+ * review state (a trail stop has none) -- it's DiscoverPlace's own fixed
+ * literal (discover-types.ts: every DiscoverPlace is "verified" by
+ * construction, since fetchPlaces only ever returns already-verified
+ * rows), reused here only because the type requires some value and
+ * nothing reads it on this path.
+ */
+export function trailStopAsDiscoverResult(stop: TrailStop): DiscoverPlace {
+  return {
+    kind: "place",
+    id: stop.id,
+    name: stop.name,
+    category: "",
+    categoryIcon: null,
+    categoryColor: null,
+    description: null,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
+    verification_status: "verified",
+    facility_ids: [],
+    coverPhotoUrl: null,
+  };
 }
 
 /**

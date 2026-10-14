@@ -26,8 +26,9 @@ import {
 } from "@/lib/discover-query";
 import { fetchTrailDetail } from "@/lib/trail-query";
 import { useTrailWalk, stopStateFor } from "@/lib/use-trail-walk";
-import type { TrailDetail } from "@/lib/trail-types";
+import { trailStopAsDiscoverResult, type TrailDetail, type TrailStop } from "@/lib/trail-types";
 import type { DiscoverResult } from "@/lib/discover-types";
+import { DirectionsError, fetchRoute } from "@/lib/directions";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
@@ -290,6 +291,47 @@ export default function DiscoverPage() {
     nextStop && userLocation && nextStop.latitude != null && nextStop.longitude != null
       ? distanceKm(userLocation, { latitude: nextStop.latitude, longitude: nextStop.longitude }) * 1000
       : null;
+
+  // Directions to a trail stop, same shape as page-directions-button.tsx's
+  // own handleClick: fetch a walking route from the shell's origin (custom
+  // From, else live location), hand it to the shell's Directions session
+  // (handleRouteFound) so the map draws the line and fits to it, exactly
+  // like a place or business's own Directions tap. The only difference is
+  // the destination: a trail stop has no DiscoverResult of its own, so
+  // trailStopAsDiscoverResult wraps it in one (trail-types.ts explains why
+  // that's safe). State is local to this page rather than the shell's
+  // Directions session, since only this page's trail panel offers the
+  // button -- discover.tsx's own loading/error state is enough, no new
+  // context needed.
+  const [trailDirectionsLoading, setTrailDirectionsLoading] = useState(false);
+  const [trailDirectionsError, setTrailDirectionsError] = useState<string | null>(null);
+  async function handleGetTrailDirections(stop: TrailStop) {
+    if (!origin) {
+      setTrailDirectionsError("Turn on location to get directions.");
+      return;
+    }
+    setTrailDirectionsLoading(true);
+    setTrailDirectionsError(null);
+    try {
+      const destinationResult = trailStopAsDiscoverResult(stop);
+      if (destinationResult.latitude == null || destinationResult.longitude == null) {
+        setTrailDirectionsError("This stop has no location to route to yet.");
+        return;
+      }
+      const geometry = await fetchRoute(
+        origin,
+        { latitude: destinationResult.latitude, longitude: destinationResult.longitude },
+        "foot",
+      );
+      handleRouteFound(geometry, destinationResult);
+    } catch (err) {
+      setTrailDirectionsError(
+        err instanceof DirectionsError ? err.message : "Couldn't reach the routing service, try again.",
+      );
+    } finally {
+      setTrailDirectionsLoading(false);
+    }
+  }
 
   // The trail's own stops are drawn as numbered markers, so their ordinary
   // place/business markers are left off the map while the trail is showing,
@@ -633,10 +675,13 @@ export default function DiscoverPage() {
             onSelectIndex={setSelectedStopIndex}
             unlockedEntryIds={walk.unlockedEntryIds}
             progressLive={walk.progressChecked}
+            nextStop={nextStop}
             nextStopMeters={nextStopMeters}
-            nextStopName={nextStop?.name ?? null}
             completed={walk.completed}
             onClose={() => setSearchParams({}, { replace: true })}
+            onGetDirections={handleGetTrailDirections}
+            directionsLoading={trailDirectionsLoading}
+            directionsError={trailDirectionsError}
           />
         </div>
       )}

@@ -22,8 +22,8 @@ export function BottomNav() {
   const { pathname } = useLocation();
   const onDiscover = pathname === "/discover" || pathname.startsWith("/discover/");
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 h-16 border-t border-border bg-card">
-      <div className="mx-auto flex h-full max-w-md items-center justify-around px-2">
+    <nav className="fixed inset-x-0 bottom-0 z-40 h-12 border-t border-border bg-card">
+      <div className="mx-auto flex h-full max-w-md items-center justify-around">
         {TABS.map((tab) => {
           // From another tab, Discover reopens the place or business page
           // that was left open (mobile swipe pager keeps it). Tapping it
@@ -36,14 +36,14 @@ export function BottomNav() {
             state={resume?.state}
             end={tab.end}
             className={({ isActive }) =>
-              `flex h-full flex-1 flex-col items-center justify-center gap-1 text-xs font-semibold ${
+              `flex h-full flex-1 flex-col items-center justify-center gap-0 text-[10px] font-normal ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
               <>
-                {/* Bold at rest (global default), filled when the tab
+                {/* Regular weight at rest, filled when the tab
                     is active, per direct request (reverses the earlier
                     outline-only rule, decision-log.md #24). */}
                 <tab.icon weight={isActive ? "fill" : "bold"} className="h-5 w-5 shrink-0" />

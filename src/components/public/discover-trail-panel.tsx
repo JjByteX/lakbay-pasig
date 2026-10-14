@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, CaretLeft, CaretRight, CheckCircle, X } from "@phosphor-icons/react";
-import type { TrailDetail } from "@/lib/trail-types";
+import { ArrowBendUpRight, ArrowRight, CaretLeft, CaretRight, CheckCircle, X } from "@phosphor-icons/react";
+import type { TrailDetail, TrailStop as TrailStopData } from "@/lib/trail-types";
 import { Button } from "@/components/ui/button";
 import { TrailStop, type TrailStopState } from "./trail-stop";
 
@@ -16,12 +16,27 @@ interface DiscoverTrailPanelProps {
   onSelectIndex: (index: number) => void;
   unlockedEntryIds: Set<string>;
   progressLive: boolean;
-  // Straight-line meters to the next locked stop, null when there is none or
-  // the visitor's position is unknown.
+  // The next locked stop in sequence (discover.tsx's own `nextStop`), null
+  // once the trail is complete or there is no saved progress yet. Carries
+  // the stop's coordinates, not just its name/distance, so this panel can
+  // hand it to Directions (trailStopAsDiscoverResult) -- not only display it.
+  nextStop: TrailStopData | null;
+  // Straight-line meters to nextStop, null when there is none or the
+  // visitor's position is unknown.
   nextStopMeters: number | null;
-  nextStopName: string | null;
   completed: boolean;
   onClose: () => void;
+  // Starts a Directions session to nextStop (public-shell.tsx's
+  // handleRouteFound, same path PageDirectionsButton uses for a place).
+  // Omitted/no-op when there is no origin to route from (location off) --
+  // PageDirectionsButton hides its whole button in that case; this one
+  // stays visible (it sits in a footer already showing trail state, an
+  // appearing/disappearing button there would be more surprising than a
+  // button that explains itself on tap) and the handler below shows an
+  // inline reason instead.
+  onGetDirections: (stop: TrailStopData) => void;
+  directionsLoading: boolean;
+  directionsError: string | null;
 }
 
 /**
@@ -39,10 +54,13 @@ export function DiscoverTrailPanel({
   onSelectIndex,
   unlockedEntryIds,
   progressLive,
+  nextStop,
   nextStopMeters,
-  nextStopName,
   completed,
   onClose,
+  onGetDirections,
+  directionsLoading,
+  directionsError,
 }: Readonly<DiscoverTrailPanelProps>) {
   const stop = trail.stops[selectedIndex];
   const total = trail.stops.length;
@@ -100,10 +118,10 @@ export function DiscoverTrailPanel({
           </span>
         ) : (
           <span className="min-w-0 truncate">
-            {nextStopName && nextStopMeters !== null
-              ? `Next: ${nextStopName}, ${formatDistance(nextStopMeters)} away`
-              : nextStopName
-                ? `Next: ${nextStopName}`
+            {nextStop && nextStopMeters !== null
+              ? `Next: ${nextStop.name}, ${formatDistance(nextStopMeters)} away`
+              : nextStop
+                ? `Next: ${nextStop.name}`
                 : "Walk to the next stop to open it"}
           </span>
         )}
@@ -112,6 +130,30 @@ export function DiscoverTrailPanel({
           <ArrowRight weight="bold" className="h-3 w-3" aria-hidden="true" />
         </Link>
       </div>
+
+      {/* Directions to the next stop, same fetchRoute/DirectionsPanel path a
+          place or business's own page uses (page-directions-button.tsx),
+          via trailStopAsDiscoverResult. Only while there is a next stop to
+          walk to -- a completed trail or one with no saved progress yet has
+          nothing to route to (Start, not Resume, is the right action then,
+          and that button already lives on the trail page itself). */}
+      {!completed && nextStop && (
+        <div className="flex flex-col gap-1 border-t border-border px-3 py-2">
+          {directionsError && <p className="text-xs text-destructive">{directionsError}</p>}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full gap-2"
+            disabled={directionsLoading}
+            loading={directionsLoading}
+            onClick={() => onGetDirections(nextStop)}
+          >
+            {directionsLoading ? "Getting directions…" : `Directions to ${nextStop.name}`}
+            {!directionsLoading && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

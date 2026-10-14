@@ -2311,6 +2311,8 @@ export function DiscoverMap({
         stops={trailStops ?? []}
         selectedStopId={selectedTrailStopId}
         onSelectStop={(id) => onSelectTrailStop?.(id)}
+        userLocation={userLocation}
+        focusStopId={selectedTrailStopId}
         onFit={(points) => {
           const map = mapRef.current;
           if (!map || points.length === 0) return;

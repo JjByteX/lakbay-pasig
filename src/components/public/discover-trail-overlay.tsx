@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { LATTE, MOCHA } from "@/lib/map-style";
 import { cn } from "@/lib/utils";
+import type { Coordinates } from "@/lib/discover-query";
 import type { TrailStopState } from "./trail-stop";
 
 /** One stop as the map draws it. Only stops with a coordinate get here. */
@@ -68,6 +69,21 @@ interface TrailOverlayProps {
   // Fits the camera to these points. Owned by DiscoverMap because it also
   // grows the map's bounds first (map-bounds-plan.md), or the fit would clamp.
   onFit: (points: { latitude: number; longitude: number }[]) => void;
+  // The visitor's live position, if known. Framed alongside the focus stop
+  // on first open, so Resume shows "you are here, walk to this pin" instead
+  // of just the stop in isolation -- same reasoning a Directions route
+  // frames both ends, not just the destination.
+  userLocation: Coordinates | null;
+  // The stop Resume/the trail panel is actually centered on right now
+  // (discover.tsx's selectedTrailStopId, which tracks the highest-unlocked
+  // stop on open and then whatever the panel's stepper selects). Bug fix:
+  // this used to be ignored by the fit entirely -- onFit always received
+  // every stop's coordinates, so a long trail opened framed to its full
+  // bounding box with the actual current/next stop just another small
+  // marker somewhere in it, not something the camera visibly "connected"
+  // the visitor to. Now the first fit frames this stop (plus userLocation,
+  // if known) tightly instead of the whole trail.
+  focusStopId: string | null;
 }
 
 /**
@@ -76,12 +92,23 @@ interface TrailOverlayProps {
  * imperative source/layer pattern DiscoverMap uses for the directions route.
  * No stops means it draws nothing and clears whatever it drew.
  */
-export function TrailOverlay({ map, styleReady, stops, selectedStopId, onSelectStop, onFit }: Readonly<TrailOverlayProps>) {
+export function TrailOverlay({
+  map,
+  styleReady,
+  stops,
+  selectedStopId,
+  onSelectStop,
+  onFit,
+  userLocation,
+  focusStopId,
+}: Readonly<TrailOverlayProps>) {
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const onSelectRef = useRef(onSelectStop);
   onSelectRef.current = onSelectStop;
   const onFitRef = useRef(onFit);
   onFitRef.current = onFit;
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
 
   // The line. Re-runs when styleReady flips (a dark/light swap discards every
   // imperative layer) or when a stop opens and its segment turns solid.
@@ -139,10 +166,32 @@ export function TrailOverlay({ map, styleReady, stops, selectedStopId, onSelectS
     };
   }, [map, stops, selectedStopId]);
 
-  // Frame the whole trail once per trail, not on every state change, or the
-  // camera would yank back each time a stop opens or one is tapped.
+  // Frame the camera once per trail open, not on every state change, or it
+  // would yank back each time a stop opens or one is tapped. Frames the
+  // focus stop (current/next, plus the visitor's own position when known)
+  // rather than every stop in the trail -- see focusStopId's own comment
+  // above for why: a trail-wide fitBounds answered "where is this trail",
+  // not "where am I in it", which is what Resume actually needs. Falls
+  // back to framing every stop only when there is no focus stop to single
+  // out (e.g. a fresh Start, before any stop is "current").
+  //
+  // Race fixed here: discover.tsx's selectedStopIndex (and so focusStopId)
+  // starts at 0 and only corrects to the real resumed stop in a later
+  // effect, one render after this component first sees the trail's stops.
+  // Locking fittedKey on the stop-id list alone, on that first render,
+  // would fit stop 0 and then never fit again once focusStopId corrects --
+  // the exact bug this whole prop exists to fix, just moved one render
+  // later. Locking on id-list + focusStopId together instead means the
+  // correction (a focusStopId change with the same stop list) still gets
+  // one fit; a same-trail stop tap or an unlock afterwards changes
+  // focusStopId again but is deliberately *not* excluded by this key, so
+  // walking to the next stop or tapping one in the list now also recenters
+  // -- the same "connect me to where I am" fix, not a one-time-only
+  // exemption from it. What stays excluded is a re-render with the same
+  // trail and the same focus stop, which is the "yank back" case the
+  // original comment above was guarding against.
   const fittedKey = useRef<string | null>(null);
-  const key = stops.map((s) => s.id).join(",");
+  const key = `${stops.map((s) => s.id).join(",")}|${focusStopId ?? ""}`;
   useEffect(() => {
     if (!map || !styleReady || stops.length === 0) {
       if (stops.length === 0) fittedKey.current = null;
@@ -150,8 +199,15 @@ export function TrailOverlay({ map, styleReady, stops, selectedStopId, onSelectS
     }
     if (fittedKey.current === key) return;
     fittedKey.current = key;
-    onFitRef.current(stops);
-  }, [map, styleReady, stops, key]);
+    const focusStop = stops.find((s) => s.id === focusStopId);
+    if (!focusStop) {
+      onFitRef.current(stops);
+      return;
+    }
+    const points = [{ latitude: focusStop.latitude, longitude: focusStop.longitude }];
+    if (userLocationRef.current) points.push(userLocationRef.current);
+    onFitRef.current(points);
+  }, [map, styleReady, stops, key, focusStopId]);
 
   return null;
 }
