@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { TrailOverlay, type TrailMapStop } from "./discover-trail-overlay";
 import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 import { DirectionsPanel } from "./directions-panel";
@@ -574,6 +575,12 @@ interface DiscoverMapProps {
   onResetFrom: () => void;
   onPickOnMap: () => void;
   onCancelPickOnMap: () => void;
+  // Trail mode (Resume trail lands here): the trail's stops with their state,
+  // drawn as numbered markers joined by a line. Optional, absent means the map
+  // is the ordinary Discover map.
+  trailStops?: TrailMapStop[];
+  selectedTrailStopId?: string | null;
+  onSelectTrailStop?: (stopId: string) => void;
 }
 
 // Feature-request-phases.md Phase 1.1/1.4: legend content (categories +
@@ -1256,6 +1263,9 @@ export function DiscoverMap({
   onResetFrom,
   onPickOnMap,
   onCancelPickOnMap,
+  trailStops,
+  selectedTrailStopId = null,
+  onSelectTrailStop,
 }: Readonly<DiscoverMapProps>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -2216,6 +2226,26 @@ export function DiscoverMap({
           this is a separate small component fed the live map instance via
           mapInstance state rather than reading mapRef directly. */}
       <ZoomControl map={mapInstance} grown={grown} />
+
+      {/* Trail mode: numbered stops and the line between them. */}
+      <TrailOverlay
+        map={mapInstance}
+        styleReady={styleReady}
+        stops={trailStops ?? []}
+        selectedStopId={selectedTrailStopId}
+        onSelectStop={(id) => onSelectTrailStop?.(id)}
+        onFit={(points) => {
+          const map = mapRef.current;
+          if (!map || points.length === 0) return;
+          growIfNeeded(points);
+          const bounds = points.reduce(
+            (b, p) => b.extend([p.longitude, p.latitude]),
+            new maplibregl.LngLatBounds([points[0].longitude, points[0].latitude], [points[0].longitude, points[0].latitude]),
+          );
+          // Extra bottom padding keeps the trail clear of the stop panel.
+          map.fitBounds(bounds, { padding: { top: 96, right: 48, bottom: 260, left: 48 }, maxZoom: 17 });
+        }}
+      />
 
       {/* desktop-directions-panel-phases.md Phase 2.3: desktop-only
           (mobile renders its own fixed panel from discover.tsx directly,

@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, NavigationArrow, CheckCircle, MapPin } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { fetchTrailDetail } from "@/lib/trail-query";
-import { getRouteProgress, unlockStop, resetRouteProgress, type RouteProgress } from "@/lib/trail-progress";
-import { completeTrail, isRouteCompleted } from "@/lib/trail-completion";
-import { fetchUnlockedEntryIds } from "@/lib/entry-unlocks";
+import { unlockStop, resetRouteProgress } from "@/lib/trail-progress";
+import { useTrailWalk, stopStateFor } from "@/lib/use-trail-walk";
 import { readScanArrival } from "@/lib/trail-scan";
-import { distanceKm, type Coordinates } from "@/lib/discover-query";
+import type { Coordinates } from "@/lib/discover-query";
 import type { TrailDetail } from "@/lib/trail-types";
 import { TrailStop } from "@/components/public/trail-stop";
 import { RollingText } from "@/components/public/text-motion";
@@ -28,13 +27,6 @@ import { usePageTitle } from "@/lib/page-title";
 // discover.tsx's Phase 8.3 catch all already use this), no shared helper
 // exists yet to import instead, per constraints.md's Inventory Before
 // Suggesting rule this stays a local copy rather than inventing one.
-
-// Extracted from a nested ternary (index > highestUnlockedIndex ? ... :
-// completed ? ... : ...) inline in the stop list's per-stop state below.
-function stopStateFor(index: number, highestUnlockedIndex: number, completed: boolean): "locked" | "completed" | "unlocked" {
-  if (index > highestUnlockedIndex) return "locked";
-  return completed ? "completed" : "unlocked";
-}
 
 /**
  * Step 7, Phase 3: trail detail page, guest preview. Route /trails/:id
@@ -230,15 +222,24 @@ export default function TrailDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  // Entry ids this visitor has unlocked by scanning a QR code. Empty for a
-  // guest and while loading; a failed read also falls back to empty, same
-  // reasoning as routeProgress above.
-  const [unlockedEntryIds, setUnlockedEntryIds] = useState<Set<string>>(new Set());
-  const [routeProgress, setRouteProgress] = useState<RouteProgress | null>(null);
-  // True once the signed-in visitor's progress has been read for this trail.
-  // trail-stop.tsx animates a stop opening only after this is true, so stops
-  // opening because saved progress just arrived stay still.
-  const [progressChecked, setProgressChecked] = useState(false);
+  // Current watched position, null until the browser returns a first reading
+  // (or forever, if geolocation is denied/unavailable). Fed to the unlock
+  // check in useTrailWalk below.
+  const [watchedPosition, setWatchedPosition] = useState<Coordinates | null>(null);
+  // Progress, scanned entries, completion and the GPS unlock check live in one
+  // hook so Discover's trail mode (where "Resume trail" lands) behaves the same.
+  const {
+    unlockedEntryIds,
+    routeProgress,
+    setRouteProgress,
+    progressChecked,
+    completed,
+    setCompleted,
+    completing,
+    completeError,
+    justCompleted,
+    setJustCompleted,
+  } = useTrailWalk(trail, watchedPosition);
   // Set when the visitor arrives from /scan having just unlocked an entry.
   // Read once at mount, then cleared from history state so a reload does not
   // replay the reveal.
@@ -260,31 +261,6 @@ export default function TrailDetailPage() {
   // establishes for its own signed-in write.
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  // 4.4: current watched position, null until the browser returns a first
-  // reading (or forever, if geolocation is denied/unavailable, matching
-  // discover.tsx's own fallback). Consumed by 4.5's unlock check once that
-  // phase exists; this phase's only consumer is the inert indicator below.
-  const [watchedPosition, setWatchedPosition] = useState<Coordinates | null>(null);
-  // Phase 5.1-5.3: whether the signed-in user has already completed this
-  // specific route (completed_routes, checked once the trail resolves,
-  // same signed-in-only shape as the routeProgress load in 4.2). Drives
-  // the last-stop-unlock detection below (5.1 only fires once, not on
-  // every subsequent proximity re-check of an already-finished trail)
-  // and the credential-earned display (5.3): true from either a fresh
-  // completion just now or a completion from a prior visit, trail-
-  // stop.tsx's own "completed" state (Phase 4.1) doesn't distinguish the
-  // two, so this state doesn't need to either.
-  const [completed, setCompleted] = useState(false);
-  // True once isRouteCompleted has answered (or failed) for this trail. The
-  // one stop completion below waits for it, so GPS arriving first cannot
-  // insert a second completed_routes row for a trail already finished.
-  const [completionChecked, setCompletionChecked] = useState(false);
-  const [completing, setCompleting] = useState(false);
-  const [completeError, setCompleteError] = useState<string | null>(null);
-  // True once a completion write has just succeeded on this visit, so the
-  // completion moment (postcard, stamp, next trail) plays once, here and now.
-  // A trail finished on an earlier visit never sets it.
-  const [justCompleted, setJustCompleted] = useState(false);
   // Phase 5.4: restart is its own async action, same loading/error split
   // as starting/startError (4.3) and the save button's own pattern.
   const [resetting, setResetting] = useState(false);
@@ -295,7 +271,6 @@ export default function TrailDetailPage() {
     setLoading(true);
     setNotFound(false);
     setError(null);
-    setJustCompleted(false);
 
     fetchTrailDetail(id)
       .then((detail) => {
@@ -308,67 +283,6 @@ export default function TrailDetailPage() {
       .catch(() => setError("Couldn't load this trail. Check your connection and try again."))
       .finally(() => setLoading(false));
   }, [id, reload]);
-
-  // 4.2: signed-in only. No session, no fetch, no progress, matching
-  // save-button.tsx's own isPlaceSaved effect exactly. Keyed on the
-  // trail's own id (not the route param directly) so this only runs once
-  // a real published route has resolved, not on a not-found or
-  // still-loading id.
-  useEffect(() => {
-    if (!session || !trail) {
-      setRouteProgress(null);
-      setProgressChecked(false);
-      return;
-    }
-    setProgressChecked(false);
-    getRouteProgress(session.user.id, trail.id)
-      .then((progress) => {
-        setRouteProgress(progress);
-        setProgressChecked(true);
-      })
-      .catch(() => {
-        setRouteProgress(null);
-        setProgressChecked(true);
-      });
-  }, [session, trail]);
-
-  // Scanned entries: same signed-in-only shape as the effect above. Only
-  // entries that need a scan are looked up.
-  useEffect(() => {
-    if (!session || !trail) {
-      setUnlockedEntryIds(new Set());
-      return;
-    }
-    const scanIds = trail.stops.flatMap((s) => s.discoveryContent.filter((e) => e.requiresScan).map((e) => e.id));
-    fetchUnlockedEntryIds(session.user.id, scanIds)
-      .then(setUnlockedEntryIds)
-      .catch(() => setUnlockedEntryIds(new Set()));
-  }, [session, trail]);
-
-  // Phase 5.1-5.3: same signed-in-only shape as the effect above, checks
-  // whether this route is already in completed_routes for this user. No
-  // session or no trail yet resets to false, matching every other
-  // signed-in-only read in this file (routeProgress, save-button.tsx's
-  // isPlaceSaved) rather than surfacing a second error state for a
-  // perfectly normal "not completed yet" outcome.
-  useEffect(() => {
-    if (!session || !trail) {
-      setCompleted(false);
-      setCompletionChecked(false);
-      return;
-    }
-    // A personal trail has no completion to look up.
-    if (trail.personal) {
-      setCompleted(false);
-      setCompletionChecked(true);
-      return;
-    }
-    setCompletionChecked(false);
-    isRouteCompleted(session.user.id, trail.id)
-      .then(setCompleted)
-      .catch(() => setCompleted(false))
-      .finally(() => setCompletionChecked(true));
-  }, [session, trail]);
 
   // 4.4: GPS proximity read, while the page is open. watchPosition (not
   // discover.tsx's one-time getCurrentPosition), since the unlock check
@@ -399,97 +313,6 @@ export default function TrailDetailPage() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [id]);
 
-  // Phase 5.1: the one place that decides "is this the last stop". The
-  // proximity effect below calls it in two cases: it just unlocked the
-  // final stop of a multi-stop trail, or a one-stop trail's only stop
-  // (unlocked free by Start) now has the visitor inside its radius.
-  // Guarded on !completed so a trail already finished (isRouteCompleted's
-  // load, or an earlier finish this session) never inserts a second
-  // completed_routes row.
-  // A useCallback, defined ahead of that effect, so the effect can list it as
-  // a dependency. It changes only when session, trail or completed do, the
-  // same inputs the effect already re-ran on.
-  const maybeCompleteTrail = useCallback(
-    (unlockedStopId: string) => {
-      // A personal trail never completes: completed_routes would refuse the row.
-      if (!session || !trail || trail.personal || completed) return;
-      const isFinalStop = trail.stops[trail.stops.length - 1]?.id === unlockedStopId;
-      if (!isFinalStop) return;
-
-      setCompleted(true); // optimistic, matches the unlock write it follows
-      setCompleting(true);
-      setCompleteError(null);
-      completeTrail(session.user.id, trail.id, trail.credential?.id)
-        .then(() => setJustCompleted(true))
-        .catch(() => {
-          setCompleted(false); // revert: completion write failed
-          setCompleteError("Couldn't record your completion. Try again.");
-        })
-        .finally(() => setCompleting(false));
-    },
-    [session, trail, completed],
-  );
-
-  // 4.5: unlock check. Signed-in only, matching every other route_progress
-  // write in this file (route_progress_own RLS, migration 0018, rejects an
-  // unauthenticated write regardless, this is an app-layer mirror of that
-  // same gate, not a new rule). No routeProgress row yet means the trail
-  // hasn't been Started, so there is no "current stop" to check against,
-  // proximity unlock only ever advances a sequence that Start (4.3) has
-  // already begun, it never starts one on its own. The next locked stop
-  // is the one immediately after routeProgress's highestUnlockedStopId in
-  // trail.stops' sequence_order-ascending order (trail-query.ts's own
-  // fetch order); once every stop is already unlocked there is nothing
-  // left to check.
-  useEffect(() => {
-    if (!session || !trail || !routeProgress || !watchedPosition) return;
-
-    const highestIndex = trail.stops.findIndex((s) => s.id === routeProgress.highestUnlockedStopId);
-    const nextStop = trail.stops[highestIndex + 1];
-
-    // One stop trail: Start already unlocked its only stop, so there is no
-    // next stop to check. It completes here instead, once the visitor is
-    // inside that stop's radius. A multi stop trail never gets here
-    // unfinished except after a failed completion write, which
-    // completeError already marks, so this does not retry in a loop.
-    if (!nextStop) {
-      const onlyStop = trail.stops.length === 1 ? trail.stops[0] : null;
-      if (!onlyStop || !completionChecked || completed || completeError) return;
-      if (onlyStop.latitude == null || onlyStop.longitude == null) return;
-      const meters =
-        distanceKm(watchedPosition, { latitude: onlyStop.latitude, longitude: onlyStop.longitude }) * 1000;
-      if (meters <= onlyStop.unlockRadius) maybeCompleteTrail(onlyStop.id);
-      return;
-    }
-
-    // No resolved coordinate for this stop (trail-query.ts's documented
-    // null case, a place/business with no geocoded address yet): nothing
-    // to compare against, skip rather than guessing in or out of range.
-    if (nextStop.latitude == null || nextStop.longitude == null) return;
-
-    // A stop unlocks at its own radius: the largest among its entries, or
-    // the default when it has none (trail-unlock.ts).
-    const distanceMeters =
-      distanceKm(watchedPosition, { latitude: nextStop.latitude, longitude: nextStop.longitude }) * 1000;
-
-    if (distanceMeters > nextStop.unlockRadius) return;
-
-    // Inside radius: advance route_progress to this stop. Local state
-    // updates immediately so trail-stop.tsx re-renders it unlocked with no
-    // page reload, per step-7-phases.md's own instruction; the write
-    // itself fails silently (see docblock above) rather than surfacing a
-    // visible error, this is a background check that will simply try
-    // again on the next watchPosition reading.
-    unlockStop(session.user.id, trail.id, nextStop.id)
-      .then(() => {
-        setRouteProgress({ highestUnlockedStopId: nextStop.id, unlockedAt: new Date().toISOString() });
-        maybeCompleteTrail(nextStop.id);
-      })
-      .catch(() => {
-        // Silent, see docblock: no user-facing retry for a check that
-        // already retries itself on the next position update.
-      });
-  }, [session, trail, routeProgress, watchedPosition, completed, completionChecked, completeError, maybeCompleteTrail]);
 
   // 3.4/4.3: Start button. Unauthenticated branch unchanged from Phase 3,
   // visible to everyone, never disabled, reusing save-button.tsx's exact
@@ -521,9 +344,13 @@ export default function TrailDetailPage() {
     // prevents from being reachable.
     if (!trail || trail.stops.length === 0) return;
 
-    // Resume: progress already exists, no write, no state change. The
-    // stop list below already reflects it from the 4.2 load.
-    if (routeProgress) return;
+    // Resume: progress already exists, so no write. Open the trail on the
+    // Discover map, where the stops, the route between them and the current
+    // stop's information are, instead of doing nothing.
+    if (routeProgress) {
+      navigate(`/discover?trail=${trail.id}`);
+      return;
+    }
 
     setStarting(true);
     setStartError(null);

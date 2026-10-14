@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
+import { DiscoverTrailPanel } from "@/components/public/discover-trail-panel";
+import type { TrailMapStop } from "@/components/public/discover-trail-overlay";
 import {
   useDiscoverFilters,
   useDirections,
@@ -17,9 +20,13 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
+  distanceKm,
   fetchDiscoverResults,
   filterDiscoverResults,
 } from "@/lib/discover-query";
+import { fetchTrailDetail } from "@/lib/trail-query";
+import { useTrailWalk, stopStateFor } from "@/lib/use-trail-walk";
+import type { TrailDetail } from "@/lib/trail-types";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
 import { getCategoryIcon } from "@/lib/place-category-icons";
@@ -221,6 +228,77 @@ export default function DiscoverPage() {
     () => filterDiscoverResults(results, query, categories, priceRange, facilities),
     [results, query, categories, priceRange, facilities],
   );
+
+  // Trail mode: "Resume trail" on a trail page lands here as /discover?trail=<id>.
+  // The map then shows that trail (numbered stops and the line between them) and
+  // a panel with the selected stop's information. Closing it drops the param and
+  // leaves the ordinary Discover map. useTrailWalk is the same hook the trail
+  // page uses, fed the shell's live position, so walking up to a stop opens it
+  // here too, not only on the trail page.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const trailId = searchParams.get("trail");
+  const [trail, setTrail] = useState<TrailDetail | null>(null);
+  useEffect(() => {
+    if (!trailId) {
+      setTrail(null);
+      return;
+    }
+    let cancelled = false;
+    fetchTrailDetail(trailId)
+      .then((detail) => {
+        if (!cancelled) setTrail(detail);
+      })
+      .catch(() => {
+        // A trail that fails to load just leaves the ordinary map: nothing
+        // here is worth an error state of its own.
+        if (!cancelled) setTrail(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trailId]);
+
+  const walk = useTrailWalk(trail, userLocation);
+  const highestUnlockedIndex = trail
+    ? trail.stops.findIndex((stop) => stop.id === walk.routeProgress?.highestUnlockedStopId)
+    : -1;
+  const stopStates = useMemo(
+    () => (trail ? trail.stops.map((_, i) => stopStateFor(i, highestUnlockedIndex, walk.completed)) : []),
+    [trail, highestUnlockedIndex, walk.completed],
+  );
+  const trailMapStops = useMemo<TrailMapStop[]>(() => {
+    if (!trail) return [];
+    // A stop with no geocoded address has no place on the map. It stays in the
+    // panel's stepper, so its information is still reachable.
+    return trail.stops.flatMap((stop, index) =>
+      stop.latitude == null || stop.longitude == null
+        ? []
+        : [{ id: stop.id, index, name: stop.name, latitude: stop.latitude, longitude: stop.longitude, state: stopStates[index] }],
+    );
+  }, [trail, stopStates]);
+
+  // The stop whose information is open. Starts on the current stop (the latest
+  // one opened) and follows along when walking opens the next, so the panel is
+  // never left on stale information.
+  const [selectedStopIndex, setSelectedStopIndex] = useState(0);
+  useEffect(() => {
+    setSelectedStopIndex(Math.max(highestUnlockedIndex, 0));
+  }, [trail, highestUnlockedIndex]);
+
+  const nextStop = trail && !walk.completed ? (trail.stops[highestUnlockedIndex + 1] ?? null) : null;
+  const nextStopMeters =
+    nextStop && userLocation && nextStop.latitude != null && nextStop.longitude != null
+      ? distanceKm(userLocation, { latitude: nextStop.latitude, longitude: nextStop.longitude }) * 1000
+      : null;
+
+  // The trail's own stops are drawn as numbered markers, so their ordinary
+  // place/business markers are left off the map while the trail is showing,
+  // or each stop would be two markers on the same spot.
+  const mapResults = useMemo(() => {
+    if (!trail) return filtered;
+    const stopKeys = new Set(trail.stops.map((stop) => `${stop.stop_type}:${stop.stop_id}`));
+    return filtered.filter((result) => !stopKeys.has(`${result.kind}:${result.id}`));
+  }, [filtered, trail]);
 
   // For the list's empty state: whether anything is narrowing the results,
   // and one action that undoes all of it (search text, categories,
@@ -483,7 +561,7 @@ export default function DiscoverPage() {
           header above and never resizes or repositions this element. */}
       {view === "map" ? (
         <DiscoverMap
-          results={filtered}
+          results={mapResults}
           userLocation={userLocation}
           origin={origin}
           // Phase 5.1: the map draws the start pin from customFrom and
@@ -519,6 +597,12 @@ export default function DiscoverPage() {
           onSelectFrom={handleSelectFrom}
           onResetFrom={handleResetFrom}
           onPickOnMap={handlePickFromOnMap}
+          trailStops={trailMapStops}
+          selectedTrailStopId={trail?.stops[selectedStopIndex]?.id ?? null}
+          onSelectTrailStop={(stopId) => {
+            const index = trail?.stops.findIndex((stop) => stop.id === stopId) ?? -1;
+            if (index >= 0) setSelectedStopIndex(index);
+          }}
         />
       ) : (
         <DiscoverList
@@ -536,6 +620,25 @@ export default function DiscoverPage() {
             setView("map");
           }}
         />
+      )}
+      {/* Trail mode panel. Hidden while a Directions panel is open (both want
+          the bottom of the screen), and in list view, where there is no map for
+          the stops to be on. */}
+      {view === "map" && trail && !directionsPanelResult && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1000] p-3">
+          <DiscoverTrailPanel
+            trail={trail}
+            stopStates={stopStates}
+            selectedIndex={Math.min(selectedStopIndex, trail.stops.length - 1)}
+            onSelectIndex={setSelectedStopIndex}
+            unlockedEntryIds={walk.unlockedEntryIds}
+            progressLive={walk.progressChecked}
+            nextStopMeters={nextStopMeters}
+            nextStopName={nextStop?.name ?? null}
+            completed={walk.completed}
+            onClose={() => setSearchParams({}, { replace: true })}
+          />
+        </div>
       )}
       {/* directions-panel-phases.md Phase 4.3: sibling to the map/list
           branch above, not inside either one, so the panel survives a
