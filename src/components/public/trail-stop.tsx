@@ -76,6 +76,10 @@ interface TrailStopProps {
   // The entry the visitor just unlocked by scanning, when they arrived from
   // the scan page. Revealed with motion and scrolled to, once.
   celebrateEntryId?: string | null;
+  // "card" (default): the stop is its own bordered card, for the trail page's
+  // list. "plain": a bare row, for callers that already sit inside a card
+  // (the Discover trail panel), so it is not a card inside a card.
+  variant?: "card" | "plain";
 }
 
 // The scanned entry's "found it" mark: a flat primary tile with an open lock
@@ -113,6 +117,7 @@ export function TrailStop({
   unlockedEntryIds,
   progressLive = false,
   celebrateEntryId = null,
+  variant = "card",
 }: Readonly<TrailStopProps>) {
   const reduceMotion = useReducedMotion();
   const rowRef = useRef<HTMLLIElement>(null);
@@ -165,7 +170,15 @@ export function TrailStop({
   }, [hasCelebrated, isLocked, reduceMotion]);
 
   return (
-    <li ref={rowRef} className="flex gap-3 py-3">
+    <li
+      ref={rowRef}
+      className={cn(
+        "flex gap-3",
+        variant === "card"
+          ? cn("rounded-xl border border-border p-4 transition-colors duration-300", isLocked ? "bg-muted/40" : "bg-card")
+          : "py-3",
+      )}
+    >
       <span
         className={cn(
           "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors duration-300",

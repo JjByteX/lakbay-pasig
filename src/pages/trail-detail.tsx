@@ -649,7 +649,7 @@ export default function TrailDetailPage() {
             {trail.stops.length === 0 ? (
               <EmptyState icon={MapPin}>Stops will appear here.</EmptyState>
             ) : (
-              <ol className="flex flex-col divide-y divide-border">
+              <ol className="flex flex-col gap-3">
                 {trail.stops.map((stop, index) => (
                   <TrailStop
                     key={stop.id}

@@ -738,12 +738,14 @@ function LegendPanel({
 // narrower viewports -- top-14 clears that row entirely so the corner
 // pill and a centered status message never visually collide.
 function MapCornerControls({
+  map,
   placeCategories,
   businessCategories,
   categoriesLoading,
   onLocationFound,
   onRecenterRequested,
 }: Readonly<{
+  map: maplibregl.Map | null;
   placeCategories: PlaceCategory[];
   businessCategories: BusinessCategory[];
   categoriesLoading: boolean;
@@ -851,12 +853,59 @@ function MapCornerControls({
         )}
       </div>
 
+      <CompassControl map={map} />
+
       {locateStatus === "error" && locateError && (
         <span className="max-w-56 break-words rounded-md border border-border bg-card px-3 py-1.5 text-right text-xs text-destructive shadow">
           {locateError}
         </span>
       )}
     </div>
+  );
+}
+
+// Compass, like Google Maps: it only appears once the map has been turned
+// away from north, shows which way north is, and a tap eases the map back to
+// north up. Hidden at north because it would be a button that does nothing.
+// Sits in MapCornerControls' column, under the pill, so it moves with it
+// instead of using its own offset from the header.
+function CompassControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
+  const [bearing, setBearing] = useState(0);
+  useEffect(() => {
+    if (!map) return;
+    const update = () => setBearing(map.getBearing());
+    update();
+    map.on("rotate", update);
+    return () => {
+      map.off("rotate", update);
+    };
+  }, [map]);
+
+  // Half a degree of slack: a twist that ends a hair off north should not
+  // leave a compass showing for no visible reason.
+  if (!map || Math.abs(bearing) < 0.5) return null;
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="h-9 w-9 rounded-full border border-input bg-card shadow hover:bg-muted"
+      aria-label="Reset map to north"
+      onClick={() => map.easeTo({ bearing: 0 })}
+    >
+      {/* Needle: red points north, grey south. The map turns by `bearing`,
+          so north on screen is at -bearing. */}
+      <svg
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        style={{ transform: `rotate(${-bearing}deg)` }}
+        aria-hidden="true"
+      >
+        <polygon points="12,2 17,12 7,12" className="fill-destructive" />
+        <polygon points="12,22 17,12 7,12" className="fill-muted-foreground" />
+      </svg>
+    </Button>
   );
 }
 
@@ -1386,10 +1435,15 @@ export function DiscoverMap({
       zoom: DEFAULT_ZOOM,
       // map-bounds-plan.md: Discover stays near Pasig. maxBounds keeps the
       // whole screen inside the box, and grows once (growIfNeeded below).
-      // Rotate and tilt are off because maxBounds assumes north up: a
-      // rotated map shows outside the box at the corners.
+      // Rotation is on, like Google Maps: two finger twist on touch,
+      // right-drag or Ctrl-drag on desktop, Shift+arrows on the keyboard.
+      // maxBounds still assumes north up, so while the map is turned the
+      // corners of the screen can show a little past the box. The camera
+      // center stays inside it, which is the part that matters. Tilt stays
+      // off (maxPitch 0): this is a flat map, and tilting would make the
+      // markers and labels hard to read.
       maxBounds: BASE_BOUNDS,
-      dragRotate: false,
+      dragRotate: true,
       pitchWithRotate: false,
       maxPitch: 0,
       attributionControl: {
@@ -1407,10 +1461,9 @@ export function DiscoverMap({
       },
     });
     mapRef.current = map;
-    // The constructor options above cover right-drag rotate and pitch;
-    // these two cover the two finger twist and the keyboard.
-    map.touchZoomRotate.disableRotation();
-    map.keyboard.disableRotation();
+    // Rotation is left on for the two finger twist and the keyboard too
+    // (MapLibre's defaults), so there is nothing to disable here. Tilt is
+    // already off through maxPitch above.
     // Zoom control: see mapInstance's own declaration comment above --
     // this is the one write that carries the map instance across a
     // render boundary so ZoomControl's prop actually receives it.
@@ -1548,6 +1601,37 @@ export function DiscoverMap({
   // is needless work for values a ref reads/writes in one step.
   const userMarkerConeRef = useRef<HTMLDivElement | null>(null);
   const userMarkerAccuracyRef = useRef<HTMLDivElement | null>(null);
+  // The device compass heading in degrees from north, null when the device
+  // reports none. Kept in a ref so the cone can be re-aimed on every map
+  // rotation, not only on a GPS tick.
+  const userHeadingRef = useRef<number | null>(null);
+  // The cone sits in a marker, which stays upright on screen when the map
+  // turns. So the angle drawn is the heading minus the map's bearing: with the
+  // map turned 90 degrees, someone facing north has the cone pointing up-left
+  // of straight up, the way Google Maps draws it. Reads only refs, so a copy
+  // from an older render is as good as the newest one.
+  const applyConeRotation = () => {
+    const cone = userMarkerConeRef.current;
+    if (!cone) return;
+    const heading = userHeadingRef.current;
+    if (heading === null) {
+      cone.style.opacity = "0";
+      return;
+    }
+    const bearing = mapRef.current?.getBearing() ?? 0;
+    cone.style.opacity = "1";
+    // Centering translate kept alongside the rotation -- see the comment
+    // where this transform is first set.
+    cone.style.transform = `translate(-50%, -50%) rotate(${heading - bearing}deg)`;
+  };
+  useEffect(() => {
+    if (!mapInstance) return;
+    mapInstance.on("rotate", applyConeRotation);
+    return () => {
+      mapInstance.off("rotate", applyConeRotation);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapInstance]);
 
   // Bugfix (map stuck / snaps back to center while dragging): the camera
   // used to recenter on every `userLocation` change, and userLocation
@@ -1691,17 +1775,9 @@ export function DiscoverMap({
     // required" posture the rest of this geolocation code already takes,
     // so that case just keeps the cone hidden rather than showing a
     // stale or fabricated direction.
-    const cone = userMarkerConeRef.current;
-    if (cone) {
-      if (typeof userLocation.heading === "number" && !Number.isNaN(userLocation.heading)) {
-        cone.style.opacity = "1";
-        // Centering translate kept alongside the rotation -- see the
-        // comment where this transform is first set, above.
-        cone.style.transform = `translate(-50%, -50%) rotate(${userLocation.heading}deg)`;
-      } else {
-        cone.style.opacity = "0";
-      }
-    }
+    userHeadingRef.current =
+      typeof userLocation.heading === "number" && !Number.isNaN(userLocation.heading) ? userLocation.heading : null;
+    applyConeRotation();
     // customFrom is a dependency so the effect also runs once when a From
     // is *cleared* (Cancel): with the guard now open, and isFirstFix long
     // since true, it takes the isExplicitRecenter path only if a locate
@@ -2214,6 +2290,7 @@ export function DiscoverMap({
           directories) is independent of whether the marker query itself
           succeeded. */}
       <MapCornerControls
+        map={mapInstance}
         placeCategories={placeCategories}
         businessCategories={businessCategories}
         categoriesLoading={categoriesLoading}

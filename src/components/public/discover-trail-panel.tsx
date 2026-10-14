@@ -88,6 +88,7 @@ export function DiscoverTrailPanel({
           state={stopStates[selectedIndex]}
           unlockedEntryIds={unlockedEntryIds}
           progressLive={progressLive}
+          variant="plain"
         />
       </ul>
 
