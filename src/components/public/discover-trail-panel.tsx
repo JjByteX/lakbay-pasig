@@ -24,6 +24,10 @@ interface DiscoverTrailPanelProps {
   // Straight-line meters to nextStop, null when there is none or the
   // visitor's position is unknown.
   nextStopMeters: number | null;
+  // True while the visitor is still on their way to stop 1 (it is open but
+  // they are not there yet): `nextStop` is then stop 1 and the wording says
+  // "Head to" instead of "Next".
+  headingToStart?: boolean;
   completed: boolean;
   onClose: () => void;
   // Starts a Directions session to nextStop (public-shell.tsx's
@@ -56,6 +60,7 @@ export function DiscoverTrailPanel({
   progressLive,
   nextStop,
   nextStopMeters,
+  headingToStart = false,
   completed,
   onClose,
   onGetDirections,
@@ -119,9 +124,9 @@ export function DiscoverTrailPanel({
         ) : (
           <span className="min-w-0 truncate">
             {nextStop && nextStopMeters !== null
-              ? `Next: ${nextStop.name}, ${formatDistance(nextStopMeters)} away`
+              ? `${headingToStart ? "Head to" : "Next:"} ${nextStop.name}, ${formatDistance(nextStopMeters)} away`
               : nextStop
-                ? `Next: ${nextStop.name}`
+                ? `${headingToStart ? "Head to" : "Next:"} ${nextStop.name}`
                 : "Walk to the next stop to open it"}
           </span>
         )}

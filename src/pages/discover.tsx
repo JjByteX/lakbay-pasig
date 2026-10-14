@@ -286,11 +286,34 @@ export default function DiscoverPage() {
     setSelectedStopIndex(Math.max(highestUnlockedIndex, 0));
   }, [trail, highestUnlockedIndex]);
 
-  const nextStop = trail && !walk.completed ? (trail.stops[highestUnlockedIndex + 1] ?? null) : null;
-  const nextStopMeters =
-    nextStop && userLocation && nextStop.latitude != null && nextStop.longitude != null
-      ? distanceKm(userLocation, { latitude: nextStop.latitude, longitude: nextStop.longitude }) * 1000
+  // Straight-line meters from the visitor to a stop, null when either side has
+  // no coordinates yet.
+  const metersTo = (stop: TrailStop | null) =>
+    stop && userLocation && stop.latitude != null && stop.longitude != null
+      ? distanceKm(userLocation, { latitude: stop.latitude, longitude: stop.longitude }) * 1000
       : null;
+
+  // Start opens the first stop wherever the visitor is, so the next locked stop
+  // is stop 2. A visitor still far from stop 1 needs to be guided there first:
+  // while only stop 1 is open and they are outside its unlock radius, the
+  // guide target is stop 1. Once they are in range (or have opened later
+  // stops) it is the next locked stop again, so after stop 1 the guidance
+  // runs from stop 1 to stop 2 as before. The unlock rule itself is unchanged.
+  const firstStop = trail?.stops[0] ?? null;
+  const firstStopMeters = metersTo(firstStop);
+  const headingToFirstStop =
+    !!trail &&
+    !walk.completed &&
+    highestUnlockedIndex === 0 &&
+    firstStop !== null &&
+    firstStopMeters !== null &&
+    firstStopMeters > firstStop.unlockRadius;
+  const nextStop = headingToFirstStop
+    ? firstStop
+    : trail && !walk.completed
+      ? (trail.stops[highestUnlockedIndex + 1] ?? null)
+      : null;
+  const nextStopMeters = headingToFirstStop ? firstStopMeters : metersTo(nextStop);
 
   // Directions to a trail stop, same shape as page-directions-button.tsx's
   // own handleClick: fetch a walking route from the shell's origin (custom
@@ -677,6 +700,7 @@ export default function DiscoverPage() {
             progressLive={walk.progressChecked}
             nextStop={nextStop}
             nextStopMeters={nextStopMeters}
+            headingToStart={headingToFirstStop}
             completed={walk.completed}
             onClose={() => setSearchParams({}, { replace: true })}
             onGetDirections={handleGetTrailDirections}
