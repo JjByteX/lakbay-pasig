@@ -9,6 +9,10 @@ port = 15432
 [db]
 port = 15433
 
+[db.seed]
+enabled = true
+sql_paths = ["./seed/01_demo_accounts.sql", "./seed/02_content.sql"]
+
 [studio]
 enabled = true
 port = 15434
