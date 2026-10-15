@@ -30,6 +30,10 @@ export interface PullHooks {
   tick(): void;
 }
 
+// One read. PromiseLike and not Promise: a supabase-js query's .then() returns
+// a PromiseLike (no .catch or .finally), and every job is only awaited.
+type Job = () => PromiseLike<unknown>;
+
 // A failed read comes back as an error object, not a throw. Only a network
 // failure should stop the download. A missing row is just a missing row.
 function ok<T extends { error: unknown }>(res: T): T {
@@ -85,7 +89,7 @@ function recordJobs(
   kind: "place" | "business",
   id: string,
   onPhoto?: (url: string) => void
-): Array<() => Promise<unknown>> {
+): Job[] {
   const photos = (res: { data: { photo_url: string }[] | null }) => {
     for (const row of res.data ?? []) onPhoto?.(row.photo_url);
   };
@@ -124,7 +128,7 @@ export async function pullAll({ signal, add, tick }: PullHooks): Promise<string[
   });
 
   // One set of reads per record.
-  const jobs: Array<() => Promise<unknown>> = [];
+  const jobs: Job[] = [];
   for (const row of results) jobs.push(...recordJobs(row.kind, row.id));
   for (const event of events) jobs.push(() => eventDetail(event.id));
   for (const trail of trails) jobs.push(() => soft(() => fetchTrailDetail(trail.id)));
@@ -197,7 +201,7 @@ export async function pullTrail(
 
   // These two throw on any error, so a network failure stops the download and
   // anything else is only a missing read.
-  const jobs: Array<() => Promise<unknown>> = [() => soft(() => fetchCredentialNamesByRouteId([id]))];
+  const jobs: Job[] = [() => soft(() => fetchCredentialNamesByRouteId([id]))];
   for (const stop of locations.values()) jobs.push(...recordJobs(stop.stop_type, stop.stop_id, addPhoto));
   for (const token of tokens) jobs.push(() => soft(() => fetchEntryByToken(token)));
   add(jobs.length);
