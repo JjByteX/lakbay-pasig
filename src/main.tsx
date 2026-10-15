@@ -37,3 +37,22 @@ createRoot(document.getElementById("root")!).render(
     </IconContext.Provider>
   </StrictMode>
 );
+
+// Offline shell (offline-phases.md, Phase 3). The worker only exists in a
+// production build, so npm run dev never registers one. A new version waits
+// and applies the next time the app is opened, with no prompt.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch((err) => console.error("Service worker registration failed:", err));
+  });
+}
+
+// Offline state, daily sync and the cleared-cache check (offline-phases.md,
+// Phase 4). Loaded after first paint, so it never delays the app opening.
+window.addEventListener("load", () => {
+  import("./lib/offline")
+    .then((m) => m.initOffline())
+    .catch((err) => console.error("Offline setup failed:", err));
+});

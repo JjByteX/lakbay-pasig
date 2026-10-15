@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readUnlockedIds, writeUnlock } from "./offline/queue";
 
 /**
  * Discovery content entries a visitor has unlocked by scanning a QR code
@@ -8,25 +9,35 @@ import { supabase } from "./supabase";
  * so unlocking is an upsert, and scanning the same code twice is harmless.
  */
 
+// Phase 8 (offline-phases.md): the two functions below go through
+// offline/queue.ts. Online they behave as before and keep a copy on the device.
+// Offline the read answers from that copy, and an unlock is queued and replays
+// when the connection returns. fetchEntryByToken further down is a public read
+// and stays as it is: a trail download stores it (offline/reads.ts), so a
+// scanned code can be checked against the device.
 export async function fetchUnlockedEntryIds(userId: string, entryIds: string[]): Promise<Set<string>> {
   if (entryIds.length === 0) return new Set();
 
-  const { data, error } = await supabase
-    .from("entry_unlocks")
-    .select("entry_id")
-    .eq("user_id", userId)
-    .in("entry_id", entryIds);
+  return readUnlockedIds(userId, entryIds, async () => {
+    const { data, error } = await supabase
+      .from("entry_unlocks")
+      .select("entry_id")
+      .eq("user_id", userId)
+      .in("entry_id", entryIds);
 
-  if (error) throw error;
-  return new Set((data ?? []).map((row) => row.entry_id));
+    if (error) throw error;
+    return new Set((data ?? []).map((row) => row.entry_id));
+  });
 }
 
 export async function unlockEntry(userId: string, entryId: string): Promise<void> {
-  const { error } = await supabase
-    .from("entry_unlocks")
-    .upsert({ user_id: userId, entry_id: entryId }, { onConflict: "user_id,entry_id" });
+  await writeUnlock(userId, entryId, async () => {
+    const { error } = await supabase
+      .from("entry_unlocks")
+      .upsert({ user_id: userId, entry_id: entryId }, { onConflict: "user_id,entry_id" });
 
-  if (error) throw error;
+    if (error) throw error;
+  });
 }
 
 // What the scan page needs from a scanned code: which entry it opens and

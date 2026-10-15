@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { clearGooglePending, startGoogleSignIn } from "@/lib/google-signin";
+import { useOnline } from "@/lib/offline/status";
 
 /**
  * "or" divider plus a Continue with Google button, rendered under the
@@ -38,6 +39,7 @@ function GoogleLogo() {
 }
 
 export function GoogleButton() {
+  const online = useOnline();
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +79,7 @@ export function GoogleButton() {
         <span className="h-px flex-1 bg-border" />
       </div>
 
-      <Button type="button" variant="outline" className="w-full gap-2" onClick={handleClick} disabled={redirecting} loading={redirecting}>
+      <Button type="button" variant="outline" className="w-full gap-2" onClick={handleClick} disabled={redirecting || !online} loading={redirecting}>
         {!redirecting && <GoogleLogo />}
         {redirecting ? "Redirecting to Google..." : "Continue with Google"}
       </Button>

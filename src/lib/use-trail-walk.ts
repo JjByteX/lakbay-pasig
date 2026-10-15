@@ -149,7 +149,7 @@ export function useTrailWalk(trail: TrailDetail | null, position: Coordinates | 
     // Inside radius: advance route_progress. Local state updates immediately so
     // the stop re-renders unlocked with no reload; the write itself fails
     // silently because the next position update re-runs this check.
-    unlockStop(session.user.id, trail.id, nextStop.id)
+    unlockStop(session.user.id, trail.id, nextStop.id, nextStop.sequence_order)
       .then(() => {
         setRouteProgress({ highestUnlockedStopId: nextStop.id, unlockedAt: new Date().toISOString() });
         maybeCompleteTrail(nextStop.id);

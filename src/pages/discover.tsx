@@ -34,6 +34,8 @@ import { getCategoryIcon } from "@/lib/place-category-icons";
 import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } from "@/lib/place-facilities";
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { usePageTitle } from "@/lib/page-title";
+import { useOnline } from "@/lib/offline/status";
+import { MAP_NEEDS_CONNECTION } from "@/lib/offline/messages";
 
 /**
  * Phase 5 (step-5-phases.md): search and list on top of Phase 4's map, one
@@ -140,7 +142,11 @@ export default function DiscoverPage() {
   // "Try again" on the list's error state bumps this, which re-runs the fetch
   // effect below, same retry-counter shape trails.tsx and saved.tsx use.
   const [reload, setReload] = useState(0);
-  const [view, setView] = useState<"map" | "list">("map");
+  const [viewChoice, setView] = useState<"map" | "list">("map");
+  // Offline there are no map tiles, so the list opens instead and the Map tab
+  // says why it is off. The choice comes back when the connection does.
+  const online = useOnline();
+  const view = online ? viewChoice : "list";
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
   // case), not "match nothing" -- widened from the original single
@@ -416,7 +422,7 @@ export default function DiscoverPage() {
                   align to. */}
         <Tabs value={view} onValueChange={(v) => setView(v as "map" | "list")}>
           <TabsList>
-            <TabsTrigger value="map" className="gap-1">
+            <TabsTrigger value="map" className="gap-1" disabled={!online}>
               <MapIcon className="h-4 w-4" />
               Map
             </TabsTrigger>
@@ -426,6 +432,7 @@ export default function DiscoverPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+        {!online && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
       </div>
 
       {/* Category filter: multi-select grid of pill buttons, replacing the

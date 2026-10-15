@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/directions";
+import { useOnline } from "@/lib/offline/status";
+import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 
 // Phase 6.1 (step-5-phases.md), pulled forward because Phase 4.4 requires
@@ -120,6 +122,7 @@ export function ResultCard({
   distanceFrom = null,
   onRouteFound,
 }: Readonly<ResultCardProps>) {
+  const online = useOnline();
   const [directionsStatus, setDirectionsStatus] = useState<"idle" | "loading" | "error">("idle");
   const [directionsError, setDirectionsError] = useState<string | null>(null);
 
@@ -217,13 +220,14 @@ export function ResultCard({
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        disabled={directionsStatus === "loading"}
+                        disabled={directionsStatus === "loading" || !online}
                         loading={directionsStatus === "loading"}
                         onClick={handleDirections}
                       >
                         {directionsStatus === "loading" ? "Getting directions…" : "Directions"}
                         {directionsStatus !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
                       </Button>
+                      {!online && <p className="text-right text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
                     </>
                   ) : (
                     <p className="text-right text-xs text-muted-foreground">Turn on location to get directions</p>

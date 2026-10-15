@@ -16,6 +16,7 @@ import { SquareLoader } from "@/components/public/square-loader";
 import { TrailCompleteMoment } from "@/components/public/trail-complete-moment";
 import { SPRING_ARRIVE } from "@/lib/motion";
 import { SaveRouteButton } from "@/components/public/save-route-button";
+import { TrailDownloadButton } from "@/components/public/trail-download-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -209,6 +210,14 @@ import { usePageTitle } from "@/lib/page-title";
  * no completion (completed_routes rejects a personal trail, so nothing is
  * written and the Restart button, which only shows once completed, never
  * appears), and no credential (fetchTrailDetail returns none).
+ *
+ * Offline (docs/offline-plan.md, Trail downloads): the page reads the trail
+ * from the device when it was downloaded, from the whole Pasig download or
+ * from this page's own Download button (a Guest view, so a personal trail does
+ * not get the button). A signed in visitor offline can Start and walk it:
+ * progress is read from the copy kept on the device, and Start and every stop
+ * unlock are queued and replay when the connection returns (trail-progress.ts,
+ * lib/offline/queue.ts).
  */
 export default function TrailDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -355,7 +364,7 @@ export default function TrailDetailPage() {
     setStarting(true);
     setStartError(null);
     const firstStopId = trail.stops[0].id;
-    unlockStop(session.user.id, trail.id, firstStopId)
+    unlockStop(session.user.id, trail.id, firstStopId, trail.stops[0].sequence_order)
       .then(() => {
         // No completion check here: the first stop is free, and a one stop
         // trail completes on proximity (the effect above), not on Start.
@@ -578,7 +587,12 @@ export default function TrailDetailPage() {
             </AnimatePresence>
 
             <div className="flex flex-col gap-1">
-              <Button type="button" onClick={handleStart} disabled={!hasStops || starting} className="w-full">
+              <Button
+                type="button"
+                onClick={handleStart}
+                disabled={!hasStops || starting}
+                className="w-full"
+              >
                 {/* "Start trail" rolls up into "Resume trail" once the first stop opens. */}
                 <RollingText text={startLabel} />
               </Button>
@@ -612,6 +626,8 @@ export default function TrailDetailPage() {
                 </div>
               )}
             </div>
+            {/* Offline: keeps this trail on the device (Guest view, so not for a personal trail). */}
+            {!trail.personal && <TrailDownloadButton trail={trail} />}
           </div>
 
           {/* 3.3/4.3: stop list. Numbered sequence, not an unordered

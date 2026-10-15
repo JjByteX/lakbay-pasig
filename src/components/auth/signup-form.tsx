@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { GoogleButton } from "@/components/auth/google-button";
+import { useOnline } from "@/lib/offline/status";
+import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -36,7 +38,8 @@ export function SignupForm() {
 
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const passwordLongEnough = password.length >= MIN_PASSWORD_LENGTH;
-  const canSubmit = email.length > 0 && passwordLongEnough && passwordsMatch && !submitting;
+  const online = useOnline();
+  const canSubmit = email.length > 0 && passwordLongEnough && passwordsMatch && !submitting && online;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -155,6 +158,7 @@ export function SignupForm() {
         </div>
 
         {error && <p className="text-base text-destructive">{error}</p>}
+        {!online && <p className="text-base text-muted-foreground">{NEEDS_CONNECTION}</p>}
 
         <Button type="submit" disabled={!canSubmit} loading={submitting}>
           {submitting ? "Creating account..." : "Create account"}

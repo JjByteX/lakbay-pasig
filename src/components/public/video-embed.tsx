@@ -1,5 +1,6 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { parseVideoLink } from "@/lib/video-embed";
+import { useOnline } from "@/lib/offline/status";
 
 const PROVIDER_NAME = { youtube: "YouTube", facebook: "Facebook" } as const;
 
@@ -15,6 +16,8 @@ const PROVIDER_NAME = { youtube: "YouTube", facebook: "Facebook" } as const;
  * to what a player needs. YouTube uses the no-cookie address.
  */
 export function VideoEmbed({ url, title }: Readonly<{ url: string; title: string }>) {
+  // Offline the player cannot load, so only the link shows.
+  const online = useOnline();
   const video = parseVideoLink(url);
   if (!video) return null;
 
@@ -22,6 +25,7 @@ export function VideoEmbed({ url, title }: Readonly<{ url: string; title: string
 
   return (
     <div className="my-1 flex flex-col gap-2">
+      {online && (
       <div className="aspect-video w-full overflow-hidden rounded-md bg-muted">
         <iframe
           title={`${title} (video)`}
@@ -34,6 +38,7 @@ export function VideoEmbed({ url, title }: Readonly<{ url: string; title: string
           sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
         />
       </div>
+      )}
       <a
         href={video.watchUrl}
         target="_blank"

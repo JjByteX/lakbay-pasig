@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import { useQueueView } from "@/lib/offline/mine";
+import { replayQueue } from "@/lib/offline/queue";
+import { signOutQueuedText } from "@/lib/offline/messages";
 import {
   Dialog,
   DialogContent,
@@ -33,12 +36,17 @@ export function SignOutDialog({
   open,
   onOpenChange,
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void }>) {
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
+  const { pending } = useQueueView(session?.user.id);
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleConfirm() {
     if (signingOut) return;
     setSigningOut(true);
+    // One try to send waiting changes while the session still exists. Sign out
+    // does not wait for it: what is left stays on the device and replays at the
+    // next sign in.
+    void replayQueue();
     await signOut();
     setSigningOut(false);
     onOpenChange(false);
@@ -53,6 +61,7 @@ export function SignOutDialog({
             You'll need to sign in again to access your account.
           </DialogDescription>
         </DialogHeader>
+        {pending > 0 && <p className="text-sm text-muted-foreground">{signOutQueuedText(pending)}</p>}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={signingOut}>

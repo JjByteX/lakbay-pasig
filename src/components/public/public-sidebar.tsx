@@ -1,9 +1,10 @@
-import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, Question } from "@phosphor-icons/react";
+import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, Question, DownloadSimple } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { useSettingsModal } from "@/lib/settings-modal";
+import { useOfflineModal } from "@/lib/offline-modal";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -64,6 +65,7 @@ export function PublicSidebar({
   const { pathname: currentPath } = useLocation();
   const navigate = useNavigate();
   const { openSettings } = useSettingsModal();
+  const { openOffline } = useOfflineModal();
 
   // Log-out confirmation: same SignOutDialog (owns the actual signOut()
   // call) public-shell.tsx's mobile AccountMenu and admin-sidebar.tsx's
@@ -143,6 +145,12 @@ export function PublicSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => openOffline()} tooltip="Offline">
+                <DownloadSimple className="h-4 w-4 shrink-0" />
+                <span>Offline</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton onClick={() => navigate("/help")} tooltip="Help & FAQ">
                 <Question className="h-4 w-4 shrink-0" />
                 <span>Help & FAQ</span>
@@ -217,6 +225,10 @@ export function PublicSidebar({
               <DropdownMenuItem onClick={() => openSettings()}>
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openOffline()}>
+                <DownloadSimple className="mr-2 h-4 w-4" />
+                Offline
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/help")}>
                 <Question className="mr-2 h-4 w-4" />

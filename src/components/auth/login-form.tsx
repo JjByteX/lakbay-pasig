@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { GoogleButton } from "@/components/auth/google-button";
+import { useOnline } from "@/lib/offline/status";
+import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 
 /**
  * landing-hero-phases.md Phase 5.4-5.6. Body moved verbatim from the
@@ -61,7 +63,8 @@ export function LoginForm() {
     }
   }, []);
 
-  const canSubmit = email.length > 0 && password.length > 0 && !submitting;
+  const online = useOnline();
+  const canSubmit = email.length > 0 && password.length > 0 && !submitting && online;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -184,6 +187,7 @@ export function LoginForm() {
         )}
 
         {error && <p className="text-base text-destructive">{error}</p>}
+        {!online && <p className="text-base text-muted-foreground">{NEEDS_CONNECTION}</p>}
 
         <Button type="submit" disabled={!canSubmit} loading={submitting}>
           {submitting ? "Logging in..." : "Log in"}

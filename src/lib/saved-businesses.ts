@@ -1,4 +1,9 @@
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { fetchDiscoverResults } from "./discover-query";
+import { readSaved, replaceSaved } from "./offline/mine";
+import { readIsSaved, readSavedIds, settle, writeSaved } from "./offline/queue";
+import { failReason } from "./offline/rules";
 import { readEmbeddedName } from "./place-categories";
 import { fetchCoverPhotoUrls } from "./home-query";
 
@@ -24,28 +29,35 @@ export interface SavedBusiness {
   coverPhotoUrl: string | null;
 }
 
+// Phase 8 (offline-phases.md): reads and writes go through offline/queue.ts,
+// same as saved-places.ts. A copy on the device answers offline, and a save or
+// unsave made offline is queued.
 export async function isBusinessSaved(userId: string, businessId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("saved_businesses")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("business_id", businessId)
-    .maybeSingle();
+  return readIsSaved(userId, "business", businessId, async () => {
+    const { data, error } = await supabase
+      .from("saved_businesses")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("business_id", businessId)
+      .maybeSingle();
 
-  if (error) throw error;
-  return data !== null;
+    if (error) throw error;
+    return data !== null;
+  });
 }
 
 // Every business id this user has saved, in one request: the business twin of
 // saved-places.ts's fetchSavedPlaceIds, for the Discover list's hearts.
 export async function fetchSavedBusinessIds(userId: string): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from("saved_businesses")
-    .select("business_id")
-    .eq("user_id", userId);
+  return readSavedIds(userId, "business", async () => {
+    const { data, error } = await supabase
+      .from("saved_businesses")
+      .select("business_id")
+      .eq("user_id", userId);
 
-  if (error) throw error;
-  return new Set((data ?? []).map((row) => row.business_id));
+    if (error) throw error;
+    return new Set((data ?? []).map((row) => row.business_id));
+  });
 }
 
 // Same contract as toggleSavedPlace: inserts or deletes the row directly and
@@ -55,21 +67,44 @@ export async function toggleSavedBusiness(
   businessId: string,
   currentlySaved: boolean
 ): Promise<boolean> {
-  if (currentlySaved) {
+  return writeSaved("business", userId, businessId, !currentlySaved, async () => {
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from("saved_businesses")
+        .delete()
+        .eq("user_id", userId)
+        .eq("business_id", businessId);
+      if (error) throw error;
+      return;
+    }
+
     const { error } = await supabase
       .from("saved_businesses")
-      .delete()
-      .eq("user_id", userId)
-      .eq("business_id", businessId);
+      .insert({ user_id: userId, business_id: businessId });
     if (error) throw error;
-    return false;
-  }
+  });
+}
 
-  const { error } = await supabase
-    .from("saved_businesses")
-    .insert({ user_id: userId, business_id: businessId });
-  if (error) throw error;
-  return true;
+// Offline: the saved ids kept on this device, joined in memory with the
+// businesses the Pasig download holds. Without a copy of the ids, the original
+// error stands.
+async function savedBusinessesOffline(userId: string, cause: PostgrestError): Promise<SavedBusiness[]> {
+  const ids = await readSaved(userId, "business");
+  if (!ids) throw cause;
+  if (ids.size === 0) return [];
+  const results = await fetchDiscoverResults();
+  const saved: SavedBusiness[] = [];
+  for (const row of results) {
+    if (row.kind !== "business" || !ids.has(row.id)) continue;
+    saved.push({
+      id: row.id,
+      name: row.name,
+      category: row.category ?? "",
+      verification_status: row.verification_status,
+      coverPhotoUrl: row.coverPhotoUrl,
+    });
+  }
+  return saved;
 }
 
 /**
@@ -81,13 +116,18 @@ export async function toggleSavedBusiness(
  * text for a business saved before migration 0027 gave it a category_id.
  */
 export async function fetchSavedBusinesses(userId: string): Promise<SavedBusiness[]> {
+  await settle(userId);
   const { data: savedRows, error: savedError } = await supabase
     .from("saved_businesses")
     .select("business_id")
     .eq("user_id", userId);
 
-  if (savedError) throw savedError;
+  if (savedError) {
+    if (failReason(savedError) === "network") return savedBusinessesOffline(userId, savedError);
+    throw savedError;
+  }
   const ids = (savedRows ?? []).map((row) => row.business_id);
+  await replaceSaved(userId, "business", ids);
   if (ids.length === 0) return [];
 
   const { data, error } = await supabase

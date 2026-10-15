@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { thumbPath, uploadThumb } from "./photo-thumb";
 import type { ItemPhoto, VendorItem } from "./vendor-types";
 
 /**
@@ -98,6 +99,7 @@ export async function uploadItemPhoto(
   const path = `businesses/${businessId}/items/${itemId}/${crypto.randomUUID()}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file);
   if (uploadError) throw new Error(uploadError.message);
+  await uploadThumb(PHOTO_BUCKET, path, file);
 
   const { data: publicUrlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
 
@@ -128,7 +130,7 @@ async function removeItemPhotoFile(photoUrl: string): Promise<void> {
   if (index === -1) return;
   const storagePath = decodeURIComponent(photoUrl.slice(index + marker.length));
 
-  const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([storagePath]);
+  const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([storagePath, thumbPath(storagePath)]);
   if (storageError) {
     console.error("Failed to remove item photo from storage:", storageError.message);
   }

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { useSettingsModal } from "@/lib/settings-modal";
 import { removeAvatarFile } from "@/lib/avatar-storage";
+import { purgeUser } from "@/lib/offline/mine";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,6 +78,9 @@ export function DeleteAccountDialog({
     }
 
     if (profile?.profile_picture) await removeAvatarFile(profile.profile_picture);
+    // The account is gone, so its saved ids, progress and waiting changes on
+    // this device go too, the queue included.
+    if (profile?.id) await purgeUser(profile.id);
     await supabase.auth.signOut({ scope: "local" });
     closeSettings();
     navigate("/");

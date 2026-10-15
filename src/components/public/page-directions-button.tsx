@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { DirectionsError, fetchRoute } from "@/lib/directions";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { useDirections } from "@/components/public/public-shell";
+import { useOnline } from "@/lib/offline/status";
+import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 
 /**
  * Directions on a place or business's full detail page. The map preview
@@ -23,6 +25,7 @@ import { useDirections } from "@/components/public/public-shell";
 export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResult }>) {
   const navigate = useNavigate();
   const { origin, handleRouteFound } = useDirections();
+  const online = useOnline();
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -56,13 +59,14 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
         variant="outline"
         size="sm"
         className="gap-2"
-        disabled={status === "loading"}
+        disabled={status === "loading" || !online}
         loading={status === "loading"}
         onClick={handleClick}
       >
         {status === "loading" ? "Getting directions…" : "Directions"}
         {status !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
       </Button>
+      {!online && <p className="text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
     </div>
   );
 }

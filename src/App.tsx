@@ -3,6 +3,8 @@ import { AuthProvider } from "@/lib/auth-context";
 import { AuthModalProvider } from "@/lib/auth-modal";
 import { SettingsModalProvider } from "@/lib/settings-modal";
 import { SettingsModal } from "@/components/settings-modal";
+import { OfflineModalProvider } from "@/lib/offline-modal";
+import { OfflineModal } from "@/components/offline-modal";
 import { AuthModalRoute } from "@/lib/auth-modal-route";
 import { EntryGate } from "@/lib/entry-gate";
 import { AuthModal } from "@/components/auth/auth-modal";
@@ -67,6 +69,7 @@ export default function App() {
     <AuthProvider>
       <AuthModalProvider>
         <SettingsModalProvider>
+        <OfflineModalProvider>
         <Routes>
           {/* Public shell, five tabs per navigation-and-access-control.md's
               Bottom Nav Order, Guest accessible, no session required. home.tsx
@@ -422,6 +425,8 @@ export default function App() {
             in visit (email and Google alike). Renders nothing otherwise. */}
         <CategoriesOnboarding />
         <SettingsModal />
+        <OfflineModal />
+        </OfflineModalProvider>
         </SettingsModalProvider>
       </AuthModalProvider>
     </AuthProvider>

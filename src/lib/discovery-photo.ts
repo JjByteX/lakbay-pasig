@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { thumbPath, uploadThumb } from "./photo-thumb";
 
 /**
  * The one optional photo on a discovery content entry (migration 0051).
@@ -22,6 +23,7 @@ export async function uploadDiscoveryPhoto(file: File): Promise<string> {
   const path = `discovery/${crypto.randomUUID()}-${file.name}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, file);
   if (error) throw new Error(error.message);
+  await uploadThumb(BUCKET, path, file);
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data.publicUrl;
@@ -32,7 +34,7 @@ export async function uploadDiscoveryPhoto(file: File): Promise<string> {
 export async function removeDiscoveryPhotoFile(publicUrl: string): Promise<void> {
   const path = storagePathFromPublicUrl(publicUrl);
   if (!path) return;
-  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  const { error } = await supabase.storage.from(BUCKET).remove([path, thumbPath(path)]);
   if (error) console.error("Failed to remove discovery photo from storage:", error.message);
 }
 

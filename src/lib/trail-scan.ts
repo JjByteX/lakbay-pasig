@@ -3,6 +3,8 @@ import { distanceKm, type Coordinates } from "./discover-query";
 import { fetchEntryByToken, unlockEntry } from "./entry-unlocks";
 import { getRouteProgress } from "./trail-progress";
 import { fetchTrailDetail } from "./trail-query";
+import { readMeta } from "./offline/meta";
+import { failReason } from "./offline/rules";
 import type { TrailStop } from "./trail-types";
 import { DEFAULT_UNLOCK_RADIUS } from "./trail-unlock";
 
@@ -74,13 +76,28 @@ export async function scanEntry(
     .eq("stop_type", entry.related_location_type)
     .eq("stop_id", entry.related_location_id);
 
-  if (error) throw error;
-  const routeIds = [...new Set((stopRows ?? []).map((r) => r.route_id))];
+  // Offline (Phase 8.8): route_stops cannot be read, so the candidates are the
+  // trails downloaded to this device. fetchEntryByToken above already answered
+  // from the download, so a code from a downloaded trail is found here, and the
+  // unlock and radius checks below run unchanged. A trail with no stop at this
+  // place is dropped after its detail loads.
+  const offline = !!error && failReason(error) === "network";
+  if (error && !offline) throw error;
+  const routeIds = offline
+    ? readMeta().trails.map((pack) => pack.id)
+    : [...new Set((stopRows ?? []).map((r) => r.route_id))];
   if (routeIds.length === 0) return { status: "not-found" };
 
   const candidates = await Promise.all(
     routeIds.map(async (routeId) => {
-      const [detail, progress] = await Promise.all([fetchTrailDetail(routeId), getRouteProgress(userId, routeId)]);
+      const [detail, progress] = await Promise.all([
+        // A downloaded trail the browser has since cleared is just not a candidate.
+        fetchTrailDetail(routeId).catch((err: unknown) => {
+          if (offline && failReason(err) === "network") return null;
+          throw err;
+        }),
+        getRouteProgress(userId, routeId),
+      ]);
       if (!detail) return null;
       const highestIndex = progress
         ? detail.stops.findIndex((s) => s.id === progress.highestUnlockedStopId)
@@ -91,11 +108,14 @@ export async function scanEntry(
           s.stop_id === entry.related_location_id &&
           index <= highestIndex
       );
-      return { id: detail.id, name: detail.name, unlockedStop };
+      const atPlace = detail.stops.some(
+        (s) => s.stop_type === entry.related_location_type && s.stop_id === entry.related_location_id
+      );
+      return { id: detail.id, name: detail.name, unlockedStop, atPlace };
     })
   );
 
-  const trails = candidates.filter((c): c is NonNullable<typeof c> => c !== null);
+  const trails = candidates.filter((c): c is NonNullable<typeof c> => c !== null && (!offline || c.atPlace));
   // Trails where this stop is already unlocked for the visitor, each paired
   // with that stop.
   const onTrail = trails.flatMap((t) => (t.unlockedStop ? [{ id: t.id, stop: t.unlockedStop }] : []));

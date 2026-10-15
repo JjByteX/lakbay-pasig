@@ -1,4 +1,9 @@
+import type { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { fetchDiscoverResults } from "./discover-query";
+import { readSaved, replaceSaved } from "./offline/mine";
+import { readIsSaved, readSavedIds, settle, writeSaved } from "./offline/queue";
+import { failReason } from "./offline/rules";
 import { readEmbeddedName, readEmbeddedIcon, readEmbeddedColor } from "./place-categories";
 import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverPlace } from "./discover-types";
@@ -15,16 +20,22 @@ import type { DiscoverPlace } from "./discover-types";
  * schema is on architecture-notes.md's never-touch-without-approval list.
  */
 
+// Phase 8 (offline-phases.md): the reads and writes in this file go through
+// offline/queue.ts. Online they behave as before and keep a copy on the device.
+// Offline they answer from that copy, and a save or unsave is queued and replays
+// when the connection returns.
 export async function isPlaceSaved(userId: string, placeId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("saved_places")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("place_id", placeId)
-    .maybeSingle();
+  return readIsSaved(userId, "place", placeId, async () => {
+    const { data, error } = await supabase
+      .from("saved_places")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("place_id", placeId)
+      .maybeSingle();
 
-  if (error) throw error;
-  return data !== null;
+    if (error) throw error;
+    return data !== null;
+  });
 }
 
 /**
@@ -35,13 +46,15 @@ export async function isPlaceSaved(userId: string, placeId: string): Promise<boo
  * (saved_places_own), ids only, no places join.
  */
 export async function fetchSavedPlaceIds(userId: string): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from("saved_places")
-    .select("place_id")
-    .eq("user_id", userId);
+  return readSavedIds(userId, "place", async () => {
+    const { data, error } = await supabase
+      .from("saved_places")
+      .select("place_id")
+      .eq("user_id", userId);
 
-  if (error) throw error;
-  return new Set((data ?? []).map((row) => row.place_id));
+    if (error) throw error;
+    return new Set((data ?? []).map((row) => row.place_id));
+  });
 }
 
 /**
@@ -55,21 +68,33 @@ export async function toggleSavedPlace(
   placeId: string,
   currentlySaved: boolean
 ): Promise<boolean> {
-  if (currentlySaved) {
+  return writeSaved("place", userId, placeId, !currentlySaved, async () => {
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from("saved_places")
+        .delete()
+        .eq("user_id", userId)
+        .eq("place_id", placeId);
+      if (error) throw error;
+      return;
+    }
+
     const { error } = await supabase
       .from("saved_places")
-      .delete()
-      .eq("user_id", userId)
-      .eq("place_id", placeId);
+      .insert({ user_id: userId, place_id: placeId });
     if (error) throw error;
-    return false;
-  }
+  });
+}
 
-  const { error } = await supabase
-    .from("saved_places")
-    .insert({ user_id: userId, place_id: placeId });
-  if (error) throw error;
-  return true;
+// Offline: the saved ids kept on this device, joined in memory with the places
+// the Pasig download holds (the same list Discover shows). Without a copy of the
+// ids, the original error stands.
+async function savedPlacesOffline(userId: string, cause: PostgrestError): Promise<DiscoverPlace[]> {
+  const ids = await readSaved(userId, "place");
+  if (!ids) throw cause;
+  if (ids.size === 0) return [];
+  const results = await fetchDiscoverResults();
+  return results.filter((row): row is DiscoverPlace => row.kind === "place" && ids.has(row.id));
 }
 
 /**
@@ -90,13 +115,18 @@ export async function toggleSavedPlace(
  * ever returns verified rows, so a saved place can't be anything else.
  */
 export async function fetchSavedPlaces(userId: string): Promise<DiscoverPlace[]> {
+  await settle(userId);
   const { data: savedRows, error: savedError } = await supabase
     .from("saved_places")
     .select("place_id")
     .eq("user_id", userId);
 
-  if (savedError) throw savedError;
+  if (savedError) {
+    if (failReason(savedError) === "network") return savedPlacesOffline(userId, savedError);
+    throw savedError;
+  }
   const placeIds = (savedRows ?? []).map((row) => row.place_id);
+  await replaceSaved(userId, "place", placeIds);
   if (placeIds.length === 0) return [];
 
   const { data: places, error: placesError } = await supabase

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { thumbPath, uploadThumb } from "@/lib/photo-thumb";
 
 /**
  * usePlacePhotos -- the historical/current photo lists, the upload state,
@@ -95,6 +96,8 @@ export function usePlacePhotos({ id, isNew, onError }: Readonly<UsePlacePhotosOp
       return;
     }
 
+    await uploadThumb(PHOTO_BUCKET, path, file);
+
     const { data: publicUrlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
     const list = photoType === "historical" ? historicalPhotos : currentPhotos;
 
@@ -134,7 +137,7 @@ export function usePlacePhotos({ id, isNew, onError }: Readonly<UsePlacePhotosOp
     // rest of the app reads) is already gone and correct either way.
     const storagePath = getStoragePathFromPublicUrl(photo.photo_url);
     if (storagePath) {
-      const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([storagePath]);
+      const { error: storageError } = await supabase.storage.from(PHOTO_BUCKET).remove([storagePath, thumbPath(storagePath)]);
       if (storageError) {
         console.error("Failed to remove photo from storage:", storageError.message);
       }

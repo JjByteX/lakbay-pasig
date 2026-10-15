@@ -11,7 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon, Question } from "@phosphor-icons/react";
+import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon, Question, DownloadSimple } from "@phosphor-icons/react";
 import { BottomNav } from "./bottom-nav";
 import { PagePager } from "./page-pager";
 import { pagerIndexFor } from "@/lib/pager-index";
@@ -42,6 +42,9 @@ import {
 import { SignOutDialog } from "@/components/sign-out-dialog";
 import { useAuthModal } from "@/lib/auth-modal";
 import { useSettingsModal } from "@/lib/settings-modal";
+import { useOfflineModal } from "@/lib/offline-modal";
+import { useOnline } from "@/lib/offline/status";
+import { OfflineNotice } from "@/components/offline-notice";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 
 // Global search: shell-owned per the resolved spec ("shared query state
@@ -632,6 +635,7 @@ function AccountMenu() {
   const { session, profile } = useAuth();
   const navigate = useNavigate();
   const { openSettings } = useSettingsModal();
+  const { openOffline } = useOfflineModal();
   const { openAuth } = useAuthModal();
   const initial = profile?.display_name?.[0]?.toUpperCase();
   // Log-out confirmation: "Sign out" no longer calls signOut directly,
@@ -659,6 +663,10 @@ function AccountMenu() {
           <DropdownMenuItem onClick={() => navigate("/welcome")}>
             <HomeIcon className="mr-2 h-4 w-4" />
             Home Page
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openOffline()}>
+            <DownloadSimple className="mr-2 h-4 w-4" />
+            Offline
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate("/help")}>
             <Question className="mr-2 h-4 w-4" />
@@ -706,6 +714,10 @@ function AccountMenu() {
           <DropdownMenuItem onClick={() => openSettings()}>
             <SettingsIcon className="mr-2 h-4 w-4" />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openOffline()}>
+            <DownloadSimple className="mr-2 h-4 w-4" />
+            Offline
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate("/help")}>
             <Question className="mr-2 h-4 w-4" />
@@ -768,6 +780,9 @@ function MobileShell({
   // which gives each page its own scroller so scroll position is kept across
   // swipes. Every other route keeps the single scrolling <main> + Outlet.
   const pagerIndex = pagerIndexFor(location.pathname);
+  // While offline the notice sits under the header and the content moves down
+  // by its height, so no page needs to know about it.
+  const online = useOnline();
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -831,9 +846,11 @@ function MobileShell({
           whether or not the page scrolls, so a tab that is taller than the
           screen (a Products grid) doesn't shrink the page and shift the
           centred content sideways when it appears. */}
+      <OfflineNotice className="fixed inset-x-0 top-14 z-30" />
       <main
         className={cn(
-          "fixed inset-x-0 top-14 bottom-16",
+          "fixed inset-x-0 bottom-16",
+          online ? "top-14" : "top-[calc(3.5rem+var(--offline-notice-height))]",
           pagerIndex === -1 ? "overflow-y-auto [scrollbar-gutter:stable]" : "overflow-hidden",
         )}
       >
@@ -1000,7 +1017,8 @@ function DesktopShell({
             Main content starts flush at the top of SidebarInset; nothing
             else was rendered in this bar to preserve. */}
         {/* scrollbar-gutter: stable, same reason as MobileShell's main. */}
-        <div className="h-full overflow-y-auto [scrollbar-gutter:stable]">
+        <OfflineNotice />
+        <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <Outlet />
         </div>
       </SidebarInset>

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { isOnline } from "./offline/status";
 import { readEmbeddedName } from "./place-categories";
 
 // Global search, per the resolved spec: a search bar visible on every tab
@@ -299,6 +300,18 @@ async function searchItems(q: string): Promise<SearchItemHit[]> {
 export async function searchEverything(query: string): Promise<GlobalSearchResults> {
   const q = query.trim();
   if (!q) return EMPTY_SEARCH_RESULTS;
+
+  // Offline the RPC calls below cannot run (or be stored), so the bar filters
+  // the downloaded lists instead. Loaded on demand so the shell does not pull
+  // the download code in. Nothing downloaded reads as no results.
+  if (!isOnline()) {
+    try {
+      const { searchOffline } = await import("./offline/search");
+      return await searchOffline(q);
+    } catch {
+      return EMPTY_SEARCH_RESULTS;
+    }
+  }
 
   const [places, businesses, trails, events, fiestas, items] = await Promise.all([
     searchPlaces(q).catch(() => []),

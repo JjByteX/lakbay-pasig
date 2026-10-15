@@ -6,6 +6,7 @@ import {
 } from "@/components/public/category-photo-row";
 import { useRecommendations, type RecommendationAnchor } from "@/lib/recommendations";
 import { distanceFromHere, kmAway } from "@/lib/distance-label";
+import { useOnline } from "@/lib/offline/status";
 
 // Reasons the function gives only to say "close by". When the card shows a
 // distance line the reason would say the same thing twice ("Near you" above
@@ -41,6 +42,10 @@ export function RecommendationRow({
 }: Readonly<{ anchor?: RecommendationAnchor; title?: string }>) {
   const navigate = useNavigate();
   const { cards, loading, locationUsed, canHide, hide, undo, hiddenIds, hideError } = useRecommendations(anchor);
+
+  // The recommendation function is a server call, so offline the row is hidden.
+  const online = useOnline();
+  if (!online) return null;
 
   if (loading) return <CategoryPhotoRowSkeleton withStrip />;
   if (cards.length === 0) return null;

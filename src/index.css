@@ -16,6 +16,12 @@
 
 @layer base {
   :root {
+    /* Height of the offline notice (components/offline-notice.tsx). The mobile
+       shell adds it to the top offset of its content while the notice shows.
+       Three lines of text-xs: the notice text plus the count of writes waiting
+       to sync, on a 360 px screen. */
+    --offline-notice-height: 3.25rem;
+
     --background: 210 17% 98%;
     --foreground: 210 11% 15%;
 

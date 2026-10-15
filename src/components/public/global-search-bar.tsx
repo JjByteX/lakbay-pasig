@@ -9,6 +9,8 @@ import { VerificationBadge } from "./result-card";
 import { ItemRow, ResultGroup, ResultRow } from "./search-result-list";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import { isVoiceSearchSupported, useVoiceSearch } from "@/hooks/use-voice-search";
+import { useOnline } from "@/lib/offline/status";
+import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 import {
   EMPTY_SEARCH_RESULTS,
   hasAnyResults,
@@ -78,6 +80,13 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
+  // Voice search sends audio to the server. Offline the mic stays, and a tap says why it is off.
+  const online = useOnline();
+  const [offlineTap, setOfflineTap] = useState(false);
+  useEffect(() => {
+    if (online) setOfflineTap(false);
+  }, [online]);
+
   const [voiceSupported] = useState(isVoiceSearchSupported);
   const voice = useVoiceSearch((text) => {
     onQueryChange(text);
@@ -124,9 +133,14 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   let voiceNote: string | null = voice.error;
   if (voice.status === "recording") voiceNote = "Listening…";
   if (voice.status === "transcribing") voiceNote = "Working out what you said…";
+  if (offlineTap && !online) voiceNote = NEEDS_CONNECTION;
   const showVoiceNote = voiceNote !== null && !showPanel;
 
   function handleMicClick() {
+    if (!online) {
+      setOfflineTap(true);
+      return;
+    }
     if (voice.status === "recording") {
       voice.stop();
       return;
@@ -141,6 +155,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
         value={query}
         onChange={(e) => {
           voice.clearError();
+          setOfflineTap(false);
           onQueryChange(e.target.value);
         }}
         onFocus={() => setOpen(true)}
@@ -155,9 +170,10 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
           size="icon"
           onClick={handleMicClick}
           disabled={voice.status === "transcribing"}
+          aria-disabled={!online || undefined}
           aria-label={voice.status === "recording" ? "Stop recording" : "Search by voice"}
           title={voice.status === "recording" ? "Stop recording" : "Search by voice"}
-          className="absolute right-0 top-0 h-9 w-9 text-muted-foreground"
+          className={`absolute right-0 top-0 h-9 w-9 text-muted-foreground${online ? "" : " opacity-50"}`}
         >
           {voice.status === "idle" && <Microphone className="h-4 w-4" />}
           {voice.status === "recording" && (

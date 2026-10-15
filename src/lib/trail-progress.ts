@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { readRouteProgress, writeReset, writeStop } from "./offline/queue";
 
 /**
  * Step 7, Phase 1.5: route_progress (migration 0018, owner-only RLS via
@@ -15,21 +16,27 @@ export interface RouteProgress {
   unlockedAt: string;
 }
 
+// Phase 8 (offline-phases.md): reads and writes go through offline/queue.ts.
+// Online they behave as before and keep a copy on the device. Offline the read
+// answers from that copy, and a Start or a stop unlock is queued and replays
+// when the connection returns.
 export async function getRouteProgress(userId: string, routeId: string): Promise<RouteProgress | null> {
-  const { data, error } = await supabase
-    .from("route_progress")
-    .select("highest_unlocked_stop_id, unlocked_at")
-    .eq("user_id", userId)
-    .eq("route_id", routeId)
-    .maybeSingle();
+  return readRouteProgress(userId, routeId, async () => {
+    const { data, error } = await supabase
+      .from("route_progress")
+      .select("highest_unlocked_stop_id, unlocked_at")
+      .eq("user_id", userId)
+      .eq("route_id", routeId)
+      .maybeSingle();
 
-  if (error) throw error;
-  if (!data) return null;
+    if (error) throw error;
+    if (!data) return null;
 
-  return {
-    highestUnlockedStopId: data.highest_unlocked_stop_id,
-    unlockedAt: data.unlocked_at,
-  };
+    return {
+      highestUnlockedStopId: data.highest_unlocked_stop_id,
+      unlockedAt: data.unlocked_at,
+    };
+  });
 }
 
 /**
@@ -41,19 +48,29 @@ export async function getRouteProgress(userId: string, routeId: string): Promise
  * stop. `unlocked_at` is refreshed to now() on every call, matching the
  * column's role as "when the current highest stop was reached," not a
  * fixed start timestamp.
+ *
+ * `sequenceOrder` is the stop's sequence_order. The server never sees it: it is
+ * how a queued write keeps the highest stop when several wait (queue-rules.ts).
  */
-export async function unlockStop(userId: string, routeId: string, stopId: string): Promise<void> {
-  const { error } = await supabase.from("route_progress").upsert(
-    {
-      user_id: userId,
-      route_id: routeId,
-      highest_unlocked_stop_id: stopId,
-      unlocked_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,route_id" }
-  );
+export async function unlockStop(
+  userId: string,
+  routeId: string,
+  stopId: string,
+  sequenceOrder: number
+): Promise<void> {
+  await writeStop(userId, routeId, stopId, sequenceOrder, async (at) => {
+    const { error } = await supabase.from("route_progress").upsert(
+      {
+        user_id: userId,
+        route_id: routeId,
+        highest_unlocked_stop_id: stopId,
+        unlocked_at: at,
+      },
+      { onConflict: "user_id,route_id" }
+    );
 
-  if (error) throw error;
+    if (error) throw error;
+  });
 }
 
 /**
@@ -65,11 +82,15 @@ export async function unlockStop(userId: string, routeId: string, stopId: string
  * first-stop value when "no row" already means exactly that.
  */
 export async function resetRouteProgress(userId: string, routeId: string): Promise<void> {
-  const { error } = await supabase
-    .from("route_progress")
-    .delete()
-    .eq("user_id", userId)
-    .eq("route_id", routeId);
+  // Restart stays an online action: offline it fails like any failed write, and
+  // the copy on the device follows once the server has deleted the row.
+  await writeReset(userId, routeId, async () => {
+    const { error } = await supabase
+      .from("route_progress")
+      .delete()
+      .eq("user_id", userId)
+      .eq("route_id", routeId);
 
-  if (error) throw error;
+    if (error) throw error;
+  });
 }
