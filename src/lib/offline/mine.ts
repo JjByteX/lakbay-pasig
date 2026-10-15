@@ -45,8 +45,11 @@ function database(): Promise<IDBDatabase> {
   return attempt;
 }
 
-function result<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
+// Generic over the request itself, not its result type. IDBRequest is invariant
+// in its result, so a union such as `x ? store.put(...) : store.delete(...)`
+// (IDBRequest<IDBValidKey> or IDBRequest<undefined>) cannot infer one T.
+function result<R extends IDBRequest>(request: R): Promise<R["result"]> {
+  return new Promise<R["result"]>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
