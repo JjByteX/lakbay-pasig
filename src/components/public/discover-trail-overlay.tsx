@@ -144,7 +144,7 @@ export function TrailOverlay({
   // Remove the line when the overlay goes away (trail mode exited).
   useEffect(() => {
     return () => {
-      if (!map || !map.getStyle()) return;
+      if (!map?.getStyle()) return;
       if (map.getLayer(DONE_LAYER_ID)) map.removeLayer(DONE_LAYER_ID);
       if (map.getLayer(NEXT_LAYER_ID)) map.removeLayer(NEXT_LAYER_ID);
       if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);

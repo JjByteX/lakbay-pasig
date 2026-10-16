@@ -55,9 +55,13 @@ async function ensureWorker(): Promise<void> {
   if (!navigator.serviceWorker.controller) throw unsupported();
 }
 
+// Each message to the worker carries a number so its reply can be matched. The
+// worker answers the page that sent it, so a counter is enough.
+let lastMessageId = 0;
+
 function post(message: Record<string, unknown>): Promise<void> {
   return new Promise((resolve, reject) => {
-    const id = Math.random();
+    const id = ++lastMessageId;
     const timer = setTimeout(() => {
       navigator.serviceWorker.removeEventListener("message", onMessage);
       reject(new Error("The offline worker did not answer."));
@@ -79,6 +83,31 @@ async function dropCache(name: string): Promise<void> {
   } catch {
     // No Cache API, so there is nothing to delete.
   }
+}
+
+// Deletes every cache whose name passes the test, all at once.
+async function dropCachesWhere(test: (name: string) => boolean): Promise<void> {
+  const names = (await caches.keys()).filter(test);
+  await Promise.all(names.map((name) => caches.delete(name)));
+}
+
+// Puts the worker into download mode for one run (it then stores what the page
+// reads into `target`) and takes it out again. stop() does nothing unless start()
+// got through, so it is safe to call from both the success path and the error
+// path, and more than once.
+function downloadMode(target: string) {
+  let on = false;
+  return {
+    async start(): Promise<void> {
+      await post({ type: "download-start", anon: SUPABASE_ANON, target });
+      on = true;
+    },
+    async stop(): Promise<void> {
+      if (!on) return;
+      on = false;
+      await post({ type: "download-end" }).catch(() => undefined);
+    },
+  };
 }
 
 // The worker holds one download setting at a time, so runs take turns: a trail
@@ -122,21 +151,15 @@ export async function runDownload(mode: "download" | "sync", onProgress: (p: Pro
   const target = contentCacheName(Date.now());
   let done = 0;
   let total = 0;
-  let modeOn = false;
+  const worker = downloadMode(target);
   const report = () => onProgress({ done, total });
-  const stop = async () => {
-    if (!modeOn) return;
-    modeOn = false;
-    await post({ type: "download-end" }).catch(() => undefined);
-  };
 
   try {
     release = await acquire();
     controller.signal.throwIfAborted();
     await ensureWorker();
     void navigator.storage?.persist?.();
-    await post({ type: "download-start", anon: SUPABASE_ANON, target });
-    modeOn = true;
+    await worker.start();
 
     const thumbs = await pullAll({
       signal: controller.signal,
@@ -159,13 +182,11 @@ export async function runDownload(mode: "download" | "sync", onProgress: (p: Pro
     // leave gaps without a throw.
     if (!isOnline()) throw new TypeError("Failed to fetch");
 
-    await stop();
-    for (const name of await caches.keys()) {
-      if (isContentCache(name) && name !== target) await caches.delete(name);
-    }
+    await worker.stop();
+    await dropCachesWhere((name) => isContentCache(name) && name !== target);
     writeMeta(afterSync(readMeta(), { cache: target }, Date.now()));
   } catch (err) {
-    await stop();
+    await worker.stop();
     await dropCache(target);
     const keep = mode === "sync" || before.syncedAt !== null;
     // readMeta, not before: a trail download that ran while this one waited
@@ -178,7 +199,7 @@ export async function runDownload(mode: "download" | "sync", onProgress: (p: Pro
       writeMeta({ ...readMeta(), state: "failed", reason: failReason(err) });
     }
   } finally {
-    await stop();
+    await worker.stop();
     current = null;
     release();
   }
@@ -195,16 +216,12 @@ const PHOTOS = "photos-runtime";
 // they stay, and so do the photos they may need.
 export async function removeDownload(): Promise<void> {
   const keepTrails = readMeta().trails.length > 0;
-  for (const name of await caches.keys()) {
-    if (isContentCache(name) || (!keepTrails && (name === PHOTOS || isTrailCache(name)))) await caches.delete(name);
-  }
+  await dropCachesWhere((name) => isContentCache(name) || (!keepTrails && (name === PHOTOS || isTrailCache(name))));
   writeMeta(withoutContent(readMeta()));
 }
 
-async function dropTrailCaches(id: string, keep?: string): Promise<void> {
-  for (const name of await caches.keys()) {
-    if (isCacheOfTrail(name, id) && name !== keep) await caches.delete(name);
-  }
+function dropTrailCaches(id: string, keep?: string): Promise<void> {
+  return dropCachesWhere((name) => isCacheOfTrail(name, id) && name !== keep);
 }
 
 export async function removeTrail(id: string): Promise<void> {
@@ -217,12 +234,13 @@ export async function removeTrail(id: string): Promise<void> {
 // The real size of a cache, for the size shown beside a downloaded trail.
 async function cacheBytes(name: string): Promise<number> {
   const cache = await caches.open(name);
-  let bytes = 0;
-  for (const request of await cache.keys()) {
-    const response = await cache.match(request);
-    if (response) bytes += (await response.arrayBuffer()).byteLength;
-  }
-  return bytes;
+  const sizes = await Promise.all(
+    (await cache.keys()).map(async (request) => {
+      const response = await cache.match(request);
+      return response ? (await response.arrayBuffer()).byteLength : 0;
+    })
+  );
+  return sizes.reduce((sum, size) => sum + size, 0);
 }
 
 const syncingTrails = new Set<string>();
@@ -234,6 +252,18 @@ const syncingTrails = new Set<string>();
  * keeps the old pack and its time. A trail that is not published any more is
  * dropped, and its name is kept for the modal to say so.
  */
+// What a failed or cancelled trail run leaves behind. A cancel only clears the
+// button. A failed Download shows its reason. A failed daily sync changes
+// nothing but the attempt time, so the old pack and its time stay.
+function settleTrailFailure(id: string, visible: boolean, aborted: boolean, err: unknown): void {
+  if (visible) {
+    if (aborted) endTrailJob(id);
+    else failTrailJob(id, failReason(err));
+  } else if (!aborted) {
+    writeMeta(afterPackSync(readMeta(), id, null, Date.now()));
+  }
+}
+
 async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
   const visible = mode === "download";
   if (visible ? getTrailJob(id)?.status === "downloading" : syncingTrails.has(id)) return;
@@ -244,15 +274,10 @@ async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
   const target = trailCacheName(id, Date.now());
   let done = 0;
   let total = 0;
-  let modeOn = false;
   let release: () => void = () => undefined;
+  const worker = downloadMode(target);
   const report = () => {
     if (visible) progressTrailJob(id, done, total);
-  };
-  const stop = async () => {
-    if (!modeOn) return;
-    modeOn = false;
-    await post({ type: "download-end" }).catch(() => undefined);
   };
 
   try {
@@ -260,8 +285,7 @@ async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
     controller.signal.throwIfAborted();
     await ensureWorker();
     void navigator.storage?.persist?.();
-    await post({ type: "download-start", anon: SUPABASE_ANON, target });
-    modeOn = true;
+    await worker.start();
 
     const pulled = await pullTrail(id, {
       signal: controller.signal,
@@ -275,7 +299,7 @@ async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
       },
     });
     if (!pulled) {
-      await stop();
+      await worker.stop();
       await dropCache(target);
       await dropTrailCaches(id);
       writeMeta(afterPackGone(readMeta(), id));
@@ -291,23 +315,17 @@ async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
     });
     if (!isOnline()) throw new TypeError("Failed to fetch");
 
-    await stop();
+    await worker.stop();
     const bytes = await cacheBytes(target);
     await dropTrailCaches(id, target);
     writeMeta(afterPackSync(readMeta(), id, { name: pulled.name, cache: target, bytes }, Date.now()));
     if (visible) endTrailJob(id);
   } catch (err) {
-    await stop();
+    await worker.stop();
     await dropCache(target);
-    if (controller.signal.aborted) {
-      if (visible) endTrailJob(id);
-    } else if (visible) {
-      failTrailJob(id, failReason(err));
-    } else {
-      writeMeta(afterPackSync(readMeta(), id, null, Date.now()));
-    }
+    settleTrailFailure(id, visible, controller.signal.aborted, err);
   } finally {
-    await stop();
+    await worker.stop();
     syncingTrails.delete(id);
     release();
   }

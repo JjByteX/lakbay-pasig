@@ -9,6 +9,15 @@ function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
+// The footer line: where to go next, with the distance when the visitor's
+// position is known, or a hint when there is no next stop yet.
+function nextStopText(nextStop: TrailStopData | null, meters: number | null, headingToStart: boolean): string {
+  if (!nextStop) return "Walk to the next stop to open it";
+  const lead = headingToStart ? "Head to" : "Next:";
+  if (meters === null) return `${lead} ${nextStop.name}`;
+  return `${lead} ${nextStop.name}, ${formatDistance(meters)} away`;
+}
+
 interface DiscoverTrailPanelProps {
   trail: TrailDetail;
   stopStates: TrailStopState[];
@@ -122,13 +131,7 @@ export function DiscoverTrailPanel({
             Trail complete
           </span>
         ) : (
-          <span className="min-w-0 truncate">
-            {nextStop && nextStopMeters !== null
-              ? `${headingToStart ? "Head to" : "Next:"} ${nextStop.name}, ${formatDistance(nextStopMeters)} away`
-              : nextStop
-                ? `${headingToStart ? "Head to" : "Next:"} ${nextStop.name}`
-                : "Walk to the next stop to open it"}
-          </span>
+          <span className="min-w-0 truncate">{nextStopText(nextStop, nextStopMeters, headingToStart)}</span>
         )}
         <Link to={`/trails/${trail.id}`} className="flex shrink-0 items-center gap-1 font-semibold text-primary">
           Full trail

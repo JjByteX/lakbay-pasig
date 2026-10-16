@@ -22,6 +22,12 @@ export interface StoredProgress {
 
 let opened: Promise<IDBDatabase> | null = null;
 
+// A rejection should carry an Error. An IndexedDB request or transaction has
+// its error set only after it fails, and the type allows null.
+function failure(error: DOMException | null, fallback: string): Error {
+  return error ?? new Error(fallback);
+}
+
 function database(): Promise<IDBDatabase> {
   if (opened) return opened;
   const attempt = new Promise<IDBDatabase>((resolve, reject) => {
@@ -34,7 +40,7 @@ function database(): Promise<IDBDatabase> {
       for (const name of STORES) request.result.createObjectStore(name);
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(failure(request.error, "IndexedDB could not be opened."));
     request.onblocked = () => reject(new Error("IndexedDB is blocked."));
   });
   // A failed open is tried again on the next call.
@@ -51,7 +57,7 @@ function database(): Promise<IDBDatabase> {
 function result<R extends IDBRequest>(request: R): Promise<R["result"]> {
   return new Promise<R["result"]>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(failure(request.error, "An IndexedDB request failed."));
   });
 }
 
@@ -59,8 +65,8 @@ async function inStore<T>(name: Store, mode: IDBTransactionMode, work: (store: I
   const tx = (await database()).transaction(name, mode);
   const finished = new Promise<void>((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(failure(tx.error, "An IndexedDB transaction failed."));
+    tx.onabort = () => reject(failure(tx.error, "An IndexedDB transaction was aborted."));
   });
   // A failure inside work() aborts the transaction, which rejects `finished`
   // with nobody waiting on it.
@@ -100,7 +106,9 @@ export function readSaved(userId: string, kind: SaveKind): Promise<Set<string> |
     () =>
       inStore("saved", "readonly", async (store) => {
         const keys = await result(store.getAllKeys(prefixRange(prefix)));
-        return new Set(keys.map((key) => String(key).slice(prefix.length)));
+        // Every key here was written as a string (<user>:<kind>:<id>).
+        const ids = keys.filter((key): key is string => typeof key === "string");
+        return new Set(ids.map((key) => key.slice(prefix.length)));
       }),
     undefined
   );
@@ -177,12 +185,12 @@ export function readUnlocks(userId: string, entryIds: string[]): Promise<Set<str
 export function replaceUnlocks(userId: string, asked: string[], unlocked: Set<string>): Promise<boolean> {
   return safe(
     () =>
-      inStore("unlocks", "readwrite", async (store) => {
+      inStore("unlocks", "readwrite", (store) => {
         for (const id of asked) {
           if (unlocked.has(id)) store.put(true, `${userId}:${id}`);
           else store.delete(`${userId}:${id}`);
         }
-        return true;
+        return Promise.resolve(true);
       }),
     false
   );
@@ -216,18 +224,16 @@ export function readQueue(userId: string): Promise<QueuedOp[] | undefined> {
 }
 
 async function changeQueue(userId: string, change: (ops: QueuedOp[]) => QueuedOp[]): Promise<boolean> {
-  const ok = await safe(
-    () =>
-      inStore("queue", "readwrite", async (store) => {
-        const key = `${userId}:ops`;
-        const ops = ((await result(store.get(key))) as QueuedOp[] | undefined) ?? [];
-        const next = change(ops);
-        if (next === ops) return true;
-        await result(next.length > 0 ? store.put(next, key) : store.delete(key));
-        return true;
-      }),
-    false
-  );
+  const ok = await safe(async () => {
+    await inStore("queue", "readwrite", async (store) => {
+      const key = `${userId}:ops`;
+      const ops = ((await result(store.get(key))) as QueuedOp[] | undefined) ?? [];
+      const next = change(ops);
+      if (next === ops) return;
+      await result(next.length > 0 ? store.put(next, key) : store.delete(key));
+    });
+    return true;
+  }, false);
   if (ok) await refreshQueueView(userId);
   return ok;
 }

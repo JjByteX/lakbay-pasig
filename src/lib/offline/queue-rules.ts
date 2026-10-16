@@ -105,7 +105,9 @@ export async function replayOps(
     if (outcome === "drop" && !(await hooks.stillOwner())) outcome = "keep";
     if (outcome === "keep") return { done, dropped, stopped: true };
 
-    await hooks.settled(item, outcome);
+    // One at a time on purpose: writes replay oldest first and the run stops at
+    // the first one that has to wait, so they cannot be started together.
+    await hooks.settled(item, outcome); // NOSONAR
     if (outcome === "done") done += 1;
     else dropped += 1;
   }

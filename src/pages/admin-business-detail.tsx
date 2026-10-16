@@ -386,12 +386,8 @@ export default function AdminBusinessDetailPage() {
     e.preventDefault();
     // Enter inside a step 1 or 2 field means "Next", not save, or a later
     // step would be skipped.
-    if (step === 1) {
-      if (missingStep1.length === 0) setStep(2);
-      return;
-    }
-    if (step === 2) {
-      if (missingStep2.length === 0) setStep(3);
+    if (step !== 3) {
+      if (missingNow.length === 0) setStep((step + 1) as 2 | 3);
       return;
     }
     if (!canSubmit || !id) return;

@@ -23,8 +23,7 @@ export function OfflineNotice({ className }: Readonly<{ className?: string }>) {
   // The Pasig download, or else the newest downloaded trail.
   const syncedAt = savedAt(meta);
   return (
-    <div
-      role="status"
+    <output
       className={cn(
         "flex h-[var(--offline-notice-height)] shrink-0 items-center gap-2 border-b border-border bg-muted px-4 text-xs leading-4 text-muted-foreground",
         className
@@ -35,6 +34,6 @@ export function OfflineNotice({ className }: Readonly<{ className?: string }>) {
         {noticeText(syncedAt)}
         {pending > 0 && ` ${queuedText(pending)}`}
       </p>
-    </div>
+    </output>
   );
 }

@@ -59,7 +59,9 @@ export async function pool<T>(
   async function worker(): Promise<void> {
     while (next < items.length) {
       signal.throwIfAborted();
-      await fn(items[next++]);
+      // Each worker takes the next item only after finishing its last one, which
+      // is what limits the pool to `size` reads at a time.
+      await fn(items[next++]); // NOSONAR
     }
   }
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, worker));

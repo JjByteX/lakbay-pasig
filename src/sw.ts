@@ -27,6 +27,7 @@ interface FetchEv extends Waitable {
   respondWith(response: Promise<Response>): void;
 }
 interface MessageEv extends Waitable {
+  origin: string;
   data: { type?: string; id?: number; anon?: string; target?: string } | null;
   source: { postMessage(message: unknown): void } | null;
 }
@@ -44,8 +45,9 @@ declare const self: {
 
 function hash(text: string): string {
   let h = 5381;
-  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
+  // h * 33 + code, kept to 32 bits.
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 33) + (text.codePointAt(i) ?? 0)) >>> 0;
+  return h.toString(36);
 }
 
 const origin = self.location.origin;
@@ -83,9 +85,8 @@ self.addEventListener("install", (event) => {
 // Safe to claim: a new version only activates once no tab uses the old one.
 self.addEventListener("activate", (event) => {
   const work = (async () => {
-    for (const name of await caches.keys()) {
-      if (name.startsWith("shell-") && name !== SHELL) await caches.delete(name);
-    }
+    const old = (await caches.keys()).filter((name) => name.startsWith("shell-") && name !== SHELL);
+    await Promise.all(old.map((name) => caches.delete(name)));
     await self.clients.claim();
   })();
   (event as Waitable).waitUntil(work);
@@ -94,6 +95,8 @@ self.addEventListener("activate", (event) => {
 // The page starts and ends a download. The reply lets it wait for the switch.
 self.addEventListener("message", (event) => {
   const e = event as MessageEv;
+  // Only this app's own pages may start or end a download.
+  if (e.origin !== origin) return;
   const m = e.data;
   if (!m || (m.type !== "download-start" && m.type !== "download-end")) return;
   const work = (async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Lock, LockOpen, CheckCircle, QrCode } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -110,6 +110,206 @@ function FoundSticker() {
   );
 }
 
+type StopEntryData = TrailStopData["discoveryContent"][number];
+
+// Counts real unlocks. Derived while rendering (React's "adjust state when a
+// prop changes" pattern) so the content that mounts in this same render
+// already knows to animate. A flip counts only when progress was already
+// live on the previous render.
+function useStopPlays(state: TrailStopState, progressLive: boolean) {
+  const reduceMotion = useReducedMotion();
+  const [seen, setSeen] = useState({ state, live: progressLive });
+  const [unlockPlays, setUnlockPlays] = useState(0);
+  const [completePlays, setCompletePlays] = useState(0);
+  if (seen.state !== state || seen.live !== progressLive) {
+    setSeen({ state, live: progressLive });
+    const wasLive = seen.live && progressLive;
+    if (wasLive && seen.state === "locked" && state !== "locked") {
+      setUnlockPlays((n) => n + 1);
+    }
+    // The trail just finished: every stop flips to completed together, and
+    // each one's check pops in a beat after the one before it.
+    if (wasLive && state === "completed" && seen.state !== "completed") {
+      setCompletePlays((n) => n + 1);
+    }
+  }
+  return {
+    unlockPlays,
+    completePlays,
+    animateUnlock: unlockPlays > 0 && !reduceMotion,
+    animateComplete: completePlays > 0 && !reduceMotion,
+  };
+}
+
+// The two scrolls: to the stop that just opened, and (arriving from a scan) to
+// the middle of the screen once the scanned entry is showing.
+function useStopScroll(
+  rowRef: RefObject<HTMLLIElement | null>,
+  { unlockPlays, hasCelebrated, isLocked }: Readonly<{ unlockPlays: number; hasCelebrated: boolean; isLocked: boolean }>
+) {
+  const reduceMotion = useReducedMotion();
+  const arrivedRef = useRef(false);
+  const behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth";
+
+  useEffect(() => {
+    if (unlockPlays === 0) return;
+    if (!reduceMotion) haptic(10);
+    const timer = setTimeout(() => {
+      rowRef.current?.scrollIntoView({ behavior, block: "nearest" });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [unlockPlays, reduceMotion, behavior, rowRef]);
+
+  // The flag is set inside the timer so a dev double-run of the effect cannot
+  // cancel the only scroll.
+  useEffect(() => {
+    if (!hasCelebrated || isLocked || arrivedRef.current) return;
+    const timer = setTimeout(() => {
+      arrivedRef.current = true;
+      rowRef.current?.scrollIntoView({ behavior, block: "center" });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [hasCelebrated, isLocked, behavior, rowRef]);
+}
+
+// The numbered tile. Keyed on the unlock count so each real unlock sends a
+// fresh ring outward and remounts the number to stamp it in with a half turn,
+// the way onboarding's finish check lands.
+function StopNumber({
+  index,
+  isLocked,
+  unlockPlays,
+  animateUnlock,
+}: Readonly<{ index: number; isLocked: boolean; unlockPlays: number; animateUnlock: boolean }>) {
+  return (
+    <span
+      className={cn(
+        "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors duration-300",
+        isLocked && "bg-muted text-muted-foreground",
+        !isLocked && "bg-primary text-primary-foreground"
+      )}
+    >
+      {animateUnlock && (
+        <motion.span
+          key={`ring-${unlockPlays}`}
+          aria-hidden="true"
+          className="absolute inset-0 rounded-md border-2 border-primary"
+          initial={{ scale: 1, opacity: 0.7 }}
+          animate={{ scale: 2.2, opacity: 0 }}
+          transition={{ duration: DURATION.moment - 0.1, ease: EASE_OUT }}
+        />
+      )}
+      <motion.span
+        key={unlockPlays}
+        className="flex"
+        initial={animateUnlock ? { scale: 0, rotate: -45 } : false}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={SPRING_STAMP}
+      >
+        {index + 1}
+      </motion.span>
+    </span>
+  );
+}
+
+// One Discovery content entry. An entry that needs a scan stays one generic
+// line, not its title, until its code has been scanned.
+function StopEntry({
+  entry,
+  entryIndex,
+  unlockedEntryIds,
+  celebrateEntryId,
+  animateUnlock,
+}: Readonly<{
+  entry: StopEntryData;
+  entryIndex: number;
+  unlockedEntryIds: Set<string>;
+  celebrateEntryId: string | null;
+  animateUnlock: boolean;
+}>) {
+  const reduceMotion = useReducedMotion();
+  if (entry.requiresScan && !unlockedEntryIds.has(entry.id)) {
+    return (
+      <li className="flex items-center gap-2 text-sm text-muted-foreground">
+        <QrCode className="h-4 w-4 shrink-0" aria-hidden="true" />
+        Scan the code at the object to read more
+      </li>
+    );
+  }
+  const celebrate = entry.id === celebrateEntryId && !reduceMotion;
+  // A stop that just opened brings its entries in one after another once the
+  // content has started to open. A scanned entry waits a beat longer so the
+  // page has scrolled to it.
+  const rise = celebrate || animateUnlock;
+  return (
+    <motion.li
+      className="relative flex flex-col gap-1"
+      initial={rise ? { opacity: 0, y: 10 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...SPRING_ARRIVE, delay: celebrate ? 0.3 : 0.2 + entryIndex * 0.08 }}
+    >
+      {celebrate && <FoundSticker />}
+      <span className={cn("text-sm font-semibold text-foreground", celebrate && "pr-12")}>
+        {celebrate ? <RevealWords text={entry.title} delay={0.45} /> : entry.title}
+      </span>
+      {entry.photoUrl && (
+        <img
+          src={entry.photoUrl}
+          alt={entry.title}
+          loading="lazy"
+          className="my-1 aspect-video w-full rounded-md object-cover"
+        />
+      )}
+      {entry.videoUrl && <VideoEmbed url={entry.videoUrl} title={entry.title} />}
+      <p className="text-sm text-muted-foreground">{entry.content}</p>
+    </motion.li>
+  );
+}
+
+// Unlocked and completed both show Discovery content, per the plan doc's
+// "completed (same as unlocked, visually marked done)." A stop holds a list of
+// entries, trail notes first and then the place's own entries (trail-query.ts).
+// An empty list is a normal valid state, not an error, so nothing renders below
+// the name in that case.
+function StopContent({
+  entries,
+  isLocked,
+  animateUnlock,
+  unlockedEntryIds,
+  celebrateEntryId,
+}: Readonly<{
+  entries: StopEntryData[];
+  isLocked: boolean;
+  animateUnlock: boolean;
+  unlockedEntryIds: Set<string>;
+  celebrateEntryId: string | null;
+}>) {
+  return (
+    <AnimatePresence initial={false}>
+      {!isLocked && entries.length > 0 && (
+        <motion.ul
+          key="content"
+          className="flex flex-col gap-3 overflow-hidden pt-1"
+          initial={animateUnlock ? { height: 0, opacity: 0 } : false}
+          animate={{ height: "auto", opacity: 1 }}
+          transition={{ duration: DURATION.slow, ease: EASE_OUT }}
+        >
+          {entries.map((entry, entryIndex) => (
+            <StopEntry
+              key={entry.id}
+              entry={entry}
+              entryIndex={entryIndex}
+              unlockedEntryIds={unlockedEntryIds}
+              celebrateEntryId={celebrateEntryId}
+              animateUnlock={animateUnlock}
+            />
+          ))}
+        </motion.ul>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export function TrailStop({
   stop,
   index,
@@ -121,94 +321,25 @@ export function TrailStop({
 }: Readonly<TrailStopProps>) {
   const reduceMotion = useReducedMotion();
   const rowRef = useRef<HTMLLIElement>(null);
-  const arrivedRef = useRef(false);
   const isLocked = state === "locked";
   const isCompleted = state === "completed";
-
-  // Counts real unlocks. Derived while rendering (React's "adjust state when a
-  // prop changes" pattern) so the content that mounts in this same render
-  // already knows to animate. A flip counts only when progress was already
-  // live on the previous render.
-  const [seen, setSeen] = useState({ state, live: progressLive });
-  const [unlockPlays, setUnlockPlays] = useState(0);
-  const [completePlays, setCompletePlays] = useState(0);
-  if (seen.state !== state || seen.live !== progressLive) {
-    setSeen({ state, live: progressLive });
-    if (seen.live && progressLive && seen.state === "locked" && state !== "locked") {
-      setUnlockPlays((n) => n + 1);
-    }
-    // The trail just finished: every stop flips to completed together, and
-    // each one's check pops in a beat after the one before it.
-    if (seen.live && progressLive && state === "completed" && seen.state !== "completed") {
-      setCompletePlays((n) => n + 1);
-    }
-  }
-  const animateUnlock = unlockPlays > 0 && !reduceMotion;
-  const animateComplete = completePlays > 0 && !reduceMotion;
-
-  useEffect(() => {
-    if (unlockPlays === 0) return;
-    if (!reduceMotion) haptic(10);
-    const timer = setTimeout(() => {
-      rowRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" });
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [unlockPlays, reduceMotion]);
+  const { unlockPlays, completePlays, animateUnlock, animateComplete } = useStopPlays(state, progressLive);
 
   // Arriving from a scan: bring this stop to the middle of the screen once its
-  // content is showing. The flag is set inside the timer so a dev double-run of
-  // the effect cannot cancel the only scroll.
+  // content is showing.
   const hasCelebrated =
     celebrateEntryId !== null && stop.discoveryContent.some((entry) => entry.id === celebrateEntryId);
-  useEffect(() => {
-    if (!hasCelebrated || isLocked || arrivedRef.current) return;
-    const timer = setTimeout(() => {
-      arrivedRef.current = true;
-      rowRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [hasCelebrated, isLocked, reduceMotion]);
+  useStopScroll(rowRef, { unlockPlays, hasCelebrated, isLocked });
+
+  const cardFill = isLocked ? "bg-muted/40" : "bg-card";
+  const rowStyle =
+    variant === "card"
+      ? cn("rounded-xl border border-border p-4 transition-colors duration-300", cardFill)
+      : "py-3";
 
   return (
-    <li
-      ref={rowRef}
-      className={cn(
-        "flex gap-3",
-        variant === "card"
-          ? cn("rounded-xl border border-border p-4 transition-colors duration-300", isLocked ? "bg-muted/40" : "bg-card")
-          : "py-3",
-      )}
-    >
-      <span
-        className={cn(
-          "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold transition-colors duration-300",
-          isLocked && "bg-muted text-muted-foreground",
-          !isLocked && "bg-primary text-primary-foreground"
-        )}
-      >
-        {/* Keyed on the unlock count so each real unlock sends a fresh ring
-            outward and remounts the number to stamp it in with a half turn,
-            the way onboarding's finish check lands. */}
-        {animateUnlock && (
-          <motion.span
-            key={`ring-${unlockPlays}`}
-            aria-hidden="true"
-            className="absolute inset-0 rounded-md border-2 border-primary"
-            initial={{ scale: 1, opacity: 0.7 }}
-            animate={{ scale: 2.2, opacity: 0 }}
-            transition={{ duration: DURATION.moment - 0.1, ease: EASE_OUT }}
-          />
-        )}
-        <motion.span
-          key={unlockPlays}
-          className="flex"
-          initial={animateUnlock ? { scale: 0, rotate: -45 } : false}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={SPRING_STAMP}
-        >
-          {index + 1}
-        </motion.span>
-      </span>
+    <li ref={rowRef} className={cn("flex gap-3", rowStyle)}>
+      <StopNumber index={index} isLocked={isLocked} unlockPlays={unlockPlays} animateUnlock={animateUnlock} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
@@ -245,64 +376,13 @@ export function TrailStop({
           )}
         </div>
 
-        {/* Unlocked and completed both show Discovery content, per the
-            plan doc's "completed (same as unlocked, visually marked
-            done)." A stop holds a list of entries, trail notes first and
-            then the place's own entries (trail-query.ts). An empty list is
-            a normal valid state, not an error, so nothing renders below
-            the name in that case. An entry that needs a scan stays one
-            generic line, not its title, until its code has been scanned. */}
-        <AnimatePresence initial={false}>
-          {!isLocked && stop.discoveryContent.length > 0 && (
-            <motion.ul
-              key="content"
-              className="flex flex-col gap-3 overflow-hidden pt-1"
-              initial={animateUnlock ? { height: 0, opacity: 0 } : false}
-              animate={{ height: "auto", opacity: 1 }}
-              transition={{ duration: DURATION.slow, ease: EASE_OUT }}
-            >
-              {stop.discoveryContent.map((entry, entryIndex) => {
-                if (entry.requiresScan && !unlockedEntryIds.has(entry.id)) {
-                  return (
-                    <li key={entry.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <QrCode className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      Scan the code at the object to read more
-                    </li>
-                  );
-                }
-                const celebrate = entry.id === celebrateEntryId && !reduceMotion;
-                // A stop that just opened brings its entries in one after
-                // another once the content has started to open. A scanned
-                // entry waits a beat longer so the page has scrolled to it.
-                const rise = celebrate || animateUnlock;
-                return (
-                  <motion.li
-                    key={entry.id}
-                    className="relative flex flex-col gap-1"
-                    initial={rise ? { opacity: 0, y: 10 } : false}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...SPRING_ARRIVE, delay: celebrate ? 0.3 : 0.2 + entryIndex * 0.08 }}
-                  >
-                    {celebrate && <FoundSticker />}
-                    <span className={cn("text-sm font-semibold text-foreground", celebrate && "pr-12")}>
-                      {celebrate ? <RevealWords text={entry.title} delay={0.45} /> : entry.title}
-                    </span>
-                    {entry.photoUrl && (
-                      <img
-                        src={entry.photoUrl}
-                        alt={entry.title}
-                        loading="lazy"
-                        className="my-1 aspect-video w-full rounded-md object-cover"
-                      />
-                    )}
-                    {entry.videoUrl && <VideoEmbed url={entry.videoUrl} title={entry.title} />}
-                    <p className="text-sm text-muted-foreground">{entry.content}</p>
-                  </motion.li>
-                );
-              })}
-            </motion.ul>
-          )}
-        </AnimatePresence>
+        <StopContent
+          entries={stop.discoveryContent}
+          isLocked={isLocked}
+          animateUnlock={animateUnlock}
+          unlockedEntryIds={unlockedEntryIds}
+          celebrateEntryId={celebrateEntryId}
+        />
       </div>
     </li>
   );

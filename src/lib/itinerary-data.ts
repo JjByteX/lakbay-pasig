@@ -86,7 +86,7 @@ export async function fetchItineraryPool(
  * throws, and generateItinerary treats that as "keep the estimates".
  */
 export const fetchRoadLegs: RoadLegsFetcher = async (start, stops, mode) => {
-  const last = stops[stops.length - 1];
+  const last = stops.at(-1);
   if (!last) return [];
   const route = await fetchRoute(start, last, mode, stops.slice(0, -1));
   return route.legs ? route.legs.map((leg) => ({ km: leg.distance / 1000, minutes: leg.duration / 60 })) : null;

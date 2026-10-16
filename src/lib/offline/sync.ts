@@ -12,7 +12,9 @@ import { packsDue, shouldSync } from "./rules";
 export async function syncNow(): Promise<void> {
   await replayQueue();
   if (shouldSync(readMeta(), Date.now(), isOnline())) await runDownload("sync");
-  for (const id of packsDue(readMeta(), Date.now(), isOnline())) await refreshTrail(id);
+  // Started together, but each takes its turn in download.ts (acquire), so the
+  // worker still handles one download setting at a time.
+  await Promise.all(packsDue(readMeta(), Date.now(), isOnline()).map((id) => refreshTrail(id)));
 }
 
 export function startSync(): void {

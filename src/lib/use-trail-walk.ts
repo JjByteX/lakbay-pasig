@@ -102,7 +102,7 @@ export function useTrailWalk(trail: TrailDetail | null, position: Coordinates | 
     (unlockedStopId: string) => {
       // A personal trail never completes: completed_routes would refuse the row.
       if (!session || !trail || trail.personal || completed) return;
-      const isFinalStop = trail.stops[trail.stops.length - 1]?.id === unlockedStopId;
+      const isFinalStop = trail.stops.at(-1)?.id === unlockedStopId;
       if (!isFinalStop) return;
 
       setCompleted(true); // optimistic, matches the unlock write it follows

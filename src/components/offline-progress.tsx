@@ -18,15 +18,12 @@ export function OfflineProgress({
         <SquareLoader size="sm" />
         <p className="text-sm">{percent === null ? "Downloading" : `Downloading ${percent}%`}</p>
       </div>
-      <div
-        className="h-2 overflow-hidden rounded-full bg-muted"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent ?? undefined}
-      >
-        <div className="h-full bg-primary transition-[width]" style={{ width: `${percent ?? 0}%` }} />
-      </div>
+      <progress
+        className="h-2 w-full appearance-none overflow-hidden rounded-full bg-muted [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary [&::-webkit-progress-value]:transition-[width]"
+        aria-label="Download progress"
+        max={100}
+        value={percent ?? undefined}
+      />
       <Button variant="outline" size="lg" onClick={onCancel}>
         Cancel
       </Button>

@@ -181,6 +181,21 @@ function withFacilityToggled(ids: string[], facilityId: string): string[] {
   return ids.includes(facilityId) ? ids.filter((f) => f !== facilityId) : [...ids, facilityId];
 }
 
+// Insert (no id: a new place) or update (id) the place row. Returns the new id
+// when a row was created, and the message when the write failed.
+async function writePlace(
+  id: string | undefined,
+  payload: Record<string, unknown>
+): Promise<{ newId: string | null; error: string | null }> {
+  if (id === undefined) {
+    const { data, error } = await supabase.from("places").insert(payload).select("id").single();
+    if (error || !data) return { newId: null, error: error?.message ?? "Could not create this place." };
+    return { newId: data.id as string, error: null };
+  }
+  const { error } = await supabase.from("places").update(payload).eq("id", id);
+  return { newId: null, error: error ? error.message : null };
+}
+
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -358,12 +373,8 @@ export default function AdminPlaceDetailPage() {
     // "Next", not save, or a later step would be skipped. The Address field
     // is the one exception: the location picker's Enter runs the address
     // search and never reaches this handler (location-picker.tsx).
-    if (step === 1) {
-      setStep(2);
-      return;
-    }
-    if (step === 2) {
-      setStep(3);
+    if (step !== 3) {
+      setStep((step + 1) as 2 | 3);
       return;
     }
 
@@ -381,27 +392,15 @@ export default function AdminPlaceDetailPage() {
       updated_at: new Date().toISOString(),
     };
 
-    if (isNew) {
-      const { data, error: insertError } = await supabase
-        .from("places")
-        .insert(payload)
-        .select("id")
-        .single();
-
-      setSaving(false);
-      if (insertError || !data) {
-        setError(insertError?.message ?? "Could not create this place.");
-        return;
-      }
-      navigate(`/admin/places/${data.id}`, { replace: true });
-      return;
-    }
-
-    const { error: updateError } = await supabase.from("places").update(payload).eq("id", id);
+    const written = await writePlace(id, payload);
 
     setSaving(false);
-    if (updateError) {
-      setError(updateError.message);
+    if (written.error) {
+      setError(written.error);
+      return;
+    }
+    if (written.newId) {
+      navigate(`/admin/places/${written.newId}`, { replace: true });
       return;
     }
     navigate("/admin/places");

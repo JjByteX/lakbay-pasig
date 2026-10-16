@@ -129,13 +129,11 @@ async function run(): Promise<void> {
 // Replays the signed in user's waiting writes, oldest first. One run at a time:
 // a second call gets the run already going. Never throws.
 export function replayQueue(): Promise<void> {
-  if (!running) {
-    running = run()
-      .catch(() => undefined)
-      .finally(() => {
-        running = null;
-      });
-  }
+  running ??= run()
+    .catch(() => undefined)
+    .finally(() => {
+      running = null;
+    });
   return running;
 }
 

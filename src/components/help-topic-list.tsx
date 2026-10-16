@@ -22,6 +22,8 @@ export function HelpTopicList({ topics, dense = false }: Readonly<{ topics: Help
   const searching = normalize(query) !== "";
   const shown = filterHelpTopics(topics, query);
   const matchCount = shown.reduce((total, topic) => total + topic.items.length, 0);
+  const answerWord = matchCount === 1 ? "answer" : "answers";
+  const announcement = searching ? `${matchCount} ${answerWord} found` : "";
 
   return (
     <>
@@ -57,9 +59,7 @@ export function HelpTopicList({ topics, dense = false }: Readonly<{ topics: Help
       </div>
 
       {/* Read out by screen readers after each change, not shown. */}
-      <output className="sr-only">
-        {searching ? `${matchCount} ${matchCount === 1 ? "answer" : "answers"} found` : ""}
-      </output>
+      <output className="sr-only">{announcement}</output>
 
       {searching && shown.length === 0 && (
         <EmptyState icon={MagnifyingGlass}>No answers for &quot;{query.trim()}&quot;.</EmptyState>

@@ -82,9 +82,10 @@ function Screen({ children }: Readonly<{ children: ReactNode }>) {
 function ScanSteps({ reached }: Readonly<{ reached: 1 | 2 }>) {
   const reduceMotion = useReducedMotion();
   return (
-    <div className="flex gap-2" role="progressbar" aria-label="Scan progress" aria-valuemin={1} aria-valuemax={2} aria-valuenow={reached}>
+    <div className="flex gap-2">
+      <progress className="sr-only" aria-label="Scan progress" value={reached} max={2} />
       {[1, 2].map((n) => (
-        <span key={n} className="h-1 flex-1 overflow-hidden rounded-lg bg-border">
+        <span key={n} aria-hidden="true" className="h-1 flex-1 overflow-hidden rounded-lg bg-border">
           <motion.span
             className="block h-full origin-left bg-primary"
             initial={reduceMotion ? false : { scaleX: 0 }}

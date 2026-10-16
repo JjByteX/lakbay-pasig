@@ -311,6 +311,12 @@ function Preview({
   );
 }
 
+// The Suggest button's label: busy, ready to plan again, or the first plan.
+function generateLabel(generating: boolean, hasTrip: boolean): string {
+  if (generating) return "Planning…";
+  return hasTrip ? "Plan again" : "Suggest a trail";
+}
+
 /**
  * The itinerary generator (docs: Lakbay_Pasig_Itinerary_Generator_Plan.md).
  * Time, start point, start time, travel mode and interests are per-trip inputs.
@@ -482,7 +488,7 @@ export default function TrailSuggestPage() {
       <div className="flex flex-col gap-1">
         <Button type="button" onClick={() => void handleGenerate()} disabled={generating} loading={generating}>
           <Sparkle className="mr-1 h-4 w-4" aria-hidden="true" />
-          {generating ? "Planning…" : trip ? "Plan again" : "Suggest a trail"}
+          {generateLabel(generating, !!trip)}
         </Button>
         {formError && <p className="text-xs text-destructive">{formError}</p>}
       </div>

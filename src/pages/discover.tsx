@@ -142,7 +142,7 @@ export default function DiscoverPage() {
   // "Try again" on the list's error state bumps this, which re-runs the fetch
   // effect below, same retry-counter shape trails.tsx and saved.tsx use.
   const [reload, setReload] = useState(0);
-  const [viewChoice, setView] = useState<"map" | "list">("map");
+  const [viewChoice, setViewChoice] = useState<"map" | "list">("map");
   // Offline there are no map tiles, so the list opens instead and the Map tab
   // says why it is off. The choice comes back when the connection does.
   const online = useOnline();
@@ -314,11 +314,8 @@ export default function DiscoverPage() {
     firstStop !== null &&
     firstStopMeters !== null &&
     firstStopMeters > firstStop.unlockRadius;
-  const nextStop = headingToFirstStop
-    ? firstStop
-    : trail && !walk.completed
-      ? (trail.stops[highestUnlockedIndex + 1] ?? null)
-      : null;
+  const upcomingStop = trail && !walk.completed ? (trail.stops[highestUnlockedIndex + 1] ?? null) : null;
+  const nextStop = headingToFirstStop ? firstStop : upcomingStop;
   const nextStopMeters = headingToFirstStop ? firstStopMeters : metersTo(nextStop);
 
   // Directions to a trail stop, same shape as page-directions-button.tsx's
@@ -420,7 +417,7 @@ export default function DiscoverPage() {
                   instruction -- the desktop panel is not a centered mobile
                   header, it's a left-side panel with its own left edge to
                   align to. */}
-        <Tabs value={view} onValueChange={(v) => setView(v as "map" | "list")}>
+        <Tabs value={view} onValueChange={(v) => setViewChoice(v as "map" | "list")}>
           <TabsList>
             <TabsTrigger value="map" className="gap-1" disabled={!online}>
               <MapIcon className="h-4 w-4" />
@@ -689,7 +686,7 @@ export default function DiscoverPage() {
           onClearFilters={clearFilters}
           onRouteFound={(geometry, foundResult) => {
             handleRouteFound(geometry, foundResult);
-            setView("map");
+            setViewChoice("map");
           }}
         />
       )}

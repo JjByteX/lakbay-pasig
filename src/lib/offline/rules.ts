@@ -147,7 +147,8 @@ export function savedAt(meta: OfflineMeta): number | null {
 
 export function failReason(err: unknown): FailReason {
   const name = err instanceof Error ? err.name : "";
-  const message = String((err as { message?: unknown } | null)?.message ?? "");
+  const raw = (err as { message?: unknown } | null)?.message;
+  const message = typeof raw === "string" ? raw : "";
   if (name === "UnsupportedError") return "unsupported";
   if (name === "QuotaExceededError" || /quota/i.test(message)) return "storage_full";
   if (err instanceof TypeError || /failed to fetch|network|load failed/i.test(message)) return "network";

@@ -187,6 +187,41 @@ async function replaceBarangays(id: string, barangays: Set<string>): Promise<str
   return insertError ? insertError.message : null;
 }
 
+// A copy of the set with the name added, or taken out when it was already in.
+function toggled(set: Set<string>, name: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(name)) next.delete(name);
+  else next.add(name);
+  return next;
+}
+
+interface LoadedFiesta {
+  form: FiestaFormState;
+  barangays: Set<string>;
+  published: boolean;
+  hasEndDate: boolean;
+}
+
+// Reads one fiesta and its barangay tags as form state. Null when it cannot be
+// read.
+async function loadFiesta(id: string): Promise<LoadedFiesta | null> {
+  const { data, error } = await supabase
+    .from("fiestas")
+    .select(
+      "name, patron_saint, community, month, start_date, end_date, date_label, description, history, related_place_id, source_reference, published, fiesta_barangays(barangay)"
+    )
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  const tags = (data.fiesta_barangays ?? []) as { barangay: string }[];
+  return {
+    form: formFromRow(data),
+    barangays: new Set(tags.map((t) => t.barangay)),
+    published: data.published,
+    hasEndDate: Boolean(data.end_date),
+  };
+}
+
 interface FiestaFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -226,7 +261,7 @@ export default function FiestaFormDialog({
       .order("name", { ascending: true })
       .then(({ data }) => setPlaces((data ?? []) as PlaceOption[]));
 
-    if (isNew) {
+    if (fiestaId === null) {
       setForm(EMPTY_FORM);
       setBarangays(new Set());
       setPublished(false);
@@ -236,39 +271,26 @@ export default function FiestaFormDialog({
     }
 
     setLoading(true);
-    supabase
-      .from("fiestas")
-      .select(
-        "name, patron_saint, community, month, start_date, end_date, date_label, description, history, related_place_id, source_reference, published, fiesta_barangays(barangay)"
-      )
-      .eq("id", fiestaId)
-      .single()
-      .then(({ data, error: fetchError }) => {
-        if (fetchError || !data) {
-          setError("Could not load this fiesta.");
-          setLoading(false);
-          return;
-        }
-        setForm(formFromRow(data));
-        const tags = (data.fiesta_barangays ?? []) as { barangay: string }[];
-        setBarangays(new Set(tags.map((t) => t.barangay)));
-        setPublished(data.published);
-        setHasEndDate(Boolean(data.end_date));
+    void loadFiesta(fiestaId).then((loaded) => {
+      if (!loaded) {
+        setError("Could not load this fiesta.");
         setLoading(false);
-      });
-  }, [open, isNew, fiestaId]);
+        return;
+      }
+      setForm(loaded.form);
+      setBarangays(loaded.barangays);
+      setPublished(loaded.published);
+      setHasEndDate(loaded.hasEndDate);
+      setLoading(false);
+    });
+  }, [open, fiestaId]);
 
   function updateField<K extends keyof FiestaFormState>(key: K, value: FiestaFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function toggleBarangay(name: string) {
-    setBarangays((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+    setBarangays((prev) => toggled(prev, name));
   }
 
   const missingRequiredFields = missingRequiredFieldsFor(form, hasEndDate);
