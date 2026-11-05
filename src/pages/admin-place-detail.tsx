@@ -22,14 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ReviewDialog } from "@/components/admin/review-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CharCount } from "@/components/business/business-fields";
 import { LocationPicker } from "@/components/location-picker";
@@ -409,15 +402,6 @@ export default function AdminPlaceDetailPage() {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
-  // Extracted from a nested ternary (reviewSubmitting ? ... : reviewAction
-  // === "verify" ? ... : ...) inline in the Verify/Reject dialog button below.
-  let reviewSubmitLabel = "Reject";
-  if (reviewSubmitting) {
-    reviewSubmitLabel = "Submitting…";
-  } else if (reviewAction === "verify") {
-    reviewSubmitLabel = "Verify";
-  }
-
   let submitLabel = isNew ? "Create Place" : "Save Changes";
   if (saving) submitLabel = "Saving…";
 
@@ -535,49 +519,16 @@ export default function AdminPlaceDetailPage() {
         </Tabs>
       )}
 
-      <Dialog open={reviewAction !== null} onOpenChange={(open) => !open && setReviewAction(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{reviewAction === "verify" ? "Verify this place?" : "Reject this place?"}</DialogTitle>
-            <DialogDescription>
-              {reviewAction === "verify"
-                ? "This place will be marked verified and visible to the public."
-                : "Explain what needs to change. The submitter's record stays visible in the review history."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {reviewAction === "reject" && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="review-notes">Review Notes</Label>
-              <Textarea
-                id="review-notes"
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-                placeholder="Reason for rejection"
-                required
-                maxLength={1000}
-              />
-              <CharCount value={reviewNotes} max={1000} />
-            </div>
-          )}
-
-          {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReviewAction(null)} disabled={reviewSubmitting}>
-              Cancel
-            </Button>
-            <Button
-              variant={reviewAction === "reject" ? "destructive" : "default"}
-              onClick={handleReviewSubmit}
-              disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
-              loading={reviewSubmitting}
-            >
-              {reviewSubmitLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReviewDialog
+        noun="place"
+        action={reviewAction}
+        notes={reviewNotes}
+        submitting={reviewSubmitting}
+        error={reviewError}
+        onNotesChange={setReviewNotes}
+        onSubmit={handleReviewSubmit}
+        onClose={() => setReviewAction(null)}
+      />
     </div>
   );
 }

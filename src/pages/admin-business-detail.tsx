@@ -8,23 +8,13 @@ import { useReviewParam } from "@/hooks/use-review-param";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   BusinessFields,
-  CharCount,
   EMPTY_BUSINESS_FORM,
   type BusinessFormState,
 } from "@/components/business/business-fields";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ReviewDialog } from "@/components/admin/review-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageTitle } from "@/lib/page-title";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
@@ -50,11 +40,13 @@ interface BusinessItem {
 // PlaceReviewEntry: action includes 'feature' alongside 'verify'/'reject',
 // per 0004_businesses.sql's business_reviews check constraint, since 6.7's
 // Featured toggle also logs here.
+type BusinessReviewAction = "verify" | "reject" | "feature";
+
 interface BusinessReviewEntry {
   id: string;
   staff_id: string;
   staff_name: string | null;
-  action: "verify" | "reject" | "feature";
+  action: BusinessReviewAction;
   notes: string | null;
   created_at: string;
 }
@@ -66,7 +58,7 @@ interface BusinessReviewEntry {
 interface BusinessReviewRow {
   id: string;
   staff_id: string;
-  action: "verify" | "reject" | "feature";
+  action: BusinessReviewAction;
   notes: string | null;
   created_at: string;
   profiles: { display_name: string | null }[];
@@ -541,15 +533,6 @@ export default function AdminBusinessDetailPage() {
     featureToggleLabel = "Unfeature";
   }
 
-  // Extracted from a nested ternary (reviewSubmitting ? ... : reviewAction
-  // === "verify" ? ... : ...) inline in the Verify/Reject dialog button below.
-  let reviewSubmitLabel = "Reject";
-  if (reviewSubmitting) {
-    reviewSubmitLabel = "Submitting…";
-  } else if (reviewAction === "verify") {
-    reviewSubmitLabel = "Verify";
-  }
-
   const stepLabel = STEP_LABELS[step];
   const stepSection = STEP_SECTIONS[step];
 
@@ -655,49 +638,16 @@ export default function AdminBusinessDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={reviewAction !== null} onOpenChange={(open) => !open && setReviewAction(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{reviewAction === "verify" ? "Verify this business?" : "Reject this business?"}</DialogTitle>
-            <DialogDescription>
-              {reviewAction === "verify"
-                ? "This business will be marked verified and visible to the public."
-                : "Explain what needs to change. The submitter's record stays visible in the review history."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {reviewAction === "reject" && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="review-notes">Review Notes</Label>
-              <Textarea
-                id="review-notes"
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-                placeholder="Reason for rejection"
-                required
-                maxLength={1000}
-              />
-              <CharCount value={reviewNotes} max={1000} />
-            </div>
-          )}
-
-          {reviewError && <p className="text-sm text-destructive">{reviewError}</p>}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReviewAction(null)} disabled={reviewSubmitting}>
-              Cancel
-            </Button>
-            <Button
-              variant={reviewAction === "reject" ? "destructive" : "default"}
-              onClick={handleReviewSubmit}
-              disabled={reviewSubmitting || (reviewAction === "reject" && reviewNotes.trim().length === 0)}
-              loading={reviewSubmitting}
-            >
-              {reviewSubmitLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReviewDialog
+        noun="business"
+        action={reviewAction}
+        notes={reviewNotes}
+        submitting={reviewSubmitting}
+        error={reviewError}
+        onNotesChange={setReviewNotes}
+        onSubmit={handleReviewSubmit}
+        onClose={() => setReviewAction(null)}
+      />
     </div>
   );
 }

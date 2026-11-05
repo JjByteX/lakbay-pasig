@@ -129,7 +129,9 @@ export function TrailOverlay({
       source: SOURCE_ID,
       filter: ["==", ["get", "done"], false],
       layout: { "line-cap": "butt", "line-join": "round" },
-      paint: { "line-color": palette.roadDark, "line-width": 3, "line-dasharray": [2, 2] },
+      // Same hue as the done line, told apart by dash pattern (WCAG 1.4.1, not color alone).
+      // roadDark is now a road tier color, so it would blend into the basemap.
+      paint: { "line-color": palette.mauve, "line-width": 4, "line-dasharray": [2, 2] },
     });
     map.addLayer({
       id: DONE_LAYER_ID,
