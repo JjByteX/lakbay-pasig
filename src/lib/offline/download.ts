@@ -255,13 +255,13 @@ const syncingTrails = new Set<string>();
 // What a failed or cancelled trail run leaves behind. A cancel only clears the
 // button. A failed Download shows its reason. A failed daily sync changes
 // nothing but the attempt time, so the old pack and its time stay.
-function settleVisibleTrailFailure(id: string, aborted: boolean, err: unknown): void {
-  if (aborted) endTrailJob(id);
-  else failTrailJob(id, failReason(err));
+function trailCancelled(id: string, mode: "download" | "sync"): void {
+  if (mode === "download") endTrailJob(id);
 }
 
-function settleSyncTrailFailure(id: string, aborted: boolean): void {
-  if (!aborted) writeMeta(afterPackSync(readMeta(), id, null, Date.now()));
+function trailFailed(id: string, mode: "download" | "sync", err: unknown): void {
+  if (mode === "download") failTrailJob(id, failReason(err));
+  else writeMeta(afterPackSync(readMeta(), id, null, Date.now()));
 }
 
 async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
@@ -323,8 +323,8 @@ async function runTrail(id: string, mode: "download" | "sync"): Promise<void> {
   } catch (err) {
     await worker.stop();
     await dropCache(target);
-    if (visible) settleVisibleTrailFailure(id, controller.signal.aborted, err);
-    else settleSyncTrailFailure(id, controller.signal.aborted);
+    if (controller.signal.aborted) trailCancelled(id, mode);
+    else trailFailed(id, mode, err);
   } finally {
     await worker.stop();
     syncingTrails.delete(id);

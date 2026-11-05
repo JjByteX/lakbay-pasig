@@ -35,6 +35,7 @@ interface MessageEv extends Waitable {
 // typings used by the rest of src do not describe it, so declare what is used.
 declare const self: {
   __WB_MANIFEST: PrecacheEntry[];
+  addEventListener(type: "message", listener: (event: MessageEv) => void): void;
   addEventListener(type: string, listener: (event: Event) => void): void;
   clients: {
     claim(): Promise<void>;
@@ -95,9 +96,8 @@ self.addEventListener("activate", (event) => {
 // The page starts and ends a download. The reply lets it wait for the switch.
 self.addEventListener("message", (event) => {
   // Only this app's own pages may start or end a download.
-  if ((event as MessageEv).origin !== origin) return;
-  const e = event as MessageEv;
-  const m = e.data;
+  if (event.origin !== origin) return;
+  const m = event.data;
   if (!m || (m.type !== "download-start" && m.type !== "download-end")) return;
   const work = (async () => {
     if (m.type === "download-start") {
@@ -106,9 +106,9 @@ self.addEventListener("message", (event) => {
     } else {
       await caches.delete(DL);
     }
-    e.source?.postMessage({ id: m.id });
+    event.source?.postMessage({ id: m.id });
   })();
-  e.waitUntil(work);
+  event.waitUntil(work);
 });
 
 // Key stored responses by the bare address. Keying by the page's own request

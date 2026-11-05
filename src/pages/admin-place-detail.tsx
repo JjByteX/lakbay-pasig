@@ -197,6 +197,51 @@ async function writePlace(
   return { newId: null, error: error ? error.message : null };
 }
 
+// The place record as form state plus its status, or null when it cannot be
+// read. Moved out of the page component to keep its cognitive complexity
+// under Sonar's limit.
+async function loadPlaceDetail(id: string): Promise<{ form: PlaceFormState; status: PlaceRecord["verification_status"] } | null> {
+  const { data, error } = await supabase
+    .from("places")
+    .select(
+      "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, latitude, longitude, operating_hours, entrance_fee, visit_duration, accessibility_info, rules, facility_ids, verification_status, reviewed_by, category_id"
+    )
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return { form: placeToFormState(data), status: data.verification_status };
+}
+
+// 5.6: full review history, staff id, action, notes, timestamp, newest
+// first, per admin-panel-spec.md's Review Action Log. place_reviews widened
+// in migration 0014 (phase-5-decisions.md Decision 3) to a type-plus-id pair
+// so Trail Content reviews can reuse this table too -- this is specifically
+// the Place detail page, so it must filter on reviewed_type = 'place'
+// explicitly, not just reviewed_id, or a discovery_content.id that happens
+// to collide with this place's id would incorrectly show up here.
+async function loadPlaceReviews(id: string): Promise<PlaceReviewEntry[]> {
+  const { data } = await supabase
+    .from("place_reviews")
+    .select("id, staff_id, action, notes, created_at, profiles(display_name)")
+    .eq("reviewed_type", "place")
+    .eq("reviewed_id", id)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r: PlaceReviewRow) => toPlaceReviewEntry(r));
+}
+
+// entrance_fee is numeric (migration 0019): the form holds it as a string
+// for the number input, so it must be parsed back to a number (or null when
+// blank) before it reaches a numeric column -- an empty string fails
+// Postgres's numeric cast, unlike every other field here which stays text
+// all the way through.
+function savePlace(id: string | undefined, form: PlaceFormState) {
+  return writePlace(id, {
+    ...form,
+    entrance_fee: form.entrance_fee.trim() ? Number(form.entrance_fee) : null,
+    updated_at: new Date().toISOString(),
+  });
+}
+
 export default function AdminPlaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === undefined;
@@ -287,41 +332,16 @@ export default function AdminPlaceDetailPage() {
     if (isNew) return;
 
     setLoading(true);
-    supabase
-      .from("places")
-      .select(
-        "id, name, description, historical_background, historical_significance, year_or_period, source_reference, address, latitude, longitude, operating_hours, entrance_fee, visit_duration, accessibility_info, rules, facility_ids, verification_status, reviewed_by, category_id"
-      )
-      .eq("id", id)
-      .single()
-      .then(({ data, error: fetchError }) => {
-        if (fetchError || !data) {
-          setError("Could not load this place.");
-          setLoading(false);
-          return;
-        }
-        setForm(placeToFormState(data));
-        setStatus(data.verification_status);
-        setLoading(false);
-      });
-
-    // 5.6: full review history, staff id, action, notes, timestamp, newest
-    // first, per admin-panel-spec.md's Review Action Log. place_reviews
-    // widened in migration 0014 (phase-5-decisions.md Decision 3) to a
-    // type-plus-id pair so Trail Content reviews can reuse this table too
-    // — this page is specifically the Place detail page, so it must filter
-    // on reviewed_type = 'place' explicitly, not just reviewed_id, or a
-    // discovery_content.id that happens to collide with this place's id
-    // would incorrectly show up here.
-    supabase
-      .from("place_reviews")
-      .select("id, staff_id, action, notes, created_at, profiles(display_name)")
-      .eq("reviewed_type", "place")
-      .eq("reviewed_id", id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setReviews((data ?? []).map((r: PlaceReviewRow) => toPlaceReviewEntry(r)));
-      });
+    void loadPlaceDetail(id).then((loaded) => {
+      if (loaded) {
+        setForm(loaded.form);
+        setStatus(loaded.status);
+      } else {
+        setError("Could not load this place.");
+      }
+      setLoading(false);
+    });
+    void loadPlaceReviews(id).then(setReviews);
   }, [id, isNew]);
 
   // Row action menu in the Places table (5.2) links here with ?review=verify
@@ -371,18 +391,7 @@ export default function AdminPlaceDetailPage() {
     setSaving(true);
     setError(null);
 
-    // entrance_fee is numeric (migration 0019): the form holds it as a
-    // string for the number input, so it must be parsed back to a number
-    // (or null when blank) before it reaches a numeric column -- an empty
-    // string fails Postgres's numeric cast, unlike every other field here
-    // which stays text all the way through.
-    const payload = {
-      ...form,
-      entrance_fee: form.entrance_fee.trim() ? Number(form.entrance_fee) : null,
-      updated_at: new Date().toISOString(),
-    };
-
-    const written = await writePlace(id, payload);
+    const written = await savePlace(id, form);
 
     setSaving(false);
     if (written.error) {

@@ -225,6 +225,76 @@ function prependReview(
   ];
 }
 
+type InsertedReview = Parameters<typeof prependReview>[1];
+
+interface ReviewWrite {
+  inserted: InsertedReview;
+  error: string | null;
+}
+
+// Same submit writes both the audit log row and the record's current state,
+// per admin-panel-spec.md's Review Action Log and plan 6.6. Audit row first,
+// then the record, so the log always has an entry even if the second write
+// fails. Moved out of the page component to keep its cognitive complexity
+// under Sonar's limit.
+async function insertBusinessReview(
+  businessId: string,
+  staffId: string,
+  action: "verify" | "reject" | "feature",
+  notes: string | null
+): Promise<ReviewWrite> {
+  // .select().single() so the 6.8 history list can prepend the new entry
+  // locally instead of refetching the whole list.
+  const { data, error } = await supabase
+    .from("business_reviews")
+    .insert({ business_id: businessId, staff_id: staffId, action, notes })
+    .select("id, staff_id, action, notes, created_at")
+    .single();
+  return { inserted: data, error: error ? error.message : null };
+}
+
+async function writeBusinessReview(
+  businessId: string,
+  staffId: string,
+  action: ReviewAction,
+  notes: string
+): Promise<ReviewWrite & { status: VerificationStatus }> {
+  const status: VerificationStatus = action === "verify" ? "verified" : "unverified";
+  const written = await insertBusinessReview(businessId, staffId, action, notes.trim() || null);
+  if (written.error) return { ...written, status };
+
+  // Phase 1 (step-6-phases.md): verified_at (migration 0017) only set on
+  // the transition into 'verified', not on every save, so an edit to an
+  // already-verified row (handleSubmit's own update) never moves it. Home's
+  // "recently verified" section sorts on this column, not on updated_at,
+  // which would also move on an unrelated edit.
+  const { error } = await supabase
+    .from("businesses")
+    .update({
+      verification_status: status,
+      reviewed_by: staffId,
+      review_notes: action === "reject" ? notes.trim() : null,
+      updated_at: new Date().toISOString(),
+      ...(status === "verified" ? { verified_at: new Date().toISOString() } : {}),
+    })
+    .eq("id", businessId);
+  return { inserted: written.inserted, error: error ? error.message : null, status };
+}
+
+async function writeFeatureToggle(
+  businessId: string,
+  staffId: string,
+  next: FeaturedStatus
+): Promise<ReviewWrite> {
+  const written = await insertBusinessReview(businessId, staffId, "feature", null);
+  if (written.error) return written;
+  const { error } = await supabase
+    .from("businesses")
+    .update({ featured_status: next, updated_at: new Date().toISOString() })
+    .eq("id", businessId);
+  return { inserted: written.inserted, error: error ? error.message : null };
+}
+
 const STEP_LABELS = { 1: "Business", 2: "Location", 3: "Rules and story" } as const;
 const STEP_SECTIONS = { 1: "business", 2: "location", 3: "story" } as const;
 
@@ -413,59 +483,20 @@ export default function AdminBusinessDetailPage() {
       setReviewError("Rejecting requires a note explaining why.");
       return;
     }
+    if (!reviewAction) return;
 
     setReviewSubmitting(true);
     setReviewError(null);
 
-    const nextStatus: VerificationStatus = reviewAction === "verify" ? "verified" : "unverified";
-
-    // Same submit writes both the audit log row and the record's current
-    // state, per admin-panel-spec.md's Review Action Log and plan 6.6.
-    // .select().single() on the insert, same as admin-place-detail.tsx's
-    // handleReviewSubmit, so the 6.8 history list can prepend the new
-    // entry locally instead of refetching the whole list.
-    const { data: insertedReview, error: reviewInsertError } = await supabase
-      .from("business_reviews")
-      .insert({
-        business_id: id,
-        staff_id: profile.id,
-        action: reviewAction,
-        notes: reviewNotes.trim() || null,
-      })
-      .select("id, staff_id, action, notes, created_at")
-      .single();
-
-    if (reviewInsertError) {
-      setReviewSubmitting(false);
-      setReviewError(reviewInsertError.message);
-      return;
-    }
-
-    // Phase 1 (step-6-phases.md): verified_at (migration 0017) only set on
-    // the transition into 'verified', not on every save, so an edit to an
-    // already-verified row (handleSubmit's own update, above) never moves
-    // it. Home's "recently verified" section sorts on this column, not on
-    // updated_at, which would also move on an unrelated edit.
-    const { error: updateError } = await supabase
-      .from("businesses")
-      .update({
-        verification_status: nextStatus,
-        reviewed_by: profile.id,
-        review_notes: reviewAction === "reject" ? reviewNotes.trim() : null,
-        updated_at: new Date().toISOString(),
-        ...(nextStatus === "verified" ? { verified_at: new Date().toISOString() } : {}),
-      })
-      .eq("id", id);
-
+    const written = await writeBusinessReview(id, profile.id, reviewAction, reviewNotes);
     setReviewSubmitting(false);
-
-    if (updateError) {
-      setReviewError(updateError.message);
+    if (written.error) {
+      setReviewError(written.error);
       return;
     }
 
-    setStatus(nextStatus);
-    setReviews((prev) => prependReview(prev, insertedReview, profile.display_name));
+    setStatus(written.status);
+    setReviews((prev) => prependReview(prev, written.inserted, profile.display_name));
     setReviewAction(null);
   }
 
@@ -482,43 +513,15 @@ export default function AdminBusinessDetailPage() {
     setFeatureError(null);
 
     const nextFeaturedStatus: FeaturedStatus = featuredStatus === "featured" ? "listed" : "featured";
-
-    // .select().single(), same reasoning as handleReviewSubmit above: the
-    // 6.8 history tab prepends this locally instead of refetching.
-    const { data: insertedReview, error: reviewInsertError } = await supabase
-      .from("business_reviews")
-      .insert({
-        business_id: id,
-        staff_id: profile.id,
-        action: "feature",
-        notes: null,
-      })
-      .select("id, staff_id, action, notes, created_at")
-      .single();
-
-    if (reviewInsertError) {
-      setFeatureSubmitting(false);
-      setFeatureError(reviewInsertError.message);
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from("businesses")
-      .update({
-        featured_status: nextFeaturedStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-
+    const written = await writeFeatureToggle(id, profile.id, nextFeaturedStatus);
     setFeatureSubmitting(false);
-
-    if (updateError) {
-      setFeatureError(updateError.message);
+    if (written.error) {
+      setFeatureError(written.error);
       return;
     }
 
     setFeaturedStatus(nextFeaturedStatus);
-    setReviews((prev) => prependReview(prev, insertedReview, profile.display_name));
+    setReviews((prev) => prependReview(prev, written.inserted, profile.display_name));
   }
 
   if (loading) {
