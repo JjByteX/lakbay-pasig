@@ -36,7 +36,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SignOutDialog } from "@/components/sign-out-dialog";
@@ -747,7 +746,6 @@ function AccountMenu() {
             <HomeIcon className="mr-2 h-4 w-4" />
             Home Page
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
             <SignOut className="mr-2 h-4 w-4" />
             Sign out

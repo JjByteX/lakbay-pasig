@@ -149,7 +149,7 @@ function AnnouncementTile({ announcement, slotOffset, containerWidthPx, tilesInV
       // sets through `x`, so the press squeeze is Motion's, like save-heart.tsx.
       whileTap={reduceMotion ? undefined : { scale: 0.98 }}
       transition={SPRING_PRESS}
-      className="group absolute top-0 flex h-full w-full flex-col items-start justify-center gap-1 overflow-hidden rounded-lg border border-border bg-card px-6 py-4 text-left transition-colors hover:bg-muted"
+      className="group absolute top-0 flex h-full w-full flex-col items-start justify-center gap-1 overflow-hidden rounded-lg border border-border bg-card px-6 py-4 text-left transition-colors [@media(hover:hover)]:hover:bg-muted"
       style={{
         width: tileWidthPx(containerWidthPx, tilesInViewport, TILE_GAP_PX),
         left: 0,
@@ -267,8 +267,10 @@ export function AnnouncementCarousel({ announcements, onOpen }: Readonly<Announc
   return (
     <div>
       <div
-        onMouseEnter={() => setPaused(true)}
-        onMouseLeave={() => setPaused(false)}
+        // Mouse only. A touch tap also fires emulated mouseenter, and on
+        // phones that pause re-render swallowed the tap before it clicked.
+        onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
+        onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
         className="relative h-32 w-full overflow-hidden"
         ref={containerRef}
       >
@@ -310,7 +312,7 @@ export function AnnouncementCarousel({ announcements, onOpen }: Readonly<Announc
             >
               <span
                 className={`relative block h-2 overflow-hidden rounded-full bg-border transition-all duration-300 ${
-                  i === index ? "w-8" : "w-2 group-hover/dot:bg-muted-foreground"
+                  i === index ? "w-8" : "w-2 [@media(hover:hover)]:group-hover/dot:bg-muted-foreground"
                 }`}
               >
                 {i === index && (
