@@ -43,6 +43,22 @@ jobs:
       - name: Build
         run: npm run build
 
+  design-gate:
+    name: Design gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # Pure Node script, no dependencies, so no install step. Fails on new
+      # violations of project-foundation/ux-ui-guidelines.md; existing ones
+      # are recorded in scripts/design-baseline.json.
+      - name: Check design rules
+        run: node scripts/design-gate.mjs
+
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
@@ -105,7 +121,7 @@ jobs:
 
   deploy-migrations:
     name: Push migrations to Supabase
-    needs: [checks, migrations-check]
+    needs: [checks, design-gate, migrations-check]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
