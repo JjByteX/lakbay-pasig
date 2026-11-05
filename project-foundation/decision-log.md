@@ -493,3 +493,56 @@ Scope: phases 1 and 2 cover the public and admin global search. Not yet changed:
 **Accepted limits:** Written without running the app. Two loaders exist on purpose: `SquareLoader` is a filled primary tile and would vanish on a default button, so buttons use the `currentColor` spinner. The spinner does not stop under reduced motion, as the upload and voice spinners already do not. Buttons whose busy state has no label swap (a disabled-only Cancel) were left alone.
 
 **Rejected:** Putting `SquareLoader` inside `Button` (invisible on primary, wrong colour on destructive). A `loading` label prop on `Button` (the callers' labels already change, and a second source for the text would drift). Converting only the public screens (a half-converted admin would look unfinished).
+
+---
+
+**#:** 54
+**Milestone:** Seasonal visits, Phase 1: the visit log (docs/seasonal-visits-plan.md)
+
+**Decision:** Migration 0004 adds `place_visits` (kind, item_id, visited_at) and two triggers that write one row per verified visit: a QR scan (a new `entry_unlocks` row) and a GPS stop unlock (`route_progress` moving to a different stop). Rows carry the place or business and the time only: no user id, no clicks, no views, no location. The table is append-only (no insert, update or delete policy, only the security definer triggers write) and admin-read only. No app code changed. Later phases add a nightly job that turns the rows into "Busiest in: Nov, Dec" labels, shown only for a place with at least 30 visits in 12 months once the app has 12 months of history, relative to total app traffic. The public sees labels only. The Tourism Office sees counts under the same threshold.
+
+**Standing rule:** Seasonality counts verified visits only, never clicks or page views. It is not an input to recommendations, ranking, or any user-facing leaderboard, so #40 stands. Nothing may add a user id to `place_visits`.
+
+**Accepted limits:** Written without running the migration. Trail Start is an insert on `route_progress`, so a trail's first stop is counted only when its QR code is scanned. A stop with a QR code can count twice for one trip (GPS unlock, then scan). A restarted trail counts again when re-walked. Offline unlocks are counted when the queue replays, dated by the unlock time the queue sends. Labels describe Lakbay Pasig visitors, not all visitors. No daily cap yet: add one only if gaming shows up.
+
+**Rejected:** Counting page views or clicks (#40). Counting trail completions (one event for a whole route, cannot show which place was busy). Storing a user id to dedupe visits (breaks the no-identity rule). Separate tables for places and businesses (a kind column covers both). Writing the visit from app code (two paths to keep in sync, and offline replays would be missed).
+
+---
+
+**#:** 55
+**Milestone:** Seasonal visits, Phase 2: the nightly labels (docs/seasonal-visits-plan.md)
+
+**Decision:** Migration 0005 adds `place_seasonality` (kind, item_id, peak_months) and `refresh_place_seasonality()`, plain SQL that rebuilds the table from `place_visits`. A GitHub workflow (`seasonality.yml`, nightly 18:30 UTC) calls it with the service role key. The window is the last 12 complete calendar months in Manila time. Nothing is labelled until the first visit is a year old, and a place needs 30 visits in the window. Per month, the place's visits are compared with what it would have had at its usual share of the whole app's visits that month, with 3 pretend visits added to both sides so small counts shrink toward normal. A month at 1.5x or more is a peak. The three constants sit at the top of the function. A place with no peak, or under the threshold, has no row. The place and business detail pages show "Busiest in: Nov, Dec among Lakbay Pasig visitors" through `SeasonLabel`, which renders nothing without a row. Labels are readable by anyone who can already see the place or business.
+
+**Standing rule:** Labels are informational only. They are not read by `recommend_items`, search, sorting or any ranking, so #40 and #54 stand. The table holds months, never counts or users. Changing the rule is a new migration, never an edit to 0005 after it has been applied.
+
+**Accepted limits:** Written without running the migration or the app. Only the last 12 months count, so one unusual event can define a season until Phase 3 averages across years. The label shows up the night after a place crosses the threshold. A vendor sees their own business label through the public page, there is no separate vendor screen. The Tourism Office counts view is Phase 3. The offline copy of a page has no label.
+
+**Rejected:** pg_cron (an extension to enable per project, and the app already has a nightly workflow with the secrets). Storing counts beside the months (the Tourism Office reads `place_visits` directly, and a count next to a public label invites gaming). A row for every place with an empty list (no row already means no label). Ranking or filtering by season (#40).
+
+---
+
+**#:** 56
+**Milestone:** Seasonal visits, Phase 3: years, weeks, crowd hints and the planning view (docs/seasonal-visits-plan.md)
+
+**Decision:** Migration 0006 replaces `refresh_place_seasonality()` (0005 is untouched) and adds four columns to `place_seasonality`: `peak_weeks`, `busy_slots`, `quiet_slots`, `busier_next_week`. The window is now up to 3 whole years of history, pooled, and a month or week is a peak only if it was above normal in more than half of those years, so one unusual year or event no longer defines a season. Weekly peaks use 52 fixed 7-day buckets and need 2.0x normal (a week holds far fewer visits than a month); this separates Undas and Simbang Gabi from the rest of their months. Six crowd slots (weekday or weekend, morning, afternoon, evening, Manila time) give "usually busier" at 1.5x and "usually quieter" at 0.5x or less. `busier_next_week` is set when the week bucket seven days ahead is a peak week. The threshold is unchanged: 30 visits in the last 12 months and 12 months of app history. `report_visit_planning()` gives the Tourism Office a Reports > Visit planning page: verified-visit counts for the last 12 complete months, per site at the same threshold, with peak weeks and a filter for peaks in the next 8 weeks, behind `view_reports` and downloadable like the other reports. The public place and business pages show the new lines through `SeasonLabel`, labels only.
+
+**Standing rule:** Same as #54 and #55. Nothing here feeds recommendations, search or ranking, no user id is stored, and counts are shown only to staff with `view_reports`. Changing the rule is a new migration, never an edit to 0006 after it has been applied.
+
+**Accepted limits:** Written without running the migration or the app. The job needs 24 months before it averages two years, so until then it behaves like Phase 2 plus weeks and crowd hints. Week buckets are fixed from Jan 1, so Undas lands in a bucket that starts Oct 29, and a leap year runs a day later after Feb 29. Crowd slots are the visit's recorded time, which for an offline unlock is the unlock time the queue sends. The next-week hint says only "busier", never "quieter" (a quiet week looks like normal at this volume). The offline copy of a page has no label.
+
+**Rejected:** Prophet or STL (a Python job and a long series per place, and each place has too few visits; pooled shares with the years check do the same job). A holiday or fiesta calendar to explain peaks (Phase 4). Storing counts on the public table (#55). A separate dashboard app (one more report in the existing list). A daily cap per user (still no sign of gaming).
+
+
+---
+
+**#:** 57
+**Milestone:** Seasonal visits, Phase 4: fiesta and event calendars explain the peaks (docs/seasonal-visits-plan.md)
+
+**Decision:** No migration and no new table. A place's peak months and weeks (`place_seasonality`, 0006) are matched against the published fiestas and events whose `related_place_id` is that place, the link staff already make. The rule is pure code in `seasonality-reasons.ts`: a dated fiesta or event matches when any of its days falls in a peak week; a place with no peak weeks falls back to peak months; a fiesta with only a month matches on months. Events are read as Manila calendar days and the year is ignored, so a yearly event matches every year and is listed once by title. An event longer than 31 days (an exhibit) is skipped, the same cap as `fiestas_end_date_check`. At most 3 are shown, fiestas first. The public place page adds one line, "Around the same time: Undas (Nov 1 – 2)", with links to the fiesta or event page, fetched only after the place already has a label. Reports > Visit planning gets an "Around the same time" column, also in the download, from two extra requests for the whole table. Database reads are in `seasonality-occasions.ts`, kept apart so the matching file runs under plain Node.
+
+**Standing rule:** Same as #54 to #56. The wording is "around the same time", never "because": a calendar match is timing, not proof. It is informational only and never feeds recommendations, search or ranking (#40). No counts are added to anything public. Nothing is tagged by hand for this: a fiesta or event with no related place explains nothing.
+
+**Accepted limits:** Written without running the app or the check. Only fiestas and events with a related place can explain a peak, so a place whose Undas or Simbang Gabi entry is not linked to it shows nothing until staff link it. Businesses have no such link and get no reasons. A dated item in a peak month but outside every peak week is not listed, on purpose, because the place did not spike for it. Week dates use the same non-leap-year convention as the week labels. The offline copy of a page has no label, so no reasons either.
+
+**Rejected:** A holiday calendar kept in code (Undas, Simbang Gabi and the like would be a second list to maintain beside the Tourism Office's own, and the plan says nothing is hand-tagged). Matching fiestas by barangay or by distance (a guess where an explicit link exists; revisit if staff find linking too slow). Matching on months alone for dated items (a November fiesta would then "explain" any November peak). Storing the matches in `place_seasonality` (they would go stale when staff edit a fiesta, and computing them on read is two small queries). Weather and other outside signals from the enterprise table (no data source, and the plan lists them as later).

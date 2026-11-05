@@ -1,0 +1,34 @@
+name: Refresh seasonality
+
+# Rebuilds public.place_seasonality (migration 0005) from public.place_visits
+# for the "Busiest in" labels (docs/seasonal-visits-plan.md, Phase 2). Plain SQL
+# in the database, so this only calls it: no checkout, no install. Separate from
+# ci.yml because it needs the service role key. Nightly at 18:30 UTC (2:30 AM in
+# Manila, after the embed job), plus a manual run.
+on:
+  schedule:
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: seasonality
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  refresh:
+    name: Refresh labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refresh
+        run: |
+          curl --fail-with-body -sS -X POST "$SUPABASE_URL/rest/v1/rpc/refresh_place_seasonality" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

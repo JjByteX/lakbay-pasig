@@ -15,6 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
 import { SaveButton } from "@/components/public/save-button";
 import { RecommendationRow } from "@/components/public/recommendation-row";
+import { SeasonLabel } from "@/components/public/season-label";
 import { usePageTitle } from "@/lib/page-title";
 import { useDiscoverBack } from "@/lib/discover-memory";
 import { cn } from "@/lib/utils";
@@ -277,6 +278,9 @@ export default function DiscoverBusinessDetailPage() {
                 and pending look related but never the same, per
                 vendor-mode-spec.md. */}
             <VerificationBadge status={business.verification_status} />
+            {/* Busiest months (seasonal-visits-plan.md, Phase 2). Renders nothing
+                until the business has a label. */}
+            <SeasonLabel kind="business" itemId={business.id} />
             {/* Directions, same as the preview modal; the full page lost it. */}
             <PageDirectionsButton
               result={{

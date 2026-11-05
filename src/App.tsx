@@ -44,6 +44,7 @@ import AdminLandingPage from "@/pages/admin-landing";
 import AdminReportsPage from "@/pages/admin-reports";
 import AdminReportHeatmapPage from "@/pages/admin-report-heatmap";
 import AdminReportFiestasPage from "@/pages/admin-report-fiestas";
+import AdminReportVisitsPage from "@/pages/admin-report-visits";
 import AdminStaffPage from "@/pages/admin-staff";
 import AdminActivityPage from "@/pages/admin-activity";
 import AdminSettingsPage from "@/pages/admin-settings";
@@ -356,6 +357,16 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission="view_reports">
                   <AdminReportFiestasPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Visit planning, seasonal-visits-plan.md Phase 3. Same
+                view_reports gate as the other reports. */}
+            <Route
+              path="reports/visits"
+              element={
+                <ProtectedRoute requiredPermission="view_reports">
+                  <AdminReportVisitsPage />
                 </ProtectedRoute>
               }
             />

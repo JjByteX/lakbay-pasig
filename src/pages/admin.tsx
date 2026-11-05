@@ -25,6 +25,7 @@ const BOUNDED_LIST_ROUTES = new Set([
   "/admin/activity",
   "/admin/reports/heatmap",
   "/admin/reports/fiestas",
+  "/admin/reports/visits",
 ]);
 
 // Sub pages (place new/edit, discovery review, business detail, trail

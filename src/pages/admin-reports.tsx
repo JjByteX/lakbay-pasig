@@ -17,6 +17,11 @@ const REPORTS = [
     name: "Fiesta coverage",
     description: "Which barangays have a published fiesta, only drafts, or none yet.",
   },
+  {
+    to: "/admin/reports/visits",
+    name: "Visit planning",
+    description: "Verified visits per Place and Business over 12 months, and the weeks each is usually busiest.",
+  },
 ];
 
 export default function AdminReportsPage() {

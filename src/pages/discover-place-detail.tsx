@@ -22,6 +22,7 @@ import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
 import { RecommendationRow } from "@/components/public/recommendation-row";
+import { SeasonLabel } from "@/components/public/season-label";
 import { useUserLocation } from "@/components/public/public-shell";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { usePageTitle } from "@/lib/page-title";
@@ -288,6 +289,9 @@ export default function DiscoverPlaceDetailPage() {
             )}
             {/* Same seal-check badge as the map preview's modal. */}
             <VerificationBadge status={place.verification_status} />
+            {/* Busiest months (seasonal-visits-plan.md, Phase 2). Renders nothing
+                until the place has a label. */}
+            <SeasonLabel kind="place" itemId={place.id} />
             {/* Directions, same as the preview modal; the full page lost it. */}
             <PageDirectionsButton
               result={{
