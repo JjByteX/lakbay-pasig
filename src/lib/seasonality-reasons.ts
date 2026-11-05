@@ -113,6 +113,12 @@ export function matchOccasion(
   return { kind: src.kind, id: src.id, name: src.name, when: whenLabel(a, b), sortDay: startDoy };
 }
 
+// Fiestas first, then by day of the year, then by name.
+function compareOccasions(x: Occasion, y: Occasion): number {
+  if (x.kind !== y.kind) return x.kind === "fiesta" ? -1 : 1;
+  return x.sortDay - y.sortDay || x.name.localeCompare(y.name);
+}
+
 /**
  * Up to three occasions that line up with the peaks. Fiestas come before
  * events. An event that repeats yearly appears once per title. Within each
@@ -133,7 +139,7 @@ export function matchOccasions(
     seen.add(key);
     found.push(hit);
   }
-  found.sort((x, y) => (x.kind === y.kind ? x.sortDay - y.sortDay || x.name.localeCompare(y.name) : x.kind === "fiesta" ? -1 : 1));
+  found.sort(compareOccasions);
   return found.slice(0, MAX_REASONS);
 }
 

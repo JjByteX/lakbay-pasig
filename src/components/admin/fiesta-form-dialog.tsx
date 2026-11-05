@@ -222,6 +222,26 @@ async function loadFiesta(id: string): Promise<LoadedFiesta | null> {
   };
 }
 
+// Title and status badge. Its own component to keep the dialog's cognitive
+// complexity under Sonar's limit.
+function FiestaDialogTitle({
+  isNew,
+  loading,
+  name,
+  published,
+}: Readonly<{ isNew: boolean; loading: boolean; name: string; published: boolean }>) {
+  let title = "New Fiesta";
+  if (!isNew) title = name || "Edit Fiesta";
+  return (
+    <div className="flex items-center gap-3">
+      <DialogTitle>{title}</DialogTitle>
+      {!isNew && !loading && (
+        <Badge variant={published ? "default" : "outline"}>{published ? "Published" : "Draft"}</Badge>
+      )}
+    </div>
+  );
+}
+
 interface FiestaFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -359,12 +379,7 @@ export default function FiestaFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <DialogTitle>{isNew ? "New Fiesta" : form.name || "Edit Fiesta"}</DialogTitle>
-            {!isNew && !loading && (
-              <Badge variant={published ? "default" : "outline"}>{published ? "Published" : "Draft"}</Badge>
-            )}
-          </div>
+          <FiestaDialogTitle isNew={isNew} loading={loading} name={form.name} published={published} />
         </DialogHeader>
 
         {loading ? (

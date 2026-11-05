@@ -126,24 +126,22 @@ export default function AdminReportVisitsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchVisitPlanning()
-      .then((rows) => {
+    async function load() {
+      try {
+        const rows = await fetchVisitPlanning();
         if (cancelled) return;
         setData(rows);
         // Occasions are extra: a failure leaves the column empty, not the report.
         const placeIds = rows.filter((r) => r.kind === "place").map((r) => r.item_id);
-        fetchOccasionSources(placeIds)
-          .then((map) => {
-            if (!cancelled) setSources(map);
-          })
-          .catch(() => {});
-      })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
-      })
-      .finally(() => {
+        const map = await fetchOccasionSources(placeIds).catch(() => null);
+        if (!cancelled && map) setSources(map);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+    void load();
     return () => {
       cancelled = true;
     };

@@ -26,7 +26,7 @@ import type { Occasion } from "@/lib/seasonality-reasons";
  * "Around the same time" because timing is not proof. Fetched only once the
  * place has a label, so a place without one costs no extra request.
  */
-export function SeasonLabel({ kind, itemId }: { kind: "place" | "business"; itemId: string }) {
+export function SeasonLabel({ kind, itemId }: Readonly<{ kind: "place" | "business"; itemId: string }>) {
   const [info, setInfo] = useState<Seasonality | null>(null);
   const [occasions, setOccasions] = useState<Occasion[]>([]);
 

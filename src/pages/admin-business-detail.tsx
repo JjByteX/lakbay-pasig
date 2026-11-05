@@ -4,6 +4,7 @@ import { Star, ShoppingBag } from "@phosphor-icons/react";
 import { StepFooter } from "@/components/admin/step-footer";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { useReviewParam } from "@/hooks/use-review-param";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -330,18 +331,7 @@ export default function AdminBusinessDetailPage() {
   // Row action menu in the Businesses table (6.2) links here with
   // ?review=verify or ?review=reject, same pattern as admin-places.tsx,
   // so Verify/Reject is a single click from the list.
-  useEffect(() => {
-    const requested = searchParams.get("review");
-    if (requested === "verify" || requested === "reject") {
-      openReviewDialog(requested);
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("review");
-        return next;
-      }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  useReviewParam(searchParams, setSearchParams, openReviewDialog);
 
   // 6.7: the Businesses table's row menu (6.2) also links here with
   // ?toggle=featured, so Feature/Unfeature is a single click from the

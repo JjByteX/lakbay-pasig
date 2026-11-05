@@ -94,9 +94,9 @@ self.addEventListener("activate", (event) => {
 
 // The page starts and ends a download. The reply lets it wait for the switch.
 self.addEventListener("message", (event) => {
-  const e = event as MessageEv;
   // Only this app's own pages may start or end a download.
-  if (e.origin !== origin) return;
+  if ((event as MessageEv).origin !== origin) return;
+  const e = event as MessageEv;
   const m = e.data;
   if (!m || (m.type !== "download-start" && m.type !== "download-end")) return;
   const work = (async () => {
@@ -218,7 +218,7 @@ async function keepPhoto(url: string): Promise<void> {
     const cache = await caches.open(PHOTOS);
     await cache.put(bare(url), res);
     const keys = await cache.keys();
-    for (const key of keys.slice(0, Math.max(0, keys.length - PHOTO_CAP))) await cache.delete(key);
+    await Promise.all(keys.slice(0, Math.max(0, keys.length - PHOTO_CAP)).map((key) => cache.delete(key)));
   } catch {
     // A photo that cannot be kept is just not available offline.
   }

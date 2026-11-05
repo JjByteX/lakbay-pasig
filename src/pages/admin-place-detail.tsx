@@ -4,6 +4,7 @@ import { CameraPlus, CircleNotch, X } from "@phosphor-icons/react";
 import { StepFooter } from "@/components/admin/step-footer";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { useReviewParam } from "@/hooks/use-review-param";
 import { usePlaceReview, type PlaceReviewEntry } from "@/hooks/use-place-review";
 import { usePlacePhotos, type PlacePhoto } from "@/hooks/use-place-photos";
 import { fetchActiveCategories, type PlaceCategory } from "@/lib/place-categories";
@@ -326,18 +327,7 @@ export default function AdminPlaceDetailPage() {
   // Row action menu in the Places table (5.2) links here with ?review=verify
   // or ?review=reject so Verify/Reject is a single click from the list,
   // instead of forcing View then Verify as two separate steps.
-  useEffect(() => {
-    const requested = searchParams.get("review");
-    if (requested === "verify" || requested === "reject") {
-      openReviewDialog(requested);
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("review");
-        return next;
-      }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  useReviewParam(searchParams, setSearchParams, openReviewDialog);
 
   function updateField<K extends keyof PlaceFormState>(key: K, value: PlaceFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));

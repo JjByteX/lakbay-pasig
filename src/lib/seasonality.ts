@@ -69,7 +69,7 @@ export function weekRuns(weeks: number[]): [number, number][] {
   const sorted = [...new Set(weeks)].sort((a, b) => a - b);
   const runs: [number, number][] = [];
   for (const w of sorted) {
-    const last = runs[runs.length - 1];
+    const last = runs.at(-1);
     if (last && w === last[1] + 1) last[1] = w;
     else runs.push([w, w]);
   }
