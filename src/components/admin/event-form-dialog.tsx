@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { combineDateAndTime, splitDateAndTime } from "@/lib/datetime";
 import { CharCount } from "@/components/business/business-fields";
+import { LocationPicker } from "@/components/location-picker";
 
 // Announcements modal conversion: this dialog replaces the former
 // admin-event-detail.tsx route (create + edit at /admin/events/new and
@@ -63,6 +64,9 @@ interface EventFormState {
   end_date: string;
   end_time: string;
   location: string;
+  // The map pin behind `location`, null until one is set.
+  latitude: number | null;
+  longitude: number | null;
   related_place_id: string;
   enrollment_info: string;
 }
@@ -77,6 +81,8 @@ const EMPTY_FORM: EventFormState = {
   end_date: "",
   end_time: "",
   location: "",
+  latitude: null,
+  longitude: null,
   related_place_id: "",
   enrollment_info: "",
 };
@@ -160,7 +166,7 @@ export default function EventFormDialog({
     supabase
       .from("events")
       .select(
-        "title, description, category_id, related_program, date_time, end_date_time, location, related_place_id, enrollment_info, published, lifecycle_status"
+        "title, description, category_id, related_program, date_time, end_date_time, location, latitude, longitude, related_place_id, enrollment_info, published, lifecycle_status"
       )
       .eq("id", eventId)
       .single()
@@ -180,6 +186,8 @@ export default function EventFormDialog({
           end_date: splitDateAndTime(data.end_date_time).date,
           end_time: splitDateAndTime(data.end_date_time).time,
           location: data.location ?? "",
+          latitude: data.latitude ?? null,
+          longitude: data.longitude ?? null,
           related_place_id: data.related_place_id ?? "",
           enrollment_info: data.enrollment_info ?? "",
         });
@@ -225,6 +233,8 @@ export default function EventFormDialog({
       date_time: combineDateAndTime(form.start_date, form.start_time),
       end_date_time: hasEndDate ? combineDateAndTime(form.end_date, form.end_time) : null,
       location: form.location || null,
+      latitude: form.latitude,
+      longitude: form.longitude,
       related_place_id: form.related_place_id || null,
       enrollment_info: form.enrollment_info || null,
       updated_at: new Date().toISOString(),
@@ -494,15 +504,27 @@ export default function EventFormDialog({
                   </div>
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="location">Location</Label>
-                      <Input
-                        id="location"
-                        value={form.location}
-                        onChange={(e) => updateField("location", e.target.value)}
-                        maxLength={300}
-                      />
-                    </div>
+                    {/* Same picker as the place and business forms: a search
+                        field plus a draggable pin. The pin is the source of
+                        truth and the text is a label filled from it. */}
+                    <LocationPicker
+                      label="Location"
+                      placeholder="Type an address and press Enter to search"
+                      address={form.location}
+                      coordinates={
+                        form.latitude !== null && form.longitude !== null
+                          ? { latitude: form.latitude, longitude: form.longitude }
+                          : null
+                      }
+                      onChange={({ address, coordinates }) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          location: address,
+                          latitude: coordinates?.latitude ?? null,
+                          longitude: coordinates?.longitude ?? null,
+                        }))
+                      }
+                    />
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="related_place_id">Related Place</Label>
                       <Select value={form.related_place_id} onValueChange={(v) => updateField("related_place_id", v)}>
