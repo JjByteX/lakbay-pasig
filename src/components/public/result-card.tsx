@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { flushSync } from "react-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowBendUpRight, ArrowUpRight, SealCheck, SealQuestion } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +124,7 @@ export function ResultCard({
   onRouteFound,
 }: Readonly<ResultCardProps>) {
   const online = useOnline();
+  const navigate = useNavigate();
   const [directionsStatus, setDirectionsStatus] = useState<"idle" | "loading" | "error">("idle");
   const [directionsError, setDirectionsError] = useState<string | null>(null);
 
@@ -206,9 +208,23 @@ export function ResultCard({
                       applies a navigation as a low-priority transition, and the
                       map keeps firing urgent updates (location fixes, camera
                       events) while it is still mounted, so the transition could
-                      be held back. flushSync commits the route change at once.
+                      be held back. react-dom's flushSync around navigate() commits the
+                      route change at once (the Link `flushSync` prop is not available
+                      in the installed react-router-dom types).
                       Closing the popup in the same click is unchanged. */}
-                  <Link to={`/discover/${result.kind}/${result.id}`} flushSync onClick={() => onOpenChange(false)}>
+                  <Link
+                    to={`/discover/${result.kind}/${result.id}`}
+                    onClick={(event) => {
+                      // Let new-tab / modified clicks use the default link behavior.
+                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+                        onOpenChange(false);
+                        return;
+                      }
+                      event.preventDefault();
+                      flushSync(() => navigate(`/discover/${result.kind}/${result.id}`));
+                      onOpenChange(false);
+                    }}
+                  >
                     View
                     <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
                   </Link>
