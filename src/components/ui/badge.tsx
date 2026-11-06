@@ -13,6 +13,12 @@ const badgeVariants = cva(
         destructive: "border-transparent bg-destructive text-destructive-foreground",
         outline: "border-border text-foreground",
         accent: "border-transparent bg-accent text-accent-foreground",
+        // Pills (project-foundation/ux-ui-guidelines.md, Pill Rules): neutral
+        // text on a tinted background, no outline, no dot. Dashboard counts and
+        // status words use these.
+        muted: "border-transparent bg-muted text-foreground",
+        info: "border-transparent bg-primary/10 text-foreground",
+        alert: "border-transparent bg-destructive/10 text-foreground",
       },
     },
     defaultVariants: {

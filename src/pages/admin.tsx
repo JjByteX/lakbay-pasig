@@ -15,6 +15,9 @@ import { cn } from "@/lib/utils";
 // map and a list that scrolls on its own. The Reports selector page is not,
 // it is a short list with nothing to fit.
 const BOUNDED_LIST_ROUTES = new Set([
+  // The dashboard fits the viewport too (admin-dashboard.tsx). Its lists count
+  // the rows that fit, and on a narrow screen it scrolls inside this region.
+  "/admin",
   "/admin/places",
   "/admin/businesses",
   "/admin/events",
@@ -31,7 +34,7 @@ const BOUNDED_LIST_ROUTES = new Set([
 // Sub pages (place new/edit, discovery review, business detail, trail
 // builder) are bounded too, like amkor's forms: the page fits the viewport
 // and the card inside it scrolls when its content is taller (see
-// admin-form-card.tsx). Only admin-dashboard.tsx keeps a scrolling page.
+// admin-form-card.tsx). No admin page scrolls as a whole any more.
 const BOUNDED_SUB_PAGE = /^\/admin\/(places|businesses|trails)\/[^/]+(\/[^/]+)?$/;
 
 export default function AdminPage() {

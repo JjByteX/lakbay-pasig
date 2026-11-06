@@ -1,299 +1,328 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { CaretRight, ClipboardText } from "@phosphor-icons/react";
-import { supabase } from "@/lib/supabase";
+import { CalendarBlank, CaretRight, CheckCircle, ChartLineUp, ClipboardText } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
+import type { SystemPermission } from "@/lib/auth-types";
 import { usePageTitle } from "@/lib/page-title";
-import { formatDateTimeNoSeconds } from "@/lib/datetime";
-import { EmptyState } from "@/components/ui/empty-state";
+import { useAutoPageSize } from "@/hooks/use-auto-page-size";
+import {
+  RANGES,
+  daysSince,
+  deltaLabel,
+  fetchActivity,
+  fetchComingUp,
+  fetchOverview,
+  fetchReviewTimes,
+  fetchTopVisited,
+  fetchVisits,
+  timeAgo,
+  toTrend,
+  type DashboardPerms,
+  type RangeDays,
+  type Trend,
+} from "@/lib/admin-dashboard";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AreaChart, Meter, Pane, Segmented, Sparkline } from "@/components/admin/dashboard-widgets";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
-interface ActivityEntry {
-  id: string;
-  section: "Places" | "Businesses" | "Discovery content";
-  action: string;
-  notes: string | null;
-  created_at: string;
-  staff_name: string | null;
+// Admin dashboard. Fits the viewport on a wide screen (admin.tsx lists "/admin"
+// in BOUNDED_LIST_ROUTES) and scrolls on a narrow one.
+//
+// Order follows project-foundation/ux-ui-guidelines.md: what needs action
+// first, then trends, then the reference log. Left column is the work (queues,
+// what is coming up), right column is the record (trend, activity), so the
+// wide data side balances the sidebar and the narrow action rail on the left.
+//
+//   header          title and date              date range
+//   summary strip   one box, up to 4 figures, divided by hairlines
+//   row 1           Needs attention (4)         Daily trend (8)
+//   row 2           Coming up (4)               Recent activity (8)
+//
+// Every panel is permission gated like the sidebar. A panel a person cannot use
+// is left out, and a row with one panel gives it the full width.
+
+const WIDE_QUERY = "(min-width: 1280px)";
+// A queue untouched this long is flagged as late.
+const STALE_DAYS = 7;
+
+interface Load<T> {
+  data: T | null;
+  error: boolean;
 }
 
-const ACTION_LABEL: Record<string, string> = {
-  verify: "verified",
-  reject: "rejected",
-  feature: "featured",
-};
-
-const ENTITY_LABEL: Record<ActivityEntry["section"], string> = {
-  Places: "a place",
-  Businesses: "a business",
-  "Discovery content": "discovery content",
-};
-
-// Raw shape returned by the place_reviews and business_reviews queries
-// below (same selected columns), before mapping into ActivityEntry.
-// Supabase types a select(...profiles(display_name)) join as an array even
-// for a one-to-one relationship, so profiles comes back as a (possibly
-// empty) array here, not a single nullable object.
-interface ReviewActivityRow {
-  id: string;
-  action: string;
-  notes: string | null;
-  created_at: string;
-  profiles: { display_name: string | null }[];
-}
-
-// Chart window: one bar per day, today last. Days are bucketed in the
-// viewer's own timezone so a late review lands on the day staff saw it.
-const CHART_DAYS = 14;
-
-function dayKey(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function chartStart(): Date {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (CHART_DAYS - 1));
-  return start;
-}
-
-interface ChartDay {
-  key: string;
-  label: string;
-  count: number;
-}
-
-function bucketByDay(timestamps: string[]): ChartDay[] {
-  const start = chartStart();
-  const days: ChartDay[] = Array.from({ length: CHART_DAYS }, (_, i) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + i);
-    return {
-      key: dayKey(date),
-      label: date.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
-      count: 0,
+// Runs `load` when `key` changes. The previous result stays on screen while the
+// next one loads, so changing the date range does not flash the page empty.
+function useLoad<T>(load: (() => Promise<T>) | null, key: string): Load<T> {
+  const [state, setState] = useState<Load<T>>({ data: null, error: false });
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => {
+    const run = loadRef.current;
+    if (!run) return;
+    let cancelled = false;
+    run().then(
+      (data) => !cancelled && setState({ data, error: false }),
+      () => !cancelled && setState((prev) => ({ ...prev, error: true }))
+    );
+    return () => {
+      cancelled = true;
     };
-  });
-  const byKey = new Map(days.map((d) => [d.key, d]));
-  for (const ts of timestamps) {
-    const bucket = byKey.get(dayKey(new Date(ts)));
-    if (bucket) bucket.count += 1;
-  }
-  return days;
+  }, [key]);
+  return state;
 }
 
-// "today", "1 day ago", "6 days ago". Whole calendar days in the viewer's
-// timezone, so a change at 11pm last night reads "1 day ago", not "today".
-function daysAgo(iso: string): string {
-  const then = new Date(iso);
-  then.setHours(0, 0, 0, 0);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const days = Math.round((now.getTime() - then.getTime()) / 86_400_000);
-  if (days <= 0) return "today";
+function useIsWide(): boolean {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE_QUERY).matches);
+  useEffect(() => {
+    const query = window.matchMedia(WIDE_QUERY);
+    const onChange = () => setWide(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
+
+function plural(n: number, one: string, other: string): string {
+  return `${n.toLocaleString("en-PH")} ${n === 1 ? one : other}`;
+}
+
+function ageLabel(days: number): string {
+  if (days === 0) return "today";
   return days === 1 ? "1 day ago" : `${days} days ago`;
 }
+
+// ---------------------------------------------------------------- summary strip
+
+function Figure({
+  label,
+  value,
+  pill,
+  pillHint,
+  note,
+  trend,
+  trendLabel,
+  meter,
+}: Readonly<{
+  label: string;
+  value: string;
+  pill?: string | null;
+  pillHint?: string;
+  note?: string;
+  trend?: number[];
+  trendLabel?: string;
+  meter?: { value: number; label: string };
+}>) {
+  const rising = pill === "New" || pill?.startsWith("+");
+  return (
+    <div className="flex min-w-0 flex-col gap-1 bg-card p-4">
+      <div className="flex h-6 items-center justify-between gap-2">
+        <h3 className="truncate text-sm text-muted-foreground">{label}</h3>
+        {pill && (
+          <Badge variant={rising ? "info" : "muted"} title={pillHint} aria-label={pillHint ? `${pill}, ${pillHint}` : pill}>
+            {pill}
+          </Badge>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-2xl font-semibold leading-8 text-foreground">{value}</p>
+        {trend && <Sparkline values={trend} label={trendLabel ?? `${label} per day`} />}
+        {meter && (
+          <div className="w-24 shrink-0">
+            <Meter value={meter.value} label={meter.label} />
+          </div>
+        )}
+      </div>
+      {note && <p className="truncate text-xs text-muted-foreground">{note}</p>}
+    </div>
+  );
+}
+
+const STRIP_COLUMNS = ["", "xl:grid-cols-1", "xl:grid-cols-2", "xl:grid-cols-3", "xl:grid-cols-4"];
+
+// ---------------------------------------------------------------- page
 
 export default function AdminDashboardPage() {
   usePageTitle("Dashboard");
   const { profile } = useAuth();
   const isAdmin = profile?.staff_role === "admin";
-  const canPlaces = isAdmin || !!profile?.system_permission?.includes("manage_places");
-  const canBusinesses = isAdmin || !!profile?.system_permission?.includes("review_businesses");
+  const has = (permission: SystemPermission) => isAdmin || !!profile?.system_permission?.includes(permission);
+  const perms: DashboardPerms = {
+    isAdmin,
+    canPlaces: has("manage_places"),
+    canBusinesses: has("review_businesses"),
+    canEvents: has("publish_events"),
+    canTrails: has("build_trails"),
+  };
+  const { canPlaces, canBusinesses, canEvents, canTrails } = perms;
+  const canReviews = canPlaces || canBusinesses;
+  const hasTimeData = isAdmin || canReviews;
+  const permKey = [isAdmin, canPlaces, canBusinesses, canEvents, canTrails].join();
 
-  const [placesPending, setPlacesPending] = useState<number | null>(null);
-  const [businessesPending, setBusinessesPending] = useState<number | null>(null);
-  // updated_at of the stalest pending row in each queue. places and
-  // businesses have no created_at column, so this is when the row last
-  // changed, not when it was submitted. Flagged discovery content has no
-  // timestamp at all and is not part of the Places figure.
-  const [placesOldest, setPlacesOldest] = useState<string | null>(null);
-  const [businessesOldest, setBusinessesOldest] = useState<string | null>(null);
-  const [activity, setActivity] = useState<ActivityEntry[] | null>(null);
-  // created_at of every review in the chart window, both queues merged.
-  const [reviewTimes, setReviewTimes] = useState<string[] | null>(null);
+  const wide = useIsWide();
+  const [days, setDays] = useState<RangeDays>(14);
+  const [metric, setMetric] = useState<"visits" | "reviews">(isAdmin ? "visits" : "reviews");
+  const activeMetric = metric === "visits" && !isAdmin ? "reviews" : metric;
 
-  // 6.1 (step-4-phases.md): "pending counts for Events (if a pending
-  // concept applies) and any flagged Trail content in the Places queue
-  // count." Events has no pending/review concept to count — published
-  // (draft/live) and lifecycle_status (upcoming/ongoing/past) are both
-  // fully staff-controlled with no second reviewer, per admin-panel-spec.md
-  // ("no second reviewer required... Staff who builds it can publish
-  // directly," the same reasoning step-4-plan.md applies to Events'
-  // Trail Publishing section), so there's no "pending" state for staff to
-  // be alerted to here — a card counting drafts would misrepresent what
-  // this section actually asks staff to act on. Flagged Trail content has
-  // no card of its own either: it's explicitly "in the Places queue
-  // count," per the same line, not a new number — see the placesPending
-  // query below, which now sums both sources, matching what
-  // admin-places.tsx's merged queue already lists as one set of open items.
-  useEffect(() => {
-    // RLS already scopes places/business review access to manage_places /
-    // review_businesses / admin, so a query from a staff member without
-    // that permission just returns nothing, no need to branch on it here.
-    if (canPlaces) {
-      void Promise.all([
-        supabase.from("places").select("id", { count: "exact", head: true }).eq("verification_status", "pending"),
-        // Flagged discovery_content rows have no status of their own
-        // (0005/0012), a flagged row is by definition an open item, same
-        // reasoning admin-places.tsx's merged queue already uses.
-        supabase.from("discovery_content").select("id", { count: "exact", head: true }).eq("needs_place_review", true),
-      ]).then(([placesRes, flaggedRes]) => {
-        setPlacesPending((placesRes.count ?? 0) + (flaggedRes.count ?? 0));
-      });
-    }
-    if (canPlaces) {
-      void supabase
-        .from("places")
-        .select("updated_at")
-        .eq("verification_status", "pending")
-        .order("updated_at", { ascending: true })
-        .limit(1)
-        .then(({ data }) => setPlacesOldest(data?.[0]?.updated_at ?? null));
-    }
-    if (canBusinesses) {
-      supabase
-        .from("businesses")
-        .select("id", { count: "exact", head: true })
-        .eq("verification_status", "pending")
-        .then(({ count }) => setBusinessesPending(count ?? 0));
-      void supabase
-        .from("businesses")
-        .select("updated_at")
-        .eq("verification_status", "pending")
-        .order("updated_at", { ascending: true })
-        .limit(1)
-        .then(({ data }) => setBusinessesOldest(data?.[0]?.updated_at ?? null));
-    }
+  const overview = useLoad(() => fetchOverview(perms), permKey);
+  const reviews = useLoad(canReviews ? () => fetchReviewTimes(perms, days) : null, `${permKey}:${days}`);
+  const visits = useLoad(
+    isAdmin
+      ? async () => {
+          const rows = await fetchVisits(days);
+          return { rows, top: await fetchTopVisited(rows, days) };
+        }
+      : null,
+    `${permKey}:${days}`
+  );
+  const comingUp = useLoad(canEvents ? () => fetchComingUp() : null, permKey);
+  const activity = useLoad(hasTimeData ? () => fetchActivity(perms) : null, permKey);
 
-    // Review volume for the chart. Only the timestamp is needed, so this
-    // stays a thin query, separate from the 10 row activity feed below.
-    const since = chartStart().toISOString();
-    void Promise.all([
-      canPlaces
-        ? supabase.from("place_reviews").select("created_at").gte("created_at", since)
-        : Promise.resolve({ data: [] }),
-      canBusinesses
-        ? supabase.from("business_reviews").select("created_at").gte("created_at", since)
-        : Promise.resolve({ data: [] }),
-    ]).then(([placeRes, businessRes]) => {
-      const rows = [...(placeRes.data ?? []), ...(businessRes.data ?? [])] as { created_at: string }[];
-      setReviewTimes(rows.map((r) => r.created_at));
-    });
+  const reviewTrend = useMemo<Trend | null>(() => (reviews.data ? toTrend(reviews.data, days) : null), [reviews.data, days]);
+  const visitTrend = useMemo<Trend | null>(
+    () => (visits.data ? toTrend(visits.data.rows.map((r) => r.visited_at), days) : null),
+    [visits.data, days]
+  );
 
-    // place_reviews now covers two reviewed_type values (migration 0014,
-    // widened for Phase 5.3's Trail Content review reuse). Query each type
-    // separately and filter explicitly, rather than pulling the whole
-    // table unfiltered — the pre-6.1 version of this query predates 0014
-    // and silently started mixing both types together once that migration
-    // landed, mislabeling every discovery_content review as "a place."
-    // Both are gated on canPlaces: migration 0013 grants discovery_content
-    // review access to manage_places specifically so this same queue's
-    // reviewer sees Trail Content activity too, matching admin-places.tsx's
-    // merged list and the 6.1 pending count above.
-    void Promise.all([
-      canPlaces
-        ? supabase
-            .from("place_reviews")
-            .select("id, action, notes, created_at, profiles(display_name)")
-            .eq("reviewed_type", "place")
-            .order("created_at", { ascending: false })
-            .limit(10)
-        : Promise.resolve({ data: [] }),
-      canPlaces
-        ? supabase
-            .from("place_reviews")
-            .select("id, action, notes, created_at, profiles(display_name)")
-            .eq("reviewed_type", "discovery_content")
-            .order("created_at", { ascending: false })
-            .limit(10)
-        : Promise.resolve({ data: [] }),
-      canBusinesses
-        ? supabase
-            .from("business_reviews")
-            .select("id, action, notes, created_at, profiles(display_name)")
-            .order("created_at", { ascending: false })
-            .limit(10)
-        : Promise.resolve({ data: [] }),
-    ]).then(([placeRes, discoveryRes, businessRes]) => {
-      const combined: ActivityEntry[] = [
-        ...(placeRes.data ?? []).map((r: ReviewActivityRow) => ({
-          id: r.id,
-          section: "Places" as const,
-          action: r.action,
-          notes: r.notes,
-          created_at: r.created_at,
-          staff_name: r.profiles[0]?.display_name ?? null,
-        })),
-        ...(discoveryRes.data ?? []).map((r: ReviewActivityRow) => ({
-          id: r.id,
-          section: "Discovery content" as const,
-          action: r.action,
-          notes: r.notes,
-          created_at: r.created_at,
-          staff_name: r.profiles[0]?.display_name ?? null,
-        })),
-        ...(businessRes.data ?? []).map((r: ReviewActivityRow) => ({
-          id: r.id,
-          section: "Businesses" as const,
-          action: r.action,
-          notes: r.notes,
-          created_at: r.created_at,
-          staff_name: r.profiles[0]?.display_name ?? null,
-        })),
-      ]
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .slice(0, 10);
-      setActivity(combined);
-    });
-  }, [canPlaces, canBusinesses]);
+  // Lists count how many 56px rows fit their pane, so nothing scrolls. Below
+  // the wide breakpoint the page scrolls instead and shows a fixed count.
+  const comingFit = useAutoPageSize({ enabled: wide, pageSize: 5, hasToolbar: false, hasPagination: false, headerHeight: 0, minRows: 2 });
+  const activityFit = useAutoPageSize({ enabled: wide, pageSize: 4, hasToolbar: false, hasPagination: false, minRows: 2 });
 
-  const chartDays = useMemo(() => bucketByDay(reviewTimes ?? []), [reviewTimes]);
-  const chartTotal = chartDays.reduce((sum, d) => sum + d.count, 0);
-  const chartMax = Math.max(...chartDays.map((d) => d.count), 1);
+  const compared = `compared with the previous ${days} days`;
 
-  // Things that need a person, most urgent first. Each row opens the queue
-  // it counts, so the number always leads to the action.
+  // ---- summary strip
+  const figures: ReactNode[] = [];
+  if (isAdmin) {
+    figures.push(
+      <Figure
+        key="visits"
+        label="Visits"
+        value={visitTrend ? visitTrend.current.toLocaleString("en-PH") : "–"}
+        pill={visitTrend ? deltaLabel(visitTrend.current, visitTrend.previous) : null}
+        pillHint={compared}
+        note={
+          visits.data?.top
+            ? `Most visited: ${visits.data.top.name}, ${visits.data.top.visits}`
+            : visitTrend
+              ? `Last ${days} days`
+              : undefined
+        }
+        trend={visitTrend?.series.map((p) => p.value)}
+        trendLabel={`Visits per day, last ${days} days`}
+      />
+    );
+  }
+  if (canReviews) {
+    figures.push(
+      <Figure
+        key="reviews"
+        label="Reviews"
+        value={reviewTrend ? reviewTrend.current.toLocaleString("en-PH") : "–"}
+        pill={reviewTrend ? deltaLabel(reviewTrend.current, reviewTrend.previous) : null}
+        pillHint={compared}
+        note={reviewTrend ? `Last ${days} days` : undefined}
+        trend={reviewTrend?.series.map((p) => p.value)}
+        trendLabel={`Reviews per day, last ${days} days`}
+      />
+    );
+  }
+  const content = overview.data;
+  if (content?.verified) {
+    const { verified, total } = content.verified;
+    const scope = canPlaces && canBusinesses ? "listings" : canPlaces ? "places" : "businesses";
+    const pct = total === 0 ? 0 : Math.round((verified / total) * 100);
+    figures.push(
+      <Figure
+        key="verified"
+        label="Verified listings"
+        value={`${pct}%`}
+        meter={{ value: pct, label: `${pct}% of ${scope} verified` }}
+        note={`${verified.toLocaleString("en-PH")} of ${total.toLocaleString("en-PH")} ${scope}`}
+      />
+    );
+  }
+  if (content?.announcements) {
+    const { live, drafts } = content.announcements;
+    figures.push(
+      <Figure key="announcements" label="Live announcements" value={live.toLocaleString("en-PH")} note={plural(drafts, "draft", "drafts")} />
+    );
+  }
+  if (content?.trails) {
+    const { published, drafts } = content.trails;
+    figures.push(
+      <Figure key="trails" label="Published trails" value={published.toLocaleString("en-PH")} note={plural(drafts, "draft", "drafts")} />
+    );
+  }
+  const strip = figures.slice(0, 4);
+
+  // ---- needs attention
   interface AttentionRow {
+    key: string;
     label: string;
-    count: number | null;
-    oldest: string | null;
+    note: string | null;
+    count: number;
+    stale: boolean;
     to: string;
   }
-  const attention = [
-    canPlaces && { label: "Places and discovery content", count: placesPending, oldest: placesOldest, to: "/admin/places" },
-    canBusinesses && { label: "Businesses", count: businessesPending, oldest: businessesOldest, to: "/admin/businesses" },
-  ].filter((row): row is AttentionRow => row !== false);
-  const attentionLoaded = attention.every((row) => row.count !== null);
-  const nothingWaiting = attentionLoaded && attention.every((row) => row.count === 0);
+  const attention: AttentionRow[] = [];
+  const queueRow = (key: string, label: string, to: string, queue: { count: number; oldest: string | null }, extra?: string) => {
+    if (queue.count === 0) return;
+    const age = queue.oldest ? daysSince(queue.oldest) : 0;
+    attention.push({
+      key,
+      label,
+      note: [queue.oldest ? `Oldest edited ${ageLabel(age)}` : null, extra].filter(Boolean).join(", ") || null,
+      count: queue.count,
+      stale: age >= STALE_DAYS,
+      to,
+    });
+  };
+  if (content?.places) {
+    queueRow("places", "Places awaiting review", "/admin/places", content.places, content.places.flagged > 0 ? `${content.places.flagged} flagged` : undefined);
+  }
+  if (content?.businesses) queueRow("businesses", "Businesses awaiting review", "/admin/businesses", content.businesses);
+  if (content?.announcements && content.announcements.drafts > 0) {
+    attention.push({ key: "events", label: "Draft announcements", note: "Not published", count: content.announcements.drafts, stale: false, to: "/admin/events" });
+  }
+  if (content?.trails && content.trails.drafts > 0) {
+    attention.push({ key: "trails", label: "Draft trails", note: "Not published", count: content.trails.drafts, stale: false, to: "/admin/trails" });
+  }
+  attention.sort((a, b) => Number(b.stale) - Number(a.stale) || b.count - a.count);
+
+  const showAttention = canPlaces || canBusinesses || canEvents || canTrails;
+  const showTrend = hasTimeData;
+  const showComingUp = canEvents;
+  const showActivity = hasTimeData;
 
   let attentionBody: ReactNode;
-  if (attention.length === 0 || nothingWaiting) {
+  if (!content) {
+    attentionBody = overview.error ? (
+      <EmptyState icon={ClipboardText} className="h-full">Review queues could not be loaded. Reload the page to try again.</EmptyState>
+    ) : (
+      <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+    );
+  } else if (attention.length === 0) {
     attentionBody = (
-      <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
-        Nothing is waiting for review.
-      </p>
+      <EmptyState icon={CheckCircle} className="h-full">Nothing needs attention.</EmptyState>
     );
   } else {
     attentionBody = (
-      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+      <ul className="grid h-full grid-cols-[minmax(0,1fr)] auto-rows-[minmax(3.5rem,4.5rem)] divide-y divide-border overflow-y-auto">
         {attention.map((row) => (
-          <li key={row.to}>
+          <li key={row.key}>
             <Link
               to={row.to}
-              className="flex items-center justify-between gap-4 p-4 text-sm text-foreground transition-colors hover:bg-muted/50"
+              className="flex h-full items-center justify-between gap-4 px-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              <span className="flex flex-col gap-1">
-                <span>{row.label}</span>
-                {row.oldest && (row.count ?? 0) > 0 && (
-                  <span className="text-xs text-muted-foreground">Oldest edited {daysAgo(row.oldest)}</span>
-                )}
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-foreground">{row.label}</span>
+                {row.note && <span className="block truncate text-xs text-muted-foreground">{row.note}</span>}
               </span>
-              <span className="flex items-center gap-2">
-                <Badge variant="secondary">{row.count ?? "…"}</Badge>
+              <span className="flex shrink-0 items-center gap-2">
+                <Badge variant={row.stale ? "alert" : "muted"}>{row.count}</Badge>
                 <CaretRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </span>
             </Link>
@@ -303,105 +332,219 @@ export default function AdminDashboardPage() {
     );
   }
 
-  let chartBody: ReactNode;
-  if (reviewTimes === null) {
-    chartBody = <p className="text-sm text-muted-foreground">Loading…</p>;
-  } else if (chartTotal === 0) {
-    chartBody = <EmptyState icon={ClipboardText}>Reviews from the last 14 days will appear here.</EmptyState>;
+  // ---- daily trend
+  const trend = activeMetric === "visits" ? visitTrend : reviewTrend;
+  const trendState = activeMetric === "visits" ? visits : reviews;
+  const noun = activeMetric === "visits" ? { one: "visit", other: "visits" } : { one: "review", other: "reviews" };
+  let trendBody: ReactNode;
+  if (!trend) {
+    trendBody = trendState.error ? (
+      <EmptyState icon={ChartLineUp} className="h-full">The {noun.other} could not be loaded. Reload the page to try again.</EmptyState>
+    ) : (
+      <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+    );
+  } else if (trend.current === 0) {
+    trendBody = (
+      <EmptyState icon={ChartLineUp} className="h-full">
+        {noun.other[0].toUpperCase() + noun.other.slice(1)} from the last {days} days will appear here.
+      </EmptyState>
+    );
   } else {
-    chartBody = (
-      <div className="flex flex-col gap-2">
-        <div
-          role="img"
-          aria-label={`${chartTotal} reviews in the last ${CHART_DAYS} days`}
-          className="flex h-32 items-end gap-1 border-b border-border"
-        >
-          {chartDays.map((day) => (
-            <div
-              key={day.key}
-              title={`${day.label}: ${day.count} ${day.count === 1 ? "review" : "reviews"}`}
-              className="flex h-full flex-1 items-end"
+    trendBody = <AreaChart points={trend.series} noun={noun} />;
+  }
+
+  // ---- coming up
+  let comingBody: ReactNode;
+  if (!comingUp.data) {
+    comingBody = comingUp.error ? (
+      <EmptyState icon={CalendarBlank} className="h-full">Upcoming dates could not be loaded. Reload the page to try again.</EmptyState>
+    ) : (
+      <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+    );
+  } else if (comingUp.data.length === 0) {
+    comingBody = (
+      <EmptyState icon={CalendarBlank} className="h-full">Announcements and fiestas in the next 90 days will appear here.</EmptyState>
+    );
+  } else {
+    comingBody = (
+      <ul className="grid h-full grid-cols-[minmax(0,1fr)] auto-rows-[minmax(3.5rem,4rem)] divide-y divide-border">
+        {comingUp.data.slice(0, comingFit.pageSize).map((item) => (
+          <li key={item.key}>
+            <Link
+              to={item.to}
+              className="flex h-full items-center gap-4 px-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              <div
-                className={day.count === 0 ? "h-px w-full bg-border" : "w-full rounded-sm bg-primary"}
-                style={day.count === 0 ? undefined : { height: `${(day.count / chartMax) * 100}%` }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{chartDays[0].label}</span>
-          <span>{chartDays[chartDays.length - 1].label}</span>
-        </div>
-      </div>
+              <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-muted text-xs leading-4 text-muted-foreground">
+                <span>{item.month}</span>
+                {item.day !== null && <span className="text-sm font-semibold text-foreground">{item.day}</span>}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground">{item.title}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {item.kind}, {item.detail}
+                </span>
+              </span>
+              {!item.published && <Badge variant="muted">Draft</Badge>}
+            </Link>
+          </li>
+        ))}
+      </ul>
     );
   }
 
+  // ---- recent activity
+  const rows = activity.data?.slice(0, activityFit.pageSize) ?? [];
+  const showItem = (activity.data ?? []).some((r) => r.label);
   let activityBody: ReactNode;
-  if (activity === null) {
-    activityBody = <p className="text-sm text-muted-foreground">Loading…</p>;
-  } else if (activity.length === 0) {
-    activityBody = <EmptyState icon={ClipboardText}>Review actions will appear here.</EmptyState>;
+  if (!activity.data) {
+    activityBody = activity.error ? (
+      <EmptyState icon={ClipboardText} className="h-full">Recent activity could not be loaded. Reload the page to try again.</EmptyState>
+    ) : (
+      <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+    );
+  } else if (activity.data.length === 0) {
+    activityBody = <EmptyState icon={ClipboardText} className="h-full">Staff actions will appear here.</EmptyState>;
   } else {
-    // The table is its own container, no card around it.
     activityBody = (
-      <div className="rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Staff</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Item</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead className="text-right">When</TableHead>
+      <Table className="table-fixed">
+        <TableHeader>
+          <TableRow className="h-10 hover:bg-transparent">
+            <TableHead className="h-10 w-[22%] px-4">Staff</TableHead>
+            <TableHead className="h-10 w-[32%] px-4">Action</TableHead>
+            {showItem && <TableHead className="hidden h-10 px-4 md:table-cell">Item</TableHead>}
+            <TableHead className="h-10 w-[18%] px-4 text-right">When</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((entry) => (
+            <TableRow key={entry.id} className="h-[var(--height-table-row)]">
+              <TableCell className="truncate px-4 py-0 text-sm text-foreground">{entry.who}</TableCell>
+              <TableCell className="truncate px-4 py-0 text-sm text-foreground">
+                {entry.action} {entry.target}
+              </TableCell>
+              {showItem && (
+                <TableCell className="hidden truncate px-4 py-0 text-sm text-muted-foreground md:table-cell">
+                  {entry.label ?? ""}
+                </TableCell>
+              )}
+              <TableCell className="whitespace-nowrap px-4 py-0 text-right text-xs text-muted-foreground">{timeAgo(entry.at)}</TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {activity.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell className="text-sm text-foreground">{entry.staff_name ?? "Staff"}</TableCell>
-                <TableCell className="text-sm text-foreground">
-                  {ACTION_LABEL[entry.action] ?? entry.action}
-                </TableCell>
-                <TableCell className="text-sm text-foreground">{ENTITY_LABEL[entry.section]}</TableCell>
-                <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-                  {entry.notes ?? ""}
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
-                  {formatDateTimeNoSeconds(entry.created_at)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+          ))}
+        </TableBody>
+      </Table>
     );
   }
 
-  // Order: what needs action, then the trend, then the reference log.
+  // ---- layout
+  // Stacked (below xl) a pane has no row to fill, so it gets a fixed height.
+  const pane = "h-80 xl:h-auto";
+  const row = "grid gap-6 xl:min-h-[14rem] xl:flex-1 xl:grid-cols-12";
+  const today = new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" });
+
+  // Each pane takes its column span from where it sits: 4 beside an 8, or the
+  // whole row when it has no partner.
+  const attentionPane = (cols: string) => (
+    <Pane title="Needs attention" className={cn(pane, cols)}>
+      {attentionBody}
+    </Pane>
+  );
+  const trendPane = (cols: string) => (
+    <Pane
+      title={isAdmin ? "Daily trend" : "Reviews per day"}
+      className={cn(pane, cols)}
+      action={
+        isAdmin ? (
+          <Segmented
+            label="Metric"
+            value={activeMetric}
+            onChange={setMetric}
+            options={[
+              { value: "visits", label: "Visits" },
+              { value: "reviews", label: "Reviews" },
+            ]}
+          />
+        ) : undefined
+      }
+    >
+      {trendBody}
+    </Pane>
+  );
+  const comingPane = (cols: string) => (
+    <Pane title="Coming up" bodyRef={comingFit.containerRef} className={cn(pane, cols)}>
+      {comingBody}
+    </Pane>
+  );
+  const activityPane = (cols: string) => (
+    <Pane
+      title="Recent activity"
+      bodyRef={activityFit.containerRef}
+      className={cn(pane, cols)}
+      action={
+        isAdmin ? (
+          <Link
+            to="/admin/activity"
+            className="text-sm font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            View all
+          </Link>
+        ) : undefined
+      }
+    >
+      {activityBody}
+    </Pane>
+  );
+
+  const NARROW = "xl:col-span-4";
+  const WIDE = "xl:col-span-8";
+  const FULL = "xl:col-span-12";
+  // Staff without review access have no trend or activity. Their one row pairs
+  // the queue with what is coming up instead.
+  const first = showTrend ? trendPane(WIDE) : showComingUp ? comingPane(WIDE) : null;
+  const rowOne = showAttention || first ? [showAttention ? attentionPane(first ? NARROW : FULL) : null, first] : null;
+  const rowTwo = showTrend && (showComingUp || showActivity) ? [showComingUp ? comingPane(NARROW) : null, showActivity ? activityPane(showComingUp ? WIDE : FULL) : null] : null;
+
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+      <AdminPageHeader
+        title="Dashboard"
+        badges={<span className="text-sm text-muted-foreground">{today}</span>}
+        actions={
+          hasTimeData ? (
+            <Segmented
+              label="Date range"
+              value={days}
+              onChange={setDays}
+              options={RANGES.map((d) => ({ value: d, label: `${d} days` }))}
+            />
+          ) : undefined
+        }
+      />
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold text-foreground">Needs review</h2>
-        {attentionBody}
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="text-sm font-semibold text-foreground">Reviews, last 14 days</h2>
-          {reviewTimes !== null && chartTotal > 0 && (
-            <span className="text-xs text-muted-foreground">{chartTotal} total</span>
+      {strip.length > 0 && (
+        <div
+          className={cn(
+            "grid shrink-0 grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-2",
+            STRIP_COLUMNS[strip.length],
+            // Odd count on two columns: the last figure takes the full row.
+            "md:max-xl:[&>:last-child:nth-child(odd)]:col-span-2"
           )}
+        >
+          {strip}
         </div>
-        {chartBody}
-      </section>
+      )}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold text-foreground">Recent activity</h2>
-        {activityBody}
-      </section>
+      {rowOne && (
+        <div className={row}>
+          {rowOne[0]}
+          {rowOne[1]}
+        </div>
+      )}
+      {rowTwo && (
+        <div className={row}>
+          {rowTwo[0]}
+          {rowTwo[1]}
+        </div>
+      )}
     </div>
   );
 }

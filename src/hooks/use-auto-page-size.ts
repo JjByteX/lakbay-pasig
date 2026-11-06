@@ -43,6 +43,12 @@ interface UseAutoPageSizeOptions {
   hasToolbar: boolean;
   /** Whether a pagination bar is rendered below the table. */
   hasPagination: boolean;
+  /** Smallest size returned, default 3. */
+  minRows?: number;
+  /** Rows are not 56px tall (a dashboard list, say). Default: --height-table-row. */
+  rowHeight?: number;
+  /** The container has no header row (a plain list). Default: --height-table-header. */
+  headerHeight?: number;
 }
 
 export function useAutoPageSize({
@@ -50,6 +56,9 @@ export function useAutoPageSize({
   pageSize,
   hasToolbar,
   hasPagination,
+  minRows = MIN_ROWS,
+  rowHeight,
+  headerHeight,
 }: UseAutoPageSizeOptions) {
   // Outer container: the region whose height we measure (admin.tsx's bounded
   // outlet, passed down through the page via flex-1 min-h-0).
@@ -64,14 +73,14 @@ export function useAutoPageSize({
 
     const availableH = container.getBoundingClientRect().height;
     const toolbarH = hasToolbar ? (toolbarRef.current?.getBoundingClientRect().height ?? 0) : 0;
-    const rowH = getCssVar("--height-table-row", FALLBACK_ROW_HEIGHT);
-    const headerH = getCssVar("--height-table-header", FALLBACK_HEADER_HEIGHT);
+    const rowH = rowHeight ?? getCssVar("--height-table-row", FALLBACK_ROW_HEIGHT);
+    const headerH = headerHeight ?? getCssVar("--height-table-header", FALLBACK_HEADER_HEIGHT);
     const paginationH = hasPagination ? PAGINATION_BAR_HEIGHT : 0;
 
     const usable = availableH - toolbarH - headerH - paginationH - CARD_BORDER;
     const rows = Math.floor(usable / rowH);
-    setComputedPageSize(Math.max(MIN_ROWS, Math.min(MAX_ROWS, rows)));
-  }, [hasToolbar, hasPagination]);
+    setComputedPageSize(Math.max(minRows, Math.min(MAX_ROWS, rows)));
+  }, [hasToolbar, hasPagination, minRows, rowHeight, headerHeight]);
 
   useEffect(() => {
     if (!enabled) return;
