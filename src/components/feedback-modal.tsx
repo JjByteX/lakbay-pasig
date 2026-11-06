@@ -72,6 +72,16 @@ function loadTurnstile(): Promise<void> {
 
 const SUCCESS_CLOSE_MS = 1200;
 
+// The database counts code points, so the form does too (maxLength and
+// String.length count UTF-16 units, which differs for emoji).
+function codePointLength(text: string): number {
+  return Array.from(text).length;
+}
+
+function clipToCodePoints(text: string, max: number): string {
+  return codePointLength(text) <= max ? text : Array.from(text).slice(0, max).join("");
+}
+
 /**
  * Send Feedback modal (send-feedback-plan.md, Phase 4). A guest or a signed in
  * user picks a type, writes a message, and may add an email and one image.
@@ -92,7 +102,10 @@ export function FeedbackModal() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
 
+  // Bumped on every pick, remove and clear, so a slow older result is ignored.
+  const pickToken = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const captchaBox = useRef<HTMLDivElement>(null);
   const captchaId = useRef<string | null>(null);
@@ -143,6 +156,8 @@ export function FeedbackModal() {
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   function clearForm() {
+    pickToken.current += 1;
+    setProcessing(false);
     setType("");
     setMessage("");
     setEmail("");
@@ -167,7 +182,12 @@ export function FeedbackModal() {
   async function pickImage(file: File | undefined) {
     setImageError(null);
     if (!file) return;
+    const token = ++pickToken.current;
+    setImage(null);
+    setProcessing(true);
     const result = await shrinkImage(file);
+    if (token !== pickToken.current) return;
+    setProcessing(false);
     if ("problem" in result) {
       setImage(null);
       setImageError(ERROR_TEXT[result.problem]);
@@ -178,6 +198,8 @@ export function FeedbackModal() {
   }
 
   function removeImage() {
+    pickToken.current += 1;
+    setProcessing(false);
     setImage(null);
     setImageError(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -193,15 +215,17 @@ export function FeedbackModal() {
   }
 
   const trimmed = message.trim();
-  const ready = type !== "" && trimmed.length >= MESSAGE_MIN;
+  const trimmedLength = codePointLength(trimmed);
+  const ready = type !== "" && trimmedLength >= MESSAGE_MIN && trimmedLength <= MESSAGE_MAX && !processing;
   let hint: string | null = null;
   if (!online) hint = HINT_OFFLINE;
   else if (type === "") hint = HINT_TYPE;
-  else if (trimmed.length < MESSAGE_MIN) hint = HINT_MESSAGE;
+  else if (trimmedLength < MESSAGE_MIN) hint = HINT_MESSAGE;
+  else if (processing) hint = "Preparing your image.";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!ready || sending || !online) return;
+    if (!ready || sending || processing || !online) return;
     setSending(true);
     setError(null);
     try {
@@ -251,6 +275,7 @@ export function FeedbackModal() {
   }
 
   const locked = sending || sent;
+  const imageLocked = locked || processing;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -285,9 +310,8 @@ export function FeedbackModal() {
               <Textarea
                 id="feedback-message"
                 rows={4}
-                maxLength={MESSAGE_MAX}
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => setMessage(clipToCodePoints(e.target.value, MESSAGE_MAX))}
                 placeholder={MESSAGE_PLACEHOLDER}
                 disabled={locked}
               />
@@ -316,13 +340,13 @@ export function FeedbackModal() {
                 type="file"
                 accept={ACCEPTED_TYPES.join(",")}
                 className="sr-only"
-                disabled={locked}
+                disabled={imageLocked}
                 onChange={(e) => void pickImage(e.target.files?.[0])}
               />
               {image ? (
                 <div className="flex items-center justify-between gap-3">
                   <p className="min-w-0 truncate text-sm">{image.name}</p>
-                  <Button type="button" variant="outline" size="sm" disabled={locked} onClick={removeImage}>
+                  <Button type="button" variant="outline" size="sm" disabled={imageLocked} onClick={removeImage}>
                     <X className="mr-1 h-4 w-4" aria-hidden="true" />
                     {IMAGE_REMOVE}
                   </Button>
@@ -333,7 +357,7 @@ export function FeedbackModal() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={locked}
+                    disabled={imageLocked}
                     onClick={() => fileRef.current?.click()}
                   >
                     <ImageSquare className="mr-1 h-4 w-4" aria-hidden="true" />

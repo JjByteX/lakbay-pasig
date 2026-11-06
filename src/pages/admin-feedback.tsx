@@ -264,9 +264,15 @@ function FeedbackDetail({
     if (!row || next === row.status) return;
     setSaving(true);
     setError(null);
-    const { error: updateError } = await supabase.from("feedback").update({ status: next }).eq("id", row.id);
+    // select() returns the changed rows, so an update that row level security
+    // filtered out (no error, no rows) is not shown as saved.
+    const { data, error: updateError } = await supabase
+      .from("feedback")
+      .update({ status: next })
+      .eq("id", row.id)
+      .select("id");
     setSaving(false);
-    if (updateError) {
+    if (updateError || !data?.length) {
       setError("Could not change the status. Try again.");
       return;
     }

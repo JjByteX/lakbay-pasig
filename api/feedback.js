@@ -35,6 +35,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // so about 3 MB for the whole request is plenty.
 const MAX_BODY_BYTES = 3_000_000;
 const MAX_IMAGE_PIXELS = 40_000_000;
+const CAPTCHA_TIMEOUT_MS = 8_000;
 const IMAGE_SIDE = 1280;
 const IMAGE_QUALITY = 75;
 
@@ -92,10 +93,37 @@ function sniffImage(bytes) {
   return null;
 }
 
-async function readBody(request) {
-  const contentType = (request.headers.get("content-type") || "").toLowerCase();
-  if (contentType.startsWith("multipart/form-data")) {
-    const form = await request.formData();
+// Length in code points, the way Postgres char_length counts, not UTF-16 units.
+function codePointLength(text) {
+  return Array.from(text).length;
+}
+
+// Reads the body while counting bytes and stops as soon as the cap is passed,
+// so a missing or false Content-Length cannot get an oversized body through.
+// Returns null when the body is over the cap.
+async function readCapped(request, maxBytes) {
+  if (!request.body) return Buffer.alloc(0);
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readBody(request, bytes, contentType) {
+  // formData() and json() run on the already capped bytes.
+  const capped = new Response(bytes, { headers: { "content-type": contentType } });
+  if (contentType.toLowerCase().startsWith("multipart/form-data")) {
+    const form = await capped.formData();
     const image = form.get("image");
     return {
       fields: {
@@ -108,8 +136,8 @@ async function readBody(request) {
       image: image && typeof image === "object" && image.size > 0 ? image : null,
     };
   }
-  if (contentType.startsWith("application/json")) {
-    const json = await request.json();
+  if (contentType.toLowerCase().startsWith("application/json")) {
+    const json = await capped.json();
     return { fields: json && typeof json === "object" ? json : {}, image: null };
   }
   return null;
@@ -123,6 +151,7 @@ async function captchaPasses(token, ip) {
   const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
     method: "POST",
     body: form,
+    signal: AbortSignal.timeout(CAPTCHA_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`turnstile ${res.status}`);
   const data = await res.json();
@@ -156,9 +185,12 @@ export default {
     const declared = Number(request.headers.get("content-length") || 0);
     if (declared > MAX_BODY_BYTES) return reply("too_large", 413);
 
+    const contentType = request.headers.get("content-type") || "";
     let body;
     try {
-      body = await readBody(request);
+      const bytes = await readCapped(request, MAX_BODY_BYTES);
+      if (!bytes) return reply("too_large", 413);
+      body = await readBody(request, bytes, contentType);
     } catch {
       return reply("invalid_message", 400);
     }
@@ -174,7 +206,8 @@ export default {
     if (!TYPES.has(type)) return reply("invalid_type", 400);
 
     const message = typeof fields.message === "string" ? fields.message.replace(/\0/g, "").trim() : "";
-    if (message.length < MESSAGE_MIN || message.length > MESSAGE_MAX) return reply("invalid_message", 400);
+    const messageLength = codePointLength(message);
+    if (messageLength < MESSAGE_MIN || messageLength > MESSAGE_MAX) return reply("invalid_message", 400);
 
     let email = null;
     if (typeof fields.email === "string" && fields.email.trim() !== "") {

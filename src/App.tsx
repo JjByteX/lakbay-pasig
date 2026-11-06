@@ -64,7 +64,7 @@ const PrivacyPage = lazyPage(() => import("@/pages/privacy"));
 // the mobile pager and the first screens use them right away.
 const EVERYONE_PAGES = [TrailBuilderPage, TrailSuggestPage, TrailScanPage, PrivacyPage];
 const VENDOR_PAGES = [VendorDashboardPage, VendorItemsPage];
-const ADMIN_PAGES = [AdminPage, AdminDashboardPage, AdminPlacesPage, AdminPlaceDetailPage, AdminDiscoveryContentReviewPage, AdminBusinessesPage, AdminBusinessDetailPage, AdminEventsPage, AdminFiestasPage, AdminTrailsPage, AdminTrailBuilderPage, AdminCategoriesPage, AdminLandingPage, AdminReportsPage, AdminReportHeatmapPage, AdminReportFiestasPage, AdminReportVisitsPage, AdminStaffPage, AdminActivityPage, AdminSettingsPage, AdminHelpPage];
+const ADMIN_PAGES = [AdminPage, AdminDashboardPage, AdminPlacesPage, AdminPlaceDetailPage, AdminDiscoveryContentReviewPage, AdminBusinessesPage, AdminBusinessDetailPage, AdminEventsPage, AdminFiestasPage, AdminTrailsPage, AdminTrailBuilderPage, AdminCategoriesPage, AdminLandingPage, AdminReportsPage, AdminReportHeatmapPage, AdminReportFiestasPage, AdminReportVisitsPage, AdminStaffPage, AdminActivityPage, AdminSettingsPage, AdminHelpPage, AdminFeedbackPage];
 
 // Fetches the split pages while the browser is idle, so the first visit to
 // each is as quick as a page already loaded. Admin files are fetched only for

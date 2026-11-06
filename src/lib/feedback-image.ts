@@ -34,7 +34,15 @@ export async function shrinkImage(file: File): Promise<{ file: File } | { proble
 
     // WebP where the browser can encode it, else JPEG (a PNG fallback is bigger).
     let blob = await encode(canvas, "image/webp", 0.78);
-    if (blob?.type !== "image/webp") blob = await encode(canvas, "image/jpeg", 0.8);
+    if (blob?.type !== "image/webp") {
+      // JPEG has no alpha, so put white behind transparent pixels first.
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-over";
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      blob = await encode(canvas, "image/jpeg", 0.8);
+    }
     if (!blob) return { problem: "image_type" };
     if (blob.size > UPLOAD_MAX_BYTES) return { problem: "too_large" };
 

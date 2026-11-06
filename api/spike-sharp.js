@@ -69,7 +69,8 @@ export default {
         outputHasExif: Boolean(outputMeta.exif),
       });
     } catch (error) {
-      return reply({ ok: false, error: String(error && error.message ? error.message : error) }, 500);
+      console.error("spike-sharp processing failed", error);
+      return reply({ ok: false, error: "internal_error" }, 500);
     }
   },
 };
