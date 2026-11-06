@@ -201,7 +201,14 @@ export function ResultCard({
               </div>
               <DialogFooter className="flex-row items-center justify-between gap-2 sm:justify-between">
                 <Button asChild variant="link" className="gap-1 px-0">
-                  <Link to={`/discover/${result.kind}/${result.id}`} onClick={() => onOpenChange(false)}>
+                  {/* Bugfix, human-reported: the address bar changed to the detail URL but
+                      the screen stayed on the map until a reload. React Router
+                      applies a navigation as a low-priority transition, and the
+                      map keeps firing urgent updates (location fixes, camera
+                      events) while it is still mounted, so the transition could
+                      be held back. flushSync commits the route change at once.
+                      Closing the popup in the same click is unchanged. */}
+                  <Link to={`/discover/${result.kind}/${result.id}`} flushSync onClick={() => onOpenChange(false)}>
                     View
                     <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
                   </Link>
