@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChatCircleText, Eye, Hourglass } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChatCircleText, Check, Copy, Eye, Hourglass } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,8 +77,66 @@ function snippet(message: string): string {
   return flat.length > 90 ? `${flat.slice(0, 90)}…` : flat;
 }
 
+// Plain text for pasting into a chat, ticket or AI prompt. The sender's email
+// and the private attachment are left out on purpose: this text leaves the
+// admin panel, and neither is needed to understand the problem.
+function feedbackAsText(row: FeedbackRow): string {
+  return [
+    `Type: ${TYPE_LABEL[row.type] ?? row.type}`,
+    `Received: ${formatDateTimeNoSeconds(row.created_at)}`,
+    `Sent by: ${row.user_id ? "Signed in user" : "Guest"}`,
+    `Status: ${STATUS_OPTIONS.find((o) => o.value === row.status)?.label ?? row.status}`,
+    row.attachment_path ? "Attachment: has an image (not included)" : null,
+    "",
+    "Message:",
+    row.message,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Clipboard API is missing on plain http or when permission is refused.
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    return ok;
+  }
+}
+
+// Which row was just copied, so its button can show a tick for a moment.
+function useCopied() {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  const copy = useCallback(async (row: FeedbackRow) => {
+    if (!(await copyText(feedbackAsText(row)))) return;
+    setCopiedId(row.id);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopiedId(null), 1500);
+  }, []);
+  return { copiedId, copy };
+}
+
 export default function AdminFeedbackPage() {
   usePageTitle("Feedback");
+  const { copiedId, copy } = useCopied();
   const [rows, setRows] = useState<FeedbackRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -169,6 +227,11 @@ export default function AdminFeedbackPage() {
       render: (row) => (
         <AdminIconActions>
           <AdminIconAction icon={Eye} label="View" onClick={() => setOpenId(row.id)} />
+          <AdminIconAction
+            icon={copiedId === row.id ? Check : Copy}
+            label={copiedId === row.id ? "Copied" : "Copy"}
+            onClick={() => copy(row)}
+          />
           <DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -286,6 +349,7 @@ function FeedbackDetail({
   onClose: () => void;
   onStatusChanged: (id: string, status: FeedbackStatus) => void;
 }>) {
+  const { copiedId, copy } = useCopied();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -400,6 +464,11 @@ function FeedbackDetail({
                 </Select>
                 {error && <p className="text-sm text-destructive">{error}</p>}
               </div>
+
+              <Button type="button" variant="outline" className="self-start" onClick={() => copy(row)}>
+                {copiedId === row.id ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                {copiedId === row.id ? "Copied" : "Copy as text"}
+              </Button>
             </div>
           </>
         )}

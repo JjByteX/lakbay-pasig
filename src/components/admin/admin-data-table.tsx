@@ -443,6 +443,11 @@ export default function AdminDataTable<T>({
                       actionsCol && "w-px whitespace-nowrap text-center",
                       !actionsCol && col.align === "right" && "text-right"
                     )}
+                    // A click on a row action (Copy, Set status, ...) must not
+                    // also fire the row's own click, which opens the item. React
+                    // events bubble through portals, so this also covers the
+                    // items of a dropdown opened from the actions cell.
+                    onClick={actionsCol && onRowClick ? (e) => e.stopPropagation() : undefined}
                   >
                     {renderCellContent(row, col)}
                   </TableCell>
