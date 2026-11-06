@@ -84,7 +84,7 @@ export function useSwr<T>(key: string, fetcher: () => Promise<T>, retry = 0): Sw
       if (Date.now() - hit.at < FRESH_MS) return;
     } else {
       setCurrent((prev) =>
-        prev.key === key && prev.loading && prev.data === undefined ? prev : held(key, { data: undefined, loading: true, error: false })
+        prev.key === key && prev.loading && prev.data === undefined ? prev : held<T>(key, { data: undefined, loading: true, error: false })
       );
     }
     load(key, fetcher)
@@ -97,7 +97,7 @@ export function useSwr<T>(key: string, fetcher: () => Promise<T>, retry = 0): Sw
           setCurrent((prev) =>
             prev.key === key && prev.data !== undefined
               ? { ...prev, loading: false }
-              : held(key, { data: undefined, loading: false, error: true })
+              : held<T>(key, { data: undefined, loading: false, error: true })
           );
         }
       });
