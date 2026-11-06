@@ -38,6 +38,8 @@ const MAX_IMAGE_PIXELS = 40_000_000;
 const CAPTCHA_TIMEOUT_MS = 8_000;
 const IMAGE_SIDE = 1280;
 const IMAGE_QUALITY = 75;
+// The feedback bucket rejects files over 2 MiB, so refuse them before the upload.
+const MAX_STORED_IMAGE_BYTES = 2_097_152;
 
 // Shared limits, counted in Supabase so every instance sees the same number.
 const IP_LIMIT = { max: 5, windowSeconds: 600 };
@@ -260,6 +262,7 @@ export default {
           console.error("feedback: image processing failed", error);
           return reply("image_type", 415);
         }
+        if (processed.byteLength > MAX_STORED_IMAGE_BYTES) return reply("too_large", 413);
         attachmentPath = `${randomUUID()}.webp`;
       }
 
