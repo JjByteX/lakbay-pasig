@@ -29,7 +29,7 @@ Medium scale means feature-based grouping: each feature owns its files, shared u
 - UI Components: shadcn/ui with Tailwind CSS
 - Backend and Database: Supabase, built on PostgreSQL
 - Auth: Supabase Auth, email verification only
-- Hosting: Hostinger Node.js hosting, deployed through GitHub integration, connected to Supabase through Hostinger's database connector
+- Hosting: Vercel for the app and its serverless functions (`api/`), Supabase for the database, auth and storage
 - Role-based access through Supabase row level security, matching Guest, Registered User, Vendor, and CATO Staff roles
 
 Reasoning: the data model is relational (Places, Trails, Businesses, and Staff permissions all link to each other), so PostgreSQL fits better than a NoSQL database. Supabase's row level security maps directly onto the four user roles. shadcn/ui requires TypeScript, which also gives type safety across the data model for a team of three.

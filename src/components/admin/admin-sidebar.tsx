@@ -1,4 +1,4 @@
-import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, FlagBanner, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown, Question } from "@phosphor-icons/react";
+import { MagnifyingGlass, SquaresFour, ChartBar, Bank, Storefront, CalendarDots, FlagBanner, MapTrifold, Tag, Image, Users, Pulse, Gear as SettingsIcon, SignOut, House, ArrowsLeftRight, CaretUpDown, Question, ChatCircleText } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -88,6 +88,10 @@ const NAV_ITEMS = [
   // landing content, and reusing manage_places would hand every place
   // editor control over the first screen a new visitor sees.
   { to: "/admin/landing", label: "Landing Page", icon: Image, permission: "manage_landing" as const, permissions: null, adminOnly: false, group: "tools" },
+  // Feedback (send-feedback-plan.md Phase 6.3): inbox for Send Feedback. Own
+  // permission (review_feedback, migration 0008). Route guard in App.tsx uses
+  // the same permission, keep the two in step.
+  { to: "/admin/feedback", label: "Feedback", icon: ChatCircleText, permission: "review_feedback" as const, permissions: null, adminOnly: false, group: "tools" },
   {
     to: "/admin/categories",
     label: "Categories",

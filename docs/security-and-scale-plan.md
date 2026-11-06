@@ -20,6 +20,7 @@ Pasig has about 850,000 residents, but that is not concurrent load. The real ris
 | 6 | Indexes and pagination | Slow queries as data grows | Medium |
 | 7 | CDN caching for public reads | Spike protection | Medium |
 | 8 | Monitoring, backups, incident plan | Know when it breaks | Medium |
+| 9 | Send Feedback endpoint and bucket | Guests can write, so it needs its own checks | Small |
 
 ## 1. Guard role columns on `profiles` (critical, verify)
 
@@ -123,6 +124,22 @@ The in-app cache (`lib/swr-cache.ts`) helps one browser only. For many users:
 - [ ] Review why `onnxruntime-node` is a dependency of a browser app (the Vercel build lists it among packages with install scripts)
 - [ ] Short incident plan: who to call, how to rotate keys, how to disable an account
 - [ ] Data Privacy Act (RA 10173) obligations: confirm with the LGU's data protection officer
+
+## 9. Send Feedback endpoint and bucket
+
+Guests can submit, so every write goes through `api/feedback.js` and nothing is written directly with the public key. The limiter is a Supabase table shared across instances, not the in-memory one in `api/transcribe.js`.
+
+- [ ] `anon` and `authenticated` cannot insert, update or delete `feedback` rows (RLS), and a guest cannot read or list them
+- [ ] The private `feedback` bucket has no public read or write, and only the endpoint (service role) writes to it
+- [ ] The endpoint rejects bodies over about 3 MB (Vercel's limit is 4.5 MB)
+- [ ] Image accepts JPG, PNG and WebP by real file type, is re-encoded to WebP, and EXIF is stripped
+- [ ] CAPTCHA, honeypot and message length limits are enforced server side
+- [ ] The rate limit holds across instances and is keyed by IP, and by user id when signed in
+- [ ] Errors return a code and a plain message only, never internal details
+- [ ] A stored message shows as plain text in the inbox, links included
+- [ ] CAPTCHA secret and service role key are set in the Vercel dashboard, and `.env.example` lists names only
+- [ ] Attachments are deleted some time after an item is Resolved
+- [ ] Collection and retention confirmed with the LGU data protection officer (RA 10173)
 
 ## Already in good shape
 

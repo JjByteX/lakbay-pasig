@@ -1,0 +1,56 @@
+name: Clean up feedback attachments
+
+# Send Feedback retention (docs/send-feedback-plan.md, Phase 7.1). Deletes the
+# image of any feedback item that has been Resolved for more than 90 days, then
+# clears its attachment_path. The message stays. Done here and not in SQL
+# because a file in Storage is removed through the Storage API, not by deleting
+# a row. A reopened item has resolved_at cleared by the database, so it is never
+# picked up. Same style as seasonality.yml: no checkout, no install, needs the
+# service role key. Nightly at 19:00 UTC (3:00 AM in Manila), plus a manual run.
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: feedback-cleanup
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  cleanup:
+    name: Delete old attachments
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          auth=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+
+          rows=$(curl --fail-with-body -sS "${auth[@]}" \
+            "$SUPABASE_URL/rest/v1/feedback?select=id,attachment_path&status=eq.resolved&resolved_at=lt.$cutoff&attachment_path=not.is.null&limit=500")
+
+          count=$(echo "$rows" | jq length)
+          if [ "$count" -eq 0 ]; then
+            echo "Nothing to delete."
+            exit 0
+          fi
+
+          # Files first. If this fails the paths stay in the table and the next
+          # run tries again. Deleting a path that is already gone is not an error.
+          curl --fail-with-body -sS -X DELETE "$SUPABASE_URL/storage/v1/object/feedback" \
+            "${auth[@]}" -H "Content-Type: application/json" \
+            -d "$(echo "$rows" | jq -c '{prefixes: map(.attachment_path)}')" > /dev/null
+
+          ids=$(echo "$rows" | jq -r 'map(.id) | join(",")')
+          curl --fail-with-body -sS -X PATCH "$SUPABASE_URL/rest/v1/feedback?id=in.($ids)" \
+            "${auth[@]}" -H "Content-Type: application/json" \
+            -d '{"attachment_path": null}' > /dev/null
+
+          echo "Deleted $count attachment(s)."
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

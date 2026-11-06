@@ -111,6 +111,6 @@ Already done in the project:
 - Ranking results. Tagalog or other languages in the synonym map (copy is English only).
 - Link to a single question (`/help#...`).
 - "Was this helpful" voting.
-- Contact form or chat.
+- Contact form or chat. Partly superseded: Send Feedback (`docs/send-feedback-plan.md`) is a one-way form with no replies, opened from the account menu and from the Help page. A live chat or a two-way contact form is still out of scope.
 - A Help row in the admin Tools list.
 - Onboarding tour.

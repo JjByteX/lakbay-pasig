@@ -12,11 +12,11 @@ import { CATO_EMAIL, CATO_NAME } from "@/lib/cato-contact";
  * single purpose page, so no bottom nav, search or sidebar.
  *
  * Every statement below was written from what the code does today, not
- * from a template: which services the browser calls (Supabase, OpenFreeMap
+ * from a template: which services the browser calls (Supabase, Cloudflare Turnstile, OpenFreeMap
  * tiles, the FOSSGIS routing servers, Photon, Groq through
  * api/transcribe.js, Google for sign in and the landing map embed), which
  * tables hold personal records (profiles, saved_places, saved_businesses,
- * route_progress, completed_routes, rec_hides, activity_log, plus the private
+ * route_progress, completed_routes, rec_hides, activity_log, feedback, plus the private
  * trails a user builds, which sit in routes and route_stops flagged personal) and that no
  * analytics or advertising script exists in the app. If any of those
  * change, this page has to change with them. Update LAST_UPDATED too.
@@ -27,7 +27,7 @@ import { CATO_EMAIL, CATO_NAME } from "@/lib/cato-contact";
  * This is a plain language draft: CATO or its legal counsel should review
  * it before it is relied on. No em dashes, per the landing copy rules.
  */
-const LAST_UPDATED = "October 5, 2026";
+const LAST_UPDATED = "November 7, 2026";
 const CATO_ADDRESS = "4th Floor, Pasig Revolving Tower, Market Avenue, Barangay San Nicolas, Pasig City, 1600 Metro Manila";
 
 function Section({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
@@ -91,6 +91,7 @@ export default function PrivacyPage() {
               "Details you choose to add in Settings: username, first and last name, contact number, date of birth, profile picture and preferred categories, plus your light or dark mode and text size.",
               "What you do in the app: places, businesses and trails you save, the private trails you build (only you can see them), your trail progress and completed trails, and items you mark as Not interested.",
               "If you list a business: the business details, photos and contact information you enter. These are shown publicly once CATO approves the listing.",
+              "If you use Send Feedback, with or without an account: your message, the type you chose, the optional email address you give, and the optional image you attach. If you are signed in, your account is attached to the feedback. Images are resized and stripped of location data before they are saved. We also keep a scrambled (hashed) form of your network address for a short time to limit how many messages one person can send.",
               "For CATO staff accounts: a record of staff actions (who did what, and when), kept for accountability.",
             ]}
           />
@@ -123,7 +124,8 @@ export default function PrivacyPage() {
           <Bullets
             items={[
               "Supabase: our database, sign in and file storage.",
-              "Vercel: hosting for the website and the voice search function.",
+              "Vercel: hosting for the website, the voice search function and the Send Feedback function.",
+              "Cloudflare: Turnstile, the check that stops automated Send Feedback messages.",
               "Google: the Continue with Google sign in, and the office map shown on the welcome page.",
               "OpenFreeMap and OpenStreetMap services: map tiles, directions and address search.",
               "Groq: voice search transcription.",
@@ -145,6 +147,11 @@ export default function PrivacyPage() {
           <P>
             We keep your account data while your account exists. If your account is deleted, your profile, saved items,
             private trails and trail progress are deleted with it. Records of staff actions may be kept longer for accountability.
+          </P>
+          <P>
+            Feedback you send is read only by CATO staff who are allowed to review it. The image you attach is deleted
+            90 days after CATO marks your feedback as resolved. The message and the email address stay with the
+            feedback record, and you can ask us to delete them using the contact details below.
           </P>
         </Section>
 
