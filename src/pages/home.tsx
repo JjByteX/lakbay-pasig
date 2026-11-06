@@ -1,7 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { fetchAnnouncements, fetchHomeShowcase } from "@/lib/home-query";
-import type { Announcement, CategoryRow, RecentlyVerifiedItem } from "@/lib/home-types";
+import { useSwr } from "@/lib/swr-cache";
+import { useAuth } from "@/lib/auth-context";
+import type { RecentlyVerifiedItem } from "@/lib/home-types";
 import { AnnouncementCarousel } from "@/components/public/announcement-carousel";
 import { VerifiedItemCard } from "@/components/public/verified-item-card";
 import {
@@ -46,7 +48,7 @@ import { usePageTitle } from "@/lib/page-title";
 // widened to cover both.
 function SectionSkeleton() {
   return (
-    <ul className="-mx-6 flex flex-col divide-y divide-border">
+    <ul className="-mx-6 flex flex-col">
       {[0, 1, 2].map((i) => (
         <li key={i} className="flex flex-col gap-2 px-6 py-4">
           <Skeleton className="h-4 w-2/3" />
@@ -62,56 +64,30 @@ export default function HomePage() {
   usePageTitle(null);
   const navigate = useNavigate();
 
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
-  const [announcementsError, setAnnouncementsError] = useState<string | null>(null);
-
-  // home-photo-showcase-phases.md Phase 5.1: fetchHomeShowcase (home-
-  // query.ts Phase 2.3) replaces fetchRecentlyVerified here -- one call
-  // returning three lists (place category rows, business category rows,
-  // fallback items), held as three pieces of state but covered by one
-  // loading flag and one error state, matching Phase 5.1's own corrected
-  // shape (not three separate loading/error signals for three outputs of
-  // the same single fetch). Still its own effect, independent from
-  // announcements above, same "a slow places/businesses query and a slow
-  // events query are unrelated causes" reasoning the original Phase 5.1
-  // comment already gave.
-  const [placeCategoryRows, setPlaceCategoryRows] = useState<CategoryRow[]>([]);
-  const [businessCategoryRows, setBusinessCategoryRows] = useState<CategoryRow[]>([]);
-  const [fallbackItems, setFallbackItems] = useState<RecentlyVerifiedItem[]>([]);
-  const [showcaseLoading, setShowcaseLoading] = useState(true);
-  const [showcaseError, setShowcaseError] = useState<string | null>(null);
+  const { session } = useAuth();
   const [retry, setRetry] = useState({ announcements: 0, showcase: 0 });
 
-  useEffect(() => {
-    setAnnouncementsLoading(true);
-    setAnnouncementsError(null);
-    fetchAnnouncements()
-      .then((data) => setAnnouncements(data))
-      .catch(() => {
-        setAnnouncementsError("Couldn't load announcements. Check your connection and try again.");
-        setAnnouncements([]);
-      })
-      .finally(() => setAnnouncementsLoading(false));
-  }, [retry.announcements]);
+  // Cached per person (lib/swr-cache.ts): coming back to Home shows the last
+  // content at once and refreshes it behind the scenes, with no skeleton.
+  // Announcements and the showcase stay two independent reads with their own
+  // loading and error, the same reasoning Phase 5.1 gave: a slow places query
+  // and a slow events query are unrelated causes.
+  const userKey = session?.user.id ?? "guest";
+  const announcementsRead = useSwr(`home:announcements:${userKey}`, fetchAnnouncements, retry.announcements);
+  const showcaseRead = useSwr(`home:showcase:${userKey}`, fetchHomeShowcase, retry.showcase);
 
-  useEffect(() => {
-    setShowcaseLoading(true);
-    setShowcaseError(null);
-    fetchHomeShowcase()
-      .then((data) => {
-        setPlaceCategoryRows(data.placeCategoryRows);
-        setBusinessCategoryRows(data.businessCategoryRows);
-        setFallbackItems(data.fallbackItems);
-      })
-      .catch(() => {
-        setShowcaseError("Couldn't load recently verified places and businesses. Check your connection and try again.");
-        setPlaceCategoryRows([]);
-        setBusinessCategoryRows([]);
-        setFallbackItems([]);
-      })
-      .finally(() => setShowcaseLoading(false));
-  }, [retry.showcase]);
+  const announcements = announcementsRead.data ?? [];
+  const announcementsLoading = announcementsRead.loading;
+  const announcementsError = announcementsRead.error
+    ? "Couldn't load announcements. Check your connection and try again."
+    : null;
+  const placeCategoryRows = showcaseRead.data?.placeCategoryRows ?? [];
+  const businessCategoryRows = showcaseRead.data?.businessCategoryRows ?? [];
+  const fallbackItems = showcaseRead.data?.fallbackItems ?? [];
+  const showcaseLoading = showcaseRead.loading;
+  const showcaseError = showcaseRead.error
+    ? "Couldn't load recently verified places and businesses. Check your connection and try again."
+    : null;
 
   // Extracted from a nested ternary (announcementsError ? ... :
   // announcementsLoading ? ... : announcements.length === 0 ? ... : ...)
@@ -238,7 +214,7 @@ export default function HomePage() {
         {fallbackItems.length > 0 && (
           <div className="flex flex-col gap-3">
             <h2 className="text-base font-semibold text-foreground">More verified listings</h2>
-            <ul className="-mx-6 flex flex-col divide-y divide-border">
+            <ul className="-mx-6 flex flex-col">
               {fallbackItems.map((item) => (
                 <li key={`${item.kind}-${item.id}`}>
                   <VerifiedItemCard item={item} onClick={() => openItem(item)} />

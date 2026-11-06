@@ -36,7 +36,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SignOutDialog } from "@/components/sign-out-dialog";
@@ -747,7 +746,6 @@ function AccountMenu() {
             <HomeIcon className="mr-2 h-4 w-4" />
             Home Page
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
             <SignOut className="mr-2 h-4 w-4" />
             Sign out
@@ -849,7 +847,9 @@ function MobileShell({
       <OfflineNotice className="fixed inset-x-0 top-14 z-30" />
       <main
         className={cn(
-          "fixed inset-x-0 bottom-16",
+          // bottom-12 matches BottomNav's h-12; bottom-16 left a 1rem gap
+          // between the map and the nav.
+          "fixed inset-x-0 bottom-12",
           online ? "top-14" : "top-[calc(3.5rem+var(--offline-notice-height))]",
           pagerIndex === -1 ? "overflow-y-auto [scrollbar-gutter:stable]" : "overflow-hidden",
         )}

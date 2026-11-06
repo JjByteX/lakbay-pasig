@@ -33,11 +33,20 @@ export const LATTE = {
   green: "#40a02b",
   blue: "#1e66f5",
   sapphire: "#209fb5",
-  building: "#bcc0cc", // surface1
-  buildingLine: "#acb0be", // surface2, one soft step off the fill
-  road: "#9ca0b0", // overlay0
-  roadDark: "#8c8fa1", // overlay1, secondary/tertiary, one step darker than minor roads
-  peach: "#fe640b",
+  // WCAG pass, human-reported (hard to tell map features apart). Every value
+  // below was measured against `base` with the WCAG 2.x relative-luminance
+  // formula. SC 1.4.11 Non-text Contrast needs 3:1 for graphics that are
+  // needed to understand the map (roads, outlines), SC 1.4.3 needs 4.5:1 for
+  // text. Old Latte values failed: road 2.3, major road 2.6, building 1.6,
+  // water label 2.8. New ratios are in the comments.
+  building: "#c9cdd9", // fill only, the outline below carries the 3:1
+  buildingLine: "#7c7f93", // overlay2, 3.5:1 against base
+  road: "#7c7f93", // overlay2, 3.5:1
+  roadDark: "#6c6f85", // subtext1, 4.4:1, secondary/tertiary
+  peach: "#c2410c", // major roads, 4.6:1 (was #fe640b at 2.6:1)
+  casing: "#ffffff", // thin outline under roads so they separate from buildings (G209)
+  greenLine: "#2e7d32", // park outline, 4.5:1
+  waterText: "#0f6f80", // water labels, 5.2:1 (was sapphire at 2.8:1)
   // Bugfix, human-reported: the directions route line used to reuse
   // `peach`, the exact same color as the road-major layer just below --
   // a walking/driving route drawn along a major road was visually
@@ -49,7 +58,7 @@ export const LATTE = {
   mauve: "#8839ef",
   railway: "#6c6f85", // subtext1
   boundary: "#6c6f85", // subtext1
-  text: "#4c4f69",
+  text: "#2c2f45", // 11.6:1 (was #4c4f69 at 7.1:1), darker for thin street labels
 };
 
 export const MOCHA: typeof LATTE = {
@@ -58,15 +67,18 @@ export const MOCHA: typeof LATTE = {
   green: "#a6e3a1",
   blue: "#89b4fa",
   sapphire: "#74c7ec",
-  building: "#45475a", // surface1
-  buildingLine: "#585b70", // surface2, one soft step off the fill
-  road: "#6c7086", // overlay0
-  roadDark: "#7f849c", // overlay1
+  building: "#313244", // surface0, fill only
+  buildingLine: "#7f849c", // overlay1, 4.4:1 against base
+  road: "#7f849c", // overlay1, 4.4:1 (was overlay0 at 3.4:1)
+  roadDark: "#9399b2", // overlay2, secondary/tertiary, one step brighter than minor roads
+  casing: "#11111b", // crust
+  greenLine: "#a6e3a1",
+  waterText: "#74c7ec",
   peach: "#fab387",
   mauve: "#cba6f7",
   railway: "#a6adc8", // subtext0
   boundary: "#a6adc8", // subtext0
-  text: "#cdd6f4",
+  text: "#e6ebff", // brighter so street names pop on dark roads
 };
 
 // OpenFreeMap's `openmaptiles` vector source (OpenMapTiles schema) and font
@@ -121,6 +133,15 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         "source-layer": "park",
         paint: { "fill-color": palette.green, "fill-opacity": 0.35 },
       },
+      // CodeRabbit: fill-opacity also dims fill-outline-color, dropping the
+      // outline below 3:1. A separate line layer keeps the outline opaque.
+      {
+        id: "park-outline",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "park",
+        paint: { "line-color": palette.greenLine, "line-width": 1 },
+      },
       {
         id: "water",
         type: "fill",
@@ -144,6 +165,42 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         paint: {
           "fill-color": palette.building,
           "fill-outline-color": palette.buildingLine,
+        },
+      },
+      {
+        id: "road-minor-casing",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["match", ["get", "class"], ["minor", "service", "track"], true, false],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": palette.casing,
+          "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 13, 1.5, 20, 14],
+        },
+      },
+      {
+        id: "road-secondary-tertiary-casing",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["match", ["get", "class"], ["secondary", "tertiary"], true, false],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": palette.casing,
+          "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 8, 2, 20, 16],
+        },
+      },
+      {
+        id: "road-major-casing",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "transportation",
+        filter: ["match", ["get", "class"], ["primary", "trunk", "motorway"], true, false],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": palette.casing,
+          "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 5, 1.5, 20, 20],
         },
       },
       {
@@ -203,11 +260,15 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "water_name",
-        layout: { "text-field": ["get", "name"], "text-size": 12, "text-font": ["Noto Sans Regular"] },
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 12, 16, 15],
+          "text-font": ["Noto Sans Regular"],
+        },
         paint: {
-          "text-color": palette.sapphire,
+          "text-color": palette.waterText,
           "text-halo-color": palette.base,
-          "text-halo-width": 1,
+          "text-halo-width": 2,
         },
       },
       {
@@ -215,11 +276,25 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         type: "symbol",
         source: "openmaptiles",
         "source-layer": "transportation_name",
-        layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-size": 11, "text-font": ["Noto Sans Regular"] },
+        // Bugfix, human-reported (street names not visible): 11px with a 1px
+        // halo vanished against road lines up to 18px wide. Size now grows with
+        // zoom (13 -> 17px), the halo is 2.5px with a little blur, and the text
+        // colour is the highest-contrast token. The halo is the casing colour
+        // so it also reads over road fills in both themes.
+        layout: {
+          "symbol-placement": "line",
+          "text-field": ["get", "name"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 12, 13, 15, 15, 18, 17],
+          "text-font": ["Noto Sans Regular"],
+          "text-letter-spacing": 0.02,
+          "text-padding": 4,
+          "symbol-spacing": 220,
+        },
         paint: {
           "text-color": palette.text,
-          "text-halo-color": palette.base,
-          "text-halo-width": 1,
+          "text-halo-color": palette.casing,
+          "text-halo-width": 2.5,
+          "text-halo-blur": 0.5,
         },
       },
       {
@@ -228,11 +303,15 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         source: "openmaptiles",
         "source-layer": "place",
         filter: ["match", ["get", "class"], ["city", "town", "village"], true, false],
-        layout: { "text-field": ["get", "name"], "text-size": 13, "text-font": ["Noto Sans Regular"] },
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 13, 16, 16],
+          "text-font": ["Noto Sans Regular"],
+        },
         paint: {
           "text-color": palette.text,
           "text-halo-color": palette.base,
-          "text-halo-width": 1.5,
+          "text-halo-width": 2,
         },
       },
     ],

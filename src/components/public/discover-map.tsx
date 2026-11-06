@@ -398,6 +398,7 @@ function layoutMarkers(
 // already uses for the waterway layer -- no new rendering library.
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
+const ROUTE_CASING_LAYER_ID = "directions-route-casing";
 
 // Ring border for verification status, shared by markerElement and the
 // legend's Status swatches so the two cannot drift. Verified is a solid
@@ -1945,12 +1946,21 @@ export function DiscoverMap({
         type: "geojson",
         data: { type: "Feature", properties: {}, geometry },
       });
+      // WCAG 1.4.11: a casing in the road-casing colour keeps the route
+      // separable from any road colour beneath it, in both themes.
+      map.addLayer({
+        id: ROUTE_CASING_LAYER_ID,
+        type: "line",
+        source: ROUTE_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": palette.casing, "line-width": 8 },
+      });
       map.addLayer({
         id: ROUTE_LAYER_ID,
         type: "line",
         source: ROUTE_SOURCE_ID,
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": palette.mauve, "line-width": 4 },
+        paint: { "line-color": palette.mauve, "line-width": 5 },
       });
     }
     const bounds = geometry.coordinates.reduce(

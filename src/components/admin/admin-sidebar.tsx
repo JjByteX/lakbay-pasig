@@ -22,7 +22,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -326,7 +325,6 @@ export function AdminSidebar({
               <House className="mr-2 h-4 w-4" />
               Home Page
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setSignOutOpen(true)}>
               <SignOut className="mr-2 h-4 w-4" />
               Sign out

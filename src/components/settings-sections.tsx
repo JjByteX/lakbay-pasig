@@ -187,13 +187,13 @@ const MIN_PASSWORD_LENGTH = 8;
  */
 type AccountFieldKey = "username" | "first_name" | "last_name" | "contact_number";
 
-interface AccountFieldState {
-  value: string;
-  saving: boolean;
-  error: string | null;
-}
-
-const EMPTY_ACCOUNT_FIELD_STATE: AccountFieldState = { value: "", saving: false, error: null };
+const ACCOUNT_KEYS: AccountFieldKey[] = ["username", "first_name", "last_name", "contact_number"];
+const ACCOUNT_LABELS: Record<AccountFieldKey, string> = {
+  username: "username",
+  first_name: "first name",
+  last_name: "last name",
+  contact_number: "contact number",
+};
 
 export function SettingsSections({
   section,
@@ -229,22 +229,23 @@ export function SettingsSections({
     setFontSize(profile.font_size_preference ?? "default");
   }, [profile]);
 
-  // 8.3/8.4/8.5: one AccountFieldState per column, each independently
-  // seeded/saved/errored -- same re-seed-on-profile-change shape as the
+  // 8.3/8.4/8.5: one string per column, each seeded -- same re-seed-on-profile-change shape as the
   // dark mode / font size state above, so an external change (another
   // tab, refreshProfile elsewhere) still keeps this page in sync.
-  const [username, setUsername] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
-  const [firstName, setFirstName] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
-  const [lastName, setLastName] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
-  const [contactNumber, setContactNumber] = useState<AccountFieldState>(EMPTY_ACCOUNT_FIELD_STATE);
+  const [username, setUsername] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
-    setUsername((prev) => ({ ...prev, value: profile.username ?? "" }));
-    setFirstName((prev) => ({ ...prev, value: profile.first_name ?? "" }));
-    setLastName((prev) => ({ ...prev, value: profile.last_name ?? "" }));
-    setContactNumber((prev) => ({ ...prev, value: profile.contact_number ?? "" }));
+    setUsername(profile.username ?? "");
+    setFirstName(profile.first_name ?? "");
+    setLastName(profile.last_name ?? "");
+    setContactNumber(profile.contact_number ?? "");
   }, [profile]);
 
   // 3.3/3.4/4.3/4.4/8.4/8.5/8.7: handlers are declared at module scope
@@ -255,17 +256,31 @@ export function SettingsSections({
   // counts nested function bodies against the enclosing function).
   // Step 8 cleanup: handleDarkModeChange/handleFontSizeChange now live in
   // preferences.ts (shared with admin-settings.tsx, see that file's own
-  // comment); saveAccountField below stays local, this page's Account
+  // comment); saveAccountChanges below stays local, this page's Account
   // Settings section has no admin-side counterpart to share it with.
   // Contact Number: same digits-only, 15-char cap as profile.tsx's own
   // updateContactNumber, so the field behaves identically in both places
   // it appears in the app.
   function updateContactNumberValue(raw: string) {
-    setContactNumber((prev) => ({ ...prev, value: raw.replace(/\D/g, "").slice(0, 15) }));
+    setContactNumber(raw.replace(/\D/g, "").slice(0, 15));
   }
 
+  // One Save for the whole Account section: only the fields that differ
+  // from what is saved go out, in a single update.
+  const { changes: accountChanges, errors: accountErrors } = getAccountChanges(
+    { username, first_name: firstName, last_name: lastName, contact_number: contactNumber },
+    {
+      username: profile?.username ?? "",
+      first_name: profile?.first_name ?? "",
+      last_name: profile?.last_name ?? "",
+      contact_number: profile?.contact_number ?? "",
+    }
+  );
+  const canSaveAccount =
+    !accountSaving && Object.keys(accountChanges).length > 0 && Object.keys(accountErrors).length === 0;
+
   // 8.6: current/new/confirm, all local to this card -- none of these
-  // are profile fields, so they get no AccountFieldState/profiles seed
+  // are profile fields, so they get no profiles seed
   // effect, unlike the four fields above.
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -411,10 +426,10 @@ export function SettingsSections({
             body={body}
             id="username"
             label="Username"
-            state={username}
-            onValueChange={(v) => setUsername((prev) => ({ ...prev, value: v }))}
-            onSave={(v) => saveAccountField("username", setUsername, v, session, refreshProfile)}
-            originalValue={profile?.username ?? ""}
+            value={username}
+            onValueChange={setUsername}
+            error={accountErrors.username}
+            disabled={accountSaving}
             maxLength={30}
           />
 
@@ -422,10 +437,10 @@ export function SettingsSections({
             body={body}
             id="first_name"
             label="First Name"
-            state={firstName}
-            onValueChange={(v) => setFirstName((prev) => ({ ...prev, value: v }))}
-            onSave={(v) => saveAccountField("first_name", setFirstName, v, session, refreshProfile)}
-            originalValue={profile?.first_name ?? ""}
+            value={firstName}
+            onValueChange={setFirstName}
+            error={accountErrors.first_name}
+            disabled={accountSaving}
             maxLength={75}
           />
 
@@ -433,29 +448,40 @@ export function SettingsSections({
             body={body}
             id="last_name"
             label="Last Name"
-            state={lastName}
-            onValueChange={(v) => setLastName((prev) => ({ ...prev, value: v }))}
-            onSave={(v) => saveAccountField("last_name", setLastName, v, session, refreshProfile)}
-            originalValue={profile?.last_name ?? ""}
+            value={lastName}
+            onValueChange={setLastName}
+            error={accountErrors.last_name}
+            disabled={accountSaving}
             maxLength={75}
           />
 
-          {/* 8.5: same digits-only/15-char-cap treatment as profile.tsx's
-              own Contact Number field, via updateContactNumberValue above.
-              `validate` adds the specific inline format error. */}
           <AccountField
             body={body}
             id="contact_number"
             label="Contact Number"
-            state={contactNumber}
+            value={contactNumber}
             onValueChange={updateContactNumberValue}
-            onSave={(v) => saveAccountField("contact_number", setContactNumber, v, session, refreshProfile)}
-            originalValue={profile?.contact_number ?? ""}
+            error={accountErrors.contact_number}
+            disabled={accountSaving}
             maxLength={15}
             type="tel"
             inputMode="numeric"
-            validate={validateContactNumber}
           />
+
+          <div className="flex flex-col gap-2 pb-4 pt-2">
+            <div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!canSaveAccount}
+                loading={accountSaving}
+                onClick={() => void saveAccountChanges(accountChanges, session, refreshProfile, setAccountSaving, setAccountError)}
+              >
+                {accountSaving ? "Saving..." : "Save changes"}
+              </Button>
+            </div>
+            {accountError && <p className={cn(body, "text-destructive")}>{accountError}</p>}
+          </div>
 
           {/* Residents only. Staff and admin accounts are managed from Admin,
               Staff, and delete_my_account() (migration 0049) refuses them
@@ -564,7 +590,6 @@ export function SettingsSections({
             {/* 8.8: this section's own status line, separate from the
                 per-field format messages above -- Update password is one
                 combined action over three fields, not three saves. */}
-            {passwordBlockedReason && <p className={cn(body, "text-destructive")}>{passwordBlockedReason}</p>}
             {passwordError && <p className={cn(body, "text-destructive")}>{passwordError}</p>}
             {passwordSuccess && <p className={cn(body, "text-muted-foreground")}>Password updated.</p>}
           </div>
@@ -691,7 +716,7 @@ function HiddenItemsBlock({ userId, body }: Readonly<{ userId: string; body: str
             <Button
               id={`unhide_${itemKey(item)}`}
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               disabled={busyKey === itemKey(item)}
               onClick={() => void onUnhide(item)}
@@ -721,7 +746,7 @@ function SectionHeading({ children }: Readonly<{ children: ReactNode }>) {
 }
 
 // One settings row: label (and optional description) on the left, control
-// on the right, a divider between rows. `stacked` puts a full-width control
+// on the right. `stacked` puts a full-width control
 // under its label instead, for text inputs that need the room.
 function SettingsRow({
   label,
@@ -741,7 +766,7 @@ function SettingsRow({
   children: ReactNode;
 }>) {
   return (
-    <div className="flex flex-col gap-2 border-b border-border py-4 last:border-b-0">
+    <div className="flex flex-col gap-2 py-3">
       <div className={cn("flex gap-4", stacked ? "flex-col" : "items-center justify-between")}>
         <div className="flex min-w-0 flex-col gap-1">
           <Label htmlFor={htmlFor} className={body}>
@@ -756,41 +781,53 @@ function SettingsRow({
   );
 }
 
-// 8.4/8.5/8.7: one Save action per field, not a shared submit, so one
-// field's error never blocks another's already-valid write -- same
-// independence Phase 3/4's two preference controls already have from
-// each other. Contact Number reuses profile.tsx's exact digits-only/
-// 15-char-cap updateContactNumber treatment; Username/First/Last Name
-// trim to null-when-empty, same "unset means unset" convention 0021/0030
-// already establish for every nullable profiles column. Username
-// collisions surface via error.message from the profiles_username_unique
-// partial index (migration 0030), same DB-is-source-of-truth convention
-// category-form-dialog.tsx's own 3.4 already uses for category names.
-// Same module-scope reasoning as the handlers above.
-async function saveAccountField(
-  field: AccountFieldKey,
-  setState: Dispatch<SetStateAction<AccountFieldState>>,
-  rawValue: string,
+// Writes every changed Account field in one update. Values arrive already
+// trimmed and non-empty from getAccountChanges.
+async function saveAccountChanges(
+  changes: Partial<Record<AccountFieldKey, string>>,
   session: Session | null,
-  refreshProfile: () => Promise<void>
+  refreshProfile: () => Promise<void>,
+  setSaving: Dispatch<SetStateAction<boolean>>,
+  setError: Dispatch<SetStateAction<string | null>>
 ) {
   if (!session) return;
 
-  const value = rawValue.trim() || null;
-  setState((prev) => ({ ...prev, saving: true, error: null }));
+  setSaving(true);
+  setError(null);
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ [field]: value })
-    .eq("id", session.user.id);
+  const { error } = await supabase.from("profiles").update(changes).eq("id", session.user.id);
 
+  setSaving(false);
   if (error) {
-    setState((prev) => ({ ...prev, saving: false, error: error.message }));
+    setError(error.message);
     return;
   }
-
-  setState((prev) => ({ ...prev, saving: false, error: null }));
   await refreshProfile();
+}
+
+// Which Account fields changed, and which of those are not saveable yet.
+// An untouched field is never flagged; a changed one must be non-empty and,
+// for Contact Number, a valid PH mobile number.
+function getAccountChanges(values: Record<AccountFieldKey, string>, originals: Record<AccountFieldKey, string>) {
+  const changes: Partial<Record<AccountFieldKey, string>> = {};
+  const errors: Partial<Record<AccountFieldKey, string>> = {};
+
+  for (const key of ACCOUNT_KEYS) {
+    const value = values[key].trim();
+    if (value === originals[key].trim()) continue;
+    if (!value) {
+      errors[key] = `Enter a ${ACCOUNT_LABELS[key]}.`;
+      continue;
+    }
+    const formatError = key === "contact_number" ? validateContactNumber(value) : null;
+    if (formatError) {
+      errors[key] = formatError;
+      continue;
+    }
+    changes[key] = value;
+  }
+
+  return { changes, errors };
 }
 
 // 8.6: re-verify the typed current password by silently signing in with
@@ -854,109 +891,52 @@ async function handleChangePassword(ctx: {
   setPasswordSuccess(true);
 }
 
-// 8.3/8.4/8.5/8.7/8.8: one field row shared by all four Account Settings
-// fields rather than four near-identical blocks copy-pasted -- same
-// per-field Save/disabled-gated/error shape for each, per constraints.md's
-// Inventory Before Suggesting rule applied within this file. 8.7: Save is
-// disabled with a visible reason (title attr, same native-title approach
-// admin-event-detail.tsx's own gated Publish button gives no separate
-// visible line for -- here a specific reason line is shown instead,
-// matching 8.8's "specific message per field" requirement) whenever the
-// value is empty or unchanged from what is already saved, or while a save
-// is in flight. 8.8: default/editing/saving/error states, each field's
-// own message, not a shared status line for the whole section.
-//
-// 8.5: optional `validate` prop, used only by Contact Number below --
-// digitsOnly stripping already existed (updateContactNumberValue) but
-// nothing checked the *shape* of the result, so a 3-digit or 20-digit
-// string saved silently with no feedback. This is the one gap 8.5 asks
-// for specifically ("a specific inline error for an invalid format
-// rather than a generic failure message"), everything else in this file
-// already existed before this change. Kept as a prop rather than a
-// field-specific fork of AccountField, so Username/First/Last Name (no
-// format to validate) are unaffected and the one shared component still
-// covers all four fields, per the Inventory Before Suggesting rule.
+// One labelled input row for the Account section. Saving is handled once
+// for the whole section, not per field.
 interface AccountFieldProps {
   body: string;
   id: string;
   label: string;
-  state: AccountFieldState;
-  originalValue: string;
+  value: string;
   onValueChange: (value: string) => void;
-  onSave: (value: string) => void;
   maxLength: number;
+  error?: string;
+  disabled?: boolean;
   type?: string;
   inputMode?: "numeric" | "text";
-  validate?: (trimmedValue: string) => string | null;
 }
 
 function AccountField({
   body,
   id,
   label,
-  state,
-  originalValue,
+  value,
   onValueChange,
-  onSave,
   maxLength,
+  error,
+  disabled,
   type = "text",
   inputMode,
-  validate,
 }: Readonly<AccountFieldProps>) {
-  const trimmed = state.value.trim();
-  const unchanged = trimmed === originalValue.trim();
-  const isEmpty = trimmed.length === 0;
-
-  // 8.7: a visible reason only when there is one worth showing -- an
-  // empty field the user has actually typed into and cleared gets a
-  // specific message, same as admin-event-detail.tsx's own
-  // missingRequiredFields line. A field that has simply never been set
-  // (originalValue already blank, untouched) shows no reason on first
-  // render -- same "don't greet the page with an error" posture
-  // signup.tsx's own password-mismatch line only shows once there's a
-  // value to react to. "unchanged" alone disables Save with no error
-  // line either, since nothing being different from what's already saved
-  // isn't a mistake.
-  //
-  // 8.5: format check only runs once the field is non-empty and changed,
-  // same "don't greet the page with an error" posture as the empty-field
-  // check above -- an untouched, already-saved value is never re-flagged
-  // as invalid on render. Format error takes precedence over "Enter a
-  // ___." since a non-empty value that fails validation isn't empty.
-  const formatError = !isEmpty && !unchanged ? (validate?.(trimmed) ?? null) : null;
-  const blockedReason = formatError ?? (isEmpty && !unchanged ? `Enter a ${label.toLowerCase()}.` : null);
-  const canSave = !state.saving && !unchanged && !isEmpty && !formatError;
-
   return (
-    <div className="flex flex-col gap-2 border-b border-border py-4 last:border-b-0">
+    <div className="flex flex-col gap-2 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <Label htmlFor={id} className={cn("sm:w-36 sm:shrink-0", body)}>
           {label}
         </Label>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="min-w-0 flex-1">
           <Input
             id={id}
             type={type}
             inputMode={inputMode}
-            value={state.value}
+            value={value}
             onChange={(e) => onValueChange(e.target.value)}
             maxLength={maxLength}
-            disabled={state.saving}
+            disabled={disabled}
           />
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={!canSave}
-            loading={state.saving}
-            title={blockedReason ?? undefined}
-            onClick={() => onSave(state.value)}
-          >
-            {state.saving ? "Saving..." : "Save"}
-          </Button>
         </div>
       </div>
-      {blockedReason && <p className={cn(body, "text-destructive sm:pl-40")}>{blockedReason}</p>}
-      {state.error && <p className={cn(body, "text-destructive sm:pl-40")}>{state.error}</p>}
+      {error && <p className={cn(body, "text-destructive sm:pl-40")}>{error}</p>}
     </div>
   );
 }
