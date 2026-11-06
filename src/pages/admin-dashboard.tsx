@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
 import { CalendarBlank, CaretRight, CheckCircle, ChartLineUp, ClipboardText } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
@@ -22,7 +22,7 @@ import {
   type Trend,
 } from "@/lib/admin-dashboard";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { AreaChart, Meter, Pane, Segmented, Sparkline } from "@/components/admin/dashboard-widgets";
+import { AreaChart, Meter, PaneGroup, Segmented, Sparkline } from "@/components/admin/dashboard-widgets";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -37,9 +37,9 @@ import { cn } from "@/lib/utils";
 // wide data side balances the sidebar and the narrow action rail on the left.
 //
 //   header          title and date              date range
-//   summary strip   one box, up to 4 figures, divided by hairlines
-//   row 1           Needs attention (4)         Daily trend (8)
-//   row 2           Coming up (4)               Recent activity (8)
+//   summary strip   one box, up to 4 figures, divided by inset hairlines
+//   left card (4)   Needs attention over Coming up, split by a hairline
+//   right card (8)  Daily trend over Recent activity, split by a hairline
 //
 // Every panel is permission gated like the sidebar. A panel a person cannot use
 // is left out, and a row with one panel gives it the full width.
@@ -117,7 +117,19 @@ function Figure({
 }>) {
   const rising = pill === "New" || pill?.startsWith("+");
   return (
-    <div className="flex min-w-0 flex-col gap-1 bg-card p-4">
+    <div
+      className={cn(
+        "relative flex min-w-0 flex-col gap-1 p-4",
+        // Inset dividers: they stop short of the card edges instead of touching them.
+        // Stacked: a line under every figure but the last.
+        "after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden",
+        // Two columns: a vertical line after the left figure, and no bottom line on the last row.
+        "before:absolute before:inset-y-4 before:right-0 before:hidden before:w-px before:bg-border",
+        "md:max-xl:[&:nth-child(odd):not(:last-child)]:before:block md:max-xl:[&:nth-last-child(2):nth-child(odd)]:after:hidden",
+        // One row: vertical lines only.
+        "xl:after:hidden xl:[&:not(:last-child)]:before:block"
+      )}
+    >
       <div className="flex h-6 items-center justify-between gap-2">
         <h3 className="truncate text-sm text-muted-foreground">{label}</h3>
         {pill && (
@@ -436,72 +448,56 @@ export default function AdminDashboardPage() {
   }
 
   // ---- layout
-  // Stacked (below xl) a pane has no row to fill, so it gets a fixed height.
-  const pane = "h-80 xl:h-auto";
-  const row = "grid gap-6 xl:min-h-[14rem] xl:flex-1 xl:grid-cols-12";
+  // Left column: the work. Needs attention and Coming up are one context (what
+  // to do next), so they share one card split by a hairline. Right column: the
+  // record, trend over activity. A lone section stays its own card.
+  const activityAction = isAdmin ? (
+    <Link
+      to="/admin/activity"
+      className="text-sm font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      View all
+    </Link>
+  ) : undefined;
+  const trendAction = isAdmin ? (
+    <Segmented
+      label="Metric"
+      value={activeMetric}
+      onChange={setMetric}
+      options={[
+        { value: "visits", label: "Visits" },
+        { value: "reviews", label: "Reviews" },
+      ]}
+    />
+  ) : undefined;
+
+  const leftSections: { title: string; bodyRef?: Ref<HTMLDivElement>; children: ReactNode }[] = [];
+  if (showAttention) leftSections.push({ title: "Needs attention", children: attentionBody });
+  if (showComingUp) leftSections.push({ title: "Coming up", bodyRef: comingFit.containerRef, children: comingBody });
+  const rightSections = showTrend
+    ? [
+        { title: isAdmin ? "Daily trend" : "Reviews per day", action: trendAction, children: trendBody },
+        ...(showActivity ? [{ title: "Recent activity", action: activityAction, bodyRef: activityFit.containerRef, children: activityBody }] : []),
+      ]
+    : [];
+
+  // Stacked (below xl) a card has no row to fill, so each section gets a fixed height.
+  const stackedHeight = (count: number) => (count === 2 ? "h-[40rem]" : "h-80");
+  const leftCard =
+    leftSections.length === 0 ? null : (
+      <PaneGroup
+        sections={leftSections}
+        className={cn(stackedHeight(leftSections.length), "xl:h-auto", rightSections.length > 0 ? "xl:col-span-4" : "xl:col-span-12")}
+      />
+    );
+  const rightCard =
+    rightSections.length === 0 ? null : (
+      <PaneGroup
+        sections={rightSections}
+        className={cn(stackedHeight(rightSections.length), "xl:h-auto", leftSections.length > 0 ? "xl:col-span-8" : "xl:col-span-12")}
+      />
+    );
   const today = new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" });
-
-  // Each pane takes its column span from where it sits: 4 beside an 8, or the
-  // whole row when it has no partner.
-  const attentionPane = (cols: string) => (
-    <Pane title="Needs attention" className={cn(pane, cols)}>
-      {attentionBody}
-    </Pane>
-  );
-  const trendPane = (cols: string) => (
-    <Pane
-      title={isAdmin ? "Daily trend" : "Reviews per day"}
-      className={cn(pane, cols)}
-      action={
-        isAdmin ? (
-          <Segmented
-            label="Metric"
-            value={activeMetric}
-            onChange={setMetric}
-            options={[
-              { value: "visits", label: "Visits" },
-              { value: "reviews", label: "Reviews" },
-            ]}
-          />
-        ) : undefined
-      }
-    >
-      {trendBody}
-    </Pane>
-  );
-  const comingPane = (cols: string) => (
-    <Pane title="Coming up" bodyRef={comingFit.containerRef} className={cn(pane, cols)}>
-      {comingBody}
-    </Pane>
-  );
-  const activityPane = (cols: string) => (
-    <Pane
-      title="Recent activity"
-      bodyRef={activityFit.containerRef}
-      className={cn(pane, cols)}
-      action={
-        isAdmin ? (
-          <Link
-            to="/admin/activity"
-            className="text-sm font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            View all
-          </Link>
-        ) : undefined
-      }
-    >
-      {activityBody}
-    </Pane>
-  );
-
-  const NARROW = "xl:col-span-4";
-  const WIDE = "xl:col-span-8";
-  const FULL = "xl:col-span-12";
-  // Staff without review access have no trend or activity. Their one row pairs
-  // the queue with what is coming up instead.
-  const first = showTrend ? trendPane(WIDE) : showComingUp ? comingPane(WIDE) : null;
-  const rowOne = showAttention || first ? [showAttention ? attentionPane(first ? NARROW : FULL) : null, first] : null;
-  const rowTwo = showTrend && (showComingUp || showActivity) ? [showComingUp ? comingPane(NARROW) : null, showActivity ? activityPane(showComingUp ? WIDE : FULL) : null] : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
@@ -523,7 +519,7 @@ export default function AdminDashboardPage() {
       {strip.length > 0 && (
         <div
           className={cn(
-            "grid shrink-0 grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-2",
+            "grid shrink-0 grid-cols-1 overflow-hidden rounded-lg border border-border bg-card md:grid-cols-2",
             STRIP_COLUMNS[strip.length],
             // Odd count on two columns: the last figure takes the full row.
             "md:max-xl:[&>:last-child:nth-child(odd)]:col-span-2"
@@ -533,16 +529,10 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {rowOne && (
-        <div className={row}>
-          {rowOne[0]}
-          {rowOne[1]}
-        </div>
-      )}
-      {rowTwo && (
-        <div className={row}>
-          {rowTwo[0]}
-          {rowTwo[1]}
+      {(leftCard || rightCard) && (
+        <div className="grid gap-6 xl:min-h-[28rem] xl:flex-1 xl:grid-cols-12">
+          {leftCard}
+          {rightCard}
         </div>
       )}
     </div>

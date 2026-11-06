@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { cn } from "@/lib/utils";
 import type { DayPoint } from "@/lib/admin-dashboard";
 
@@ -7,8 +7,8 @@ import type { DayPoint } from "@/lib/admin-dashboard";
 // Colors come from the theme tokens only (--primary for data, --border for the
 // grid, --muted-foreground for text), so light and dark both work.
 
-// A titled region: heading row above, one bordered container below. The
-// container is the only box, nothing nests inside another card. `bodyRef` goes
+// A titled card: the heading row sits inside the one bordered container, above
+// the body. Nothing nests inside another card. `bodyRef` goes
 // to useAutoPageSize so a list can count how many rows fit.
 export function Pane({
   title,
@@ -24,15 +24,44 @@ export function Pane({
   className?: string;
 }>) {
   return (
-    <section className={cn("flex min-h-0 flex-col gap-2", className)}>
-      <div className="flex h-8 shrink-0 items-center justify-between gap-4">
+    <section className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card", className)}>
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         {action}
       </div>
-      <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card">
+      <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
         {children}
       </div>
     </section>
+  );
+}
+
+// Several related sections in one card, split by an inset hairline instead of
+// one card each. Each section gets an equal share of the height.
+export function PaneGroup({
+  sections,
+  className,
+}: Readonly<{
+  sections: readonly { title: string; action?: ReactNode; bodyRef?: Ref<HTMLDivElement>; children: ReactNode }[];
+  className?: string;
+}>) {
+  return (
+    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card", className)}>
+      {sections.map((section, i) => (
+        <Fragment key={section.title}>
+          {i > 0 && <div className="mx-4 h-px shrink-0 bg-border" />}
+          <section className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2">
+              <h2 className="text-sm font-semibold text-foreground">{section.title}</h2>
+              {section.action}
+            </div>
+            <div ref={section.bodyRef} className="min-h-0 flex-1 overflow-hidden">
+              {section.children}
+            </div>
+          </section>
+        </Fragment>
+      ))}
+    </div>
   );
 }
 
