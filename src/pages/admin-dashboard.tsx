@@ -167,11 +167,12 @@ export default function AdminDashboardPage() {
     canBusinesses: has("review_businesses"),
     canEvents: has("publish_events"),
     canTrails: has("build_trails"),
+    canFeedback: has("review_feedback"),
   };
-  const { canPlaces, canBusinesses, canEvents, canTrails } = perms;
+  const { canPlaces, canBusinesses, canEvents, canTrails, canFeedback } = perms;
   const canReviews = canPlaces || canBusinesses;
   const hasTimeData = isAdmin || canReviews;
-  const permKey = [isAdmin, canPlaces, canBusinesses, canEvents, canTrails].join();
+  const permKey = [isAdmin, canPlaces, canBusinesses, canEvents, canTrails, canFeedback].join();
 
   const wide = useIsWide();
   const [days, setDays] = useState<RangeDays>(14);
@@ -302,9 +303,20 @@ export default function AdminDashboardPage() {
   if (content?.trails && content.trails.drafts > 0) {
     attention.push({ key: "trails", label: plural(content.trails.drafts, "draft trail", "draft trails"), note: "Not published", count: content.trails.drafts, stale: false, to: "/admin/trails" });
   }
+  if (content?.feedback && content.feedback.count > 0) {
+    const age = content.feedback.oldest ? daysSince(content.feedback.oldest) : 0;
+    attention.push({
+      key: "feedback",
+      label: `${content.feedback.count.toLocaleString("en-PH")} new feedback`,
+      note: content.feedback.oldest ? `Oldest received ${ageLabel(age)}` : null,
+      count: content.feedback.count,
+      stale: age >= STALE_DAYS,
+      to: "/admin/feedback",
+    });
+  }
   attention.sort((a, b) => Number(b.stale) - Number(a.stale) || b.count - a.count);
 
-  const showAttention = canPlaces || canBusinesses || canEvents || canTrails;
+  const showAttention = canPlaces || canBusinesses || canEvents || canTrails || canFeedback;
   const showTrend = hasTimeData;
   const showComingUp = canEvents;
   const showActivity = hasTimeData;

@@ -16,6 +16,7 @@ export interface DashboardPerms {
   canBusinesses: boolean;
   canEvents: boolean;
   canTrails: boolean;
+  canFeedback: boolean;
 }
 
 // ---------------------------------------------------------------- dates
@@ -190,6 +191,8 @@ export interface Overview {
   verified: { verified: number; total: number } | null;
   announcements: { live: number; drafts: number } | null;
   trails: { published: number; drafts: number } | null;
+  /** Feedback with status new. oldest is the stalest created_at. */
+  feedback: Queue | null;
 }
 
 async function pendingQueue(table: "places" | "businesses"): Promise<Queue> {
@@ -205,11 +208,19 @@ async function pendingQueue(table: "places" | "businesses"): Promise<Queue> {
   return { count: n, oldest: oldest.data?.[0]?.updated_at ?? null };
 }
 
+async function newFeedbackQueue(): Promise<Queue> {
+  const [n, oldest] = await Promise.all([
+    count(supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "new")),
+    supabase.from("feedback").select("created_at").eq("status", "new").order("created_at", { ascending: true }).limit(1),
+  ]);
+  return { count: n, oldest: oldest.data?.[0]?.created_at ?? null };
+}
+
 export async function fetchOverview(perms: DashboardPerms): Promise<Overview> {
-  const { canPlaces, canBusinesses, canEvents, canTrails } = perms;
+  const { canPlaces, canBusinesses, canEvents, canTrails, canFeedback } = perms;
   const exact = (table: string) => supabase.from(table).select("id", { count: "exact", head: true });
 
-  const [places, flagged, businesses, placeCounts, businessCounts, announcements, trails] = await Promise.all([
+  const [places, flagged, businesses, placeCounts, businessCounts, announcements, trails, feedback] = await Promise.all([
     canPlaces ? pendingQueue("places") : null,
     // A flagged discovery_content row has no status of its own: flagged is open.
     canPlaces ? count(exact("discovery_content").eq("needs_place_review", true)) : 0,
@@ -232,6 +243,7 @@ export async function fetchOverview(perms: DashboardPerms): Promise<Overview> {
           count(exact("routes").eq("personal", false).eq("status", "draft")),
         ])
       : null,
+    canFeedback ? newFeedbackQueue() : null,
   ]);
 
   const verified =
@@ -249,6 +261,7 @@ export async function fetchOverview(perms: DashboardPerms): Promise<Overview> {
     verified,
     announcements: announcements ? { live: announcements[0], drafts: announcements[1] } : null,
     trails: trails ? { published: trails[0], drafts: trails[1] } : null,
+    feedback,
   };
 }
 

@@ -26,6 +26,7 @@ const BOUNDED_LIST_ROUTES = new Set([
   "/admin/categories",
   "/admin/staff",
   "/admin/activity",
+  "/admin/feedback",
   "/admin/reports/heatmap",
   "/admin/reports/fiestas",
   "/admin/reports/visits",

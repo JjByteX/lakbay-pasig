@@ -377,7 +377,7 @@ export default function EventFormDialog({
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_auto_1fr]">
-                {/* Left: what the announcement is. Right: when, where and how
+                {/* Left: what the announcement is and when. Right: where and how
                     to join. The divider only shows from md up, where the two
                     columns sit side by side; below that they stack. */}
                 <div className="flex flex-col gap-4">
@@ -409,33 +409,6 @@ export default function EventFormDialog({
                       {categoriesError && <p className="text-sm text-destructive">{categoriesError}</p>}
                     </div>
 
-                <div className="flex flex-col gap-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      className="min-h-[160px]"
-                      value={form.description}
-                      onChange={(e) => updateField("description", e.target.value)}
-                      maxLength={2000}
-                    />
-                    <CharCount value={form.description} max={2000} />
-                  </div>
-
-                <div className="flex flex-col gap-2">
-                    <Label htmlFor="related_program">Related Program</Label>
-                    <Input
-                      id="related_program"
-                      placeholder="e.g. Pasig Creative Arts Academy, if recurring"
-                      value={form.related_program}
-                      onChange={(e) => updateField("related_program", e.target.value)}
-                      maxLength={150}
-                    />
-                  </div>
-                </div>
-
-                <div className="hidden w-px bg-border md:block" aria-hidden="true" />
-
-                <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                     <label htmlFor="has_end_date_time" className="flex w-fit items-center gap-2 text-sm text-foreground">
                       <input
@@ -503,6 +476,33 @@ export default function EventFormDialog({
                     </div>
                   </div>
 
+                <div className="flex flex-col gap-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      className="min-h-[160px]"
+                      value={form.description}
+                      onChange={(e) => updateField("description", e.target.value)}
+                      maxLength={2000}
+                    />
+                    <CharCount value={form.description} max={2000} />
+                  </div>
+
+                <div className="flex flex-col gap-2">
+                    <Label htmlFor="related_program">Related Program</Label>
+                    <Input
+                      id="related_program"
+                      placeholder="e.g. Pasig Creative Arts Academy, if recurring"
+                      value={form.related_program}
+                      onChange={(e) => updateField("related_program", e.target.value)}
+                      maxLength={150}
+                    />
+                  </div>
+                </div>
+
+                <div className="hidden w-px bg-border md:block" aria-hidden="true" />
+
+                <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-4">
                     {/* Same picker as the place and business forms: a search
                         field plus a draggable pin. The pin is the source of

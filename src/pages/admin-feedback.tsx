@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChatCircleText } from "@phosphor-icons/react";
+import { ChatCircleText, Eye, Hourglass } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -17,13 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AdminIconAction, AdminIconActions } from "@/components/admin/admin-icon-action";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/lib/page-title";
-import { formatDateTimeNoSeconds } from "@/lib/datetime";
+import { formatDateTimeNoSeconds, parseDateValue, toDateOnlyValue } from "@/lib/datetime";
 import { TYPE_OPTIONS, type FeedbackType } from "@/lib/feedback-messages";
 
 // Feedback inbox (send-feedback-plan.md Phase 6). Reads feedback (migration
@@ -55,8 +65,6 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: FeedbackStatus; label: string; vari
 
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map((o) => [o.value, o.label]));
 const ALL = "all";
-// ux-ui-guidelines.md: no data table under 5 rows, a plain list instead.
-const TABLE_MIN_ROWS = 5;
 const SIGNED_URL_SECONDS = 60;
 
 function StatusPill({ status }: Readonly<{ status: FeedbackStatus }>) {
@@ -77,6 +85,10 @@ export default function AdminFeedbackPage() {
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Date range, "YYYY-MM-DD", "" when unset. Same as admin-activity.tsx.
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Newest 500, same cap and cancel flag as admin-activity.tsx.
   useEffect(() => {
@@ -109,13 +121,36 @@ export default function AdminFeedbackPage() {
       }
       if (typeFilter !== ALL && row.type !== typeFilter) return false;
       if (statusFilter !== ALL && row.status !== statusFilter) return false;
+      const day = toDateOnlyValue(new Date(row.created_at));
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
       return true;
     });
-  }, [rows, search, typeFilter, statusFilter]);
+  }, [rows, search, typeFilter, statusFilter, fromDate, toDate]);
 
   const handleStatusChanged = useCallback((id: string, status: FeedbackStatus) => {
     setRows((current) => (current ? current.map((row) => (row.id === id ? { ...row, status } : row)) : current));
   }, []);
+
+  // Row action: same update the detail dialog makes. select() returns the
+  // changed rows, so an update row level security filtered out is not shown
+  // as saved.
+  async function changeRowStatus(row: FeedbackRow, next: FeedbackStatus) {
+    if (next === row.status) return;
+    setUpdatingId(row.id);
+    setError(null);
+    const { data, error: updateError } = await supabase
+      .from("feedback")
+      .update({ status: next })
+      .eq("id", row.id)
+      .select("id");
+    setUpdatingId(null);
+    if (updateError || !data?.length) {
+      setError("Could not change the status. Try again.");
+      return;
+    }
+    handleStatusChanged(row.id, next);
+  }
 
   const openRow = rows?.find((row) => row.id === openId) ?? null;
 
@@ -128,6 +163,46 @@ export default function AdminFeedbackPage() {
       render: (row) => <span title={row.message}>{snippet(row.message)}</span>,
     },
     { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} /> },
+    {
+      key: "actions",
+      label: "",
+      render: (row) => (
+        <AdminIconActions>
+          <AdminIconAction icon={Eye} label="View" onClick={() => setOpenId(row.id)} />
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={updatingId === row.id}
+                    aria-label="Set status"
+                  >
+                    <Hourglass className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Set status</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup
+                value={row.status}
+                onValueChange={(v) => changeRowStatus(row, v as FeedbackStatus)}
+              >
+                {STATUS_OPTIONS.map((o) => (
+                  <DropdownMenuRadioItem key={o.value} value={o.value}>
+                    {o.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </AdminIconActions>
+      ),
+    },
   ];
 
   const filters = (
@@ -159,52 +234,38 @@ export default function AdminFeedbackPage() {
           ))}
         </SelectContent>
       </Select>
+      <DateField
+        value={fromDate}
+        maxDate={(toDate ? parseDateValue(toDate) : null) ?? undefined}
+        onChange={setFromDate}
+        aria-label="From date"
+        align="right"
+        className="w-[190px]"
+      />
+      <DateField
+        value={toDate}
+        minDate={(fromDate ? parseDateValue(fromDate) : null) ?? undefined}
+        onChange={setToDate}
+        aria-label="To date"
+        align="right"
+        className="w-[190px]"
+      />
     </AdminFilterBar>
   );
 
-  const showList = rows !== null && rows.length < TABLE_MIN_ROWS;
-
-  let body;
-  if (showList) {
-    body =
-      rows.length === 0 ? (
-        <EmptyState icon={ChatCircleText}>Feedback will appear here.</EmptyState>
-      ) : (
-        <ul className="flex flex-col divide-y divide-border">
-          {rows.map((row) => (
-            <li key={row.id}>
-              <button
-                type="button"
-                onClick={() => setOpenId(row.id)}
-                className="flex w-full items-center justify-between gap-4 py-3 text-left hover:bg-muted/50"
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-foreground">{snippet(row.message)}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {TYPE_LABEL[row.type] ?? row.type} · {formatDateTimeNoSeconds(row.created_at)}
-                  </span>
-                </span>
-                <StatusPill status={row.status} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      );
-  } else {
-    body = (
-      <AdminDataTable
-        columns={columns}
-        rows={filtered}
-        loading={rows === null}
-        keyField="id"
-        autoPageSize
-        emptyIcon={ChatCircleText}
-        empty={rows && rows.length > 0 ? "Matching feedback will appear here." : "Feedback will appear here."}
-        onRowClick={(row) => setOpenId(row.id)}
-        toolbar={filters}
-      />
-    );
-  }
+  const body = (
+    <AdminDataTable
+      columns={columns}
+      rows={filtered}
+      loading={rows === null}
+      keyField="id"
+      autoPageSize
+      emptyIcon={ChatCircleText}
+      empty={rows && rows.length > 0 ? "Matching feedback will appear here." : "Feedback will appear here."}
+      onRowClick={(row) => setOpenId(row.id)}
+      toolbar={filters}
+    />
+  );
 
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-6">
