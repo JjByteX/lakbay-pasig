@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { Route, Routes, useLocation, useNavigate, type Location } from "react-router-dom";
 import { Compass } from "@phosphor-icons/react";
 import { EntryGate } from "@/lib/entry-gate";
@@ -196,7 +196,14 @@ function dragTransform(i: number, dx: number): string {
   return `translate3d(calc(${(-i * 100) / PANES.length}% + ${shown}px), 0, 0)`;
 }
 
-export function PagePager({ index }: Readonly<{ index: number }>) {
+// memo: the shell re-renders whenever Discover registers its filter markup
+// (useDiscoverFilters hands it a new element on every Discover render).
+// Without memo that re-rendered this pager, which rebuilt Discover's route
+// elements, which re-rendered Discover, which registered new markup again:
+// an endless loop of urgent updates that starved React Router's low-priority
+// navigation, so the bottom nav changed nothing while on Discover.
+// The only prop is `index`, so a shell re-render now stops here.
+export const PagePager = memo(function PagePager({ index }: Readonly<{ index: number }>) {
   const navigate = useNavigate();
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -346,4 +353,4 @@ export function PagePager({ index }: Readonly<{ index: number }>) {
       </div>
     </div>
   );
-}
+});

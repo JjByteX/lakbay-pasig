@@ -469,7 +469,9 @@ export default function AdminDataTable<T>({
           </div>
         )}
 
-        <div className={cn(autoPageSize ? "flex-1 min-h-0 overflow-auto" : "max-h-[70dvh] overflow-auto", isEmpty && "flex flex-col")}>
+        {/* -mb-px: the last row now has its own bottom line; when the rows fill
+            the box, this tucks that line under the outer border so it is not doubled. */}
+        <div className={cn("-mb-px", autoPageSize ? "flex-1 min-h-0 overflow-auto" : "max-h-[70dvh] overflow-auto", isEmpty && "flex flex-col")}>
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>

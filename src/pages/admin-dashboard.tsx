@@ -437,7 +437,7 @@ export default function AdminDashboardPage() {
             <TableHead className="h-10 w-[18%] px-4 text-right last:pr-0">When</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="[&_tr:last-child]:border-0">
           {rows.map((entry) => (
             <TableRow key={entry.id} className="h-[var(--height-table-row)]">
               <TableCell className="truncate px-4 py-0 text-sm text-foreground first:pl-0">{entry.who}</TableCell>
