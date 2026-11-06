@@ -33,6 +33,7 @@ const SYSTEM_PERMISSIONS = [
   "review_businesses",
   "publish_events",
   "build_trails",
+  "review_feedback",
 ] as const;
 type SystemPermission = (typeof SYSTEM_PERMISSIONS)[number];
 

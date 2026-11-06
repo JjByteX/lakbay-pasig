@@ -11,6 +11,9 @@ interface ImportMetaEnv {
   // https://lakbay-pasig.vercel.app. Unset, the code uses the address staff
   // are on, which is wrong from localhost or a preview link.
   readonly VITE_SITE_URL?: string;
+  // Cloudflare Turnstile public site key for Send Feedback. Public by design.
+  // Unset, the check never renders and Send shows the check error.
+  readonly VITE_TURNSTILE_SITE_KEY?: string;
 }
 
 interface ImportMeta {

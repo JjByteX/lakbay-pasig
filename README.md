@@ -11,7 +11,7 @@ Tourism Office backed platform for Pasig heritage sites, businesses, and guided 
 
 ## Stack
 
-React + TypeScript + Vite, shadcn/ui + Tailwind, Supabase (PostgreSQL), Hostinger hosting. Full reasoning in `project-foundation/architecture-notes.md`.
+React + TypeScript + Vite, shadcn/ui + Tailwind, Supabase (PostgreSQL), Vercel hosting. Full reasoning in `project-foundation/architecture-notes.md`.
 
 ## Local Setup (Windows, no experience needed)
 

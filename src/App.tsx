@@ -7,6 +7,8 @@ import { SettingsModalProvider } from "@/lib/settings-modal";
 import { SettingsModal } from "@/components/settings-modal";
 import { OfflineModalProvider } from "@/lib/offline-modal";
 import { OfflineModal } from "@/components/offline-modal";
+import { FeedbackModalProvider } from "@/lib/feedback-modal";
+import { FeedbackModal } from "@/components/feedback-modal";
 import { AuthModalRoute } from "@/lib/auth-modal-route";
 import { EntryGate } from "@/lib/entry-gate";
 import { AuthModal } from "@/components/auth/auth-modal";
@@ -33,6 +35,7 @@ const TrailSuggestPage = lazyPage(() => import("@/pages/trail-suggest"));
 const TrailScanPage = lazyPage(() => import("@/pages/trail-scan"));
 const VendorDashboardPage = lazyPage(() => import("@/pages/vendor-dashboard"));
 const VendorItemsPage = lazyPage(() => import("@/pages/vendor-items"));
+const AdminFeedbackPage = lazyPage(() => import("@/pages/admin-feedback"));
 const AdminPage = lazyPage(() => import("@/pages/admin"));
 const AdminDashboardPage = lazyPage(() => import("@/pages/admin-dashboard"));
 const AdminPlacesPage = lazyPage(() => import("@/pages/admin-places"));
@@ -61,7 +64,7 @@ const PrivacyPage = lazyPage(() => import("@/pages/privacy"));
 // the mobile pager and the first screens use them right away.
 const EVERYONE_PAGES = [TrailBuilderPage, TrailSuggestPage, TrailScanPage, PrivacyPage];
 const VENDOR_PAGES = [VendorDashboardPage, VendorItemsPage];
-const ADMIN_PAGES = [AdminPage, AdminDashboardPage, AdminPlacesPage, AdminPlaceDetailPage, AdminDiscoveryContentReviewPage, AdminBusinessesPage, AdminBusinessDetailPage, AdminEventsPage, AdminFiestasPage, AdminTrailsPage, AdminTrailBuilderPage, AdminCategoriesPage, AdminLandingPage, AdminReportsPage, AdminReportHeatmapPage, AdminReportFiestasPage, AdminReportVisitsPage, AdminStaffPage, AdminActivityPage, AdminSettingsPage, AdminHelpPage];
+const ADMIN_PAGES = [AdminPage, AdminDashboardPage, AdminPlacesPage, AdminPlaceDetailPage, AdminDiscoveryContentReviewPage, AdminBusinessesPage, AdminBusinessDetailPage, AdminEventsPage, AdminFiestasPage, AdminTrailsPage, AdminTrailBuilderPage, AdminCategoriesPage, AdminLandingPage, AdminReportsPage, AdminReportHeatmapPage, AdminReportFiestasPage, AdminReportVisitsPage, AdminStaffPage, AdminActivityPage, AdminSettingsPage, AdminHelpPage, AdminFeedbackPage];
 
 // Fetches the split pages while the browser is idle, so the first visit to
 // each is as quick as a page already loaded. Admin files are fetched only for
@@ -103,6 +106,7 @@ export default function App() {
       <AuthModalProvider>
         <SettingsModalProvider>
         <OfflineModalProvider>
+        <FeedbackModalProvider>
         <IdlePreload />
         <Routes>
           {/* Public shell, five tabs per navigation-and-access-control.md's
@@ -416,6 +420,17 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Feedback, send-feedback-plan.md Phase 6.3. Own permission
+                (review_feedback, migration 0008), matching
+                admin-sidebar.tsx's Feedback item. */}
+            <Route
+              path="feedback"
+              element={
+                <ProtectedRoute requiredPermission="review_feedback">
+                  <AdminFeedbackPage />
+                </ProtectedRoute>
+              }
+            />
             {/* New/Edit staff open in a modal (StaffFormDialog, rendered from
                 AdminStaffPage itself) instead of separate routes, per
                 ux-ui-guidelines.md's Modal vs panel rule. staff/new and
@@ -470,6 +485,8 @@ export default function App() {
         <CategoriesOnboarding />
         <SettingsModal />
         <OfflineModal />
+        <FeedbackModal />
+        </FeedbackModalProvider>
         </OfflineModalProvider>
         </SettingsModalProvider>
       </AuthModalProvider>

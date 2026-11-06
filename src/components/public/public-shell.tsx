@@ -11,7 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon, Question, DownloadSimple } from "@phosphor-icons/react";
+import { User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, House as HomeIcon, Question, DownloadSimple, ChatCircleText } from "@phosphor-icons/react";
 import { BottomNav } from "./bottom-nav";
 import { PagePager } from "./page-pager";
 import { pagerIndexFor } from "@/lib/pager-index";
@@ -42,6 +42,8 @@ import { SignOutDialog } from "@/components/sign-out-dialog";
 import { useAuthModal } from "@/lib/auth-modal";
 import { useSettingsModal } from "@/lib/settings-modal";
 import { useOfflineModal } from "@/lib/offline-modal";
+import { useFeedbackModal } from "@/lib/feedback-modal";
+import { FEEDBACK_LABEL } from "@/lib/feedback-messages";
 import { useOnline } from "@/lib/offline/status";
 import { OfflineNotice } from "@/components/offline-notice";
 import logo from "@/assets/lakbay-pasig-logo.svg";
@@ -665,6 +667,7 @@ function AccountMenu() {
   const navigate = useNavigate();
   const { openSettings } = useSettingsModal();
   const { openOffline } = useOfflineModal();
+  const { openFeedback } = useFeedbackModal();
   const { openAuth } = useAuthModal();
   const initial = profile?.display_name?.[0]?.toUpperCase();
   // Log-out confirmation: "Sign out" no longer calls signOut directly,
@@ -700,6 +703,10 @@ function AccountMenu() {
           <DropdownMenuItem onClick={() => navigate("/help")}>
             <Question className="mr-2 h-4 w-4" />
             Help & FAQ
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openFeedback()}>
+            <ChatCircleText className="mr-2 h-4 w-4" />
+            {FEEDBACK_LABEL}
           </DropdownMenuItem>
           {/* landing-hero-phases.md Phase 7.1: opens the shared auth
               popup in place instead of navigating away to /login, so
@@ -751,6 +758,10 @@ function AccountMenu() {
           <DropdownMenuItem onClick={() => navigate("/help")}>
             <Question className="mr-2 h-4 w-4" />
             Help & FAQ
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openFeedback()}>
+            <ChatCircleText className="mr-2 h-4 w-4" />
+            {FEEDBACK_LABEL}
           </DropdownMenuItem>
           {/* View switcher, staff/admin accounts only: same session, same
               account, just "/admin" instead of "/" -- not a role change,

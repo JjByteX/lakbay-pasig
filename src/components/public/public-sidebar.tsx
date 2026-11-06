@@ -1,10 +1,12 @@
-import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, Question, DownloadSimple } from "@phosphor-icons/react";
+import { House, MapTrifold, Compass, Bookmark, MagnifyingGlass, User as UserIcon, Gear as SettingsIcon, SignOut, ArrowsLeftRight, CaretUpDown, Question, DownloadSimple, ChatCircleText } from "@phosphor-icons/react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
 import { useSettingsModal } from "@/lib/settings-modal";
 import { useOfflineModal } from "@/lib/offline-modal";
+import { useFeedbackModal } from "@/lib/feedback-modal";
+import { FEEDBACK_LABEL } from "@/lib/feedback-messages";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -65,6 +67,7 @@ export function PublicSidebar({
   const navigate = useNavigate();
   const { openSettings } = useSettingsModal();
   const { openOffline } = useOfflineModal();
+  const { openFeedback } = useFeedbackModal();
 
   // Log-out confirmation: same SignOutDialog (owns the actual signOut()
   // call) public-shell.tsx's mobile AccountMenu and admin-sidebar.tsx's
@@ -156,6 +159,12 @@ export function PublicSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => openFeedback()} tooltip={FEEDBACK_LABEL}>
+                <ChatCircleText className="h-4 w-4 shrink-0" />
+                <span>{FEEDBACK_LABEL}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton onClick={() => openAuth("login")} tooltip="Sign in">
                 <UserIcon className="h-4 w-4 shrink-0" />
                 <span>Sign in</span>
@@ -232,6 +241,10 @@ export function PublicSidebar({
               <DropdownMenuItem onClick={() => navigate("/help")}>
                 <Question className="mr-2 h-4 w-4" />
                 Help & FAQ
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openFeedback()}>
+                <ChatCircleText className="mr-2 h-4 w-4" />
+                {FEEDBACK_LABEL}
               </DropdownMenuItem>
               {/* View switcher, staff/admin accounts only: same session,
                   same account, just "/admin" instead of "/" -- not a role

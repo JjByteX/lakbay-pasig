@@ -34,6 +34,9 @@ Admin only, Staff role has no access and the item does not appear. A read only t
 ### Landing Page
 Manage the image carousel shown on the public landing page (`/welcome`). Upload, caption, reorder, and activate/deactivate slides. Gated on the `manage_landing` system permission (Admin or a Staff member holding it).
 
+### Feedback
+Read and triage what the public sent through Send Feedback. A table of Time, Type (Suggestion, Report a Problem, Other), Status (New, In Review, Resolved) and a message preview, filterable by type and status. Opening an item shows the message and optional email as plain text, the optional image as a thumbnail from a short-lived signed URL, and a status change. Staff cannot edit or delete the message. Gated on the `review_feedback` system permission (Admin, or a Staff member holding it). Ticked per person in the Staff form's Permissions chips as "Feedback". Existing staff do not get it automatically.
+
 ### Help & FAQ
 Opened from the account menu at the bottom of the sidebar, not a sidebar row. A page at `/admin/help` with common questions for staff and admins, by topic. Visible to every staff member, same as the Dashboard, with no permission needed.
 

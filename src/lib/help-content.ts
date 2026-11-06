@@ -1,5 +1,6 @@
 import { PERSONAL_STOP_LIMIT, PERSONAL_TRAIL_LIMIT } from "@/lib/personal-trails";
 import { DEFAULT_UNLOCK_RADIUS } from "@/lib/trail-unlock";
+import { FEEDBACK_LABEL, TYPE_OPTIONS } from "@/lib/feedback-messages";
 
 /**
  * Copy for the Help & FAQ page (docs/help-faq-plan.md). Plain text, English.
@@ -143,8 +144,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     items: [
       {
         question: "Something is wrong or out of date. Who do I tell?",
-        answer:
-          "Contact CATO using the details at the bottom of this page. Include the name of the place or business.",
+        answer: `Tap ${FEEDBACK_LABEL} in the account menu or on this page, choose ${TYPE_OPTIONS[1].label}, and describe what is wrong. Include the name of the place or business. For urgent or official matters, or if you need a reply, contact CATO using the details at the bottom of this page.`,
       },
     ],
   },

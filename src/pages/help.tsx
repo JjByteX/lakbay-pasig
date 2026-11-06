@@ -1,10 +1,13 @@
 import { Link } from "react-router-dom";
-import { Envelope, FacebookLogo, Phone } from "@phosphor-icons/react";
+import { ChatCircleText, Envelope, FacebookLogo, Phone } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 import { HelpTopicList } from "@/components/help-topic-list";
 import { PageContainer } from "@/components/public/page-container";
 import { CATO_EMAIL, CATO_FACEBOOK, CATO_NAME, CATO_PHONE } from "@/lib/cato-contact";
 import { HELP_TOPICS } from "@/lib/help-content";
 import { usePageTitle } from "@/lib/page-title";
+import { useFeedbackModal } from "@/lib/feedback-modal";
+import { FEEDBACK_LABEL, HELP_REPLY_LINE } from "@/lib/feedback-messages";
 
 // Shown as text, so drop the scheme and trailing slash from the shared link.
 const FACEBOOK_TEXT = CATO_FACEBOOK.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
@@ -16,6 +19,7 @@ const FACEBOOK_TEXT = CATO_FACEBOOK.replace(/^https?:\/\/(www\.)?/, "").replace(
  */
 export default function HelpPage() {
   usePageTitle("Help & FAQ");
+  const { openFeedback } = useFeedbackModal();
 
   return (
     <PageContainer width="form" className="gap-8">
@@ -23,10 +27,16 @@ export default function HelpPage() {
 
       <HelpTopicList topics={HELP_TOPICS} />
 
+      <Button variant="outline" size="lg" className="self-start" onClick={() => openFeedback()}>
+        <ChatCircleText className="mr-2 h-4 w-4" aria-hidden="true" />
+        {FEEDBACK_LABEL}
+      </Button>
+
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <h2 className="text-base font-semibold text-foreground">Still need help?</h2>
           <p className="text-base text-muted-foreground">{CATO_NAME}</p>
+          <p className="text-base text-muted-foreground">{HELP_REPLY_LINE}</p>
         </div>
 
         <div className="flex flex-col gap-4">

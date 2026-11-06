@@ -58,6 +58,10 @@ Account info and preferences. Vendor accounts get business management tools here
 
 A public page at `/help`, opened from the account menu (the Help & FAQ item), not a tab. Guest and Registered User both see it, and the guest menu carries the item too, so no sign-in is needed. It answers common questions by topic, has a search box above the topics, and ends with CATO's contact details. The Guest rules above are unchanged.
 
+## Send Feedback
+
+A centered modal, not a page or a tab. It opens from the account menu beside Help & FAQ (the mobile account menu and the desktop sidebar, in both the guest and signed-in versions) and from one button on the Help page above CATO's contact details. Guest and Registered User both see it, and no sign-in is needed. The person picks a type (Suggestion, Report a Problem, Other), writes a message, and may add an email and one image. Signed-in users have their account attached automatically, with no extra field. Place pages and the page layout carry no Send Feedback entry. Feedback is one-way. CATO's contact details stay on the Help page for anyone who needs a reply. The Guest rules above are unchanged.
+
 ## Landing Page and Auth Popup
 
 The existing Guest rules above (Home, Discover, Trails, Saved, Profile) are unchanged by this section — nothing here is a rewrite of them.
