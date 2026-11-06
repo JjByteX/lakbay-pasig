@@ -18,6 +18,7 @@ export interface TrailMapStop {
 const SOURCE_ID = "trail-line";
 const DONE_LAYER_ID = "trail-line-done";
 const NEXT_LAYER_ID = "trail-line-next";
+const CASING_LAYER_ID = "trail-line-casing";
 
 function isDark() {
   return document.documentElement.classList.contains("dark");
@@ -123,6 +124,18 @@ export function TrailOverlay({
     if (stops.length < 2) return;
     const palette = isDark() ? MOCHA : LATTE;
     map.addSource(SOURCE_ID, { type: "geojson", data });
+    // CodeRabbit (map-style.ts:46): the trail color and the darker major-road
+    // color have almost the same luminance (1.05:1 light, 1.15:1 dark), so a
+    // trail along a major road blended into it. A casing in the page's casing
+    // color under both segments restores the 3:1 edge, same as the directions
+    // route in discover-map.tsx. Its gaps also show under the dashes.
+    map.addLayer({
+      id: CASING_LAYER_ID,
+      type: "line",
+      source: SOURCE_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": palette.casing, "line-width": 8 },
+    });
     map.addLayer({
       id: NEXT_LAYER_ID,
       type: "line",
@@ -149,6 +162,7 @@ export function TrailOverlay({
       if (!map?.getStyle()) return;
       if (map.getLayer(DONE_LAYER_ID)) map.removeLayer(DONE_LAYER_ID);
       if (map.getLayer(NEXT_LAYER_ID)) map.removeLayer(NEXT_LAYER_ID);
+      if (map.getLayer(CASING_LAYER_ID)) map.removeLayer(CASING_LAYER_ID);
       if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
     };
   }, [map]);
