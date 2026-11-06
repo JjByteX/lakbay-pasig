@@ -395,26 +395,56 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     [handleSelectFrom],
   );
 
-  return {
-    route,
-    directionsPanelResult,
-    selectedMode,
-    routeDuration,
-    routeDistance,
-    modeLoading,
-    modeErrorReason,
-    customFrom,
-    pickingOnMap,
-    origin,
-    handleRouteFound,
-    handleSelectMode,
-    handleCancelDirections,
-    handleSelectFrom,
-    handleResetFrom,
-    handlePickFromOnMap,
-    handleCancelPickOnMap,
-    handleMapPick,
-  };
+  // Memoized on purpose. This object used to be rebuilt on every render of
+  // PublicShell, so every consumer of DirectionsContext (DiscoverPage)
+  // re-rendered whenever the shell did. DiscoverPage hands the shell a new
+  // filter element on each render (useDiscoverFilters), which re-renders
+  // the shell, which re-renders DiscoverPage again: an endless loop of
+  // urgent updates. React Router applies navigation as a low-priority
+  // transition, so the loop starved it and the View button changed the URL
+  // without the screen ever following. A stable value ends the loop.
+  return useMemo(
+    () => ({
+      route,
+      directionsPanelResult,
+      selectedMode,
+      routeDuration,
+      routeDistance,
+      modeLoading,
+      modeErrorReason,
+      customFrom,
+      pickingOnMap,
+      origin,
+      handleRouteFound,
+      handleSelectMode,
+      handleCancelDirections,
+      handleSelectFrom,
+      handleResetFrom,
+      handlePickFromOnMap,
+      handleCancelPickOnMap,
+      handleMapPick,
+    }),
+    [
+      route,
+      directionsPanelResult,
+      selectedMode,
+      routeDuration,
+      routeDistance,
+      modeLoading,
+      modeErrorReason,
+      customFrom,
+      pickingOnMap,
+      origin,
+      handleRouteFound,
+      handleSelectMode,
+      handleCancelDirections,
+      handleSelectFrom,
+      handleResetFrom,
+      handlePickFromOnMap,
+      handleCancelPickOnMap,
+      handleMapPick,
+    ],
+  );
 }
 
 // Discover-only drag-reveal filters (Map/List, Category, Price), fused into
