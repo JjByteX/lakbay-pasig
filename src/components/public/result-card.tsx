@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowBendUpRight, ArrowUpRight, SealCheck, SealQuestion } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
@@ -208,9 +207,11 @@ export function ResultCard({
                       applies a navigation as a low-priority transition, and the
                       map keeps firing urgent updates (location fixes, camera
                       events) while it is still mounted, so the transition could
-                      be held back. react-dom's flushSync around navigate() commits the
-                      route change at once (the Link `flushSync` prop is not available
-                      in the installed react-router-dom types).
+                      be held back. navigate(..., { flushSync: true }) makes the router itself
+                      commit the route change synchronously. Wrapping navigate()
+                      in react-dom's flushSync does nothing here: the router's
+                      state update is a transition, which flushSync never flushes.
+                      (The Link `flushSync` prop does not exist in router v7.)
                       Closing the popup in the same click is unchanged. */}
                   <Link
                     to={`/discover/${result.kind}/${result.id}`}
@@ -221,7 +222,7 @@ export function ResultCard({
                         return;
                       }
                       event.preventDefault();
-                      flushSync(() => navigate(`/discover/${result.kind}/${result.id}`));
+                      navigate(`/discover/${result.kind}/${result.id}`, { flushSync: true });
                       onOpenChange(false);
                     }}
                   >
