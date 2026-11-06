@@ -188,9 +188,9 @@ const TAB_CONFIG: Record<
     // "Announcement Category" dialog-title pattern), and emptyNoun is
     // unchanged too (already "business", not "business category" -- see
     // this type's own field comment above for why).
-    label: "Business",
+    label: "Businesses",
     dialogLabel: "Business Category",
-    emptyNoun: "business",
+    emptyNoun: "businesses",
     permission: "review_businesses",
     fetchAll: businessCategories.fetchAllCategories,
     getIcon: getBusinessCategoryIcon,
@@ -230,7 +230,11 @@ const TAB_CONFIG: Record<
 // tab on this page (the sidebar's own Places/Businesses/Announcements/
 // Trails order, applied here since this page has no Businesses tab of its
 // own to sit directly next to).
-const TAB_ORDER: TabKey[] = ["places", "facilities", "business_categories", "trails", "events"];
+//
+// Reordered to follow the sidebar exactly (Announcements, Places, Businesses,
+// Trails), with Facilities kept right after Places. The first tab a person
+// can see is the one that opens, so an admin now lands on Announcements.
+const TAB_ORDER: TabKey[] = ["events", "places", "facilities", "business_categories", "trails"];
 
 /**
  * Fetch on mount (same fetch-on-mount, client-array shape every other
