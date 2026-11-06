@@ -132,7 +132,12 @@ export function Sparkline({ values, label }: Readonly<{ values: number[]; label:
   const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const last = values.length - 1;
   return (
-    <svg role="img" aria-label={label} viewBox={`0 0 ${W} ${H}`} className="h-8 w-24 shrink-0">
+    <svg
+      role="img"
+      aria-label={label}
+      viewBox={`0 0 ${W} ${H}`}
+      className="h-8 w-24 shrink-0"
+    >
       <polyline
         points={points}
         fill="none"
