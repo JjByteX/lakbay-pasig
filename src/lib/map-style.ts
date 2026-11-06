@@ -39,8 +39,8 @@ export const LATTE = {
   // needed to understand the map (roads, outlines), SC 1.4.3 needs 4.5:1 for
   // text. Old Latte values failed: road 2.3, major road 2.6, building 1.6,
   // water label 2.8. New ratios are in the comments.
-  building: "#c9cdd9", // fill only, the outline below carries the 3:1
-  buildingLine: "#7c7f93", // overlay2, 3.5:1 against base
+  building: "#d3d6e0", // fill
+  buildingLine: "#a6aabb", // soft edge. Buildings are background context, not something a person needs to read, so this one stays under 3:1 on purpose; roads and labels keep theirs
   road: "#7c7f93", // overlay2, 3.5:1
   roadDark: "#6c6f85", // subtext1, 4.4:1, secondary/tertiary
   peach: "#c2410c", // major roads, 4.6:1 (was #fe640b at 2.6:1)
@@ -68,7 +68,7 @@ export const MOCHA: typeof LATTE = {
   blue: "#89b4fa",
   sapphire: "#74c7ec",
   building: "#313244", // surface0, fill only
-  buildingLine: "#7f849c", // overlay1, 4.4:1 against base
+  buildingLine: "#585b70", // soft edge, same reasoning as Latte
   road: "#7f849c", // overlay1, 4.4:1 (was overlay0 at 3.4:1)
   roadDark: "#9399b2", // overlay2, secondary/tertiary, one step brighter than minor roads
   casing: "#11111b", // crust
@@ -278,7 +278,7 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         "source-layer": "transportation_name",
         // Bugfix, human-reported (street names not visible): 11px with a 1px
         // halo vanished against road lines up to 18px wide. Size now grows with
-        // zoom (13 -> 17px), the halo is 2.5px with a little blur, and the text
+        // zoom (13 -> 17px), the halo is 1.5px, and the text
         // colour is the highest-contrast token. The halo is the casing colour
         // so it also reads over road fills in both themes.
         layout: {
@@ -293,8 +293,11 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         paint: {
           "text-color": palette.text,
           "text-halo-color": palette.casing,
-          "text-halo-width": 2.5,
-          "text-halo-blur": 0.5,
+          // Slimmed from 2.5 after feedback that the outline looked heavy. 1.5
+          // still clears the road line under the text, and the text colour
+          // does the rest of the work for contrast.
+          "text-halo-width": 1.5,
+          "text-halo-blur": 0,
         },
       },
       {
