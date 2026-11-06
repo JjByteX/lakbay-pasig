@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowBendUpRight, ArrowUpRight, SealCheck, SealQuestion } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,7 +123,6 @@ export function ResultCard({
   onRouteFound,
 }: Readonly<ResultCardProps>) {
   const online = useOnline();
-  const navigate = useNavigate();
   const [directionsStatus, setDirectionsStatus] = useState<"idle" | "loading" | "error">("idle");
   const [directionsError, setDirectionsError] = useState<string | null>(null);
 
@@ -202,30 +201,9 @@ export function ResultCard({
               </div>
               <DialogFooter className="flex-row items-center justify-between gap-2 sm:justify-between">
                 <Button asChild variant="link" className="gap-1 px-0">
-                  {/* Bugfix, human-reported: the address bar changed to the detail URL but
-                      the screen stayed on the map until a reload. React Router
-                      applies a navigation as a low-priority transition, and the
-                      map keeps firing urgent updates (location fixes, camera
-                      events) while it is still mounted, so the transition could
-                      be held back. navigate(..., { flushSync: true }) makes the router itself
-                      commit the route change synchronously. Wrapping navigate()
-                      in react-dom's flushSync does nothing here: the router's
-                      state update is a transition, which flushSync never flushes.
-                      (The Link `flushSync` prop does not exist in router v7.)
-                      Closing the popup in the same click is unchanged. */}
-                  <Link
-                    to={`/discover/${result.kind}/${result.id}`}
-                    onClick={(event) => {
-                      // Let new-tab / modified clicks use the default link behavior.
-                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-                        onOpenChange(false);
-                        return;
-                      }
-                      event.preventDefault();
-                      navigate(`/discover/${result.kind}/${result.id}`, { flushSync: true });
-                      onOpenChange(false);
-                    }}
-                  >
+                  {/* Plain link: the route change unmounts the map page, which
+                      closes this popup with it. No click handler needed. */}
+                  <Link to={`/discover/${result.kind}/${result.id}`}>
                     View
                     <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
                   </Link>
