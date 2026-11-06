@@ -43,7 +43,7 @@ export const LATTE = {
   buildingLine: "#a6aabb", // soft edge. Buildings are background context, not something a person needs to read, so this one stays under 3:1 on purpose; roads and labels keep theirs
   road: "#7c7f93", // overlay2, 3.5:1
   roadDark: "#6c6f85", // subtext1, 4.4:1, secondary/tertiary
-  peach: "#c2410c", // major roads, 4.6:1 (was #fe640b at 2.6:1)
+  roadMajor: "#4c4f69", // major roads, 7.1:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
   casing: "#ffffff", // thin outline under roads so they separate from buildings (G209)
   greenLine: "#2e7d32", // park outline, 4.5:1
   waterText: "#0f6f80", // water labels, 5.2:1 (was sapphire at 2.8:1)
@@ -51,8 +51,8 @@ export const LATTE = {
   // `peach`, the exact same color as the road-major layer just below --
   // a walking/driving route drawn along a major road was visually
   // indistinguishable from the road itself. `mauve` is unused anywhere
-  // else in this palette (green = parks, blue = water, peach = major
-  // roads, road/roadDark/building = neutral greys), so the route now
+  // else in this palette (green = parks, blue = water, roads and
+  // road/roadMajor/roadDark/building = neutral greys), so the route now
   // reads as its own distinct line against every other layer in both
   // themes, not just against the one road tier it happens to sit near.
   mauve: "#8839ef",
@@ -74,7 +74,7 @@ export const MOCHA: typeof LATTE = {
   casing: "#11111b", // crust
   greenLine: "#a6e3a1",
   waterText: "#74c7ec",
-  peach: "#fab387",
+  roadMajor: "#bac2de", // subtext1, brighter than roadDark so major roads still lead
   mauve: "#cba6f7",
   railway: "#a6adc8", // subtext0
   boundary: "#a6adc8", // subtext0
@@ -235,7 +235,7 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         filter: ["match", ["get", "class"], ["primary", "trunk", "motorway"], true, false],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": palette.peach,
+          "line-color": palette.roadMajor,
           "line-width": ["interpolate", ["exponential", 1.2], ["zoom"], 5, 0.5, 20, 18],
         },
       },
@@ -293,10 +293,10 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         paint: {
           "text-color": palette.text,
           "text-halo-color": palette.casing,
-          // Slimmed from 2.5 after feedback that the outline looked heavy. 1.5
-          // still clears the road line under the text, and the text colour
-          // does the rest of the work for contrast.
-          "text-halo-width": 1.5,
+          // Slimmed from 2.5 after feedback that the outline looked heavy,
+          // then raised from 1.5 to 2 because 1.5 read thin over dense road
+          // lines. 2 matches the water and place labels.
+          "text-halo-width": 2,
           "text-halo-blur": 0,
         },
       },
