@@ -41,12 +41,15 @@ export function Pane({
 export function PaneGroup({
   sections,
   className,
+  bare = false,
 }: Readonly<{
   sections: readonly { title: string; action?: ReactNode; bodyRef?: Ref<HTMLDivElement>; children: ReactNode }[];
   className?: string;
+  /** No card chrome of its own: it sits inside a card someone else draws. */
+  bare?: boolean;
 }>) {
   return (
-    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card", className)}>
+    <div className={cn("flex min-h-0 flex-col overflow-hidden", !bare && "rounded-lg border border-border bg-card", className)}>
       {sections.map((section, i) => (
         <Fragment key={section.title}>
           {i > 0 && <div className="mx-4 h-px shrink-0 bg-border" />}

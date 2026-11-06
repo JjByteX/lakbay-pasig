@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Link } from "react-router-dom";
-import { CalendarBlank, CaretRight, CheckCircle, ChartLineUp, ClipboardText } from "@phosphor-icons/react";
+import { ArrowUpRight, CalendarBlank, CaretRight, CheckCircle, ChartLineUp, ClipboardText } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import type { SystemPermission } from "@/lib/auth-types";
 import { usePageTitle } from "@/lib/page-title";
@@ -24,6 +24,7 @@ import {
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AreaChart, Meter, PaneGroup, Segmented, Sparkline } from "@/components/admin/dashboard-widgets";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -37,9 +38,9 @@ import { cn } from "@/lib/utils";
 // wide data side balances the sidebar and the narrow action rail on the left.
 //
 //   header          title and date              date range
-//   summary strip   one box, up to 4 figures, divided by inset hairlines
-//   left card (4)   Needs attention over Coming up, split by a hairline
-//   right card (8)  Daily trend over Recent activity, split by a hairline
+//   summary strip   no card, up to 4 figures, a horizontal line underneath
+//   one card        left (4) Needs attention over Coming up, right (8) Daily
+//                   trend over Recent activity, split by a hairline
 //
 // Every panel is permission gated like the sidebar. A panel a person cannot use
 // is left out, and a row with one panel gives it the full width.
@@ -119,15 +120,14 @@ function Figure({
   return (
     <div
       className={cn(
-        "relative flex min-w-0 flex-col gap-1 p-4",
-        // Inset dividers: they stop short of the card edges instead of touching them.
+        "relative flex min-w-0 flex-col gap-1 px-4 py-4 first:pl-0 last:pr-0",
+        // The strip has no card. Lines run edge to edge of the strip.
         // Stacked: a line under every figure but the last.
-        "after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden",
-        // Two columns: a vertical line after the left figure, and no bottom line on the last row.
-        "before:absolute before:inset-y-4 before:right-0 before:hidden before:w-px before:bg-border",
-        "md:max-xl:[&:nth-child(odd):not(:last-child)]:before:block md:max-xl:[&:nth-last-child(2):nth-child(odd)]:after:hidden",
-        // One row: vertical lines only.
-        "xl:after:hidden xl:[&:not(:last-child)]:before:block"
+        "after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-border last:after:hidden",
+        // Two columns: no bottom line on the last row.
+        "md:max-xl:[&:nth-last-child(2):nth-child(odd)]:after:hidden",
+        // One row: no lines between figures.
+        "xl:after:hidden"
       )}
     >
       <div className="flex h-6 items-center justify-between gap-2">
@@ -280,12 +280,12 @@ export default function AdminDashboardPage() {
     to: string;
   }
   const attention: AttentionRow[] = [];
-  const queueRow = (key: string, label: string, to: string, queue: { count: number; oldest: string | null }, extra?: string) => {
+  const queueRow = (key: string, one: string, other: string, to: string, queue: { count: number; oldest: string | null }, extra?: string) => {
     if (queue.count === 0) return;
     const age = queue.oldest ? daysSince(queue.oldest) : 0;
     attention.push({
       key,
-      label,
+      label: `${plural(queue.count, one, other)} awaiting review`,
       note: [queue.oldest ? `Oldest edited ${ageLabel(age)}` : null, extra].filter(Boolean).join(", ") || null,
       count: queue.count,
       stale: age >= STALE_DAYS,
@@ -293,14 +293,14 @@ export default function AdminDashboardPage() {
     });
   };
   if (content?.places) {
-    queueRow("places", "Places awaiting review", "/admin/places", content.places, content.places.flagged > 0 ? `${content.places.flagged} flagged` : undefined);
+    queueRow("places", "place", "places", "/admin/places", content.places, content.places.flagged > 0 ? `${content.places.flagged} flagged` : undefined);
   }
-  if (content?.businesses) queueRow("businesses", "Businesses awaiting review", "/admin/businesses", content.businesses);
+  if (content?.businesses) queueRow("businesses", "business", "businesses", "/admin/businesses", content.businesses);
   if (content?.announcements && content.announcements.drafts > 0) {
-    attention.push({ key: "events", label: "Draft announcements", note: "Not published", count: content.announcements.drafts, stale: false, to: "/admin/events" });
+    attention.push({ key: "events", label: plural(content.announcements.drafts, "draft announcement", "draft announcements"), note: "Not published", count: content.announcements.drafts, stale: false, to: "/admin/events" });
   }
   if (content?.trails && content.trails.drafts > 0) {
-    attention.push({ key: "trails", label: "Draft trails", note: "Not published", count: content.trails.drafts, stale: false, to: "/admin/trails" });
+    attention.push({ key: "trails", label: plural(content.trails.drafts, "draft trail", "draft trails"), note: "Not published", count: content.trails.drafts, stale: false, to: "/admin/trails" });
   }
   attention.sort((a, b) => Number(b.stale) - Number(a.stale) || b.count - a.count);
 
@@ -322,9 +322,9 @@ export default function AdminDashboardPage() {
     );
   } else {
     attentionBody = (
-      <ul className="grid h-full grid-cols-[minmax(0,1fr)] auto-rows-[minmax(3.5rem,4.5rem)] divide-y divide-border overflow-y-auto">
+      <ul className="grid h-full grid-cols-[minmax(0,1fr)] auto-rows-[minmax(3.5rem,4.5rem)] overflow-y-auto">
         {attention.map((row) => (
-          <li key={row.key}>
+          <li key={row.key} className="relative after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden">
             <Link
               to={row.to}
               className="flex h-full items-center justify-between gap-4 px-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
@@ -333,10 +333,7 @@ export default function AdminDashboardPage() {
                 <span className="block truncate text-sm text-foreground">{row.label}</span>
                 {row.note && <span className="block truncate text-xs text-muted-foreground">{row.note}</span>}
               </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <Badge variant={row.stale ? "alert" : "muted"}>{row.count}</Badge>
-                <CaretRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              </span>
+              <CaretRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </Link>
           </li>
         ))}
@@ -379,9 +376,9 @@ export default function AdminDashboardPage() {
     );
   } else {
     comingBody = (
-      <ul className="grid h-full grid-cols-[minmax(0,1fr)] auto-rows-[minmax(3.5rem,4rem)] divide-y divide-border">
+      <ul className="grid h-full grid-cols-[minmax(0,1fr)] auto-rows-[minmax(3.5rem,4rem)]">
         {comingUp.data.slice(0, comingFit.pageSize).map((item) => (
-          <li key={item.key}>
+          <li key={item.key} className="relative after:absolute after:inset-x-4 after:bottom-0 after:h-px after:bg-border last:after:hidden">
             <Link
               to={item.to}
               className="flex h-full items-center gap-4 px-4 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
@@ -418,19 +415,20 @@ export default function AdminDashboardPage() {
     activityBody = <EmptyState icon={ClipboardText} className="h-full">Staff actions will appear here.</EmptyState>;
   } else {
     activityBody = (
+      <div className="px-4">
       <Table className="table-fixed">
         <TableHeader>
           <TableRow className="h-10 hover:bg-transparent">
-            <TableHead className="h-10 w-[22%] px-4">Staff</TableHead>
+            <TableHead className="h-10 w-[22%] px-4 first:pl-0">Staff</TableHead>
             <TableHead className="h-10 w-[32%] px-4">Action</TableHead>
             {showItem && <TableHead className="hidden h-10 px-4 md:table-cell">Item</TableHead>}
-            <TableHead className="h-10 w-[18%] px-4 text-right">When</TableHead>
+            <TableHead className="h-10 w-[18%] px-4 text-right last:pr-0">When</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((entry) => (
             <TableRow key={entry.id} className="h-[var(--height-table-row)]">
-              <TableCell className="truncate px-4 py-0 text-sm text-foreground">{entry.who}</TableCell>
+              <TableCell className="truncate px-4 py-0 text-sm text-foreground first:pl-0">{entry.who}</TableCell>
               <TableCell className="truncate px-4 py-0 text-sm text-foreground">
                 {entry.action} {entry.target}
               </TableCell>
@@ -439,11 +437,12 @@ export default function AdminDashboardPage() {
                   {entry.label ?? ""}
                 </TableCell>
               )}
-              <TableCell className="whitespace-nowrap px-4 py-0 text-right text-xs text-muted-foreground">{timeAgo(entry.at)}</TableCell>
+              <TableCell className="whitespace-nowrap px-4 py-0 text-right text-xs text-muted-foreground last:pr-0">{timeAgo(entry.at)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      </div>
     );
   }
 
@@ -452,12 +451,12 @@ export default function AdminDashboardPage() {
   // to do next), so they share one card split by a hairline. Right column: the
   // record, trend over activity. A lone section stays its own card.
   const activityAction = isAdmin ? (
-    <Link
-      to="/admin/activity"
-      className="text-sm font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      View all
-    </Link>
+    <Button asChild variant="link" className="h-auto gap-1 px-0 py-0">
+      <Link to="/admin/activity">
+        View all
+        <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+      </Link>
+    </Button>
   ) : undefined;
   const trendAction = isAdmin ? (
     <Segmented
@@ -486,6 +485,7 @@ export default function AdminDashboardPage() {
   const leftCard =
     leftSections.length === 0 ? null : (
       <PaneGroup
+        bare
         sections={leftSections}
         className={cn(stackedHeight(leftSections.length), "xl:h-auto", rightSections.length > 0 ? "xl:col-span-4" : "xl:col-span-12")}
       />
@@ -493,8 +493,12 @@ export default function AdminDashboardPage() {
   const rightCard =
     rightSections.length === 0 ? null : (
       <PaneGroup
+        bare
         sections={rightSections}
-        className={cn(stackedHeight(rightSections.length), "xl:h-auto", leftSections.length > 0 ? "xl:col-span-8" : "xl:col-span-12")}
+        className={cn(stackedHeight(rightSections.length), "xl:h-auto", leftSections.length > 0
+            ? "relative xl:col-span-8 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border xl:before:inset-x-auto xl:before:inset-y-4 xl:before:left-0 xl:before:h-auto xl:before:w-px"
+            : "xl:col-span-12"
+        )}
       />
     );
   const today = new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" });
@@ -519,7 +523,7 @@ export default function AdminDashboardPage() {
       {strip.length > 0 && (
         <div
           className={cn(
-            "grid shrink-0 grid-cols-1 overflow-hidden rounded-lg border border-border bg-card md:grid-cols-2",
+            "grid shrink-0 grid-cols-1 border-y border-border px-4 md:grid-cols-2",
             STRIP_COLUMNS[strip.length],
             // Odd count on two columns: the last figure takes the full row.
             "md:max-xl:[&>:last-child:nth-child(odd)]:col-span-2"
@@ -530,7 +534,7 @@ export default function AdminDashboardPage() {
       )}
 
       {(leftCard || rightCard) && (
-        <div className="grid gap-6 xl:min-h-[28rem] xl:flex-1 xl:grid-cols-12">
+        <div className="grid overflow-hidden rounded-lg border border-border bg-card xl:min-h-[28rem] xl:flex-1 xl:grid-cols-12">
           {leftCard}
           {rightCard}
         </div>
