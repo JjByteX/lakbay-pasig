@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchPublishedTrails } from "@/lib/trail-query";
+import { useSwr } from "@/lib/swr-cache";
 import { fetchMyTrails, type PersonalTrailSummary } from "@/lib/personal-trails";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
-import type { TrailSummary } from "@/lib/trail-types";
 import { TrailCard } from "@/components/public/trail-card";
 import { PageContainer } from "@/components/public/page-container";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ import { usePageTitle } from "@/lib/page-title";
 // count, and stays a placeholder not tied to the eventual result count.
 function TrailListSkeleton() {
   return (
-    <ul className="-mx-6 flex flex-col divide-y divide-border">
+    <ul className="-mx-6 flex flex-col">
       {[0, 1, 2].map((i) => (
         <li key={i} className="flex flex-col gap-1 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <Skeleton className="h-4 w-2/3 md:w-1/3" />
@@ -79,22 +79,13 @@ export default function TrailsPage() {
   const { openAuth } = useAuthModal();
   const userId = session?.user.id;
   const [myTrails, setMyTrails] = useState<PersonalTrailSummary[]>([]);
-  const [trails, setTrails] = useState<TrailSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetchPublishedTrails()
-      .then(setTrails)
-      .catch(() => {
-        setError("Couldn't load trails. Check your connection and try again.");
-        setTrails([]);
-      })
-      .finally(() => setLoading(false));
-  }, [reload]);
+  // Cached per person (lib/swr-cache.ts): coming back to Trails shows the last
+  // list at once and refreshes it behind the scenes, with no skeleton.
+  const catalog = useSwr(`trails:published:${userId ?? "guest"}`, fetchPublishedTrails, reload);
+  const trails = catalog.data ?? [];
+  const loading = catalog.loading;
+  const error = catalog.error ? "Couldn't load trails. Check your connection and try again." : null;
 
   // Signed-in only. Reloaded with the catalog's retry, and cleared on sign out.
   useEffect(() => {
@@ -144,7 +135,7 @@ export default function TrailsPage() {
     );
   } else {
     body = (
-      <ul className="-mx-6 flex flex-col divide-y divide-border">
+      <ul className="-mx-6 flex flex-col">
         {trails.map((trail) => (
           <li key={trail.id}>
             <TrailCard inline trail={trail} onClick={() => navigate(`/trails/${trail.id}`)} />
@@ -176,7 +167,7 @@ export default function TrailsPage() {
           {/* Mobile: full-width rows, the same as the catalog. md+: a grid of
               cards, so a few trails of your own do not read as a second
               catalog. */}
-          <ul className="-mx-6 flex flex-col divide-y divide-border md:mx-0 md:mt-2 md:grid md:grid-cols-2 md:gap-4 md:divide-y-0 lg:grid-cols-3">
+          <ul className="-mx-6 flex flex-col md:mx-0 md:mt-2 md:grid md:grid-cols-2 md:gap-4 lg:grid-cols-3">
             {myTrails.map((trail) => (
               <li key={trail.id} className="md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-card">
                 <TrailCard

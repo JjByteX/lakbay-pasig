@@ -131,7 +131,16 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         type: "fill",
         source: "openmaptiles",
         "source-layer": "park",
-        paint: { "fill-color": palette.green, "fill-opacity": 0.35, "fill-outline-color": palette.greenLine },
+        paint: { "fill-color": palette.green, "fill-opacity": 0.35 },
+      },
+      // CodeRabbit: fill-opacity also dims fill-outline-color, dropping the
+      // outline below 3:1. A separate line layer keeps the outline opaque.
+      {
+        id: "park-outline",
+        type: "line",
+        source: "openmaptiles",
+        "source-layer": "park",
+        paint: { "line-color": palette.greenLine, "line-width": 1 },
       },
       {
         id: "water",

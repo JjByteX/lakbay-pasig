@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { lazyPage, preloadPages, whenIdle } from "@/lib/lazy-page";
 import { AuthModalProvider } from "@/lib/auth-modal";
 import { SettingsModalProvider } from "@/lib/settings-modal";
 import { SettingsModal } from "@/components/settings-modal";
@@ -14,9 +16,6 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import { PublicShell } from "@/components/public/public-shell";
 import TrailsPage from "@/pages/trails";
 import TrailDetailPage from "@/pages/trail-detail";
-import TrailBuilderPage from "@/pages/trail-builder";
-import TrailSuggestPage from "@/pages/trail-suggest";
-import TrailScanPage from "@/pages/trail-scan";
 import DiscoverPage from "@/pages/discover";
 import DiscoverPlaceDetailPage from "@/pages/discover-place-detail";
 import DiscoverBusinessDetailPage from "@/pages/discover-business-detail";
@@ -26,31 +25,64 @@ import SavedPage from "@/pages/saved";
 import ProfilePage from "@/pages/profile";
 import HelpPage from "@/pages/help";
 import SettingsPage from "@/pages/settings";
-import VendorDashboardPage from "@/pages/vendor-dashboard";
-import VendorItemsPage from "@/pages/vendor-items";
-import AdminPage from "@/pages/admin";
-import AdminDashboardPage from "@/pages/admin-dashboard";
-import AdminPlacesPage from "@/pages/admin-places";
-import AdminPlaceDetailPage from "@/pages/admin-place-detail";
-import AdminDiscoveryContentReviewPage from "@/pages/admin-discovery-content-review";
-import AdminBusinessesPage from "@/pages/admin-businesses";
-import AdminBusinessDetailPage from "@/pages/admin-business-detail";
-import AdminEventsPage from "@/pages/admin-events";
-import AdminFiestasPage from "@/pages/admin-fiestas";
-import AdminTrailsPage from "@/pages/admin-trails";
-import AdminTrailBuilderPage from "@/pages/admin-trail-builder";
-import AdminCategoriesPage from "@/pages/admin-categories";
-import AdminLandingPage from "@/pages/admin-landing";
-import AdminReportsPage from "@/pages/admin-reports";
-import AdminReportHeatmapPage from "@/pages/admin-report-heatmap";
-import AdminReportFiestasPage from "@/pages/admin-report-fiestas";
-import AdminReportVisitsPage from "@/pages/admin-report-visits";
-import AdminStaffPage from "@/pages/admin-staff";
-import AdminActivityPage from "@/pages/admin-activity";
-import AdminSettingsPage from "@/pages/admin-settings";
-import AdminHelpPage from "@/pages/admin-help";
 import LandingPage from "@/pages/landing";
-import PrivacyPage from "@/pages/privacy";
+
+// Split out of the first download, see lib/lazy-page.tsx.
+const TrailBuilderPage = lazyPage(() => import("@/pages/trail-builder"));
+const TrailSuggestPage = lazyPage(() => import("@/pages/trail-suggest"));
+const TrailScanPage = lazyPage(() => import("@/pages/trail-scan"));
+const VendorDashboardPage = lazyPage(() => import("@/pages/vendor-dashboard"));
+const VendorItemsPage = lazyPage(() => import("@/pages/vendor-items"));
+const AdminPage = lazyPage(() => import("@/pages/admin"));
+const AdminDashboardPage = lazyPage(() => import("@/pages/admin-dashboard"));
+const AdminPlacesPage = lazyPage(() => import("@/pages/admin-places"));
+const AdminPlaceDetailPage = lazyPage(() => import("@/pages/admin-place-detail"));
+const AdminDiscoveryContentReviewPage = lazyPage(() => import("@/pages/admin-discovery-content-review"));
+const AdminBusinessesPage = lazyPage(() => import("@/pages/admin-businesses"));
+const AdminBusinessDetailPage = lazyPage(() => import("@/pages/admin-business-detail"));
+const AdminEventsPage = lazyPage(() => import("@/pages/admin-events"));
+const AdminFiestasPage = lazyPage(() => import("@/pages/admin-fiestas"));
+const AdminTrailsPage = lazyPage(() => import("@/pages/admin-trails"));
+const AdminTrailBuilderPage = lazyPage(() => import("@/pages/admin-trail-builder"));
+const AdminCategoriesPage = lazyPage(() => import("@/pages/admin-categories"));
+const AdminLandingPage = lazyPage(() => import("@/pages/admin-landing"));
+const AdminReportsPage = lazyPage(() => import("@/pages/admin-reports"));
+const AdminReportHeatmapPage = lazyPage(() => import("@/pages/admin-report-heatmap"));
+const AdminReportFiestasPage = lazyPage(() => import("@/pages/admin-report-fiestas"));
+const AdminReportVisitsPage = lazyPage(() => import("@/pages/admin-report-visits"));
+const AdminStaffPage = lazyPage(() => import("@/pages/admin-staff"));
+const AdminActivityPage = lazyPage(() => import("@/pages/admin-activity"));
+const AdminSettingsPage = lazyPage(() => import("@/pages/admin-settings"));
+const AdminHelpPage = lazyPage(() => import("@/pages/admin-help"));
+const PrivacyPage = lazyPage(() => import("@/pages/privacy"));
+
+// Pages split out of the first download (lib/lazy-page.tsx). Home, Trails,
+// Discover, Saved, Profile and the place pages stay in the main file because
+// the mobile pager and the first screens use them right away.
+const EVERYONE_PAGES = [TrailBuilderPage, TrailSuggestPage, TrailScanPage, PrivacyPage];
+const VENDOR_PAGES = [VendorDashboardPage, VendorItemsPage];
+const ADMIN_PAGES = [AdminPage, AdminDashboardPage, AdminPlacesPage, AdminPlaceDetailPage, AdminDiscoveryContentReviewPage, AdminBusinessesPage, AdminBusinessDetailPage, AdminEventsPage, AdminFiestasPage, AdminTrailsPage, AdminTrailBuilderPage, AdminCategoriesPage, AdminLandingPage, AdminReportsPage, AdminReportHeatmapPage, AdminReportFiestasPage, AdminReportVisitsPage, AdminStaffPage, AdminActivityPage, AdminSettingsPage, AdminHelpPage];
+
+// Fetches the split pages while the browser is idle, so the first visit to
+// each is as quick as a page already loaded. Admin files are fetched only for
+// staff, so a guest never downloads them.
+function IdlePreload() {
+  const { profile } = useAuth();
+  const signedIn = !!profile;
+  const staff = !!profile?.staff_role;
+  useEffect(
+    () =>
+      whenIdle(() => {
+        void (async () => {
+          await preloadPages(EVERYONE_PAGES);
+          if (signedIn) await preloadPages(VENDOR_PAGES);
+          if (staff) await preloadPages(ADMIN_PAGES);
+        })();
+      }),
+    [signedIn, staff]
+  );
+  return null;
+}
 
 // Announcements modal conversion: /admin/events/new and /admin/events/:id
 // (admin-event-detail.tsx) are retired -- create/edit now happens in
@@ -71,6 +103,7 @@ export default function App() {
       <AuthModalProvider>
         <SettingsModalProvider>
         <OfflineModalProvider>
+        <IdlePreload />
         <Routes>
           {/* Public shell, five tabs per navigation-and-access-control.md's
               Bottom Nav Order, Guest accessible, no session required. home.tsx
