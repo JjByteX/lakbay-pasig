@@ -4,13 +4,21 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   Bank,
   CalendarDots,
+  ChartBar,
+  ChatCircleText,
   CircleNotch,
   FlagBanner,
+  Gear,
+  Image as ImageIcon,
   MagnifyingGlass,
   MapTrifold,
   Microphone,
+  Pulse,
+  Question,
+  SquaresFour,
   Stop,
   Storefront,
+  Tag,
   Users,
   type Icon,
 } from "@phosphor-icons/react";
@@ -23,6 +31,8 @@ import {
   searchAdminEverything,
   type AdminSearchResults,
 } from "@/lib/admin-global-search";
+import { searchAdminPages, type AdminPageEntry } from "@/lib/admin-page-search";
+import { useAuth } from "@/lib/auth-context";
 import { isVoiceSearchSupported, useVoiceSearch } from "@/hooks/use-voice-search";
 import { cn } from "@/lib/utils";
 
@@ -86,10 +96,47 @@ interface SpotlightGroup {
   items: SpotlightItem[];
 }
 
+// Pages (admin-page-search.ts) are found in memory, so they show on the first
+// keystroke and stay when the record search is slow or fails. They come first:
+// typing "heatmap" or "staff" is almost always about the page. Icons match the
+// sidebar's. A sub-page (a report, a category list) uses its section's icon,
+// found by the id's first word.
+const PAGE_ICONS: Record<string, Icon> = {
+  dashboard: SquaresFour,
+  events: CalendarDots,
+  places: Bank,
+  businesses: Storefront,
+  trails: MapTrifold,
+  fiestas: FlagBanner,
+  reports: ChartBar,
+  report: ChartBar,
+  feedback: ChatCircleText,
+  landing: ImageIcon,
+  categories: Tag,
+  staff: Users,
+  activity: Pulse,
+  settings: Gear,
+  help: Question,
+};
+
+function pageIcon(id: string): Icon {
+  return PAGE_ICONS[id] ?? PAGE_ICONS[id.split("-")[0]] ?? MagnifyingGlass;
+}
+
 // Icons match admin-sidebar.tsx's own icon for each section, same icon for
 // the same concept everywhere.
-function buildGroups(results: AdminSearchResults): SpotlightGroup[] {
+function buildGroups(results: AdminSearchResults, pages: AdminPageEntry[]): SpotlightGroup[] {
   const groups: SpotlightGroup[] = [
+    {
+      label: "Pages",
+      items: pages.map((page) => ({
+        id: `page-${page.id}`,
+        path: page.path,
+        title: page.title,
+        subtitle: page.section,
+        icon: pageIcon(page.id),
+      })),
+    },
     {
       label: "Places",
       items: results.places.map((place) => ({
@@ -170,6 +217,9 @@ export function AdminSearchBar({
 }: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void }>) {
   const navigate = useNavigate();
   const listId = useId();
+  const { profile } = useAuth();
+  const isAdmin = profile?.staff_role === "admin";
+  const permissions = profile?.system_permission;
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AdminSearchResults>(EMPTY_ADMIN_SEARCH_RESULTS);
@@ -233,14 +283,25 @@ export function AdminSearchBar({
   }, [query]);
 
   const trimmed = query.trim();
+  // Records (places, trails, ...) come from the database and are shown only
+  // once the latest query has answered, so an earlier query's rows never
+  // appear under a newer one.
   const ready = trimmed.length > 0 && !loading && !error;
-  const groups = useMemo(() => (ready ? buildGroups(results) : []), [ready, results]);
+  // Pages are in memory: instant, and not held back by loading or an error.
+  const pageHits = useMemo(
+    () => searchAdminPages(trimmed, { isAdmin, permissions }),
+    [trimmed, isAdmin, permissions],
+  );
+  const groups = useMemo(
+    () => buildGroups(ready ? results : EMPTY_ADMIN_SEARCH_RESULTS, pageHits),
+    [ready, results, pageHits],
+  );
   const flat = useMemo(() => groups.flatMap((group) => group.items), [groups]);
 
   // New results start at the first row.
   useEffect(() => {
     setActive(0);
-  }, [results]);
+  }, [results, pageHits]);
 
   // Keep the highlighted row in view while arrowing through a long list.
   useEffect(() => {
@@ -274,6 +335,9 @@ export function AdminSearchBar({
   }
 
   function onInputKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
+    // Enter that confirms an IME candidate (Japanese, Chinese, Korean, ...)
+    // is not a request to open the highlighted row.
+    if (e.nativeEvent.isComposing) return;
     if (flat.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -357,21 +421,6 @@ export function AdminSearchBar({
               aria-label="Results"
               className="max-h-[60vh] overflow-y-auto border-t border-border p-2"
             >
-              {loading && (
-                <p className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
-                  <SquareLoader size="xs" />
-                  Searching…
-                </p>
-              )}
-
-              {!loading && error && (
-                <p className="px-4 py-2 text-sm text-muted-foreground">Search failed. Try again.</p>
-              )}
-
-              {ready && groups.length === 0 && (
-                <p className="px-4 py-2 text-sm text-muted-foreground">No results for &quot;{trimmed}&quot;.</p>
-              )}
-
               {groups.map((group) => (
                 <div key={group.label} role="group" aria-label={group.label} className="pb-2 last:pb-0">
                   <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -413,6 +462,25 @@ export function AdminSearchBar({
                   })}
                 </div>
               ))}
+
+              {/* Status lines sit below the rows, so Pages (already on screen)
+                  do not jump down while records load. */}
+              {loading && (
+                <p className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+                  <SquareLoader size="xs" />
+                  Searching…
+                </p>
+              )}
+
+              {!loading && error && (
+                <p className="px-4 py-2 text-sm text-muted-foreground">
+                  {groups.length > 0 ? "Could not search records. Try again." : "Search failed. Try again."}
+                </p>
+              )}
+
+              {ready && groups.length === 0 && (
+                <p className="px-4 py-2 text-sm text-muted-foreground">No results for &quot;{trimmed}&quot;.</p>
+              )}
             </div>
           )}
         </DialogPrimitive.Content>

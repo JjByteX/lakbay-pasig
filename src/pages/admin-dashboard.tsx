@@ -22,7 +22,8 @@ import {
   type Trend,
 } from "@/lib/admin-dashboard";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { AreaChart, Meter, PaneGroup, Segmented, Sparkline } from "@/components/admin/dashboard-widgets";
+import { AreaChart, Meter, PaneGroup, Sparkline } from "@/components/admin/dashboard-widgets";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -471,7 +472,7 @@ export default function AdminDashboardPage() {
     </Button>
   ) : undefined;
   const trendAction = isAdmin ? (
-    <Segmented
+    <SegmentedControl
       label="Metric"
       value={activeMetric}
       onChange={setMetric}
@@ -522,7 +523,7 @@ export default function AdminDashboardPage() {
         badges={<span className="text-sm text-muted-foreground">{today}</span>}
         actions={
           hasTimeData ? (
-            <Segmented
+            <SegmentedControl
               label="Date range"
               value={days}
               onChange={setDays}

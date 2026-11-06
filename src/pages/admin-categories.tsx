@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Tag, Pencil, type Icon as PhosphorIcon, Plus } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -289,7 +290,14 @@ export default function AdminCategoriesPage() {
   // Expansion Phase 2.2), so visibleTabs is never empty here in practice.
   // Falls back to the fixed tab order's first entry if this were ever
   // reached with none.
-  const [activeTab, setActiveTab] = useState<TabKey>(visibleTabs[0] ?? TAB_ORDER[0]);
+  // ?tab=<key> opens that list, used by the admin search ("Facilities",
+  // "Trail categories"). Only a tab this person may see is accepted, so a
+  // typed or stale link can never open one they have no permission for.
+  const location = useLocation();
+  const requestedTab = new URLSearchParams(location.search).get("tab");
+  const requestedVisibleTab = visibleTabs.find((tab) => tab === requestedTab) ?? null;
+
+  const [activeTab, setActiveTab] = useState<TabKey>(requestedVisibleTab ?? visibleTabs[0] ?? TAB_ORDER[0]);
   const config = TAB_CONFIG[activeTab];
 
   const [rows, setRows] = useState<CategoryRow[] | null>(null);
@@ -338,6 +346,15 @@ export default function AdminCategoriesPage() {
     setActiveFilter("all");
     setDialogTarget(null);
   }
+
+  // Searching for another list while already on this page: the page stays
+  // mounted, so the initial state above does not run again. location.key
+  // changes on every navigation, so choosing the same link twice still
+  // switches back after the person clicked another tab in between.
+  useEffect(() => {
+    if (requestedVisibleTab && requestedVisibleTab !== activeTab) handleTabChange(requestedVisibleTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   const editingRow = typeof dialogTarget === "string" && dialogTarget !== "new"
     ? (rows ?? []).find((r) => r.id === dialogTarget)

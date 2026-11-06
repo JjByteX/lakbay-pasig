@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useState, type ReactNode } from "react";
+import { useMemo, useReducer, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { CaretLeft, CaretRight, CaretUp, CaretDown, CaretUpDown, Tray, type Icon } from "@phosphor-icons/react";
 import {
   Table,
@@ -386,12 +386,32 @@ export default function AdminDataTable<T>({
     setScopeOpen(false);
   }
 
-  function toggleRow(id: string) {
+  // The row ticked last, the start of a shift-click range.
+  const lastToggledId = useRef<string | null>(null);
+
+  // Shift-click ticks every selectable row between the last ticked row and
+  // this one, in the order shown, and gives them all the state the clicked
+  // row is moving to (so shift-clicking a ticked row clears the range). If
+  // the last row is not on this page, it is a plain single toggle.
+  function toggleRow(id: string, shiftKey = false) {
     if (!selection) return;
-    const next = new Set(selection.selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    selection.onChange(next);
+    const checking = !selection.selectedIds.has(id);
+    const anchor = lastToggledId.current;
+    const from = shiftKey && anchor !== null ? selectableIds.indexOf(anchor) : -1;
+    const to = selectableIds.indexOf(id);
+    lastToggledId.current = id;
+    if (from !== -1 && to !== -1) {
+      const [start, end] = from < to ? [from, to] : [to, from];
+      changeSelection(selectableIds.slice(start, end + 1), checking);
+      return;
+    }
+    changeSelection([id], checking);
+  }
+
+  // The browser would also select the text between the two rows on a
+  // shift-click; stop that, the click itself still goes through.
+  function keepShiftClickFromSelectingText(e: MouseEvent) {
+    if (e.shiftKey) e.preventDefault();
   }
 
   function discardAndLeave() {
@@ -428,7 +448,9 @@ export default function AdminDataTable<T>({
                   <Checkbox
                     checked={checked}
                     disabled={!canSelect(row)}
-                    onChange={() => toggleRow(rowKey)}
+                    onMouseDown={keepShiftClickFromSelectingText}
+                    onClick={(e) => toggleRow(rowKey, e.shiftKey)}
+                    onChange={() => {}}
                     aria-label="Select row"
                   />
                 </TableCell>

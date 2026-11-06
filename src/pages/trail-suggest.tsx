@@ -19,6 +19,7 @@ import { useUserLocation } from "@/components/public/public-shell";
 import { PageContainer } from "@/components/public/page-container";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,7 +62,7 @@ function timeLabel(minutes: number): string {
   return minutesToTime(Math.round(minutes) % 1440);
 }
 
-function Segmented<T extends string | number>({
+function SegmentedField<T extends string | number>({
   label,
   options,
   value,
@@ -75,20 +76,7 @@ function Segmented<T extends string | number>({
   return (
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => (
-          <Button
-            key={option.value}
-            type="button"
-            size="sm"
-            variant={option.value === value ? "default" : "outline"}
-            aria-pressed={option.value === value}
-            onClick={() => onChange(option.value)}
-          >
-            {option.label}
-          </Button>
-        ))}
-      </div>
+      <SegmentedControl label={label} options={options} value={value} onChange={onChange} className="self-start" />
     </div>
   );
 }
@@ -454,13 +442,13 @@ export default function TrailSuggestPage() {
         </p>
       </div>
 
-      <Segmented
+      <SegmentedField
         label="Time available"
         options={HOUR_OPTIONS.map((h) => ({ value: h, label: `${h} hours` }))}
         value={hours}
         onChange={setHours}
       />
-      <Segmented
+      <SegmentedField
         label="Travel mode"
         options={MODE_OPTIONS.map((o) => ({ value: o.mode, label: o.label }))}
         value={mode}

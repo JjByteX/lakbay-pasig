@@ -35,6 +35,10 @@ interface DateFieldProps {
  * or picked the same way. `value` is "YYYY-MM-DD" in all of them, the same
  * shape the native inputs gave, so callers' filtering did not change.
  *
+ * The input has a fixed width sized to its text (11ch plus padding), because a
+ * native date input ignores field-sizing and keeps its own wider default. That
+ * puts the divider right after the year; the calendar button takes the remaining width.
+ *
  * The popup is w-max: it used to size to its half-width column, which
  * squeezed the calendar's seven day columns into each other.
  */
@@ -113,7 +117,7 @@ export function DateField({
           max={maxDate ? toDateOnlyValue(maxDate) : undefined}
           aria-label={ariaLabel}
           aria-invalid={ariaInvalid}
-          className="h-full min-w-0 flex-1 bg-transparent px-3 py-1 text-sm text-foreground outline-none disabled:cursor-not-allowed [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden"
+          className="h-full min-w-0 w-[calc(11ch+1.25rem)] flex-none shrink-0 bg-transparent pl-3 pr-2 py-1 text-sm text-foreground outline-none disabled:cursor-not-allowed [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden"
         />
         <span className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
         <button
@@ -122,7 +126,7 @@ export function DateField({
           aria-label={ariaLabel ? `Open calendar, ${ariaLabel}` : "Open calendar"}
           aria-expanded={open}
           onClick={() => !disabled && setOpen((o) => !o)}
-          className="flex h-full shrink-0 items-center justify-center px-3 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:hover:text-muted-foreground"
+          className="flex h-full min-w-10 flex-1 items-center justify-center px-3 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:hover:text-muted-foreground"
         >
           <CalendarIcon className="h-4 w-4" />
         </button>
@@ -130,7 +134,7 @@ export function DateField({
       {open && (
         <div
           className={cn(
-            "absolute top-full z-50 mt-2 w-max max-w-[calc(100vw-2rem)] rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md",
+            "absolute top-full z-50 mt-1 w-max max-w-[calc(100vw-2rem)] rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md",
             align === "right" ? "right-0" : "left-0"
           )}
         >

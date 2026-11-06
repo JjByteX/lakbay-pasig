@@ -1,6 +1,7 @@
 import * as React from "react";
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { cn } from "@/lib/utils";
 
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -35,6 +36,13 @@ interface CalendarProps {
  * against the native Date object -- no new dependency, per ponytail's
  * ladder. Date-only, no time concept here: reusable anywhere a future date
  * field needs the same grid (5.9), independent of time-field.tsx.
+ *
+ * Like Google's picker, the header label is a button: click the month and
+ * year to pick a month, click the year there to pick a year, so a far-off
+ * date (a date of birth) is not many taps of the arrows. The chooser itself
+ * lives in month-year-picker.tsx, sized to match the day view (284px wide;
+ * the popup around it supplies the outer padding), so the popup never
+ * resizes between them.
  */
 export function Calendar({ selected, onSelect, disabled, className }: Readonly<CalendarProps>) {
   const today = startOfDay(new Date());
@@ -43,11 +51,16 @@ export function Calendar({ selected, onSelect, disabled, className }: Readonly<C
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
 
+  const [picking, setPicking] = React.useState(false);
+
   // Keep the visible month in sync if `selected` changes from outside
   // this component (e.g. the field is cleared, or a different date is
   // set elsewhere while this panel stays open).
   React.useEffect(() => {
-    if (selected) setViewMonth(new Date(selected.getFullYear(), selected.getMonth(), 1));
+    if (selected) {
+      setViewMonth(new Date(selected.getFullYear(), selected.getMonth(), 1));
+      setPicking(false);
+    }
   }, [selected]);
 
   const firstWeekday = viewMonth.getDay();
@@ -76,8 +89,22 @@ export function Calendar({ selected, onSelect, disabled, className }: Readonly<C
     setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
   }
 
+  if (picking) {
+    return (
+      <MonthYearPicker
+        month={viewMonth}
+        selected={selected}
+        className={className}
+        onPick={(month) => {
+          setViewMonth(month);
+          setPicking(false);
+        }}
+      />
+    );
+  }
+
   return (
-    <div className={cn("flex flex-col gap-2 p-2", className)}>
+    <div className={cn("flex w-[284px] shrink-0 flex-col gap-2", className)}>
       <div className="flex items-center justify-between px-1">
         <Button
           type="button"
@@ -89,7 +116,15 @@ export function Calendar({ selected, onSelect, disabled, className }: Readonly<C
         >
           <CaretLeft className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-semibold text-foreground">{MONTH_LABEL_FORMAT.format(viewMonth)}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 px-2 text-sm font-semibold text-foreground"
+          onClick={() => setPicking(true)}
+          aria-label="Choose month and year"
+        >
+          {MONTH_LABEL_FORMAT.format(viewMonth)}
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -125,7 +160,7 @@ export function Calendar({ selected, onSelect, disabled, className }: Readonly<C
               aria-current={isToday ? "date" : undefined}
               aria-selected={isSelected}
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                "flex h-9 w-9 items-center justify-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                 inMonth ? "text-foreground" : "text-muted-foreground/50",
                 !isSelected && !isDisabled && "hover:bg-muted",
                 isToday && !isSelected && "border border-primary font-semibold text-primary",

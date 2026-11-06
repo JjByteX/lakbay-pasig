@@ -172,7 +172,7 @@ export function DateTimeField({
         </p>
       )}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 flex flex-col gap-2 rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md sm:flex-row">
+        <div className="absolute left-0 top-full z-50 mt-1 flex flex-col gap-2 rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md sm:flex-row">
           <Calendar selected={selected} onSelect={commitDate} disabled={disabledDay} />
           <div className="flex flex-col gap-1 border-t border-border pt-2 sm:border-l sm:border-t-0 sm:pl-2 sm:pt-0">
             <TimeField

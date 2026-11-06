@@ -68,41 +68,6 @@ export function PaneGroup({
   );
 }
 
-// Filter-style segmented buttons (date range, chart metric). Real buttons with
-// aria-pressed rather than tabs: they filter, they do not switch panels.
-export function Segmented<T extends string | number>({
-  label,
-  value,
-  options,
-  onChange,
-}: Readonly<{
-  label: string;
-  value: T;
-  options: readonly { value: T; label: string }[];
-  onChange: (value: T) => void;
-}>) {
-  return (
-    <div role="group" aria-label={label} className="inline-flex h-8 items-center rounded-md bg-muted p-1">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "inline-flex h-6 items-center rounded-sm px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-            option.value === value
-              ? "bg-background text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** A share of a whole: 8px track, fill in the accent. */
 export function Meter({ value, label }: Readonly<{ value: number; label: string }>) {
   const pct = Math.max(0, Math.min(100, value));

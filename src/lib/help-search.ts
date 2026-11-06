@@ -87,13 +87,13 @@ export function normalize(text: string): string {
 
 // Edits allowed per query word: none up to 4 letters (too short to guess),
 // one for 5 to 8, two from 9.
-function allowedEdits(length: number): number {
+export function allowedEdits(length: number): number {
   if (length <= 4) return 0;
   return length <= 8 ? 1 : 2;
 }
 
 // Edit distance with a swapped pair counted as one edit, the commonest typo.
-function within(a: string, b: string, max: number): boolean {
+export function within(a: string, b: string, max: number): boolean {
   if (Math.abs(a.length - b.length) > max) return false;
   let older: number[] = [];
   let prev = Array.from({ length: b.length + 1 }, (_, j) => j);

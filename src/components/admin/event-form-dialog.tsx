@@ -109,6 +109,8 @@ interface EventFormDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Event id being edited, or null for a new event. */
   eventId: string | null;
+  /** "YYYY-MM-DD" to start a new event on (a clicked calendar day). Ignored when editing. */
+  initialDate?: string | null;
   onSaved: () => void;
 }
 
@@ -116,6 +118,7 @@ export default function EventFormDialog({
   open,
   onOpenChange,
   eventId,
+  initialDate = null,
   onSaved,
 }: Readonly<EventFormDialogProps>) {
   const isNew = eventId === null;
@@ -154,7 +157,7 @@ export default function EventFormDialog({
       });
 
     if (isNew) {
-      setForm(EMPTY_FORM);
+      setForm({ ...EMPTY_FORM, start_date: initialDate ?? "" });
       setHasEndDate(false);
       setPublished(false);
       setLifecycleStatus("upcoming");
@@ -196,7 +199,7 @@ export default function EventFormDialog({
         setLifecycleStatus(data.lifecycle_status);
         setLoading(false);
       });
-  }, [open, isNew, eventId]);
+  }, [open, isNew, eventId, initialDate]);
 
   function updateField<K extends keyof EventFormState>(key: K, value: EventFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));

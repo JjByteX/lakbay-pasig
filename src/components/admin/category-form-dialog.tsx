@@ -233,11 +233,11 @@ export default function CategoryFormDialog({
                       type="button"
                       variant={active ? "default" : "outline"}
                       size="sm"
-                      className="h-auto flex-col gap-1 py-2"
+                      className="h-auto min-w-0 flex-col gap-1 whitespace-normal px-2 py-2"
                       onClick={() => updateField("icon", option.value)}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
-                      <span className="text-xs font-normal">{option.label}</span>
+                      <span className="text-center text-xs font-normal leading-tight">{option.label}</span>
                     </Button>
                   );
                 })}

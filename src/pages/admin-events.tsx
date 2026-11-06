@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CalendarDots, CaretLeft, CaretRight, DownloadSimple, Hourglass, Pencil, UploadSimple, Plus } from "@phosphor-icons/react";
 import { bulkUpdateEvents, type BulkEventAction } from "@/lib/bulk-review";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
@@ -39,7 +41,7 @@ import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filte
 import EventFormDialog from "@/components/admin/event-form-dialog";
 import { readEmbeddedName } from "@/lib/place-categories";
 import { usePageTitle } from "@/lib/page-title";
-import { formatDateTimeNoSeconds, hasTimeOfDay } from "@/lib/datetime";
+import { formatDateTimeNoSeconds, hasTimeOfDay, toDateOnlyValue } from "@/lib/datetime";
 
 // Phase 2.1: columns per step-4-phases.md, title, category,
 // lifecycle_status badge, published badge, date_time. No review queue for
@@ -161,6 +163,7 @@ type ViewMode = "calendar" | "list";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_LABEL_FORMAT = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
+const DAY_LABEL_FORMAT = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" });
 const TIME_FORMAT = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
 const MAX_CHIPS_PER_DAY = 3;
 const MAX_SPAN_DAYS = 62;
@@ -206,13 +209,19 @@ function chipClass(event: EventRow) {
 function EventsCalendar({
   events,
   onOpen,
+  onCreate,
 }: Readonly<{
   events: EventRow[];
   onOpen: (id: string) => void;
+  /** Called with "YYYY-MM-DD" when an empty part of a day is clicked. */
+  onCreate: (date: string) => void;
 }>) {
   const today = startOfDay(new Date());
   const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  useDismissOnOutsideOrEscape(pickerRef, () => setPickerOpen(false));
 
   const byDay = useMemo(() => {
     const map = new Map<string, EventRow[]>();
@@ -254,7 +263,29 @@ function EventsCalendar({
   return (
     <>
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border p-2">
-        <span className="px-1 text-base font-semibold text-foreground">{MONTH_LABEL_FORMAT.format(viewMonth)}</span>
+        <div ref={pickerRef} className="relative">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-8 px-1 text-base font-semibold text-foreground"
+            aria-expanded={pickerOpen}
+            aria-label="Choose month and year"
+            onClick={() => setPickerOpen((open) => !open)}
+          >
+            {MONTH_LABEL_FORMAT.format(viewMonth)}
+          </Button>
+          {pickerOpen && (
+            <div className="absolute left-0 top-full z-50 mt-1 rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md">
+              <MonthYearPicker
+                month={viewMonth}
+                onPick={(month) => {
+                  setViewMonth(month);
+                  setPickerOpen(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"
@@ -306,31 +337,39 @@ function EventsCalendar({
               const visible = isExpanded ? dayEvents : dayEvents.slice(0, MAX_CHIPS_PER_DAY);
               const hiddenCount = dayEvents.length - visible.length;
               return (
+                // Clicking the day starts a new event on it. The number is a real
+                // button so the keyboard can do the same; its click bubbles up here.
                 <div
                   key={key}
+                  onClick={() => onCreate(toDateOnlyValue(date))}
                   className={cn(
-                    "flex flex-col gap-1 border-b border-border p-1",
+                    "flex cursor-pointer flex-col gap-1 border-b border-border p-1 transition-colors hover:bg-muted/60",
                     index % 7 !== 6 && "border-r",
                     !inMonth && "bg-muted/40"
                   )}
                 >
-                  <span
+                  <button
+                    type="button"
+                    aria-label={`New announcement on ${DAY_LABEL_FORMAT.format(date)}`}
                     className={cn(
-                      "flex h-6 w-6 items-center justify-center rounded-md text-xs",
+                      "flex h-6 w-6 items-center justify-center rounded-md text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                       inMonth ? "text-foreground" : "text-muted-foreground/60",
                       isToday && "bg-primary font-semibold text-primary-foreground"
                     )}
                     aria-current={isToday ? "date" : undefined}
                   >
                     {date.getDate()}
-                  </span>
+                  </button>
                   {visible.map((event) => {
                     const startsToday = event.date_time ? dayKey(new Date(event.date_time)) === key : false;
                     return (
                       <button
                         key={event.id}
                         type="button"
-                        onClick={() => onOpen(event.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpen(event.id);
+                        }}
                         title={event.title}
                         className={cn(
                           "w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs font-semibold transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -347,7 +386,10 @@ function EventsCalendar({
                   {(hiddenCount > 0 || (isExpanded && dayEvents.length > MAX_CHIPS_PER_DAY)) && (
                     <button
                       type="button"
-                      onClick={() => toggleExpanded(key)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpanded(key);
+                      }}
                       className="w-full rounded-md px-1.5 py-0.5 text-left text-xs font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       {isExpanded ? "Show less" : `+${hiddenCount} more`}
@@ -400,7 +442,11 @@ export default function AdminEventsPage() {
   const dialogOpen = eventParam !== null;
   const editingEventId = eventParam && eventParam !== "new" ? eventParam : null;
 
-  function openNew() {
+  // The day a calendar click started a new event on; null for the New Event button.
+  const [newEventDate, setNewEventDate] = useState<string | null>(null);
+
+  function openNew(date: string | null = null) {
+    setNewEventDate(date);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("event", "new");
@@ -674,7 +720,7 @@ export default function AdminEventsPage() {
     <div className="relative flex flex-1 min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-foreground">Announcements</h1>
-        <Button onClick={openNew} className="gap-1 pl-3.5">
+        <Button onClick={() => openNew()} className="gap-1 pl-3.5">
           <Plus weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
           New Event
         </Button>
@@ -703,7 +749,7 @@ export default function AdminEventsPage() {
               <Skeleton className="h-64 w-full" />
             </div>
           ) : (
-            <EventsCalendar events={filtered} onOpen={openEdit} />
+            <EventsCalendar events={filtered} onOpen={openEdit} onCreate={openNew} />
           )}
         </div>
       )}
@@ -790,6 +836,7 @@ export default function AdminEventsPage() {
           if (!next) closeDialog();
         }}
         eventId={editingEventId}
+        initialDate={newEventDate}
         onSaved={load}
       />
     </div>

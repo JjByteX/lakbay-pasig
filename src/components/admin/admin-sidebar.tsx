@@ -77,10 +77,17 @@ const NAV_ITEMS = [
   // Reports (reports-phases.md Phase 6.1): selector at /admin/reports, first
   // report is the barangay heatmap. Own permission (view_reports, migration
   // 0043), not folded into an existing value: none of the five cover reading
-  // counts across Places and Businesses. First Tools entry, above Landing
-  // Page. Route guard in App.tsx uses the same permission, keep the two in
-  // step.
+  // counts across Places and Businesses. First Tools entry, above Feedback.
+  // Route guard in App.tsx uses the same permission, keep the two in step.
+  //
+  // Tools order: things checked regularly first (Reports, Feedback), then
+  // setup that changes rarely (Landing Page, Categories), then admin only
+  // (Staff, Activity).
   { to: "/admin/reports", label: "Reports", icon: ChartBar, permission: "view_reports" as const, permissions: null, adminOnly: false, group: "tools" },
+  // Feedback (send-feedback-plan.md Phase 6.3): inbox for Send Feedback. Own
+  // permission (review_feedback, migration 0008). Route guard in App.tsx uses
+  // the same permission, keep the two in step.
+  { to: "/admin/feedback", label: "Feedback", icon: ChatCircleText, permission: "review_feedback" as const, permissions: null, adminOnly: false, group: "tools" },
   // Landing Page (landing-hero-phases.md Phase 3.1): the hero carousel
   // shown to a signed-out visitor on /welcome, /login, and /signup. Own
   // permission (manage_landing, migration 0033), not folded into
@@ -88,10 +95,6 @@ const NAV_ITEMS = [
   // landing content, and reusing manage_places would hand every place
   // editor control over the first screen a new visitor sees.
   { to: "/admin/landing", label: "Landing Page", icon: Image, permission: "manage_landing" as const, permissions: null, adminOnly: false, group: "tools" },
-  // Feedback (send-feedback-plan.md Phase 6.3): inbox for Send Feedback. Own
-  // permission (review_feedback, migration 0008). Route guard in App.tsx uses
-  // the same permission, keep the two in step.
-  { to: "/admin/feedback", label: "Feedback", icon: ChatCircleText, permission: "review_feedback" as const, permissions: null, adminOnly: false, group: "tools" },
   {
     to: "/admin/categories",
     label: "Categories",
