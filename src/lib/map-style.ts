@@ -27,26 +27,38 @@ export const DEFAULT_ZOOM = 14;
 // same real Catppuccin palette (surface1, overlay0, overlay1, subtext0/1)
 // instead of adjacent surface steps, still Latte/Mocha's own hex values,
 // chosen for contrast instead of copied mechanically by matching name.
+//
+// Second fix, human-reported (screenshot vs. Google Maps side-by-side):
+// the Latte `base`/`mantle`/`building` trio above was too dark -- pixel
+// sampling the two screenshots showed our `building` fill (#d2d5df) was
+// nearly as dark as Google's own *background* (#f7f6f6), so nothing on
+// our map read as "light" the way Google's canvas does. Google's own
+// background/building/water were sampled directly off that screenshot
+// (dominant colors: bg #f7f6f6, building #e6e7ea, water #8fd8ec) and used
+// to retune `base`/`mantle`/`building`/`buildingLine` below so the canvas
+// is near-white and buildings are a barely-there warm grey, the same
+// relationship Google's own map has. Text/road/label tokens are untouched
+// on purpose (they already passed WCAG against the old darker base, and
+// still pass, often with more headroom, against this lighter one).
 export const LATTE = {
-  base: "#eff1f5",
-  mantle: "#e6e9ef",
+  base: "#f7f6f6", // near-white canvas, matches Google Maps' own background
+  mantle: "#f1f0ee", // residential landuse, a barely-there warm tint over base
   green: "#40a02b",
-  blue: "#1e66f5",
+  blue: "#128cf1", // water fill: the "i" accent blue from the PASIG logo
   sapphire: "#209fb5",
   // WCAG pass, human-reported (hard to tell map features apart). Every value
   // below was measured against `base` with the WCAG 2.x relative-luminance
   // formula. SC 1.4.11 Non-text Contrast needs 3:1 for graphics that are
   // needed to understand the map (roads, outlines), SC 1.4.3 needs 4.5:1 for
-  // text. Old Latte values failed: road 2.3, major road 2.6, building 1.6,
-  // water label 2.8. New ratios are in the comments.
-  building: "#d3d6e0", // fill
-  buildingLine: "#a6aabb", // soft edge. Buildings are background context, not something a person needs to read, so this one stays under 3:1 on purpose; roads and labels keep theirs
-  road: "#7c7f93", // overlay2, 3.5:1
-  roadDark: "#6c6f85", // subtext1, 4.4:1, secondary/tertiary
-  roadMajor: "#4c4f69", // major roads, 7.1:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
+  // text. New ratios against the lighter `base` above are in the comments.
+  building: "#e3e4e7", // fill, ~1.2:1 against base -- intentionally subtle, see buildingLine below
+  buildingLine: "#c3c5cc", // soft edge, ~1.6:1 against base. Buildings are background context, not something a person needs to read, so this one stays under 3:1 on purpose; roads and labels keep theirs
+  road: "#7c7f93", // overlay2, 3.7:1 against the lighter base
+  roadDark: "#6c6f85", // subtext1, 4.6:1, secondary/tertiary
+  roadMajor: "#4c4f69", // major roads, 7.4:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
   casing: "#ffffff", // thin outline under roads so they separate from buildings (G209)
-  greenLine: "#2e7d32", // park outline, 4.5:1
-  waterText: "#0f6f80", // water labels, 5.2:1 (was sapphire at 2.8:1)
+  greenLine: "#2e7d32", // park outline
+  waterText: "#0f6f80", // water labels, 5.4:1 against the lighter base
   // Bugfix, human-reported: the directions route line used to reuse
   // `peach`, the exact same color as the road-major layer just below --
   // a walking/driving route drawn along a major road was visually
@@ -58,7 +70,7 @@ export const LATTE = {
   mauve: "#8839ef",
   railway: "#6c6f85", // subtext1
   boundary: "#6c6f85", // subtext1
-  text: "#2c2f45", // 11.6:1 (was #4c4f69 at 7.1:1), darker for thin street labels
+  text: "#2c2f45", // 9.6:1 against the lighter base, darker for thin street labels
 };
 
 export const MOCHA: typeof LATTE = {
