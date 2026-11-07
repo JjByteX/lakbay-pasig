@@ -434,7 +434,7 @@ function LandingHeader() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.97 }}
             transition={{ duration: 0.2, ease: EASE }}
-            className="absolute inset-x-0 top-full mt-2 origin-top rounded-nest-lg-2 border border-border bg-card p-2 shadow-lg sm:hidden"
+            className="absolute inset-x-0 top-full mt-2 origin-top rounded-nest-xl-3 border border-border bg-card p-3 shadow-lg sm:hidden"
           >
             <nav aria-label="Landing page sections" className="flex flex-col">
               {NAV_LINKS.map((link) => (
@@ -446,7 +446,7 @@ function LandingHeader() {
                     closeMenu();
                   }}
                   whileTap={{ scale: 0.97 }}
-                  className="rounded-lg px-4 py-3 text-base font-medium text-foreground hover:bg-muted"
+                  className="rounded-xl px-4 py-3 text-base font-medium text-foreground hover:bg-muted"
                 >
                   {link.label}
                 </motion.a>

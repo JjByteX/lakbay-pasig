@@ -111,9 +111,11 @@ const overlayAnimations = plugin(({ addBase, addUtilities, matchUtilities, theme
  * component.
  *
  *   rounded-nest-{inner}-{gap}
- *     inner  sm | md | lg   the child's radius token (4, 6, 8 px)
- *     gap    0.5 1 1.5 2 2.5 3 4   the Tailwind spacing step between the
- *                                  box's edge and the child (its padding)
+ *     inner  sm | lg | xl   the child's radius token (4, 8, 12 px)
+ *     gap    1 2 3 4        the Tailwind spacing step between the box's edge
+ *                           and the child (its padding): 4, 8, 12, 16 px
+ *
+ * Every result is a multiple of 4, as the radius rule requires.
  *
  *   <div className="rounded-nest-lg-2 p-2">      16px = 8px child + 8px gap
  *     <Button className="rounded-lg" />
@@ -131,8 +133,8 @@ const concentricRadius = plugin(({ matchUtilities, theme }) => {
   const radii = theme("borderRadius") as Record<string, string>;
   const spacing = theme("spacing") as Record<string, string>;
   const values: Record<string, string> = {};
-  for (const inner of ["sm", "md", "lg"]) {
-    for (const gap of ["0.5", "1", "1.5", "2", "2.5", "3", "4"]) {
+  for (const inner of ["sm", "lg", "xl"]) {
+    for (const gap of ["1", "2", "3", "4"]) {
       values[`${inner}-${gap}`] = `calc(${radii[inner]} + ${spacing[gap]})`;
     }
   }
@@ -181,7 +183,8 @@ export default {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
+        // Same 8px as lg: 6px is not a multiple of 4, and controls are 8px.
+        md: "var(--radius)",
         sm: "calc(var(--radius) - 4px)",
       },
     },

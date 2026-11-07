@@ -1194,7 +1194,7 @@ function HoverPreview({
                 }
           }
         >
-          <div className="flex gap-3 rounded-nest-lg-2 border border-border bg-popover p-2 text-popover-foreground">
+          <div className="flex gap-3 rounded-nest-lg-3 border border-border bg-popover p-3 text-popover-foreground">
             {result.coverPhotoUrl ? (
               <img
                 src={result.coverPhotoUrl}

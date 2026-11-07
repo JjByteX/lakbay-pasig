@@ -172,8 +172,8 @@ inside a centered modal. Prefer the smaller, more focused pattern.
 - Nested rounded boxes use concentric corners: outer radius = inner
   radius + the gap between them. Use `rounded-nest-{inner}-{gap}`
   (tailwind.config.ts), e.g. `rounded-nest-lg-2 p-2` around an 8px child is
-  16px. 8px of padding is the standard, since 8 + 8 = 16 keeps both values
-  on the two-radius scale. Skip it when the gap is as large as the outer
+  16px, and `rounded-nest-xl-3 p-3` around a 12px child is 24px. Every
+  result is a multiple of 4. Skip it when the gap is as large as the outer
   radius (a 16px modal with p-6): use a plain token there.
 
 ---

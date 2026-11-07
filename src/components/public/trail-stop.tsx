@@ -334,7 +334,7 @@ export function TrailStop({
   const cardFill = isLocked ? "bg-muted/40" : "bg-card";
   const rowStyle =
     variant === "card"
-      ? cn("rounded-lg border border-border p-4 transition-colors duration-300", cardFill)
+      ? cn("rounded-xl border border-border p-4 transition-colors duration-300", cardFill)
       : "py-3";
 
   return (
