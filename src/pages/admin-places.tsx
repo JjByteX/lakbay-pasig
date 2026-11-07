@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { bulkReviewPlaces } from "@/lib/bulk-review";
 import { supabase } from "@/lib/supabase";
 import { readEmbeddedName } from "@/lib/place-categories";
+import { unmappedLabels, withBarangay } from "@/lib/barangay";
+import { useBarangayFeatures } from "@/hooks/use-barangay-features";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import AdminBarangayFilter from "@/components/admin/admin-barangay-filter";
 import { usePageTitle } from "@/lib/page-title";
 
 interface PlaceQueueRow {
@@ -38,6 +41,8 @@ interface PlaceQueueRow {
   category: string;
   verification_status: "pending" | "verified" | "rejected";
   updated_at: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // Phase 5.3 (step-4-phases.md, step-4-plan.md's review exception): flagged
@@ -57,10 +62,21 @@ interface DiscoveryContentQueueRow {
   trail_name: string | null;
   related_location_type: "place" | "business";
   related_location_name: string;
+  // The related place's or business's pin, so the row gets its barangay.
+  latitude: number | null;
+  longitude: number | null;
   updated_at: string;
 }
 
 type QueueRow = PlaceQueueRow | DiscoveryContentQueueRow;
+type TableRow = QueueRow & { barangay: string };
+
+interface LocationRef {
+  id: string;
+  name: string;
+  latitude: number | null;
+  longitude: number | null;
+}
 
 // Shared display name across both row kinds, used by AdminDataTable's
 // column render and by the search filter below.
@@ -108,6 +124,8 @@ export default function AdminPlacesPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_OPTIONS)[number]>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("all");
+  const [barangayFilter, setBarangayFilter] = useState("all");
+  const features = useBarangayFeatures();
 
   // Bulk actions: checked row ids (AdminDataTable's `selection`), and the
   // Verify/Reject confirm dialog the bar opens.
@@ -132,7 +150,7 @@ export default function AdminPlacesPage() {
       // Phase 1.4 (place-category-directory-phases.md): category is now a
       // joined place_categories.name (migration 0022), flattened below so
       // PlaceQueueRow's own category field stays string, unchanged.
-      supabase.from("places").select("id, name, verification_status, updated_at, place_categories(name)"),
+      supabase.from("places").select("id, name, verification_status, updated_at, latitude, longitude, place_categories(name)"),
       // No updated_at on discovery_content (migration 0005 doesn't define
       // one), so flagged rows have nothing to sort by within their own
       // priority tier except id, same tie-break gap "pending"/"rejected"
@@ -148,6 +166,8 @@ export default function AdminPlacesPage() {
       name: string;
       verification_status: "pending" | "verified" | "rejected";
       updated_at: string;
+      latitude: number | null;
+      longitude: number | null;
       place_categories: { name: string } | { name: string }[] | null;
     }[]).map(({ place_categories, ...p }) => ({
       kind: "place",
@@ -175,26 +195,29 @@ export default function AdminPlacesPage() {
 
     const [namedPlacesRes, namedBusinessesRes] = await Promise.all([
       placeIds.length > 0
-        ? supabase.from("places").select("id, name").in("id", placeIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        ? supabase.from("places").select("id, name, latitude, longitude").in("id", placeIds)
+        : Promise.resolve({ data: [] as LocationRef[] }),
       businessIds.length > 0
-        ? supabase.from("businesses").select("id, name").in("id", businessIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        ? supabase.from("businesses").select("id, name, latitude, longitude").in("id", businessIds)
+        : Promise.resolve({ data: [] as LocationRef[] }),
     ]);
 
-    const locationNames = new Map<string, string>();
-    for (const p of namedPlacesRes.data ?? []) locationNames.set(p.id, p.name);
-    for (const b of namedBusinessesRes.data ?? []) locationNames.set(b.id, b.name);
+    const locations = new Map<string, LocationRef>();
+    for (const p of namedPlacesRes.data ?? []) locations.set(p.id, p);
+    for (const b of namedBusinessesRes.data ?? []) locations.set(b.id, b);
 
     const discoveryRows: DiscoveryContentQueueRow[] = flagged.map((f) => {
       const routeName = Array.isArray(f.routes) ? f.routes[0]?.name : f.routes?.name;
+      const location = locations.get(f.related_location_id);
       return {
         kind: "discovery_content",
         id: f.id,
         title: f.title,
         trail_name: routeName ?? null,
         related_location_type: f.related_location_type,
-        related_location_name: locationNames.get(f.related_location_id) ?? "Unknown",
+        related_location_name: location?.name ?? "Unknown",
+        latitude: location?.latitude ?? null,
+        longitude: location?.longitude ?? null,
         updated_at: "",
       };
     });
@@ -215,21 +238,22 @@ export default function AdminPlacesPage() {
   // above stays the default row order (AdminDataTable only re-sorts once a
   // column header is clicked), so this filter/search layer sits on top of
   // the review queue's existing priority order rather than replacing it.
+  const tableRows = useMemo(() => withBarangay(rows ?? [], features), [rows, features]);
   const filtered = useMemo(() => {
-    if (!rows) return [];
     const query = search.trim().toLowerCase();
-    return rows.filter((row) => {
+    return tableRows.filter((row) => {
       if (query && !rowName(row).toLowerCase().includes(query)) return false;
       if (typeFilter !== "all" && row.kind !== typeFilter) return false;
+      if (barangayFilter !== "all" && row.barangay !== barangayFilter) return false;
       if (statusFilter !== "all") {
         const rowStatus = row.kind === "place" ? row.verification_status : "pending";
         if (rowStatus !== statusFilter) return false;
       }
       return true;
     });
-  }, [rows, search, typeFilter, statusFilter]);
+  }, [tableRows, search, typeFilter, statusFilter, barangayFilter]);
 
-  const columns: AdminColumn<QueueRow>[] = [
+  const columns: AdminColumn<TableRow>[] = [
     {
       key: "name",
       label: "Name",
@@ -249,6 +273,11 @@ export default function AdminPlacesPage() {
         row.kind === "place"
           ? row.category
           : [row.trail_name, row.related_location_name].filter(Boolean).join(" · "),
+    },
+    {
+      key: "barangay",
+      label: "Barangay",
+      render: (row) => row.barangay || "—",
     },
     {
       key: "verification_status",
@@ -385,6 +414,7 @@ export default function AdminPlacesPage() {
                 ))}
               </SelectContent>
             </Select>
+            <AdminBarangayFilter value={barangayFilter} onChange={setBarangayFilter} extras={unmappedLabels(tableRows)} />
           </AdminFilterBar>
         }
       />

@@ -84,6 +84,29 @@ export function barangayOf(lat: number, lng: number, features: BarangayFeature[]
   return i === -1 ? null : features[i].properties.name;
 }
 
+export const NO_PIN_LABEL = "No pin";
+export const OUTSIDE_LABEL = "Outside Pasig";
+
+// Adds each row's barangay for a table, worked out from its pin. It is ""
+// until the boundaries have loaded, NO_PIN_LABEL when the row has no pin, and
+// OUTSIDE_LABEL when the pin is in none of the 30 barangays.
+export function withBarangay<T extends { latitude: number | null; longitude: number | null }>(
+  rows: T[],
+  features: BarangayFeature[] | null,
+): (T & { barangay: string })[] {
+  return rows.map((row) => {
+    if (!features) return { ...row, barangay: "" };
+    if (row.latitude === null || row.longitude === null) return { ...row, barangay: NO_PIN_LABEL };
+    return { ...row, barangay: barangayOf(row.latitude, row.longitude, features) ?? OUTSIDE_LABEL };
+  });
+}
+
+// The two non-barangay labels that actually occur in these rows, so a filter
+// only offers them when there is something to show.
+export function unmappedLabels(rows: { barangay: string }[]): string[] {
+  return [NO_PIN_LABEL, OUTSIDE_LABEL].filter((label) => rows.some((row) => row.barangay === label));
+}
+
 export function countByBarangay(points: ReportPoint[], features: BarangayFeature[]): BarangayCountResult {
   const barangays: BarangayCount[] = features.map((f) => ({
     name: f.properties.name,

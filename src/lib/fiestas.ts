@@ -98,7 +98,7 @@ export async function fetchPublishedFiestasForBarangay(barangay: string): Promis
 const BOUNDARY_URL = "/data/pasig-barangays.geojson";
 let featuresPromise: Promise<BarangayFeature[]> | null = null;
 
-function loadBarangayFeatures(): Promise<BarangayFeature[]> {
+export function loadBarangayFeatures(): Promise<BarangayFeature[]> {
   featuresPromise ??= fetch(BOUNDARY_URL)
     .then((res) => {
       if (!res.ok) throw new Error("Could not load barangay boundaries.");

@@ -28,12 +28,15 @@ import {
 } from "@/components/ui/select";
 import AdminDataTable, { type AdminColumn } from "@/components/admin/admin-data-table";
 import AdminFilterBar, { AdminSearchInput } from "@/components/admin/admin-filter-bar";
+import AdminBarangayFilter from "@/components/admin/admin-barangay-filter";
 import {
   computeBusinessQueuePriority,
   type BusinessQueueCandidate,
   type PrioritizedBusiness,
 } from "@/lib/business-queue-priority";
 import { usePageTitle } from "@/lib/page-title";
+import { unmappedLabels, withBarangay } from "@/lib/barangay";
+import { useBarangayFeatures } from "@/hooks/use-barangay-features";
 
 // 6.2: columns per build-3-phases-plan.md 6.2 — name, business type,
 // verification status, featured status, flagged indicator. Row action menu:
@@ -79,6 +82,8 @@ interface BusinessRow extends PrioritizedBusiness {
   name: string;
   business_type: string;
   featured_status: "listed" | "featured";
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // What each bulk action applies to, and its wording. Verify/Reject only make
@@ -123,6 +128,8 @@ export default function AdminBusinessesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("all");
   const [featuredFilter, setFeaturedFilter] = useState<(typeof FEATURED_OPTIONS)[number]>("all");
+  const [barangayFilter, setBarangayFilter] = useState("all");
+  const features = useBarangayFeatures();
 
   // Bulk actions: checked ids (AdminDataTable's `selection`, remembered
   // across table pages and filters), and the confirm dialog the bar opens.
@@ -138,7 +145,7 @@ export default function AdminBusinessesPage() {
     async function load() {
       const { data: rows } = await supabase
         .from("businesses")
-        .select("id, name, business_type, description, verification_status, featured_status, submitted_by, updated_at");
+        .select("id, name, business_type, description, verification_status, featured_status, submitted_by, updated_at, latitude, longitude");
 
       if (!rows || rows.length === 0) {
         if (!cancelled) {
@@ -191,6 +198,8 @@ export default function AdminBusinessesPage() {
           name: original.name,
           business_type: original.business_type,
           featured_status: original.featured_status,
+          latitude: original.latitude,
+          longitude: original.longitude,
         };
       });
 
@@ -206,18 +215,19 @@ export default function AdminBusinessesPage() {
     };
   }, []);
 
+  const tableRows = useMemo(() => withBarangay(businesses ?? [], features), [businesses, features]);
   const filtered = useMemo(() => {
-    if (!businesses) return [];
     const query = search.trim().toLowerCase();
-    return businesses.filter((business) => {
+    return tableRows.filter((business) => {
       if (query && !business.name.toLowerCase().includes(query) && !business.business_type.toLowerCase().includes(query)) {
         return false;
       }
       if (statusFilter !== "all" && business.verificationStatus !== statusFilter) return false;
       if (featuredFilter !== "all" && business.featured_status !== featuredFilter) return false;
+      if (barangayFilter !== "all" && business.barangay !== barangayFilter) return false;
       return true;
     });
-  }, [businesses, search, statusFilter, featuredFilter]);
+  }, [tableRows, search, statusFilter, featuredFilter, barangayFilter]);
 
   // Selection survives filtering, so some checked rows can be out of view.
   // A bulk action still reaches every checked row it applies to, so say how
@@ -269,13 +279,14 @@ export default function AdminBusinessesPage() {
   let bulkSubmitLabel = bulkAction ? BULK_ACTIONS[bulkAction].verb : "";
   if (bulkSubmitting) bulkSubmitLabel = "Submitting…";
 
-  const columns: AdminColumn<BusinessRow>[] = [
+  const columns: AdminColumn<BusinessRow & { barangay: string }>[] = [
     {
       key: "name",
       label: "Name",
       render: (business) => <span className="font-semibold text-foreground">{business.name}</span>,
     },
     { key: "business_type", label: "Business Type" },
+    { key: "barangay", label: "Barangay", render: (business) => business.barangay || "—" },
     {
       key: "verificationStatus",
       label: "Verification Status",
@@ -379,6 +390,7 @@ export default function AdminBusinessesPage() {
                 ))}
               </SelectContent>
             </Select>
+            <AdminBarangayFilter value={barangayFilter} onChange={setBarangayFilter} extras={unmappedLabels(tableRows)} />
           </AdminFilterBar>
         }
       />
