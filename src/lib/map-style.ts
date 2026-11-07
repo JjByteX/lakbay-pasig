@@ -80,19 +80,30 @@ export const LATTE = {
   // point that still clears 3:1, with a little margin so color rounding
   // can't tip it under. roadDark/roadMajor follow the same blue-grey hue,
   // kept darker so the three tiers stay visually ordered.
-  road: "#848e99", // 3.1:1 against the lighter base, Google's own road hue ratio scaled to the lightest point that still clears it
-  roadDark: "#727c8e", // 3.9:1, secondary/tertiary
+  road: "#848e99", // 3.1:1 against the lighter base, Google's own road hue ratio scaled to the lightest point that still clears it -- already at the floor, no further room to move toward Google's own (much lighter) sampled value without dropping under 3:1
+  roadDark: "#727c8e", // 3.9:1, secondary/tertiary -- same ceiling as road above, close to its own floor-clearing limit
   // Seventh fix, human-reported (honest-opinion ask): roadMajor at its old
   // darker value dominated the page -- thick, saturated lines competing
   // with the text labels sitting on them, instead of receding behind them
-  // the way Google's major roads do. Google's hierarchy there comes from
-  // line width (already wider for roadMajor than roadDark in the layers
-  // below) and a subtle darker centerline, not from heavy ink density.
-  // Brought down close to roadDark's own tone (same blue-grey hue) so
-  // width alone carries the "this one leads" signal; still 4.5:1 against
-  // base, nowhere near invisible, just no longer the darkest thing on the
-  // map next to text.
-  roadMajor: "#687186", // major roads, 4.5:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
+  // the way Google's major roads do. Brought down close to roadDark's own
+  // tone so width (already wider for roadMajor than roadDark below) could
+  // carry the "this one leads" signal instead of ink density.
+  //
+  // Eighth fix, human-asked ("middle ground?"): after comparing a mockup
+  // of this file's palette against one built from Google's own sampled
+  // road colors, chose to split the difference rather than pick an
+  // extreme. road/roadDark above have no room left to move -- they're
+  // already the lightest values that still clear the 3:1 floor, so there
+  // is no safe "closer to Google" step available for them. roadMajor
+  // still had margin (was 4.5:1), so it's the one tier where a visible
+  // move toward Google's lighter tone was actually possible. First try
+  // here (#838e9f, 3.07:1) went too far: it landed within 1.0:1 of `road`
+  // itself, so major roads stopped reading as a distinct tier at all, even
+  // by color -- a real regression, not just a style choice. This value is
+  // the actual middle ground: lighter than the old #687186 (4.5:1), but
+  // still a clear step darker than roadDark (3.9:1) and road (3.1:1) so
+  // the three tiers stay visually ordered.
+  roadMajor: "#6f7887", // major roads, 4.1:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
   casing: "#ffffff", // thin outline under roads so they separate from buildings (G209)
   greenLine: "#2e7d32", // park outline
   waterText: "#0f6f80", // water labels, 5.4:1 against the lighter base
