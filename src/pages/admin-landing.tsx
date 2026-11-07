@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Slideshow, Trash, Plus } from "@phosphor-icons/react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Reorder, useDragControls, useReducedMotion } from "motion/react";
+import { DotsSixVertical, Pencil, Slideshow, Trash, Plus } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -29,13 +30,71 @@ import { usePageTitle } from "@/lib/page-title";
  * under 5 rows. The thumbnail is each row's real content, which a table
  * column serves badly.
  *
- * Reorder follows admin-trail-builder.tsx's existing up/down icon-button
- * pattern (handleMoveStop), not a drag library -- no drag dependency is
- * installed anywhere in the app, and Categories' own reorder control was
- * already removed in favor of a plain fetch order, so this page and
- * admin-trail-builder.tsx are now the two places manual reorder lives,
- * both the same shape.
+ * Reorder is drag and drop with motion's Reorder (already a dependency, no
+ * new package). Rows move on the vertical axis only, grabbed by the handle so
+ * the buttons on a row stay clickable, and the new order is saved when the
+ * row is dropped. The handle also takes the up and down arrow keys, so
+ * reordering still works without a pointer.
  */
+interface SlideRowProps {
+  slide: LandingSlide;
+  disabled: boolean;
+  onDragEnd: () => void;
+  onKeyboardMove: (direction: -1 | 1) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function SlideRow({ slide, disabled, onDragEnd, onKeyboardMove, onEdit, onDelete }: Readonly<SlideRowProps>) {
+  const controls = useDragControls();
+  const reduceMotion = useReducedMotion();
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    onKeyboardMove(event.key === "ArrowUp" ? -1 : 1);
+  }
+
+  return (
+    <Reorder.Item
+      as="li"
+      value={slide}
+      dragListener={false}
+      dragControls={controls}
+      onDragEnd={onDragEnd}
+      // The row lifts above its neighbours while held. Neighbours slide aside
+      // on a spring, and reduced motion drops the animation.
+      whileDrag={reduceMotion ? undefined : { scale: 1.015, zIndex: 10, boxShadow: "0 12px 28px -12px rgb(0 0 0 / 0.3)" }}
+      transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 600, damping: 45 }}
+      className="relative flex select-none items-center gap-4 rounded-md border border-border bg-card p-3"
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label="Drag to reorder. Use the up and down arrow keys to move this slide."
+        onPointerDown={(event) => controls.start(event)}
+        onKeyDown={handleKeyDown}
+        className="-ml-1 flex h-8 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <DotsSixVertical weight="bold" className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <div className="h-16 w-24 shrink-0 overflow-hidden rounded-md border border-border">
+        <img src={slide.image_url} alt="" draggable={false} className="h-full w-full object-cover" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="truncate text-sm text-foreground">{slide.caption}</p>
+        <Badge variant={slide.active ? "default" : "outline"} className="w-fit">
+          {slide.active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+      <AdminIconActions>
+        <AdminIconAction icon={Pencil} label="Edit" onClick={onEdit} />
+        <AdminIconAction icon={Trash} label="Delete" destructive onClick={onDelete} />
+      </AdminIconActions>
+    </Reorder.Item>
+  );
+}
+
 export default function AdminLandingPage() {
   usePageTitle("Landing Page");
 
@@ -43,6 +102,9 @@ export default function AdminLandingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  // The order last saved, to tell a real move from a drop in the same place
+  // and to put the list back if saving fails.
+  const savedOrder = useRef<LandingSlide[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSlide, setEditingSlide] = useState<LandingSlide | null>(null);
@@ -54,7 +116,9 @@ export default function AdminLandingPage() {
     setLoading(true);
     setError(null);
     try {
-      setSlides(await fetchAllSlides());
+      const loaded = await fetchAllSlides();
+      savedOrder.current = loaded;
+      setSlides(loaded);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Could not load slides.");
     } finally {
@@ -76,29 +140,32 @@ export default function AdminLandingPage() {
     setDialogOpen(true);
   }
 
-  // Reorder local state first, then persist, same optimistic-then-persist
-  // shape architecture-notes.md's Current State Notes already documents
-  // for admin reorder controls. Revert on failure so the visible order
-  // never lies about what's actually saved.
-  async function handleMove(index: number, direction: -1 | 1) {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= slides.length || reordering) return;
-
-    const reordered = [...slides];
-    const [moved] = reordered.splice(index, 1);
-    reordered.splice(targetIndex, 0, moved);
-
-    const previous = slides;
-    setSlides(reordered);
+  // The list is already in its new order on screen (drag or keyboard), so
+  // save it, and put the saved order back if that fails so the page never
+  // shows an order that isn't stored.
+  async function saveOrder(next: LandingSlide[]) {
+    const previous = savedOrder.current;
+    if (next.every((slide, i) => slide.id === previous[i]?.id)) return;
     setReordering(true);
     try {
-      await reorderSlides(reordered.map((s) => s.id));
+      await reorderSlides(next.map((slide) => slide.id));
+      savedOrder.current = next;
     } catch (reorderError) {
       setSlides(previous);
       setError(reorderError instanceof Error ? reorderError.message : "Could not save the new order.");
     } finally {
       setReordering(false);
     }
+  }
+
+  function handleKeyboardMove(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= slides.length || reordering) return;
+    const reordered = [...slides];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setSlides(reordered);
+    void saveOrder(reordered);
   }
 
   async function handleDelete() {
@@ -110,6 +177,7 @@ export default function AdminLandingPage() {
       // Row first, then the storage object, best effort, same order and
       // failure handling as admin-place-detail.tsx's handleRemovePhoto.
       void removeSlideFile(deleteTarget.image_url);
+      savedOrder.current = savedOrder.current.filter((s) => s.id !== deleteTarget.id);
       setSlides((prev) => prev.filter((s) => s.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (deleteError) {
@@ -140,48 +208,25 @@ export default function AdminLandingPage() {
       )}
 
       {!loading && slides.length > 0 && (
-        <ul className="flex flex-col gap-2">
+        <Reorder.Group
+          as="ul"
+          axis="y"
+          values={slides}
+          onReorder={setSlides}
+          className="flex flex-col gap-2"
+        >
           {slides.map((slide, index) => (
-            <li
+            <SlideRow
               key={slide.id}
-              className="flex items-center gap-4 rounded-md border border-border bg-card p-3"
-            >
-              <div className="h-16 w-24 shrink-0 overflow-hidden rounded-md border border-border">
-                <img src={slide.image_url} alt="" className="h-full w-full object-cover" />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <p className="truncate text-sm text-foreground">{slide.caption}</p>
-                <Badge variant={slide.active ? "default" : "outline"} className="w-fit">
-                  {slide.active ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={index === 0 || reordering}
-                onClick={() => handleMove(index, -1)}
-              >
-                <ArrowUp className="h-4 w-4" />
-                <span className="sr-only">Move up</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={index === slides.length - 1 || reordering}
-                onClick={() => handleMove(index, 1)}
-              >
-                <ArrowDown className="h-4 w-4" />
-                <span className="sr-only">Move down</span>
-              </Button>
-              <AdminIconActions>
-                <AdminIconAction icon={Pencil} label="Edit" onClick={() => openEdit(slide)} />
-                <AdminIconAction icon={Trash} label="Delete" destructive onClick={() => setDeleteTarget(slide)} />
-              </AdminIconActions>
-            </li>
+              slide={slide}
+              disabled={reordering}
+              onDragEnd={() => void saveOrder(slides)}
+              onKeyboardMove={(direction) => handleKeyboardMove(index, direction)}
+              onEdit={() => openEdit(slide)}
+              onDelete={() => setDeleteTarget(slide)}
+            />
           ))}
-        </ul>
+        </Reorder.Group>
       )}
 
       <SlideFormDialog
