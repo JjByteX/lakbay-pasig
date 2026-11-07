@@ -439,7 +439,11 @@ function markerElement(result: DiscoverResult): HTMLElement {
   wrapper.dataset.labelPriority = result.verification_status === "pending" ? "0" : "1";
 
   const ring = document.createElement("span");
-  ring.className = `marker-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-full shadow ${
+  // `shadow` (Tailwind's default) swapped for `marker-ring-shadow`, human
+  // instruction: wanted a drop shadow behind the icon circle that's small
+  // and tight, not spreading -- see that class in index.css for the exact
+  // values and why a plain `shadow` utility wasn't quite it.
+  ring.className = `marker-ring marker-ring-shadow flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
     result.verification_status === "pending" ? RING_PENDING : RING_VERIFIED
   }`;
   ring.style.backgroundColor = color;

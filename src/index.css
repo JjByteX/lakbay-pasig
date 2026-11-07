@@ -253,12 +253,18 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 150ms ease;
+  /* The first five layers are the existing white halo (outline). The last
+     layer is new, human instruction: a drop shadow behind the label, kept
+     small/tight on purpose (1px offset, 1.5px blur, low opacity) rather
+     than a big soft spread -- just enough to lift the text off busy map
+     tiles without reading as its own separate shape. */
   text-shadow:
     1px 1px 0 hsl(0 0% 100%),
     -1px 1px 0 hsl(0 0% 100%),
     1px -1px 0 hsl(0 0% 100%),
     -1px -1px 0 hsl(0 0% 100%),
-    0 0 4px hsl(0 0% 100%);
+    0 0 4px hsl(0 0% 100%),
+    0.5px 1px 1.5px hsl(0 0% 0% / 0.35);
 }
 
 .dark .marker-name-label {
@@ -267,7 +273,8 @@
     -1px 1px 0 hsl(212 100% 8% / 0.85),
     1px -1px 0 hsl(212 100% 8% / 0.85),
     -1px -1px 0 hsl(212 100% 8% / 0.85),
-    0 0 4px hsl(212 100% 8% / 0.6);
+    0 0 4px hsl(212 100% 8% / 0.6),
+    0.5px 1px 1.5px hsl(0 0% 0% / 0.5);
 }
 
 /* Positioning and fade for the label collision pass in discover-map.tsx
@@ -363,6 +370,17 @@
   transition:
     transform 150ms ease,
     opacity 150ms ease;
+}
+
+/* Drop shadow behind the icon circle, human instruction: small and tight,
+   not a big spread. Swapped in for Tailwind's default `shadow` utility
+   (0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)), which
+   put a visible soft halo a few pixels out on every side; this one pulls
+   the blur radius and offset in close (1px offset, 2px blur) so the
+   shadow reads as the circle lifting slightly off the map, not as its
+   own separate glow. */
+.marker-ring-shadow {
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.3);
 }
 
 .marker-ring svg {

@@ -82,7 +82,17 @@ export const LATTE = {
   // kept darker so the three tiers stay visually ordered.
   road: "#848e99", // 3.1:1 against the lighter base, Google's own road hue ratio scaled to the lightest point that still clears it
   roadDark: "#727c8e", // 3.9:1, secondary/tertiary
-  roadMajor: "#525570", // major roads, 6.7:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
+  // Seventh fix, human-reported (honest-opinion ask): roadMajor at its old
+  // darker value dominated the page -- thick, saturated lines competing
+  // with the text labels sitting on them, instead of receding behind them
+  // the way Google's major roads do. Google's hierarchy there comes from
+  // line width (already wider for roadMajor than roadDark in the layers
+  // below) and a subtle darker centerline, not from heavy ink density.
+  // Brought down close to roadDark's own tone (same blue-grey hue) so
+  // width alone carries the "this one leads" signal; still 4.5:1 against
+  // base, nowhere near invisible, just no longer the darkest thing on the
+  // map next to text.
+  roadMajor: "#687186", // major roads, 4.5:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
   casing: "#ffffff", // thin outline under roads so they separate from buildings (G209)
   greenLine: "#2e7d32", // park outline
   waterText: "#0f6f80", // water labels, 5.4:1 against the lighter base
