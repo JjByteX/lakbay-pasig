@@ -21,6 +21,7 @@ import {
   type LandingSlide,
 } from "@/lib/landing-slides";
 import { usePageTitle } from "@/lib/page-title";
+import { cn } from "@/lib/utils";
 
 /**
  * landing-hero-phases.md Phase 3.3-3.6, 3.13-3.14. The hero carousel
@@ -48,6 +49,7 @@ interface SlideRowProps {
 function SlideRow({ slide, disabled, onDragEnd, onKeyboardMove, onEdit, onDelete }: Readonly<SlideRowProps>) {
   const controls = useDragControls();
   const reduceMotion = useReducedMotion();
+  const [dragging, setDragging] = useState(false);
 
   function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -61,12 +63,20 @@ function SlideRow({ slide, disabled, onDragEnd, onKeyboardMove, onEdit, onDelete
       value={slide}
       dragListener={false}
       dragControls={controls}
-      onDragEnd={onDragEnd}
-      // The row lifts above its neighbours while held. Neighbours slide aside
-      // on a spring, and reduced motion drops the animation.
-      whileDrag={reduceMotion ? undefined : { scale: 1.015, zIndex: 10, boxShadow: "0 12px 28px -12px rgb(0 0 0 / 0.3)" }}
+      onDragStart={() => setDragging(true)}
+      onDragEnd={() => {
+        setDragging(false);
+        onDragEnd();
+      }}
+      // The row lifts above its neighbours while held (scale here, shadow-lg
+      // below). Neighbours slide aside on a spring, and reduced motion drops
+      // the animation.
+      whileDrag={reduceMotion ? undefined : { scale: 1.015, zIndex: 10 }}
       transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 600, damping: 45 }}
-      className="relative flex select-none items-center gap-4 rounded-md border border-border bg-card p-3"
+      className={cn(
+        "relative flex select-none items-center gap-4 rounded-md border border-border bg-card p-3 transition-shadow",
+        dragging && !reduceMotion && "shadow-lg"
+      )}
     >
       <button
         type="button"
