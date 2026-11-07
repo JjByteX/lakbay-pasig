@@ -309,6 +309,11 @@ function fiestaDate(
   return null;
 }
 
+function announcementDetail(date: Date, location: string | null | undefined): string {
+  const when = date.toLocaleString("en-PH", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  return location ? `${when}, ${location}` : when;
+}
+
 /** Next announcements and fiestas, soonest first, drafts included so staff see what is unpublished. */
 export async function fetchComingUp(limit = 8): Promise<ComingUpItem[]> {
   const today = new Date();
@@ -340,10 +345,7 @@ export async function fetchComingUp(limit = 8): Promise<ComingUpItem[]> {
       date: ongoing ? today : date,
       month: monthAbbr(date),
       day: date.getDate(),
-      detail: ongoing
-        ? "Ongoing"
-        : date.toLocaleString("en-PH", { weekday: "short", hour: "numeric", minute: "2-digit" }) +
-          (e.location ? `, ${e.location}` : ""),
+      detail: ongoing ? "Ongoing" : announcementDetail(date, e.location),
       published: e.published,
       to: `/admin/events?event=${e.id}`,
     });
@@ -363,7 +365,8 @@ export async function fetchComingUp(limit = 8): Promise<ComingUpItem[]> {
       to: `/admin/fiestas?fiesta=${f.id}`,
     });
   }
-  return items.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, limit);
+  items.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return items.slice(0, limit);
 }
 
 // ---------------------------------------------------------------- activity

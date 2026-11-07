@@ -207,11 +207,18 @@ export function FeedbackModal() {
 
   // The check usually finishes while the person types. If it has not, wait a
   // few seconds for it before giving up.
-  async function waitForToken(): Promise<string | null> {
-    for (let i = 0; i < 40 && !captchaToken.current; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-    return captchaToken.current;
+  function waitForToken(): Promise<string | null> {
+    if (captchaToken.current) return Promise.resolve(captchaToken.current);
+    return new Promise((resolve) => {
+      let checks = 0;
+      const timer = setInterval(() => {
+        checks += 1;
+        if (captchaToken.current || checks >= 40) {
+          clearInterval(timer);
+          resolve(captchaToken.current);
+        }
+      }, 200);
+    });
   }
 
   const trimmed = message.trim();

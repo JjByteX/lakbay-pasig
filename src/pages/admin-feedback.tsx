@@ -101,20 +101,7 @@ async function copyText(text: string): Promise<boolean> {
     return true;
   } catch {
     // Clipboard API is missing on plain http or when permission is refused.
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    let ok = false;
-    try {
-      ok = document.execCommand("copy");
-    } catch {
-      ok = false;
-    }
-    area.remove();
-    return ok;
+    return false;
   }
 }
 

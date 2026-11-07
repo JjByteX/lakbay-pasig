@@ -338,12 +338,13 @@ function EventsCalendar({
               const hiddenCount = dayEvents.length - visible.length;
               return (
                 // Clicking the day starts a new event on it. The number is a real
-                // button so the keyboard can do the same; its click bubbles up here.
+                // button whose ::after stretches over the whole cell, so mouse,
+                // keyboard and touch all use that one control. The chips below
+                // are `relative` so they sit above it and keep their own clicks.
                 <div
                   key={key}
-                  onClick={() => onCreate(toDateOnlyValue(date))}
                   className={cn(
-                    "flex cursor-pointer flex-col gap-1 border-b border-border p-1 transition-colors hover:bg-muted/60",
+                    "relative flex cursor-pointer flex-col gap-1 border-b border-border p-1 transition-colors hover:bg-muted/60",
                     index % 7 !== 6 && "border-r",
                     !inMonth && "bg-muted/40"
                   )}
@@ -351,8 +352,9 @@ function EventsCalendar({
                   <button
                     type="button"
                     aria-label={`New announcement on ${DAY_LABEL_FORMAT.format(date)}`}
+                    onClick={() => onCreate(toDateOnlyValue(date))}
                     className={cn(
-                      "flex h-6 w-6 items-center justify-center rounded-md text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      "flex h-6 w-6 items-center justify-center rounded-md text-xs after:absolute after:inset-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                       inMonth ? "text-foreground" : "text-muted-foreground/60",
                       isToday && "bg-primary font-semibold text-primary-foreground"
                     )}
@@ -366,13 +368,10 @@ function EventsCalendar({
                       <button
                         key={event.id}
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpen(event.id);
-                        }}
+                        onClick={() => onOpen(event.id)}
                         title={event.title}
                         className={cn(
-                          "w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs font-semibold transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                          "relative w-full truncate rounded-md px-1.5 py-0.5 text-left text-xs font-semibold transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                           chipClass(event)
                         )}
                       >
@@ -386,11 +385,8 @@ function EventsCalendar({
                   {(hiddenCount > 0 || (isExpanded && dayEvents.length > MAX_CHIPS_PER_DAY)) && (
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpanded(key);
-                      }}
-                      className="w-full rounded-md px-1.5 py-0.5 text-left text-xs font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      onClick={() => toggleExpanded(key)}
+                      className="relative w-full rounded-md px-1.5 py-0.5 text-left text-xs font-semibold text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       {isExpanded ? "Show less" : `+${hiddenCount} more`}
                     </button>

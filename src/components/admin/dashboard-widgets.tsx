@@ -72,15 +72,10 @@ export function PaneGroup({
 export function Meter({ value, label }: Readonly<{ value: number; label: string }>) {
   const pct = Math.max(0, Math.min(100, value));
   return (
-    <div
-      role="meter"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(pct)}
-      className="h-2 w-full overflow-hidden rounded-lg bg-primary/15"
-    >
-      <div className="h-full rounded-lg bg-primary" style={{ width: `${pct}%` }} />
+    <div className="relative h-2 w-full overflow-hidden rounded-lg bg-primary/15">
+      {/* The bar is only the picture; the native meter carries the value for assistive tech. */}
+      <div aria-hidden="true" className="h-full rounded-lg bg-primary" style={{ width: `${pct}%` }} />
+      <meter className="sr-only" aria-label={label} min={0} max={100} value={Math.round(pct)} />
     </div>
   );
 }
@@ -114,6 +109,27 @@ export function Sparkline({ values, label }: Readonly<{ values: number[]; label:
       <circle cx={x(last)} cy={y(values[last])} r={3} className="fill-primary stroke-card" strokeWidth={2} />
     </svg>
   );
+}
+
+// Where the arrow keys move the crosshair, or null for any other key.
+function keyTarget(key: string, from: number, last: number): number | null {
+  switch (key) {
+    case "ArrowLeft":
+      return from - 1;
+    case "ArrowRight":
+      return from + 1;
+    case "Home":
+      return 0;
+    case "End":
+      return last;
+    default:
+      return null;
+  }
+}
+
+function labelAnchor(i: number, n: number): "start" | "middle" | "end" {
+  if (i === 0) return "start";
+  return i === n - 1 ? "end" : "middle";
 }
 
 // Round tick values: about four steps, whole numbers only (these are counts).
@@ -170,8 +186,7 @@ export function AreaChart({
 
   const onKeyDown = (event: KeyboardEvent) => {
     const from = active ?? n - 1;
-    const next =
-      event.key === "ArrowLeft" ? from - 1 : event.key === "ArrowRight" ? from + 1 : event.key === "Home" ? 0 : event.key === "End" ? n - 1 : null;
+    const next = keyTarget(event.key, from, n - 1);
     if (next === null) return;
     event.preventDefault();
     setActive(Math.max(0, Math.min(n - 1, next)));
@@ -205,7 +220,7 @@ export function AreaChart({
           ))}
           {points.map((p, i) =>
             (n - 1 - i) % labelEvery === 0 ? (
-              <text key={p.key} x={x(i)} y={size.h - 8} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} className="fill-muted-foreground text-xs">
+              <text key={p.key} x={x(i)} y={size.h - 8} textAnchor={labelAnchor(i, n)} className="fill-muted-foreground text-xs">
                 {p.label}
               </text>
             ) : null
@@ -219,8 +234,7 @@ export function AreaChart({
         </svg>
       )}
       {hovered && (
-        <div
-          role="status"
+        <output
           className="pointer-events-none absolute top-2 rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
           style={{ left: tooltipLeft }}
         >
@@ -228,7 +242,7 @@ export function AreaChart({
             {hovered.value} {hovered.value === 1 ? noun.one : noun.other}
           </p>
           <p className="text-muted-foreground">{hovered.label}</p>
-        </div>
+        </output>
       )}
       <table className="sr-only">
         <caption>{noun.other} per day</caption>

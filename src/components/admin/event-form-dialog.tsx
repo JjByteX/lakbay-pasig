@@ -104,6 +104,51 @@ function missingRequiredFieldsFor(form: EventFormState): string[] {
   return missing;
 }
 
+interface EventRowData {
+  title: string | null;
+  description: string | null;
+  category_id: string | null;
+  related_program: string | null;
+  date_time: string | null;
+  end_date_time: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  related_place_id: string | null;
+  enrollment_info: string | null;
+}
+
+function formFromRow(data: EventRowData): EventFormState {
+  const start = splitDateAndTime(data.date_time);
+  const end = splitDateAndTime(data.end_date_time);
+  return {
+    title: data.title ?? "",
+    description: data.description ?? "",
+    category_id: data.category_id ?? "",
+    related_program: data.related_program ?? "",
+    start_date: start.date,
+    start_time: start.time,
+    end_date: end.date,
+    end_time: end.time,
+    location: data.location ?? "",
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    related_place_id: data.related_place_id ?? "",
+    enrollment_info: data.enrollment_info ?? "",
+  };
+}
+
+// With a time on both sides the end must be after the start. If either
+// side has no time, only the days are compared, so an all-day event can
+// end the same day it starts.
+function endsBeforeStart(form: EventFormState, hasEndDate: boolean): boolean {
+  if (!hasEndDate || !form.start_date || !form.end_date) return false;
+  if (form.start_time && form.end_time) {
+    return new Date(`${form.end_date}T${form.end_time}`) <= new Date(`${form.start_date}T${form.start_time}`);
+  }
+  return form.end_date < form.start_date;
+}
+
 interface EventFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -179,21 +224,7 @@ export default function EventFormDialog({
           setLoading(false);
           return;
         }
-        setForm({
-          title: data.title ?? "",
-          description: data.description ?? "",
-          category_id: data.category_id ?? "",
-          related_program: data.related_program ?? "",
-          start_date: splitDateAndTime(data.date_time).date,
-          start_time: splitDateAndTime(data.date_time).time,
-          end_date: splitDateAndTime(data.end_date_time).date,
-          end_time: splitDateAndTime(data.end_date_time).time,
-          location: data.location ?? "",
-          latitude: data.latitude ?? null,
-          longitude: data.longitude ?? null,
-          related_place_id: data.related_place_id ?? "",
-          enrollment_info: data.enrollment_info ?? "",
-        });
+        setForm(formFromRow(data));
         setHasEndDate(Boolean(data.end_date_time));
         setPublished(data.published);
         setLifecycleStatus(data.lifecycle_status);
@@ -205,16 +236,7 @@ export default function EventFormDialog({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  // With a time on both sides the end must be after the start. If either
-  // side has no time, only the days are compared, so an all-day event can
-  // end the same day it starts.
-  const endBeforeStart = (() => {
-    if (!hasEndDate || !form.start_date || !form.end_date) return false;
-    if (form.start_time && form.end_time) {
-      return new Date(`${form.end_date}T${form.end_time}`) <= new Date(`${form.start_date}T${form.start_time}`);
-    }
-    return form.end_date < form.start_date;
-  })();
+  const endBeforeStart = endsBeforeStart(form, hasEndDate);
 
   const canSubmit = form.title.trim().length > 0 && !saving && !endBeforeStart;
 

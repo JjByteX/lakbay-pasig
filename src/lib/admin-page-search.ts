@@ -186,8 +186,6 @@ export function searchAdminPages(
     scored.push({ entry: page.entry, score, order });
   });
 
-  return scored
-    .sort((a, b) => b.score - a.score || a.order - b.order)
-    .slice(0, limit)
-    .map((hit) => hit.entry);
+  scored.sort((a, b) => b.score - a.score || a.order - b.order);
+  return scored.slice(0, limit).map((hit) => hit.entry);
 }

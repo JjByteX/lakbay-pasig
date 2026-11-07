@@ -73,5 +73,5 @@ export function whenIdle(task: () => void): () => void {
 /** Fetches page files ahead of the visit, one at a time, unless Data Saver is on. */
 export async function preloadPages(pages: readonly LazyPage[]): Promise<void> {
   if ((navigator as Navigator & SaveDataConnection).connection?.saveData) return;
-  for (const page of pages) await page.preload();
+  await pages.reduce<Promise<unknown>>((chain, page) => chain.then(() => page.preload()), Promise.resolve());
 }

@@ -282,6 +282,12 @@ function SortableHeaderCell<T>({
   );
 }
 
+// The browser would also select the text between the two rows on a
+// shift-click; stop that, the click itself still goes through.
+function keepShiftClickFromSelectingText(e: MouseEvent) {
+  if (e.shiftKey) e.preventDefault();
+}
+
 export default function AdminDataTable<T>({
   columns,
   rows,
@@ -406,12 +412,6 @@ export default function AdminDataTable<T>({
       return;
     }
     changeSelection([id], checking);
-  }
-
-  // The browser would also select the text between the two rows on a
-  // shift-click; stop that, the click itself still goes through.
-  function keepShiftClickFromSelectingText(e: MouseEvent) {
-    if (e.shiftKey) e.preventDefault();
   }
 
   function discardAndLeave() {
