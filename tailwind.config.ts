@@ -102,6 +102,43 @@ const overlayAnimations = plugin(({ addBase, addUtilities, matchUtilities, theme
   matchUtilities({ duration: (value: string) => ({ animationDuration: value }) }, { values: durations });
 });
 
+/**
+ * Concentric corners: outer radius = inner radius + the gap between them.
+ *
+ * A rounded box that holds a rounded child looks wrong when both use the same
+ * radius, because the gap is thicker at the corner than along the edges. The
+ * fix is one rule, so it lives here once instead of being worked out per
+ * component.
+ *
+ *   rounded-nest-{inner}-{gap}
+ *     inner  sm | md | lg   the child's radius token (4, 6, 8 px)
+ *     gap    0.5 1 1.5 2 2.5 3 4   the Tailwind spacing step between the
+ *                                  box's edge and the child (its padding)
+ *
+ *   <div className="rounded-nest-lg-2 p-2">      16px = 8px child + 8px gap
+ *     <Button className="rounded-lg" />
+ *   </div>
+ *
+ * Use the same step for the gap and the padding (p-2 with -2). A 1px border
+ * is not counted; it is inside the tolerance. When the gap is as big as the
+ * outer radius or bigger (a 16px dialog with p-6) the corners read as
+ * separate shapes, so use a plain radius token there, not this.
+ *
+ * `cn()` in lib/utils.ts knows these classes belong to the `rounded` group,
+ * so a caller's own rounded-* still replaces them.
+ */
+const concentricRadius = plugin(({ matchUtilities, theme }) => {
+  const radii = theme("borderRadius") as Record<string, string>;
+  const spacing = theme("spacing") as Record<string, string>;
+  const values: Record<string, string> = {};
+  for (const inner of ["sm", "md", "lg"]) {
+    for (const gap of ["0.5", "1", "1.5", "2", "2.5", "3", "4"]) {
+      values[`${inner}-${gap}`] = `calc(${radii[inner]} + ${spacing[gap]})`;
+    }
+  }
+  matchUtilities({ "rounded-nest": (value: string) => ({ borderRadius: value }) }, { values });
+});
+
 export default {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
@@ -149,5 +186,5 @@ export default {
       },
     },
   },
-  plugins: [overlayAnimations],
+  plugins: [overlayAnimations, concentricRadius],
 } satisfies Config;

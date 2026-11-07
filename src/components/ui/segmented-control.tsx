@@ -160,7 +160,7 @@ export function SegmentedControl<T extends string | number>({
       ref={setRef}
       role="group"
       aria-label={label}
-      className={cn("relative inline-flex h-8 items-center rounded-md bg-muted p-1", className)}
+      className={cn("relative inline-flex h-8 items-center rounded-nest-sm-1 bg-muted p-1", className)}
     >
       {thumb}
       {options.map((option) => (
