@@ -4,7 +4,7 @@ import { ArrowLeft, CaretLeft, CaretRight, Storefront } from "@phosphor-icons/re
 import type { Session } from "@supabase/supabase-js";
 import { useAuth } from "@/lib/auth-context";
 import { useAuthModal } from "@/lib/auth-modal";
-import { fetchOwnBusiness, createBusiness, updateBusiness } from "@/lib/vendor-business";
+import { fetchOwnBusiness, createBusiness, updateBusiness, isListingRateLimited } from "@/lib/vendor-business";
 import { fetchTrailInclusions } from "@/lib/vendor-dashboard";
 import { fetchItems, missingPriceCount } from "@/lib/vendor-items";
 import { fetchActiveCategories, type BusinessCategory } from "@/lib/business-categories";
@@ -739,8 +739,12 @@ export default function VendorDashboardPage() {
       const created = await fetchOwnBusiness(session.user.id);
       setBusiness(created);
       setChecking(false);
-    } catch {
-      setCreateError("Couldn't create your listing. Check your connection and try again.");
+    } catch (err) {
+      setCreateError(
+        isListingRateLimited(err)
+          ? "You have reached today's limit for new listings. Try again tomorrow, or contact CATO."
+          : "Couldn't create your listing. Check your connection and try again."
+      );
     } finally {
       setCreating(false);
     }

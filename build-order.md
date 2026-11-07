@@ -29,7 +29,7 @@ What to build, in order. Each step assumes the ones before it exist.
 - [x] 9. **Vendor mode**
       Mode switch from Registered User. Basic listing (instant live, Pending badge) and Featured listing (staff toggle, no application flow). Item list with optional pricing and optional photos per item. Vendor dashboard with trail inclusion metrics.
 
-- [ ] 10. **Abuse prevention layer**
+- [x] 10. **Abuse prevention layer**
        One listing per account by default, second attempt flagged not blocked. Submission rate limit. Report/flag action. Review queue priority ordering.
        Send Feedback (`docs/send-feedback-plan.md`) is a general channel and is separate from this step. Place and listing flags stay here. The shared rate limiter built for Send Feedback can serve the submission rate limit and the flag action.
 

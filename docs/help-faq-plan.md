@@ -47,7 +47,7 @@ Guest: Home Page, Help & FAQ, Sign in.
 - **Saved:** What I can save. Hide a suggestion.
 - **Account:** Change details. Dark mode and text size. Delete account.
 - **Businesses:** List my business. Featured.
-- **Report a problem:** Who to tell. Points to CATO until a report action exists (build-order step 10).
+- **Report a problem:** Who to tell. Points to Send Feedback, and to the flag icon on a business page (build-order step 10).
 
 Typed label names in answers (Start trail, Restart trail, Directions, Not interested, List your business) must change with the screens.
 

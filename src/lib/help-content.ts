@@ -144,7 +144,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     items: [
       {
         question: "Something is wrong or out of date. Who do I tell?",
-        answer: `Tap ${FEEDBACK_LABEL} in the account menu or on this page, choose ${TYPE_OPTIONS[1].label}, and describe what is wrong. Include the name of the place or business. For urgent or official matters, or if you need a reply, contact CATO using the details at the bottom of this page.`,
+        answer: `Tap ${FEEDBACK_LABEL} in the account menu or on this page, choose ${TYPE_OPTIONS[1].label}, and describe what is wrong. Include the name of the place or business. To report a business listing itself (fake, closed or wrong), open the business and tap the flag icon at the top. For urgent or official matters, or if you need a reply, contact CATO using the details at the bottom of this page.`,
       },
     ],
   },

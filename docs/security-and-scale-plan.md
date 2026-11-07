@@ -93,7 +93,7 @@ Currently only `/sw.js` has a header. Add for all routes:
 - [ ] SSL enforcement on, network restrictions considered
 - [ ] MFA on the Supabase owner account, and a second owner on the org
 - [ ] Restrict CORS on `create-staff-account` from `*` to your domain
-- [ ] `grep -r service_role src` returns nothing (the key must never reach the browser)
+- [x] `grep -r service_role src` returns nothing (the key must never reach the browser)
 
 ## 6. Database performance
 
@@ -129,16 +129,16 @@ The in-app cache (`lib/swr-cache.ts`) helps one browser only. For many users:
 
 Guests can submit, so every write goes through `api/feedback.js` and nothing is written directly with the public key. The limiter is a Supabase table shared across instances, not the in-memory one in `api/transcribe.js`.
 
-- [ ] `anon` and `authenticated` cannot insert, update or delete `feedback` rows (RLS), and a guest cannot read or list them
-- [ ] The private `feedback` bucket has no public read or write, and only the endpoint (service role) writes to it
-- [ ] The endpoint rejects bodies over about 3 MB (Vercel's limit is 4.5 MB)
-- [ ] Image accepts JPG, PNG and WebP by real file type, is re-encoded to WebP, and EXIF is stripped
-- [ ] CAPTCHA, honeypot and message length limits are enforced server side
-- [ ] The rate limit holds across instances and is keyed by IP, and by user id when signed in
-- [ ] Errors return a code and a plain message only, never internal details
-- [ ] A stored message shows as plain text in the inbox, links included
+- [x] `anon` and `authenticated` cannot insert, update or delete `feedback` rows (RLS), and a guest cannot read or list them
+- [x] The private `feedback` bucket has no public read or write, and only the endpoint (service role) writes to it
+- [x] The endpoint rejects bodies over about 3 MB (Vercel's limit is 4.5 MB)
+- [x] Image accepts JPG, PNG and WebP by real file type, is re-encoded to WebP, and EXIF is stripped
+- [x] CAPTCHA, honeypot and message length limits are enforced server side
+- [x] The rate limit holds across instances and is keyed by IP, and by user id when signed in
+- [x] Errors return a code and a plain message only, never internal details
+- [x] A stored message shows as plain text in the inbox, links included
 - [ ] CAPTCHA secret and service role key are set in the Vercel dashboard, and `.env.example` lists names only
-- [ ] Attachments are deleted some time after an item is Resolved
+- [x] Attachments are deleted some time after an item is Resolved
 - [ ] Collection and retention confirmed with the LGU data protection officer (RA 10173)
 
 ## Already in good shape

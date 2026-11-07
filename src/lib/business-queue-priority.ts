@@ -40,6 +40,8 @@ export interface BusinessQueueCandidate {
   accountCreatedAt?: string | null;
   /** Whether the listing has at least one photo. Omit until a photo store exists (see file header). */
   hasPhotos?: boolean;
+  /** Unresolved reports and flags on the listing (business_flags). Omit when not fetched. */
+  openFlagCount?: number;
 }
 
 export interface BusinessQueueSignals {
@@ -49,6 +51,8 @@ export interface BusinessQueueSignals {
   thinDescription: boolean;
   copyPastedDescription: boolean;
   multipleSubmissions: boolean;
+  /** Someone reported the listing, or the system flagged a second listing, and staff have not resolved it. */
+  reported: boolean;
 }
 
 export interface PrioritizedBusiness extends BusinessQueueCandidate {
@@ -154,6 +158,7 @@ export function computeBusinessQueuePriority(
       copyPastedDescription:
         normalizedDescription.length > 0 && (descriptionCounts.get(normalizedDescription) ?? 0) > 1,
       multipleSubmissions: submissionCount >= MULTIPLE_SUBMISSIONS_THRESHOLD,
+      reported: (candidate.openFlagCount ?? 0) > 0,
     };
 
     const riskScore = [
@@ -162,6 +167,7 @@ export function computeBusinessQueuePriority(
       signals.thinDescription,
       signals.copyPastedDescription,
       signals.multipleSubmissions,
+      signals.reported,
     ].filter(Boolean).length;
 
     return { ...candidate, signals, riskScore };

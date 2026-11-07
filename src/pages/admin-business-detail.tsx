@@ -21,6 +21,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { ADMIN_SCROLL_CLASS } from "@/components/admin/admin-form-card";
 import { DiscoveryEntriesPanel, canEditDiscoveryContent } from "@/components/admin/discovery-entries-panel";
 import { ReviewHistoryTable } from "@/components/admin/review-history-table";
+import { BusinessFlagsPanel } from "@/components/admin/business-flags-panel";
 
 // 6.5: read only list of business_items for staff review, name and price
 // per item, missing price shown plainly, not hidden, per
@@ -574,6 +575,8 @@ export default function AdminBusinessDetailPage() {
       />
 
       {featureError && <p className="text-sm text-destructive">{featureError}</p>}
+
+      {id && <BusinessFlagsPanel businessId={id} />}
 
       {/* 6.8: tabs split current info from review history, same pattern as
           admin-place-detail.tsx's 5.6, per plan 6.8 and

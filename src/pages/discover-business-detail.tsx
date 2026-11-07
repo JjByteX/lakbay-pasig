@@ -14,6 +14,7 @@ import { PhotoGallery } from "@/components/public/photo-gallery";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/public/page-container";
 import { SaveButton } from "@/components/public/save-button";
+import { ReportBusinessButton } from "@/components/public/report-business-button";
 import { RecommendationRow } from "@/components/public/recommendation-row";
 import { SeasonLabel } from "@/components/public/season-label";
 import { usePageTitle } from "@/lib/page-title";
@@ -250,7 +251,12 @@ export default function DiscoverBusinessDetailPage() {
         <Button type="button" variant="ghost" size="icon" onClick={goBack} aria-label="Back">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        {business && <SaveButton kind="business" itemId={business.id} />}
+        {business && (
+          <div className="flex items-center">
+            <ReportBusinessButton businessId={business.id} />
+            <SaveButton kind="business" itemId={business.id} />
+          </div>
+        )}
       </div>
 
       {(loading || !itemsLoaded) && <p className="text-base text-muted-foreground">Loading…</p>}

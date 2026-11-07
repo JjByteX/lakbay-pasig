@@ -21,6 +21,10 @@ export async function fetchOwnBusiness(userId: string): Promise<VendorBusinessDe
       "id, name, business_type, category_id, description, address, latitude, longitude, contact, opening_hours, rules, business_story, unique_specialty, accessibility_info, social_media_links, verification_status, review_notes, featured_status, registered_or_informal, views_count, saves_count"
     )
     .eq("submitted_by", userId)
+    // One listing per account is the rule, but a second one is saved and
+    // flagged, not blocked (migration 0009), so take the first, not an error.
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (error) throw error;
@@ -32,8 +36,9 @@ export async function fetchOwnBusiness(userId: string): Promise<VendorBusinessDe
  * goes live instantly, verification_status defaults to 'pending' at the
  * database level (migration 0004's own column default), never sent from
  * here. Does not check for an existing listing first, that block is step
- * 10's "one listing per account by default" rule, out of this step's scope
- * per build-order.md's own sequencing.
+ * 10's "one listing per account by default" rule. That and the daily cap now
+ * live in the database (migration 0009): a second listing is saved and flagged
+ * for staff, and a fourth in 24 hours is refused with listing_rate_limited.
  */
 export async function createBusiness(
   userId: string,
@@ -55,4 +60,9 @@ export async function updateBusiness(
 ): Promise<void> {
   const { error } = await supabase.from("businesses").update(payload).eq("id", businessId);
   if (error) throw error;
+}
+
+/** True when createBusiness was refused by the daily listing cap (migration 0009). */
+export function isListingRateLimited(err: unknown): boolean {
+  return typeof err === "object" && err !== null && String((err as { message?: unknown }).message).includes("listing_rate_limited");
 }

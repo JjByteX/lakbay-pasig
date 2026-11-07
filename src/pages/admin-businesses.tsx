@@ -168,6 +168,10 @@ export default function AdminBusinessesPage() {
         ])
       );
       const flaggedBusinessIds = new Set((flagsRes.data ?? []).map((f) => f.business_id));
+      const openFlagCounts = new Map<string, number>();
+      for (const flag of flagsRes.data ?? []) {
+        openFlagCounts.set(flag.business_id, (openFlagCounts.get(flag.business_id) ?? 0) + 1);
+      }
 
       const candidates: BusinessQueueCandidate[] = rows.map((row) => ({
         id: row.id,
@@ -177,6 +181,7 @@ export default function AdminBusinessesPage() {
         updatedAt: row.updated_at,
         accountCreatedAt: createdAtByProfile.get(row.submitted_by) ?? null,
         hasPhotos: businessIdsWithPhotos.has(row.id),
+        openFlagCount: openFlagCounts.get(row.id) ?? 0,
       }));
 
       const prioritized: BusinessRow[] = computeBusinessQueuePriority(candidates).map((p) => {
