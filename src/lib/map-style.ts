@@ -52,10 +52,18 @@ export const LATTE = {
   // needed to understand the map (roads, outlines), SC 1.4.3 needs 4.5:1 for
   // text. New ratios against the lighter `base` above are in the comments.
   building: "#e3e4e7", // fill, ~1.2:1 against base -- intentionally subtle, see buildingLine below
-  buildingLine: "#c3c5cc", // soft edge, ~1.6:1 against base. Buildings are background context, not something a person needs to read, so this one stays under 3:1 on purpose; roads and labels keep theirs
-  road: "#7c7f93", // overlay2, 3.7:1 against the lighter base
-  roadDark: "#6c6f85", // subtext1, 4.6:1, secondary/tertiary
-  roadMajor: "#4c4f69", // major roads, 7.4:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
+  // Third fix, human-reported (screenshot vs. Google Maps side-by-side,
+  // again): buildingLine/road/roadDark/roadMajor/text were each a notch
+  // darker than Google's equivalents even after the base/building retune
+  // above, giving the whole map a heavier, bluer cast than Google's airy
+  // light grey. Each value below is lightened one step while re-checked
+  // against the WCAG ratios it needs to keep (buildingLine has none to
+  // keep, it was already intentionally under 3:1; road/roadDark/roadMajor
+  // keep their 3:1 graphic minimum; text keeps its 4.5:1 text minimum).
+  buildingLine: "#d2d3d8", // soft edge, ~1.4:1 against base -- just a touch lighter than before
+  road: "#888ba0", // 3.1:1 against the lighter base, lighter than before but still above 3:1
+  roadDark: "#787b90", // 3.9:1, secondary/tertiary
+  roadMajor: "#555872", // major roads, 6.4:1. A darker grey than minor roads, not a color: orange/red read as a warning to people with no legend to explain it
   casing: "#ffffff", // thin outline under roads so they separate from buildings (G209)
   greenLine: "#2e7d32", // park outline
   waterText: "#0f6f80", // water labels, 5.4:1 against the lighter base
@@ -70,7 +78,7 @@ export const LATTE = {
   mauve: "#8839ef",
   railway: "#6c6f85", // subtext1
   boundary: "#6c6f85", // subtext1
-  text: "#2c2f45", // 9.6:1 against the lighter base, darker for thin street labels
+  text: "#34374c", // 10.8:1 against the lighter base, lightened a notch from the previous value, still darker for thin street labels than the roads/railway/boundary tokens
 };
 
 export const MOCHA: typeof LATTE = {
@@ -280,7 +288,10 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         paint: {
           "text-color": palette.waterText,
           "text-halo-color": palette.base,
-          "text-halo-width": 2,
+          // Trimmed from 2, human-reported (outline too heavy). Thinner now
+          // that the basemap and road colors are lighter -- a thick halo
+          // read as bolder than it needed to against the softer backdrop.
+          "text-halo-width": 1.5,
         },
       },
       {
@@ -307,8 +318,11 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
           "text-halo-color": palette.casing,
           // Slimmed from 2.5 after feedback that the outline looked heavy,
           // then raised from 1.5 to 2 because 1.5 read thin over dense road
-          // lines. 2 matches the water and place labels.
-          "text-halo-width": 2,
+          // lines. Trimmed back down to 1.5 now that the road palette
+          // itself is lighter (road/roadDark/roadMajor all lightened one
+          // step above): a thinner halo no longer disappears against them,
+          // and it matches the lighter, less heavy-outlined look elsewhere.
+          "text-halo-width": 1.5,
           "text-halo-blur": 0,
         },
       },
@@ -326,7 +340,8 @@ export function buildStyle(palette: typeof LATTE): StyleSpecification {
         paint: {
           "text-color": palette.text,
           "text-halo-color": palette.base,
-          "text-halo-width": 2,
+          // Trimmed from 2, same reasoning as water-name and road-label above.
+          "text-halo-width": 1.5,
         },
       },
     ],
