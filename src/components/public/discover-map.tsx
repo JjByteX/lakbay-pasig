@@ -1644,7 +1644,6 @@ export function DiscoverMap({
     return () => {
       mapInstance.off("rotate", applyConeRotation);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance]);
 
   // Bugfix (map stuck / snaps back to center while dragging): the camera

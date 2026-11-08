@@ -189,7 +189,6 @@ function StepList({ steps }: Readonly<{ steps: RouteStep[] }>) {
         // fetchRoute response each time (directions.ts's readSteps), never
         // reordered or filtered in place, so index doubles safely as the
         // key without a per-step id to key on instead.
-        // eslint-disable-next-line react/no-array-index-key
         <li key={index} className="flex items-start gap-2 text-sm">
           {stepIcon(step)}
           <span className="min-w-0 flex-1 text-foreground">{formatStepInstruction(step)}</span>
