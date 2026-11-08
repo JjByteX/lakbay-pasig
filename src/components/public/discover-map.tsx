@@ -16,7 +16,7 @@ import {
   MOCHA,
   buildStyle,
   PASIG_CENTER,
-  DEFAULT_ZOOM,
+  defaultZoomForScreen,
   BASE_BOUNDS,
   GROW_LIMIT,
   inBounds,
@@ -426,10 +426,11 @@ const ALT_TAP_RADIUS = 12;
 
 // Ring border for verification status, shared by markerElement and the
 // legend's Status swatches so the two cannot drift. Verified is a solid
-// card-token ring, pending a dashed muted-foreground ring. The circle's own
+// card-token ring, pending a dashed card-token ring (muted-foreground flips to
+// the opposite theme's text color, so it looked like the other theme). The circle's own
 // fill is the category color, so status has to live on the ring.
 const RING_VERIFIED = "border-2 border-card";
-const RING_PENDING = "border-2 border-dashed border-muted-foreground";
+const RING_PENDING = "border-2 border-dashed border-card";
 
 // Marker: a filled circle in the category's color (Category Colors, like
 // Apple Maps), the category icon as a glyph in --category-foreground, the
@@ -1499,7 +1500,7 @@ export function DiscoverMap({
       container: containerRef.current,
       style: buildStyle(isDark() ? MOCHA : LATTE),
       center: [PASIG_CENTER.longitude, PASIG_CENTER.latitude],
-      zoom: DEFAULT_ZOOM,
+      zoom: defaultZoomForScreen(),
       // map-bounds-plan.md: Discover stays near Pasig. maxBounds keeps the
       // whole screen inside the box, and grows once (growIfNeeded below).
       // Rotation is on, like Google Maps: two finger twist on touch,
@@ -1753,7 +1754,7 @@ export function DiscoverMap({
       inBounds(GROW_LIMIT, userLocation)
     ) {
       map.setCenter([userLocation.longitude, userLocation.latitude]);
-      map.setZoom(DEFAULT_ZOOM);
+      map.setZoom(defaultZoomForScreen());
     }
     hasAutoCenteredRef.current = true;
 
