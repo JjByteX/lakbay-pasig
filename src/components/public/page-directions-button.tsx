@@ -6,7 +6,8 @@ import { DirectionsError, fetchRoute } from "@/lib/directions";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { useDirections } from "@/components/public/public-shell";
 import { useOnline } from "@/lib/offline/status";
-import { NEEDS_CONNECTION } from "@/lib/offline/messages";
+import { useMapPack } from "@/lib/offline/map-pack";
+import { MAP_NEEDS_CONNECTION, NEEDS_CONNECTION } from "@/lib/offline/messages";
 
 /**
  * Directions on a place or business's full detail page. The map preview
@@ -26,6 +27,10 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
   const navigate = useNavigate();
   const { origin, handleRouteFound, handleOpenDirections } = useDirections();
   const online = useOnline();
+  // The directions panel lives on the map, so with no connection it is only
+  // reachable when a map is downloaded.
+  const mapDownloaded = useMapPack().state === "downloaded";
+  const mapReady = online || mapDownloaded;
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +46,7 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
         variant="outline"
         size="sm"
         className="gap-2"
-        disabled={!online}
+        disabled={!mapReady}
         onClick={() => {
           handleOpenDirections(result);
           navigate("/discover");
@@ -50,7 +55,7 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
         Directions
         <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
       </Button>
-      {!online && <p className="text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
+      {!mapReady && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
       </div>
     );
   }

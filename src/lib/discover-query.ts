@@ -336,7 +336,7 @@ export function filterDiscoverResults(
   categories: string[],
   priceRange: { min: number | null; max: number | null } | null = null,
   facilities: string[] = [],
-  openNow = false
+  openAt: Date | null = null
 ): DiscoverResult[] {
   const q = query.trim().toLowerCase();
 
@@ -346,16 +346,17 @@ export function filterDiscoverResults(
       matchesCategories(result, categories) &&
       matchesPriceRange(result, priceRange) &&
       matchesFacilities(result, facilities) &&
-      matchesOpenNow(result, openNow)
+      matchesOpenNow(result, openAt)
   );
 }
 
-// Open now keeps only results whose stored hours say open on Manila's clock.
+// Open now keeps only results whose stored hours say open at `openAt`, on
+// Manila's clock. null means the filter is off.
 // No hours, or legacy free text, is "unknown" (getOpenStatus returns null),
 // and unknown is left out rather than guessed open.
-function matchesOpenNow(result: DiscoverResult, openNow: boolean): boolean {
-  if (!openNow) return true;
-  return getOpenStatus(result.hours)?.open === true;
+function matchesOpenNow(result: DiscoverResult, openAt: Date | null): boolean {
+  if (!openAt) return true;
+  return getOpenStatus(result.hours, openAt)?.open === true;
 }
 
 // Name, or an item name for businesses (places carry no items).

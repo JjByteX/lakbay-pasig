@@ -47,6 +47,9 @@ interface FromSearchProps {
   // Whether a custom From is currently set. Drives whether the "Your
   // location" row is shown, since it is a no-op when From is already live.
   hasCustomFrom: boolean;
+  // Fires as the person types, so a parent that opened the field on its own
+  // can tell it is now being used and leave it open.
+  onQueryChange?: (query: string) => void;
 }
 
 // One row style shared by "Your location" and "Choose on map" so the three
@@ -61,6 +64,7 @@ export function FromSearch({
   onUseMyLocation,
   onClose,
   hasCustomFrom,
+  onQueryChange,
 }: Readonly<FromSearchProps>) {
   const listId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -174,6 +178,7 @@ export function FromSearch({
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
+              onQueryChange?.(e.target.value);
               setActiveIndex(-1);
             }}
             onKeyDown={handleKeyDown}

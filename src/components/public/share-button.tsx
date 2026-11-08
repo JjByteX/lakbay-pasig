@@ -18,6 +18,9 @@ const COPIED_MS = 2000;
  */
 export function ShareButton({ kind, id, name }: Readonly<ShareButtonProps>) {
   const [message, setMessage] = useState<string | null>(null);
+  // True while the share sheet or the copy is open, so a second tap cannot
+  // start another and race the status message.
+  const [pending, setPending] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -34,6 +37,16 @@ export function ShareButton({ kind, id, name }: Readonly<ShareButtonProps>) {
   }
 
   async function handleShare() {
+    if (pending) return;
+    setPending(true);
+    try {
+      await shareLink();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function shareLink() {
     const url = `${globalThis.location.origin}/discover/${kind}/${id}`;
     if (typeof navigator.share === "function") {
       try {
@@ -59,6 +72,7 @@ export function ShareButton({ kind, id, name }: Readonly<ShareButtonProps>) {
         variant="outline"
         size="sm"
         className="gap-2"
+        disabled={pending}
         onClick={handleShare}
       >
         <ShareNetwork weight="bold" className="h-4 w-4" aria-hidden="true" />

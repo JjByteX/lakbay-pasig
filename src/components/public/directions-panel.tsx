@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   formatDistance,
   viaName,
@@ -201,16 +202,29 @@ function DirectionsStatusRow({
   durationSeconds,
   distanceMeters,
   noOrigin,
+  onRetry,
 }: Readonly<
   Pick<DirectionsPanelProps, "isLoading" | "errorReason" | "durationSeconds" | "distanceMeters"> & {
     noOrigin: boolean;
+    // Set only when there is no route at all (the first request failed), since
+    // the selected mode's button cannot retry what it already shows as chosen.
+    onRetry: (() => void) | null;
   }
 >) {
   if (isLoading) {
     return <p className="mt-4 text-sm text-muted-foreground">Getting directions…</p>;
   }
   if (errorReason) {
-    return <p className="mt-4 text-sm text-destructive">{ERROR_MESSAGES[errorReason]}</p>;
+    return (
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <p className="text-sm text-destructive">{ERROR_MESSAGES[errorReason]}</p>
+        {onRetry && (
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            Try again
+          </Button>
+        )}
+      </div>
+    );
   }
   // No starting point yet: the From row is already the prompt, so this row
   // stays empty instead of saying it twice.
@@ -290,6 +304,7 @@ function DirectionsFromRow({
   noOrigin,
   onStartEditing,
   onStopEditing,
+  onFromTyped,
   onSelectFrom,
   onResetFrom,
   onPickOnMap,
@@ -302,6 +317,8 @@ function DirectionsFromRow({
   noOrigin: boolean;
   onStartEditing: () => void;
   onStopEditing: () => void;
+  // The person typed in the open search field.
+  onFromTyped: () => void;
   onSelectFrom: (from: CustomFrom) => void;
   onResetFrom: () => void;
   onPickOnMap: () => void;
@@ -336,6 +353,7 @@ function DirectionsFromRow({
     return (
       <FromSearch
         hasCustomFrom={fromLabel !== null}
+        onQueryChange={onFromTyped}
         onSelect={(from) => {
           onSelectFrom(from);
           onStopEditing();
@@ -423,11 +441,12 @@ function DirectionsPanelContent({
   const noOrigin = startBlockedReason === "no-location";
   const [editingFrom, setEditingFrom] = useState(noOrigin);
   // A live fix can arrive after the panel opened with no origin. The shell
-  // then fetches the route itself, so the open search field is no longer
-  // needed. Only the no-origin -> origin change closes it, so a person who
-  // opens it on purpose later is not interrupted.
+  // then fetches the route itself, so a field that opened on its own and was
+  // never used is no longer needed. A field the person opened or typed in
+  // stays open, so their query and results are not lost.
+  const fromInUseRef = useRef(false);
   useEffect(() => {
-    if (!noOrigin) setEditingFrom(false);
+    if (!noOrigin && !fromInUseRef.current) setEditingFrom(false);
   }, [noOrigin]);
 
   return (
@@ -533,8 +552,17 @@ function DirectionsPanelContent({
           pickingOnMap={pickingOnMap}
           editingFrom={editingFrom}
           noOrigin={noOrigin}
-          onStartEditing={() => setEditingFrom(true)}
-          onStopEditing={() => setEditingFrom(false)}
+          onStartEditing={() => {
+            fromInUseRef.current = true;
+            setEditingFrom(true);
+          }}
+          onStopEditing={() => {
+            fromInUseRef.current = false;
+            setEditingFrom(false);
+          }}
+          onFromTyped={() => {
+            fromInUseRef.current = true;
+          }}
           onSelectFrom={onSelectFrom}
           onResetFrom={onResetFrom}
           onPickOnMap={onPickOnMap}
@@ -568,6 +596,7 @@ function DirectionsPanelContent({
           durationSeconds={durationSeconds}
           distanceMeters={distanceMeters}
           noOrigin={noOrigin}
+          onRetry={route === null ? () => onSelectMode(selectedMode) : null}
         />
       )}
       {!isLoading && !errorReason && !noOrigin && <TrafficNote mode={selectedMode} />}

@@ -427,7 +427,9 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       // Phase 2.3: guard changed from !userLocation to !origin, so a
       // custom From (no GPS needed) still allows a mode switch.
       if (modeLoading || !origin || !directionsPanelResult) return;
-      if (mode === selectedMode) return;
+      // Already on this mode: nothing to do, unless there is no route because
+      // the first request failed, in which case tapping it again retries.
+      if (mode === selectedMode && route) return;
       const ok = await refetch(mode, origin, directionsPanelResult);
       // Mode only commits on a successful fetch -- same rule the pre-
       // Phase-2 version enforced by setting it inside the try block.
@@ -435,7 +437,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       // reuse it without changing mode, per Phase 2.3.
       if (ok) setSelectedMode(mode);
     },
-    [modeLoading, origin, directionsPanelResult, selectedMode, refetch],
+    [modeLoading, origin, directionsPanelResult, selectedMode, route, refetch],
   );
 
   const handleCancelDirections = useCallback(() => {

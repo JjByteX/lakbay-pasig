@@ -14,7 +14,8 @@ import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverResult } from "@/lib/discover-types";
 import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/directions";
 import { useOnline } from "@/lib/offline/status";
-import { NEEDS_CONNECTION } from "@/lib/offline/messages";
+import { useMapPack } from "@/lib/offline/map-pack";
+import { MAP_NEEDS_CONNECTION, NEEDS_CONNECTION } from "@/lib/offline/messages";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { useDirections } from "./public-shell";
 import { ShareButton } from "./share-button";
@@ -130,6 +131,10 @@ export function ResultCard({
   onOpenDirections,
 }: Readonly<ResultCardProps>) {
   const online = useOnline();
+  // The directions panel lives on the map, so with no connection it is only
+  // reachable when a map is downloaded.
+  const mapDownloaded = useMapPack().state === "downloaded";
+  const mapReady = online || mapDownloaded;
   const { handleOpenDirections } = useDirections();
   const openDirections = onOpenDirections ?? handleOpenDirections;
   const [directionsStatus, setDirectionsStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -208,7 +213,7 @@ export function ResultCard({
                 )}
                 <VerificationBadge status={result.verification_status} />
               </div>
-              <DialogFooter className="flex-row items-center justify-between gap-2 sm:justify-between">
+              <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2 sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Button asChild variant="link" className="gap-1 px-0">
                     {/* Plain link: the route change unmounts the map page, which
@@ -252,7 +257,7 @@ export function ResultCard({
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        disabled={!online}
+                        disabled={!mapReady}
                         onClick={() => {
                           onOpenChange(false);
                           openDirections(result);
@@ -261,7 +266,7 @@ export function ResultCard({
                         Directions
                         <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
                       </Button>
-                      {!online && <p className="text-right text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
+                      {!mapReady && <p className="text-right text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
                       </>
                     )
                   )}

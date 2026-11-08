@@ -177,6 +177,16 @@ export default function DiscoverPage() {
   // Open now: keeps only places and businesses whose hours say open on
   // Manila's clock. Off by default, so nothing is hidden until asked.
   const [openNow, setOpenNow] = useState(false);
+  // Ticks every minute while Open now is on, so the list follows the clock:
+  // a place that closes drops out, one that opens comes in, with no other
+  // filter change needed.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!openNow) return;
+    setClock(Date.now());
+    const timer = setInterval(() => setClock(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [openNow]);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
@@ -257,8 +267,9 @@ export default function DiscoverPage() {
   }, [minPrice, maxPrice]);
 
   const filtered = useMemo(
-    () => filterDiscoverResults(results, query, categories, priceRange, facilities, openNow),
-    [results, query, categories, priceRange, facilities, openNow],
+    () =>
+      filterDiscoverResults(results, query, categories, priceRange, facilities, openNow ? new Date(clock) : null),
+    [results, query, categories, priceRange, facilities, openNow, clock],
   );
 
   // Trail mode: "Resume trail" on a trail page lands here as /discover?trail=<id>.
@@ -404,11 +415,12 @@ export default function DiscoverPage() {
   // and one action that undoes all of it (search text, categories,
   // facilities, price range) so a filtered-to-nothing list is not a dead end.
   const hasFilters =
-    query.trim() !== "" || categories.length > 0 || facilities.length > 0 || priceRange !== null;
+    query.trim() !== "" || categories.length > 0 || facilities.length > 0 || priceRange !== null || openNow;
   const clearFilters = () => {
     setQuery("");
     setCategories([]);
     setFacilities([]);
+    setOpenNow(false);
     setMinPrice("");
     setMaxPrice("");
   };
