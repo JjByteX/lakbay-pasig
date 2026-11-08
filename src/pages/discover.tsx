@@ -37,7 +37,8 @@ import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { usePageTitle } from "@/lib/page-title";
 import { useOnline } from "@/lib/offline/status";
 import { useMapPack } from "@/lib/offline/map-pack";
-import { MAP_NEEDS_CONNECTION } from "@/lib/offline/messages";
+import { MAP_NEEDS_CONNECTION, MAP_OUTSIDE_DOWNLOAD } from "@/lib/offline/messages";
+import { BASE_BOUNDS, inBounds } from "@/lib/map-style";
 
 /**
  * Phase 5 (step-5-phases.md): search and list on top of Phase 4's map, one
@@ -163,6 +164,8 @@ export default function DiscoverPage() {
   const online = useOnline();
   const mapDownloaded = useMapPack().state === "downloaded";
   const mapReady = online || mapDownloaded;
+  // The downloaded map only holds the base box, so offline outside it is blank.
+  const outsideDownload = !online && mapDownloaded && !!userLocation && !inBounds(BASE_BOUNDS, userLocation);
   const view = mapReady ? viewChoice : "list";
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
@@ -447,6 +450,7 @@ export default function DiscoverPage() {
           </TabsList>
         </Tabs>
         {!mapReady && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
+        {outsideDownload && <p className="text-xs text-muted-foreground">{MAP_OUTSIDE_DOWNLOAD}</p>}
       </div>
 
       {/* Category filter: multi-select grid of pill buttons, replacing the
@@ -726,8 +730,10 @@ export default function DiscoverPage() {
           }}
         />
       )}
-      {/* Navigation view: banner and bottom bar, over the map. */}
-      {view === "map" && navigating && <NavigationView />}
+      {/* Navigation view: banner and bottom bar. Rendered whenever navigating,
+          not only on the map, so End is always reachable (List tab, or the map
+          unavailable offline). */}
+      {navigating && <NavigationView />}
       {/* Trail mode panel. Hidden while a Directions panel is open (both want
           the bottom of the screen), and in list view, where there is no map for
           the stops to be on. */}

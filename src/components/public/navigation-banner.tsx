@@ -63,10 +63,10 @@ export function NavigationView() {
     tripProgress && tripProgress.nextStepIndex !== null ? steps?.[tripProgress.nextStepIndex] : undefined;
 
   let bannerContent;
-  if (modeErrorReason) {
-    bannerContent = <p className="text-sm text-destructive">{ERROR_MESSAGES[modeErrorReason]}</p>;
-  } else if (modeLoading) {
+  if (modeLoading) {
     bannerContent = <p className="text-sm text-muted-foreground">Rerouting…</p>;
+  } else if (modeErrorReason && (!tripProgress || !step)) {
+    bannerContent = <p className="text-sm text-destructive">{ERROR_MESSAGES[modeErrorReason]}</p>;
   } else if (!tripProgress || !step) {
     bannerContent = <p className="text-sm text-muted-foreground">Waiting for your location…</p>;
   } else {
@@ -80,6 +80,9 @@ export function NavigationView() {
             {formatDistance(tripProgress.distanceToNextStepMeters ?? 0)}
           </p>
           <p className="text-sm text-foreground">{formatStepInstruction(step)}</p>
+          {modeErrorReason && (
+            <p className="mt-2 text-xs text-destructive">{ERROR_MESSAGES[modeErrorReason]}</p>
+          )}
         </div>
       </div>
     );

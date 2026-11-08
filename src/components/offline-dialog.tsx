@@ -93,7 +93,7 @@ function MapSection({ online }: Readonly<{ online: boolean }>) {
         </Button>
       </div>
     );
-  } else if (pack.state === "failed") {
+  } else if (pack.state === "failed" && online) {
     body = <ErrorState onRetry={start}>{FAIL_TEXT[pack.reason ?? "unknown"]}</ErrorState>;
   } else {
     body = (

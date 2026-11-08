@@ -242,7 +242,7 @@ function RouteOptions({
         const selected = option === route;
         const via = viaName(option);
         return (
-          <li key={`${Math.round(option.duration)}-${Math.round(option.distance)}`}>
+          <li key={`${index}-${Math.round(option.duration)}-${Math.round(option.distance)}`}>
             <button
               type="button"
               aria-pressed={selected}

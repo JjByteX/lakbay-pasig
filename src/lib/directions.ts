@@ -182,7 +182,17 @@ export async function fetchRoute(
   }
 
   const best = readRoute(data.routes[0]);
-  const others: RouteGeometry[] = data.routes.slice(1).map(readRoute);
+  // Alternatives are optional: one without usable geometry is dropped rather
+  // than failing the whole route when the map draws it.
+  const others: RouteGeometry[] = data.routes
+    .slice(1)
+    .filter(
+      (r: { geometry?: { coordinates?: unknown }; duration?: unknown; distance?: unknown }) =>
+        Array.isArray(r?.geometry?.coordinates) &&
+        typeof r.duration === "number" &&
+        typeof r.distance === "number",
+    )
+    .map(readRoute);
   return others.length > 0 ? { ...best, alternatives: others } : best;
 }
 

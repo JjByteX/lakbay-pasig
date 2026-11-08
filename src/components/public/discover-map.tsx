@@ -1397,7 +1397,9 @@ export function DiscoverMap({
   const [grown, setGrown] = useState(false);
   const growIfNeeded = (points: Coordinates[]) => {
     const map = mapRef.current;
-    if (!map || grown) return;
+    // Offline the pack only covers the base box, so growing into tiles that
+    // were never downloaded would leave a blank map.
+    if (!map || grown || !navigator.onLine) return;
     if (points.some((p) => !inBounds(BASE_BOUNDS, p) && inBounds(GROW_LIMIT, p))) {
       map.setMaxBounds(GROW_LIMIT);
       setGrown(true);

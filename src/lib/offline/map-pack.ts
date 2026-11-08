@@ -213,7 +213,9 @@ export async function downloadMap(onProgress: (p: MapProgress) => void = () => u
     await runPool(urls, PARALLEL, signal, async (url) => {
       const res = await fetch(url, { signal });
       // An empty or missing tile (open sea, outside coverage) is skipped, the
-      // map draws it blank online as well. A dropped connection throws above.
+      // map draws it blank online as well. A dropped connection throws above,
+      // and so do rate limits and server errors: those are not missing tiles.
+      if (res.status === 429 || res.status >= 500) throw new TypeError("Failed to fetch");
       if (res.ok) {
         const blob = await res.blob();
         bytes += blob.size;
@@ -234,8 +236,12 @@ export async function downloadMap(onProgress: (p: MapProgress) => void = () => u
     await dropMapCaches(target);
     write({ state: "downloaded", syncedAt: Date.now(), bytes, cache: target, reason: null });
   } catch (err) {
+    // Read first so a real cancel stays distinguishable from a failure, then
+    // stop the other workers so they cannot keep fetching into a dropped cache.
+    const cancelled = signal.aborted;
+    controller.abort();
     await dropMapCaches(before.cache ?? undefined);
-    if (signal.aborted) {
+    if (cancelled) {
       write({ ...before, state: before.syncedAt ? "downloaded" : "idle", reason: null });
     } else if (before.syncedAt) {
       // The old map is still there, so keep it and its time.
