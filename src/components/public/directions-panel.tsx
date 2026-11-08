@@ -634,7 +634,10 @@ export function DirectionsPanel({
   return (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-16 z-50",
+        // z-30, below the shell header (z-40): the header grows over the map
+        // when the filters are dragged down, and this panel is portaled to
+        // <body>, so a higher value painted it over the open filters.
+        "fixed inset-x-0 bottom-16 z-30",
         "mx-auto w-full max-w-md px-4 pb-2",
       )}
     >

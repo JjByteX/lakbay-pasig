@@ -42,6 +42,20 @@ export const FONT_SIZES = Object.keys(FONT_SIZE_LABELS) as Exclude<FontSizePrefe
 // would.
 export function applyTheme(theme: ThemePreference): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
+  syncThemeColor();
+}
+
+// The phone's status bar (top) and system button bar (bottom) take their color
+// from the theme-color meta tag. It follows --card, the bottom nav's own
+// background, so both bars match the nav in light and dark mode instead of the
+// brand blue. Read from the token rather than a copy of its value, so a palette
+// change in index.css carries over. Skipped where there is no real DOM (the
+// Node self-check below).
+function syncThemeColor(): void {
+  if (typeof document.querySelector !== "function" || typeof getComputedStyle !== "function") return;
+  const value = getComputedStyle(document.documentElement).getPropertyValue("--card").trim();
+  if (!value) return;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", `hsl(${value})`);
 }
 
 // Null means default (18px), not small, since the new default is now
