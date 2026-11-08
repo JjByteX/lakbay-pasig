@@ -36,7 +36,7 @@ import { TrailOverlay, type TrailMapStop } from "./discover-trail-overlay";
 import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 import { DirectionsPanel } from "./directions-panel";
-import { useDirections, type CustomFrom } from "./public-shell";
+import { useDirections, type CustomFrom, type SearchedPlace } from "./public-shell";
 import { useBarangayFeatures } from "@/hooks/use-barangay-features";
 import { matchBarangay } from "@/lib/barangay";
 
@@ -540,6 +540,8 @@ interface DiscoverMapProps {
   resultsError: string | null;
   // The search text. When it names a barangay, that barangay is outlined.
   barangayQuery?: string;
+  // A street or landmark picked from the search dropdown: gets a pin.
+  searchedPlace?: SearchedPlace | null;
   // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
   // control update discover.tsx's own userLocation state (same setter its
   // one-shot geolocation effect already uses), so this file never owns a
@@ -1353,6 +1355,7 @@ export function DiscoverMap({
   resultsLoading,
   resultsError,
   barangayQuery = "",
+  searchedPlace = null,
   onLocationFound,
   route,
   onRouteFound,
@@ -2311,6 +2314,30 @@ export function DiscoverMap({
     // a route change alone must not re-frame the barangay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlighted, styleReady]);
+
+  // Pin for a place picked from the search. A DOM marker, so it survives a
+  // theme switch without being redrawn.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !searchedPlace) return;
+    const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
+    const marker = new maplibregl.Marker({ color: palette.mauve })
+      .setLngLat([searchedPlace.coordinates.longitude, searchedPlace.coordinates.latitude])
+      .addTo(map);
+    marker.getElement().setAttribute("aria-label", searchedPlace.name);
+    // Grow first so the move is not clamped, and leave the camera alone while
+    // a trip is being followed.
+    growIfNeeded([searchedPlace.coordinates]);
+    if (!navigating) {
+      map.flyTo({
+        center: [searchedPlace.coordinates.longitude, searchedPlace.coordinates.latitude],
+        zoom: Math.max(map.getZoom(), 17),
+      });
+    }
+    return () => marker.remove();
+    // navigating and growIfNeeded are read once, when the pin is placed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchedPlace]);
 
   // directions-panel-phases.md Phase 2.2: route can now go from a value
   // back to null (discover.tsx's setRoute(null), wired to Phase 4's panel

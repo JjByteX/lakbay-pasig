@@ -91,7 +91,7 @@ import { BASE_BOUNDS, inBounds } from "@/lib/map-style";
  */
 export default function DiscoverPage() {
   usePageTitle("Discover");
-  const { query, setQuery } = useGlobalSearchQuery();
+  const { query, setQuery, searchedPlace } = useGlobalSearchQuery();
   // Same viewport breakpoint public-shell.tsx's own mobile/desktop shell
   // branch already uses (useIsMobile). The filter markup below is one
   // shared block registered via useDiscoverFilters for both shells (the
@@ -672,6 +672,7 @@ export default function DiscoverPage() {
           resultsLoading={resultsLoading}
           resultsError={resultsError}
           barangayQuery={query}
+          searchedPlace={searchedPlace}
           onLocationFound={setUserLocation}
           route={route}
           onRouteFound={handleRouteFound}

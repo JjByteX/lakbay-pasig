@@ -69,9 +69,19 @@ import logo from "@/assets/lakbay-pasig-logo.svg";
 // removing it), so this is a full replacement, not an addition alongside
 // the old mechanism, per constraints.md's No Silent Overrides rule --
 // flagged here rather than left as silent drift.
+// A real-world place picked from the search dropdown (a street, a landmark
+// that is not a listing). Discover drops a pin there. Cleared as soon as the
+// search text stops being its name.
+export interface SearchedPlace {
+  name: string;
+  coordinates: Coordinates;
+}
+
 interface GlobalSearchContextValue {
   query: string;
   setQuery: (query: string) => void;
+  searchedPlace: SearchedPlace | null;
+  setSearchedPlace: (place: SearchedPlace | null) => void;
 }
 
 const GlobalSearchContext = createContext<GlobalSearchContextValue | undefined>(
@@ -1222,7 +1232,14 @@ export function PublicShell() {
   const [discoverFilters, setDiscoverFilters] = useState<ReactNode | null>(
     null,
   );
-  const contextValue = useMemo(() => ({ query, setQuery }), [query]);
+  const [searchedPlace, setSearchedPlace] = useState<SearchedPlace | null>(null);
+  useEffect(() => {
+    if (searchedPlace && query !== searchedPlace.name) setSearchedPlace(null);
+  }, [query, searchedPlace]);
+  const contextValue = useMemo(
+    () => ({ query, setQuery, searchedPlace, setSearchedPlace }),
+    [query, searchedPlace],
+  );
   const isMobile = useIsMobile();
 
   // Live location: one watchPosition subscription for the whole shell's

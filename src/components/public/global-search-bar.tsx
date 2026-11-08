@@ -10,6 +10,8 @@ import { ItemRow, ResultGroup, ResultRow } from "./search-result-list";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import { isVoiceSearchSupported, useVoiceSearch } from "@/hooks/use-voice-search";
 import { useOnline } from "@/lib/offline/status";
+import { searchPlaces as searchMapPlaces, type PlaceResult } from "@/lib/geocode";
+import { useGlobalSearchQuery } from "./public-shell";
 import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 import {
   EMPTY_SEARCH_RESULTS,
@@ -25,6 +27,11 @@ import {
 // before writing), and this is a five-line native setTimeout/clearTimeout
 // pattern, not something worth a dependency for, per ponytail's ladder.
 const DEBOUNCE_MS = 300;
+
+// The map search (Photon, a free public server) is fair use only, so it waits
+// for a longer pause than the database search and needs a few letters.
+const MAP_DEBOUNCE_MS = 700;
+const MAP_MIN_CHARS = 3;
 
 /**
  * Global search: one bar, shell-owned (rendered by public-shell.tsx on
@@ -79,6 +86,9 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   const [results, setResults] = useState<GlobalSearchResults>(EMPTY_SEARCH_RESULTS);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const { setSearchedPlace } = useGlobalSearchQuery();
+  const [mapHits, setMapHits] = useState<PlaceResult[]>([]);
+  const [mapLoading, setMapLoading] = useState(false);
 
   // Voice search sends audio to the server. Offline the mic stays, and a tap says why it is off.
   const online = useOnline();
@@ -112,6 +122,35 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
     return () => clearTimeout(timeout);
   }, [query]);
 
+  // Streets and landmarks from the map itself, for what the database does not
+  // list (a street like E. Mendoza). Online only.
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < MAP_MIN_CHARS || !online) {
+      setMapHits([]);
+      setMapLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setMapLoading(true);
+    const timeout = setTimeout(() => {
+      searchMapPlaces(trimmedQuery)
+        .then((hits) => {
+          if (!cancelled) setMapHits(hits);
+        })
+        .catch(() => {
+          if (!cancelled) setMapHits([]);
+        })
+        .finally(() => {
+          if (!cancelled) setMapLoading(false);
+        });
+    }, MAP_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [query, online]);
+
   // Close on outside click and on Escape, same two dismissal paths every
   // native browser autocomplete supports, per ux-ui-guidelines.md's
   // Familiarity principle (use the cognitive map users already have).
@@ -123,6 +162,26 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   function goTo(path: string) {
     setOpen(false);
     navigate(path);
+  }
+
+  // The query becomes the exact name, so Discover outlines the barangay.
+  function pickBarangay(name: string) {
+    setSearchedPlace(null);
+    onQueryChange(name);
+    goTo("/discover");
+  }
+
+  // A hit already shown as a listing or barangay is not repeated here.
+  const shownNames = new Set(
+    [...results.places, ...results.businesses, ...results.barangays].map((r) => r.name.trim().toLowerCase()),
+  );
+  const visibleMapHits = mapHits.filter((hit) => !hit.name || !shownNames.has(hit.name.trim().toLowerCase()));
+
+  function pickMapPlace(hit: PlaceResult) {
+    const name = hit.name ?? hit.address;
+    setSearchedPlace({ name, coordinates: hit.location });
+    onQueryChange(name);
+    goTo("/discover");
   }
 
   const trimmed = query.trim();
@@ -202,10 +261,23 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
             </p>
           )}
 
-          {!loading && !hasAnyResults(results) && (
+          {!loading && !hasAnyResults(results) && !mapLoading && visibleMapHits.length === 0 && (
             <p className="px-4 py-3 text-sm text-muted-foreground">
               No results for &quot;{trimmed}&quot;.
             </p>
+          )}
+
+          {!loading && results.barangays.length > 0 && (
+            <ResultGroup label="Barangays">
+              {results.barangays.map((barangay) => (
+                <ResultRow
+                  key={barangay.name}
+                  title={barangay.name}
+                  subtitle="Barangay"
+                  onClick={() => pickBarangay(barangay.name)}
+                />
+              ))}
+            </ResultGroup>
           )}
 
           {!loading && results.places.length > 0 && (
@@ -300,6 +372,26 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                 />
               ))}
             </ResultGroup>
+          )}
+
+          {!loading && visibleMapHits.length > 0 && (
+            <ResultGroup label="On the map">
+              {visibleMapHits.map((hit) => (
+                <ResultRow
+                  key={`${hit.location.latitude},${hit.location.longitude}`}
+                  title={hit.name ?? hit.address}
+                  subtitle={hit.name ? hit.address : null}
+                  onClick={() => pickMapPlace(hit)}
+                />
+              ))}
+            </ResultGroup>
+          )}
+
+          {!loading && mapLoading && hasAnyResults(results) && (
+            <p className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+              <SquareLoader size="xs" />
+              Looking on the map…
+            </p>
           )}
         </div>
       )}

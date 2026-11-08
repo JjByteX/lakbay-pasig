@@ -103,6 +103,14 @@ function normalizeName(text: string): string {
     .trim();
 }
 
+// Barangay names that contain the search text, in list order. Same
+// normalising as matchBarangay, so "brgy buti" and "BUTI" both find Buting.
+export function filterBarangayNames(query: string, names: readonly string[], limit: number): string[] {
+  const wanted = normalizeName(query);
+  if (wanted === "") return [];
+  return names.filter((name) => normalizeName(name).includes(wanted)).slice(0, limit);
+}
+
 export function matchBarangay(query: string, features: BarangayFeature[]): BarangayFeature | null {
   const wanted = normalizeName(query);
   if (wanted === "") return null;

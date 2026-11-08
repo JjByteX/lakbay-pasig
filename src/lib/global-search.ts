@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 import { isOnline } from "./offline/status";
 import { readEmbeddedName } from "./place-categories";
+import { BARANGAYS } from "./fiestas";
+import { filterBarangayNames } from "./barangay";
 
 // Global search, per the resolved spec: a search bar visible on every tab
 // except Profile (navigation-and-access-control.md's tab list minus
@@ -67,6 +69,13 @@ export interface SearchFiestaHit {
   date_label: string;
 }
 
+// A barangay named by the search. Not a database row: the 30 names are the
+// same list the fiesta and heatmap code already use, so this also works offline.
+export interface SearchBarangayHit {
+  kind: "barangay";
+  name: string;
+}
+
 export interface SearchItemHit {
   kind: "item";
   id: string;
@@ -84,6 +93,7 @@ export const ITEM_FETCH_LIMIT = 4;
 export const ITEM_SHOW_LIMIT = 3;
 
 export interface GlobalSearchResults {
+  barangays: SearchBarangayHit[];
   places: SearchPlaceHit[];
   businesses: SearchBusinessHit[];
   trails: SearchTrailHit[];
@@ -93,6 +103,7 @@ export interface GlobalSearchResults {
 }
 
 export const EMPTY_SEARCH_RESULTS: GlobalSearchResults = {
+  barangays: [],
   places: [],
   businesses: [],
   trails: [],
@@ -103,6 +114,7 @@ export const EMPTY_SEARCH_RESULTS: GlobalSearchResults = {
 
 export function hasAnyResults(results: GlobalSearchResults): boolean {
   return (
+    results.barangays.length > 0 ||
     results.places.length > 0 ||
     results.businesses.length > 0 ||
     results.trails.length > 0 ||
@@ -110,6 +122,10 @@ export function hasAnyResults(results: GlobalSearchResults): boolean {
     results.fiestas.length > 0 ||
     results.items.length > 0
   );
+}
+
+function searchBarangays(q: string): SearchBarangayHit[] {
+  return filterBarangayNames(q, BARANGAYS, RESULT_LIMIT).map((name) => ({ kind: "barangay" as const, name }));
 }
 
 async function searchPlaces(q: string): Promise<SearchPlaceHit[]> {
@@ -300,6 +316,7 @@ async function searchItems(q: string): Promise<SearchItemHit[]> {
 export async function searchEverything(query: string): Promise<GlobalSearchResults> {
   const q = query.trim();
   if (!q) return EMPTY_SEARCH_RESULTS;
+  const barangays = searchBarangays(q);
 
   // Offline the RPC calls below cannot run (or be stored), so the bar filters
   // the downloaded lists instead. Loaded on demand so the shell does not pull
@@ -307,9 +324,9 @@ export async function searchEverything(query: string): Promise<GlobalSearchResul
   if (!isOnline()) {
     try {
       const { searchOffline } = await import("./offline/search");
-      return await searchOffline(q);
+      return { ...(await searchOffline(q)), barangays };
     } catch {
-      return EMPTY_SEARCH_RESULTS;
+      return { ...EMPTY_SEARCH_RESULTS, barangays };
     }
   }
 
@@ -322,5 +339,5 @@ export async function searchEverything(query: string): Promise<GlobalSearchResul
     searchItems(q).catch(() => []),
   ]);
 
-  return { places, businesses, trails, events, fiestas, items };
+  return { barangays, places, businesses, trails, events, fiestas, items };
 }

@@ -65,7 +65,7 @@ function normalize(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
-export async function searchOffline(query: string): Promise<GlobalSearchResults> {
+export async function searchOffline(query: string): Promise<Omit<GlobalSearchResults, "barangays">> {
   const q = normalize(query.trim());
   const data = await load();
   const has = (name: string) => normalize(name).includes(q);
