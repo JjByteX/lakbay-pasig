@@ -16,6 +16,7 @@ import { DirectionsError, fetchRoute, type RouteGeometry } from "@/lib/direction
 import { useOnline } from "@/lib/offline/status";
 import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
+import { useDirections } from "./public-shell";
 
 // Phase 6.1 (step-5-phases.md), pulled forward because Phase 4.4 requires
 // it to exist: "the same result card component Phase 6 defines." Scoped
@@ -82,6 +83,10 @@ interface ResultCardProps {
   // directions panel for the right result, without this card knowing
   // anything about panel state or isMobile itself.
   onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
+  // With no starting point (no location, no custom From) Directions opens the
+  // panel with the destination set and asks for a start. Defaults to the
+  // shell's own action; the list passes one that also switches to the map.
+  onOpenDirections?: (result: DiscoverResult) => void;
 }
 
 /**
@@ -121,8 +126,11 @@ export function ResultCard({
   userLocation,
   distanceFrom = null,
   onRouteFound,
+  onOpenDirections,
 }: Readonly<ResultCardProps>) {
   const online = useOnline();
+  const { handleOpenDirections } = useDirections();
+  const openDirections = onOpenDirections ?? handleOpenDirections;
   const [directionsStatus, setDirectionsStatus] = useState<"idle" | "loading" | "error">("idle");
   const [directionsError, setDirectionsError] = useState<string | null>(null);
 
@@ -232,7 +240,22 @@ export function ResultCard({
                       {!online && <p className="text-right text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
                     </>
                   ) : (
-                    <p className="text-right text-xs text-muted-foreground">Turn on location to get directions</p>
+                    result.latitude != null &&
+                    result.longitude != null && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => {
+                          onOpenChange(false);
+                          openDirections(result);
+                        }}
+                      >
+                        Directions
+                        <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    )
                   )}
                 </div>
               </DialogFooter>

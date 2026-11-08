@@ -117,6 +117,62 @@ export function matchBarangay(query: string, features: BarangayFeature[]): Baran
   return features.find((f) => normalizeName(f.properties.name) === wanted) ?? null;
 }
 
+// A map search hit that is one of the barangays: its name matches a barangay
+// and its own point lies inside that barangay. The point check keeps a
+// same-named place in another city from outlining a Pasig barangay.
+export function matchBarangayHit(
+  name: string,
+  lat: number,
+  lng: number,
+  features: BarangayFeature[],
+): BarangayFeature | null {
+  const feature = matchBarangay(name, features);
+  return feature && barangayOf(lat, lng, features) === feature.properties.name ? feature : null;
+}
+
+// Where a barangay's pin goes: the area-weighted centre of its largest outer
+// ring. A long or curved barangay can put that centre outside its own edge,
+// so it falls back to the middle of the bounding box, then to the centre as is.
+export function barangayCenter(feature: BarangayFeature): { latitude: number; longitude: number } {
+  const g = feature.geometry;
+  const polygons = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+  let ring = polygons[0][0];
+  let bestArea = 0;
+  for (const poly of polygons) {
+    const area = Math.abs(ringArea(poly[0]));
+    if (area >= bestArea) {
+      bestArea = area;
+      ring = poly[0];
+    }
+  }
+  const signed = ringArea(ring);
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    cx += (ring[j][0] + ring[i][0]) * cross;
+    cy += (ring[j][1] + ring[i][1]) * cross;
+  }
+  const centroid =
+    signed === 0 ? ring[0] : [cx / (6 * signed), cy / (6 * signed)];
+  if (inFeature(centroid[0], centroid[1], feature)) return { latitude: centroid[1], longitude: centroid[0] };
+  const lngs = ring.map((p) => p[0]);
+  const lats = ring.map((p) => p[1]);
+  const middle = [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
+  return inFeature(middle[0], middle[1], feature)
+    ? { latitude: middle[1], longitude: middle[0] }
+    : { latitude: centroid[1], longitude: centroid[0] };
+}
+
+// Signed area of a ring (shoelace), in square degrees: only used for weighting.
+function ringArea(ring: Ring): number {
+  let sum = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    sum += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return sum / 2;
+}
+
 export function withBarangay<T extends { latitude: number | null; longitude: number | null }>(
   rows: T[],
   features: BarangayFeature[] | null,

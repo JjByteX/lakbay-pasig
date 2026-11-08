@@ -76,6 +76,11 @@ export interface SearchedPlace {
   name: string;
   address: string | null;
   coordinates: Coordinates;
+  // Dropped by holding on the map rather than picked from the search.
+  dropped?: boolean;
+  // The barangay this place is, by its exact name. Set only by picking it in
+  // the search; the map then outlines and dims it and frames the whole area.
+  barangay?: string;
 }
 
 interface GlobalSearchContextValue {
@@ -198,6 +203,10 @@ interface DirectionsContextValue {
   // risking the two falling out of sync.
   origin: Coordinates | null;
   handleRouteFound: (geometry: RouteGeometry, foundResult: DiscoverResult) => void;
+  // Opens the directions panel for a destination with no route yet. Used when
+  // there is no starting point (no location and no custom From): the panel
+  // asks for one, and picking it fetches the route (handleSelectFrom).
+  handleOpenDirections: (destination: DiscoverResult) => void;
   handleSelectMode: (mode: TravelMode) => Promise<void>;
   handleCancelDirections: () => void;
   // Alternative routes: swaps one of route.alternatives in as the route, the
@@ -390,6 +399,17 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     [],
   );
 
+  const handleOpenDirections = useCallback((destination: DiscoverResult) => {
+    fetchSeqRef.current++; // a fetch still in flight belongs to the old session
+    setModeLoading(false);
+    setRoute(null);
+    setDirectionsPanelResult(destination);
+    setSelectedMode("foot");
+    setRouteDuration(null);
+    setRouteDistance(null);
+    setModeErrorReason(null);
+  }, []);
+
   const handleSelectMode = useCallback(
     async (mode: TravelMode) => {
       // Phase 2.3: guard changed from !userLocation to !origin, so a
@@ -557,6 +577,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       pickingOnMap,
       origin,
       handleRouteFound,
+      handleOpenDirections,
       handleSelectMode,
       handleCancelDirections,
       handleSelectRoute,
@@ -588,6 +609,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       pickingOnMap,
       origin,
       handleRouteFound,
+      handleOpenDirections,
       handleSelectMode,
       handleCancelDirections,
       handleSelectRoute,

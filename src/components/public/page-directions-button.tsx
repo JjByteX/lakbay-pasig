@@ -20,11 +20,11 @@ import { NEEDS_CONNECTION } from "@/lib/offline/messages";
  * panel's own mode buttons take it from there.
  *
  * No coordinates on the record: nothing to route to, so no button. No
- * origin: a hint replaces the button, same as the preview does.
+ * origin: the button opens the panel, which asks for a starting point.
  */
 export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResult }>) {
   const navigate = useNavigate();
-  const { origin, handleRouteFound } = useDirections();
+  const { origin, handleRouteFound, handleOpenDirections } = useDirections();
   const online = useOnline();
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,22 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
   const destination = { latitude: result.latitude, longitude: result.longitude };
 
   if (!origin) {
-    return <p className="text-xs text-muted-foreground">Turn on location to get directions</p>;
+    // No starting point: open the panel on the map and let the person choose one.
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-2"
+        onClick={() => {
+          handleOpenDirections(result);
+          navigate("/discover");
+        }}
+      >
+        Directions
+        <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    );
   }
   const start = origin;
 

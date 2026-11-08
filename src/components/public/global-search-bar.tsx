@@ -11,6 +11,8 @@ import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-e
 import { isVoiceSearchSupported, useVoiceSearch } from "@/hooks/use-voice-search";
 import { useOnline } from "@/lib/offline/status";
 import { searchPlaces as searchMapPlaces, type PlaceResult } from "@/lib/geocode";
+import { barangayCenter, matchBarangay, matchBarangayHit } from "@/lib/barangay";
+import { useBarangayFeatures } from "@/hooks/use-barangay-features";
 import { useGlobalSearchQuery } from "./public-shell";
 import { NEEDS_CONNECTION } from "@/lib/offline/messages";
 import {
@@ -87,6 +89,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const { setSearchedPlace } = useGlobalSearchQuery();
+  const barangayFeatures = useBarangayFeatures();
   const [mapHits, setMapHits] = useState<PlaceResult[]>([]);
   const [mapLoading, setMapLoading] = useState(false);
 
@@ -164,10 +167,19 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
     navigate(path);
   }
 
-  // The query becomes the exact name, so Discover outlines the barangay.
+  // Picking a barangay pins its centre and has Discover outline and frame it.
+  // Only a pick does this, typing the name does not. If the boundaries have
+  // not loaded yet there is nothing to outline, so it is just the search text.
   function pickBarangay(name: string) {
-    setSearchedPlace(null);
-    onQueryChange(name);
+    const feature = barangayFeatures ? matchBarangay(name, barangayFeatures) : null;
+    if (feature) {
+      const exact = feature.properties.name;
+      setSearchedPlace({ name: exact, address: null, coordinates: barangayCenter(feature), barangay: exact });
+      onQueryChange(exact);
+    } else {
+      setSearchedPlace(null);
+      onQueryChange(name);
+    }
     goTo("/discover");
   }
 
@@ -179,7 +191,18 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
 
   function pickMapPlace(hit: PlaceResult) {
     const name = hit.name ?? hit.address;
-    setSearchedPlace({ name, address: hit.name ? hit.address || null : null, coordinates: hit.location });
+    // A hit that is one of the barangays gets the outline too, same as picking
+    // it from the Barangays group.
+    const feature =
+      barangayFeatures && hit.name
+        ? matchBarangayHit(hit.name, hit.location.latitude, hit.location.longitude, barangayFeatures)
+        : null;
+    setSearchedPlace({
+      name,
+      address: hit.name ? hit.address || null : null,
+      coordinates: feature ? barangayCenter(feature) : hit.location,
+      ...(feature && { barangay: feature.properties.name }),
+    });
     onQueryChange(name);
     goTo("/discover");
   }
@@ -324,7 +347,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                   <button
                     type="button"
                     onClick={() => goTo("/discover")}
-                    className="flex min-h-12 w-full items-center px-4 text-left text-sm font-semibold hover:bg-muted"
+                    className="flex min-h-12 w-full items-center px-4 text-left text-sm font-normal hover:bg-muted"
                   >
                     View all
                   </button>

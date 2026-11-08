@@ -136,6 +136,7 @@ export default function DiscoverPage() {
     // panel never sets From from a tap itself.
     handleMapPick,
     handleRouteFound,
+    handleOpenDirections,
     handleSelectMode,
     handleSelectRoute,
     handleCancelDirections,
@@ -354,7 +355,14 @@ export default function DiscoverPage() {
   const [trailDirectionsError, setTrailDirectionsError] = useState<string | null>(null);
   async function handleGetTrailDirections(stop: TrailStop) {
     if (!origin) {
-      setTrailDirectionsError("Turn on location to get directions.");
+      // No starting point: open the panel and let the person choose one.
+      const destination = trailStopAsDiscoverResult(stop);
+      if (destination.latitude == null || destination.longitude == null) {
+        setTrailDirectionsError("This stop has no location to route to yet.");
+        return;
+      }
+      setTrailDirectionsError(null);
+      handleOpenDirections(destination);
       return;
     }
     setTrailDirectionsLoading(true);
@@ -600,7 +608,7 @@ export default function DiscoverPage() {
         )}
       >
         <div className="flex flex-col gap-1">
-          <Label htmlFor="discover-price-min">Min price (₱)</Label>
+          <Label htmlFor="discover-price-min" className="font-normal">Min price (₱)</Label>
           <Input
             id="discover-price-min"
             type="number"
@@ -613,7 +621,7 @@ export default function DiscoverPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="discover-price-max">Max price (₱)</Label>
+          <Label htmlFor="discover-price-max" className="font-normal">Max price (₱)</Label>
           <Input
             id="discover-price-max"
             type="number"
@@ -672,8 +680,20 @@ export default function DiscoverPage() {
           onCancelPickOnMap={handleCancelPickOnMap}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
-          barangayQuery={query}
           searchedPlace={searchedPlace}
+          onDropPin={(coordinates) => {
+            setSearchedPlace({
+              name: "Dropped pin",
+              address: `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`,
+              coordinates,
+              dropped: true,
+            });
+            setQuery("Dropped pin");
+          }}
+          onClearPin={() => {
+            setQuery("");
+            setSearchedPlace(null);
+          }}
           onLocationFound={setUserLocation}
           route={route}
           onRouteFound={handleRouteFound}
@@ -731,6 +751,10 @@ export default function DiscoverPage() {
             handleRouteFound(geometry, foundResult);
             setViewChoice("map");
           }}
+          onOpenDirections={(foundResult) => {
+            handleOpenDirections(foundResult);
+            setViewChoice("map");
+          }}
         />
       )}
       {/* Navigation view: banner and bottom bar. Rendered whenever navigating,
@@ -739,7 +763,7 @@ export default function DiscoverPage() {
       {navigating && <NavigationView />}
       {/* A street or landmark picked from the search: name, Directions, and a
           way to clear it. Steps aside while a route is open. */}
-      {view === "map" && searchedPlace && !route && !navigating && (
+      {view === "map" && searchedPlace && !route && !navigating && !directionsPanelResult && (
         <SearchedPlaceCard
           place={searchedPlace}
           userLocation={userLocation}

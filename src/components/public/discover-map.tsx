@@ -29,6 +29,7 @@ import { fetchActiveCategories as fetchActiveBusinessCategories, type BusinessCa
 import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
 import { categoryColor } from "@/lib/category-colors";
 import { cn } from "@/lib/utils";
+import { haptic } from "@/lib/motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -405,16 +406,19 @@ const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
 const FOLLOW_LOOKAHEAD_PX = 96;
 const FOLLOW_EASE_MS = 900;
 
-// Barangay highlight: a dashed outline round the barangay a search names, and
-// a light veil over everything outside it.
+// Barangay highlight: a dashed outline round the barangay picked in the search,
+// and a veil over everything outside it.
 const BARANGAY_SOURCE_ID = "barangay-highlight";
 const BARANGAY_MASK_SOURCE_ID = "barangay-highlight-mask";
 const BARANGAY_MASK_LAYER_ID = "barangay-highlight-mask-fill";
 const BARANGAY_LINE_LAYER_ID = "barangay-highlight-line";
 // The veil has to darken in both themes. The theme's base color is near white
 // in light mode, so filling with it brightened the outside instead. Light uses
-// the dark text token, dark uses the crust token (casing), both lightly.
-const BARANGAY_VEIL_OPACITY_LIGHT = 0.12;
+// a fixed deep navy at a stronger opacity (the old 12% of the text token was
+// too faint on a near-white map to read as a dim); dark uses the crust token
+// (casing) lightly.
+const BARANGAY_VEIL_COLOR_LIGHT = "#0b1226";
+const BARANGAY_VEIL_OPACITY_LIGHT = 0.3;
 const BARANGAY_VEIL_OPACITY_DARK = 0.35;
 
 const ROUTE_SOURCE_ID = "directions-route";
@@ -542,10 +546,14 @@ interface DiscoverMapProps {
   onMapPick: (coordinates: Coordinates, name?: string) => void;
   resultsLoading: boolean;
   resultsError: string | null;
-  // The search text. When it names a barangay, that barangay is outlined.
-  barangayQuery?: string;
-  // A street or landmark picked from the search dropdown: gets a pin.
+  // A street, landmark or barangay picked from the search dropdown: gets a
+  // pin, and a barangay is outlined and framed too (searchedPlace.barangay).
   searchedPlace?: SearchedPlace | null;
+  // A press-and-hold (touch) or right-click (mouse) on empty map drops a pin
+  // there, like Google Maps. The shell turns it into a searched place.
+  onDropPin?: (coordinates: Coordinates) => void;
+  // A tap on empty map while a dropped pin is showing clears it.
+  onClearPin?: () => void;
   // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
   // control update discover.tsx's own userLocation state (same setter its
   // one-shot geolocation effect already uses), so this file never owns a
@@ -1358,8 +1366,9 @@ export function DiscoverMap({
   onMapPick,
   resultsLoading,
   resultsError,
-  barangayQuery = "",
   searchedPlace = null,
+  onDropPin,
+  onClearPin,
   onLocationFound,
   route,
   onRouteFound,
@@ -2059,6 +2068,100 @@ export function DiscoverMap({
     };
   }, [pickingOnMap, onCancelPickOnMap]);
 
+  // Drop a pin by holding. Touch: a finger held still for HOLD_MS. Mouse: a
+  // right-click (the browser's contextmenu event, which Android also fires on
+  // a long press, so the two are de-duplicated). Off while picking a From
+  // point (a tap already means something there) and while navigating. A hold
+  // that starts on a place marker is left to the marker.
+  const onDropPinRef = useRef(onDropPin);
+  const onClearPinRef = useRef(onClearPin);
+  // When the last pin was dropped, so the click that can trail a hold never
+  // counts as a tap that clears it.
+  const lastPinDropRef = useRef(0);
+  useEffect(() => {
+    onDropPinRef.current = onDropPin;
+    onClearPinRef.current = onClearPin;
+  }, [onDropPin, onClearPin]);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || pickingOnMap || navigating) return;
+    const HOLD_MS = 500;
+    const MOVE_TOLERANCE_PX = 10;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let startPoint: { x: number; y: number } | null = null;
+    const onMarker = (e: Event) => {
+      const target = e.target as Node | null;
+      return !!target && markersRef.current.some((m) => m.getElement().contains(target));
+    };
+    const drop = (lngLat: maplibregl.LngLat) => {
+      lastPinDropRef.current = Date.now();
+      haptic();
+      onDropPinRef.current?.({ latitude: lngLat.lat, longitude: lngLat.lng });
+    };
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      startPoint = null;
+    };
+    const handleTouchStart = (e: maplibregl.MapTouchEvent) => {
+      cancel();
+      if (e.originalEvent.touches.length !== 1 || onMarker(e.originalEvent)) return;
+      startPoint = { x: e.point.x, y: e.point.y };
+      const lngLat = e.lngLat;
+      timer = setTimeout(() => {
+        timer = null;
+        drop(lngLat);
+      }, HOLD_MS);
+    };
+    const handleTouchMove = (e: maplibregl.MapTouchEvent) => {
+      if (!timer || !startPoint) return;
+      if (Math.hypot(e.point.x - startPoint.x, e.point.y - startPoint.y) > MOVE_TOLERANCE_PX) cancel();
+    };
+    const handleContextMenu = (e: maplibregl.MapMouseEvent) => {
+      e.originalEvent.preventDefault();
+      if (onMarker(e.originalEvent) || Date.now() - lastPinDropRef.current < 800) return;
+      cancel();
+      drop(e.lngLat);
+    };
+    map.on("touchstart", handleTouchStart);
+    map.on("touchmove", handleTouchMove);
+    map.on("touchend", cancel);
+    map.on("touchcancel", cancel);
+    map.on("movestart", cancel);
+    map.on("zoomstart", cancel);
+    map.on("contextmenu", handleContextMenu);
+    return () => {
+      cancel();
+      map.off("touchstart", handleTouchStart);
+      map.off("touchmove", handleTouchMove);
+      map.off("touchend", cancel);
+      map.off("touchcancel", cancel);
+      map.off("movestart", cancel);
+      map.off("zoomstart", cancel);
+      map.off("contextmenu", handleContextMenu);
+    };
+  }, [mapInstance, pickingOnMap, navigating]);
+
+  // Tap empty map to clear a dropped pin, like Google Maps. Only for a pin
+  // dropped by holding (a place picked from the search keeps its X), and only
+  // while nothing else owns the tap: no From pick, no route, no trip. A tap on
+  // any marker is left to that marker.
+  const droppedPinShowing = !!searchedPlace?.dropped;
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !droppedPinShowing || pickingOnMap || navigating || route || directionsPanelResult) return;
+    const handleClear = (e: maplibregl.MapMouseEvent) => {
+      if (Date.now() - lastPinDropRef.current < 800) return;
+      const target = e.originalEvent.target as Element | null;
+      if (target?.closest?.(".maplibregl-marker")) return;
+      onClearPinRef.current?.();
+    };
+    map.on("click", handleClear);
+    return () => {
+      map.off("click", handleClear);
+    };
+  }, [mapInstance, droppedPinShowing, pickingOnMap, navigating, route, directionsPanelResult]);
+
   // locate-me-and-directions-phases.md Phase 3.5-3.7: route line, drawn
   // imperatively on demand rather than kept in buildStyle (buildStyle
   // rebuilds the whole style on every dark/light toggle via the
@@ -2245,9 +2348,10 @@ export function DiscoverMap({
   // style is ready, and redrawn after a theme switch (setStyle drops it, then
   // styleReady flips back). Sits under the route layers so a route stays on top.
   const barangayFeatures = useBarangayFeatures();
+  const highlightedName = searchedPlace?.barangay;
   const highlighted = useMemo(
-    () => (barangayFeatures ? matchBarangay(barangayQuery, barangayFeatures) : null),
-    [barangayFeatures, barangayQuery],
+    () => (barangayFeatures && highlightedName ? matchBarangay(highlightedName, barangayFeatures) : null),
+    [barangayFeatures, highlightedName],
   );
   useEffect(() => {
     const map = mapRef.current;
@@ -2288,7 +2392,7 @@ export function DiscoverMap({
         type: "fill",
         source: BARANGAY_MASK_SOURCE_ID,
         paint: {
-          "fill-color": isDarkTheme ? palette.casing : palette.text,
+          "fill-color": isDarkTheme ? palette.casing : BARANGAY_VEIL_COLOR_LIGHT,
           "fill-opacity": isDarkTheme ? BARANGAY_VEIL_OPACITY_DARK : BARANGAY_VEIL_OPACITY_LIGHT,
         },
       },
@@ -2336,7 +2440,8 @@ export function DiscoverMap({
     // Grow first so the move is not clamped, and leave the camera alone while
     // a trip is being followed.
     growIfNeeded([searchedPlace.coordinates]);
-    if (!navigating) {
+    // A barangay is framed whole by the outline effect above, so no zoom-in here.
+    if (!navigating && !searchedPlace.barangay) {
       map.flyTo({
         center: [searchedPlace.coordinates.longitude, searchedPlace.coordinates.latitude],
         zoom: Math.max(map.getZoom(), 17),

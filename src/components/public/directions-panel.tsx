@@ -200,8 +200,11 @@ function DirectionsStatusRow({
   errorReason,
   durationSeconds,
   distanceMeters,
+  noOrigin,
 }: Readonly<
-  Pick<DirectionsPanelProps, "isLoading" | "errorReason" | "durationSeconds" | "distanceMeters">
+  Pick<DirectionsPanelProps, "isLoading" | "errorReason" | "durationSeconds" | "distanceMeters"> & {
+    noOrigin: boolean;
+  }
 >) {
   if (isLoading) {
     return <p className="mt-4 text-sm text-muted-foreground">Getting directions…</p>;
@@ -209,6 +212,9 @@ function DirectionsStatusRow({
   if (errorReason) {
     return <p className="mt-4 text-sm text-destructive">{ERROR_MESSAGES[errorReason]}</p>;
   }
+  // No starting point yet: the From row is already the prompt, so this row
+  // stays empty instead of saying it twice.
+  if (noOrigin) return null;
   // Phase 1.4: time first, then distance, joined by a middle dot -- "12
   // min · 2.4 km" -- per the plan. When either value is null (should only
   // happen transiently, before the first fetch resolves), render whichever
@@ -281,6 +287,7 @@ function DirectionsFromRow({
   fromLabel,
   pickingOnMap,
   editingFrom,
+  noOrigin,
   onStartEditing,
   onStopEditing,
   onSelectFrom,
@@ -291,6 +298,8 @@ function DirectionsFromRow({
   fromLabel: string | null;
   pickingOnMap: boolean;
   editingFrom: boolean;
+  // No custom From and no live location: nothing to start from yet.
+  noOrigin: boolean;
   onStartEditing: () => void;
   onStopEditing: () => void;
   onSelectFrom: (from: CustomFrom) => void;
@@ -353,7 +362,7 @@ function DirectionsFromRow({
       // what the control does. Announces both: "Starting point: Pasig
       // City Museum. Change starting point". Also carries the full label
       // for a screen reader when the visible text is truncated.
-      aria-label={`Starting point: ${fromLabel ?? "Your location"}. Change starting point`}
+      aria-label={`Starting point: ${fromLabel ?? (noOrigin ? "not set" : "Your location")}. Change starting point`}
       onClick={onStartEditing}
       className="flex min-h-10 w-full items-center gap-2 rounded-lg text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
@@ -362,7 +371,7 @@ function DirectionsFromRow({
           of wrapping and growing the panel. min-w-0 is what lets a flex
           child actually shrink below its content width. */}
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-        {fromLabel ?? "Your location"}
+        {fromLabel ?? (noOrigin ? "Choose starting point" : "Your location")}
       </span>
     </button>
   );
@@ -409,7 +418,10 @@ function DirectionsPanelContent({
   // to survive a tab switch: the field closes on its own (outside tap,
   // Escape, a pick), so losing it on unmount costs nothing. The custom
   // From itself lives in the shell, not here.
-  const [editingFrom, setEditingFrom] = useState(false);
+  // With no starting point the field opens on its own: that is the one thing
+  // this panel needs from the person.
+  const noOrigin = startBlockedReason === "no-location";
+  const [editingFrom, setEditingFrom] = useState(noOrigin);
 
   return (
     <>
@@ -440,7 +452,8 @@ function DirectionsPanelContent({
             // loading stays enabled-looking but selected is unaffected
             // until the fetch resolves, since it's already the active
             // selection, not a new one being requested.
-            const disabled = isLoading && !selected;
+            // No starting point: a mode tap would have nothing to route from.
+            const disabled = (isLoading || noOrigin) && !selected;
             return (
               <button
                 key={mode}
@@ -512,6 +525,7 @@ function DirectionsPanelContent({
           fromLabel={fromLabel}
           pickingOnMap={pickingOnMap}
           editingFrom={editingFrom}
+          noOrigin={noOrigin}
           onStartEditing={() => setEditingFrom(true)}
           onStopEditing={() => setEditingFrom(false)}
           onSelectFrom={onSelectFrom}
@@ -546,9 +560,10 @@ function DirectionsPanelContent({
           errorReason={errorReason}
           durationSeconds={durationSeconds}
           distanceMeters={distanceMeters}
+          noOrigin={noOrigin}
         />
       )}
-      {!isLoading && !errorReason && <TrafficNote mode={selectedMode} />}
+      {!isLoading && !errorReason && !noOrigin && <TrafficNote mode={selectedMode} />}
 
       {/* Turn-by-turn phase 1: only once a route has actually loaded --
           same mutual-exclusion the status row above relies on (isLoading
