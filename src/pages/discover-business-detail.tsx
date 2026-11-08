@@ -6,6 +6,7 @@ import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { VerificationBadge } from "@/components/public/result-card";
 import { PageDirectionsButton } from "@/components/public/page-directions-button";
+import { ShareButton } from "@/components/public/share-button";
 import { useUserLocation } from "@/components/public/public-shell";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -304,6 +305,7 @@ export default function DiscoverBusinessDetailPage() {
                 coverPhotoUrl: photos[0] ?? null,
               }}
             />
+            <ShareButton kind="business" id={business.id} name={business.name} />
           </div>
 
           {/* Map hover/full-details photos phase: same placement as the

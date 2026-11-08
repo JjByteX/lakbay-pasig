@@ -45,6 +45,9 @@ export interface DiscoverPlace {
   // null" convention every other optional field on this type already
   // uses (description, latitude/longitude).
   coverPhotoUrl: string | null;
+  // Stored operating hours (hours.ts reads them), for the Open now filter.
+  // Optional: only the Discover query fills it, other builders omit it.
+  hours?: string | null;
 }
 
 export interface DiscoverBusiness {
@@ -70,6 +73,8 @@ export interface DiscoverBusiness {
   // DiscoverPlace.coverPhotoUrl above, sourced from business_photos
   // instead of place_photos via the same fetchCoverPhotoUrls helper.
   coverPhotoUrl: string | null;
+  // Stored opening hours, same purpose as DiscoverPlace.hours.
+  hours?: string | null;
 }
 
 export type DiscoverResult = DiscoverPlace | DiscoverBusiness;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
+import { Clock, List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
@@ -174,6 +174,9 @@ export default function DiscoverPage() {
   // case), not "match nothing" -- widened from the original single
   // `category: string | null` per direct request.
   const [categories, setCategories] = useState<string[]>([]);
+  // Open now: keeps only places and businesses whose hours say open on
+  // Manila's clock. Off by default, so nothing is hidden until asked.
+  const [openNow, setOpenNow] = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
@@ -254,8 +257,8 @@ export default function DiscoverPage() {
   }, [minPrice, maxPrice]);
 
   const filtered = useMemo(
-    () => filterDiscoverResults(results, query, categories, priceRange, facilities),
-    [results, query, categories, priceRange, facilities],
+    () => filterDiscoverResults(results, query, categories, priceRange, facilities, openNow),
+    [results, query, categories, priceRange, facilities, openNow],
   );
 
   // Trail mode: "Resume trail" on a trail page lands here as /discover?trail=<id>.
@@ -585,6 +588,26 @@ export default function DiscoverPage() {
             );
           })}
         </div>
+      </div>
+
+      {/* Open now: one toggle chip, same Button convention as the category
+                and facility chips. Uses each result's stored hours; a result
+                with no hours is left out while this is on, since it cannot be
+                confirmed open. */}
+      <div className={cn("flex flex-col gap-2", isMobile ? "mx-auto w-full max-w-md" : "w-full")}>
+        <Button
+          type="button"
+          variant={openNow ? "default" : "outline"}
+          aria-pressed={openNow}
+          className="h-11 justify-start gap-2 self-start rounded-full px-4 font-normal"
+          onClick={() => setOpenNow((prev) => !prev)}
+        >
+          <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Open now
+        </Button>
+        {openNow && (
+          <p className="px-1 text-xs text-muted-foreground">Places with no listed hours are hidden.</p>
+        )}
       </div>
 
       {/* Phase 7.1: price range filter, businesses only per step-5-plan.md
