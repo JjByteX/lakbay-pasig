@@ -671,6 +671,7 @@ export default function DiscoverPage() {
           onCancelPickOnMap={handleCancelPickOnMap}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
+          barangayQuery={query}
           onLocationFound={setUserLocation}
           route={route}
           onRouteFound={handleRouteFound}

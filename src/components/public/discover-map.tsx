@@ -37,6 +37,8 @@ import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/dir
 import { ResultCard, VerificationBadge } from "./result-card";
 import { DirectionsPanel } from "./directions-panel";
 import { useDirections, type CustomFrom } from "./public-shell";
+import { useBarangayFeatures } from "@/hooks/use-barangay-features";
+import { matchBarangay } from "@/lib/barangay";
 
 // Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
 // raster tiles with a `mix-blend-mode: color` div. Positron's raster tiles
@@ -403,6 +405,14 @@ const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
 const FOLLOW_LOOKAHEAD_PX = 96;
 const FOLLOW_EASE_MS = 900;
 
+// Barangay highlight: a dashed outline round the barangay a search names, and
+// a light veil over everything outside it.
+const BARANGAY_SOURCE_ID = "barangay-highlight";
+const BARANGAY_MASK_SOURCE_ID = "barangay-highlight-mask";
+const BARANGAY_MASK_LAYER_ID = "barangay-highlight-mask-fill";
+const BARANGAY_LINE_LAYER_ID = "barangay-highlight-line";
+const BARANGAY_VEIL_OPACITY = 0.35;
+
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
 const ROUTE_CASING_LAYER_ID = "directions-route-casing";
@@ -527,6 +537,8 @@ interface DiscoverMapProps {
   onMapPick: (coordinates: Coordinates, name?: string) => void;
   resultsLoading: boolean;
   resultsError: string | null;
+  // The search text. When it names a barangay, that barangay is outlined.
+  barangayQuery?: string;
   // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
   // control update discover.tsx's own userLocation state (same setter its
   // one-shot geolocation effect already uses), so this file never owns a
@@ -1339,6 +1351,7 @@ export function DiscoverMap({
   onMapPick,
   resultsLoading,
   resultsError,
+  barangayQuery = "",
   onLocationFound,
   route,
   onRouteFound,
@@ -2219,6 +2232,84 @@ export function DiscoverMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, styleReady]);
+
+  // Barangay highlight. Same imperative pattern as the route: drawn once the
+  // style is ready, and redrawn after a theme switch (setStyle drops it, then
+  // styleReady flips back). Sits under the route layers so a route stays on top.
+  const barangayFeatures = useBarangayFeatures();
+  const highlighted = useMemo(
+    () => (barangayFeatures ? matchBarangay(barangayQuery, barangayFeatures) : null),
+    [barangayFeatures, barangayQuery],
+  );
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady || !map.isStyleLoaded()) return;
+
+    for (const layerId of [BARANGAY_LINE_LAYER_ID, BARANGAY_MASK_LAYER_ID]) {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+    }
+    for (const sourceId of [BARANGAY_SOURCE_ID, BARANGAY_MASK_SOURCE_ID]) {
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+    if (!highlighted) return;
+
+    const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
+    const polygons =
+      highlighted.geometry.type === "Polygon" ? [highlighted.geometry.coordinates] : highlighted.geometry.coordinates;
+    // A box round the world with the barangay's outer ring(s) cut out of it.
+    const world = [
+      [-180, -85],
+      [180, -85],
+      [180, 85],
+      [-180, 85],
+      [-180, -85],
+    ];
+    const beforeId = map.getLayer(ALT_CASING_LAYER_ID) ? ALT_CASING_LAYER_ID : undefined;
+    map.addSource(BARANGAY_MASK_SOURCE_ID, {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Polygon", coordinates: [world, ...polygons.map((poly) => poly[0])] },
+      },
+    });
+    map.addLayer(
+      {
+        id: BARANGAY_MASK_LAYER_ID,
+        type: "fill",
+        source: BARANGAY_MASK_SOURCE_ID,
+        paint: { "fill-color": palette.base, "fill-opacity": BARANGAY_VEIL_OPACITY },
+      },
+      beforeId,
+    );
+    map.addSource(BARANGAY_SOURCE_ID, {
+      type: "geojson",
+      data: { type: "Feature", properties: {}, geometry: highlighted.geometry },
+    });
+    map.addLayer(
+      {
+        id: BARANGAY_LINE_LAYER_ID,
+        type: "line",
+        source: BARANGAY_SOURCE_ID,
+        layout: { "line-join": "round" },
+        paint: { "line-color": palette.mauve, "line-width": 2, "line-dasharray": [2, 2] },
+      },
+      beforeId,
+    );
+
+    // Frame it, unless a route or a trip already owns the camera.
+    if (!route && !navigating) {
+      const points = polygons.flatMap((poly) => poly[0]);
+      const bounds = points.reduce(
+        (b, coord) => b.extend(coord as [number, number]),
+        new maplibregl.LngLatBounds(points[0] as [number, number], points[0] as [number, number]),
+      );
+      map.fitBounds(bounds, { padding: 48, duration: 600 });
+    }
+    // route and navigating are read only to decide whether to move the camera;
+    // a route change alone must not re-frame the barangay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlighted, styleReady]);
 
   // directions-panel-phases.md Phase 2.2: route can now go from a value
   // back to null (discover.tsx's setRoute(null), wired to Phase 4's panel

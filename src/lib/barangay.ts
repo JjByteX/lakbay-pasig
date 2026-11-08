@@ -90,6 +90,25 @@ export const OUTSIDE_LABEL = "Outside Pasig";
 // Adds each row's barangay for a table, worked out from its pin. It is ""
 // until the boundaries have loaded, NO_PIN_LABEL when the row has no pin, and
 // OUTSIDE_LABEL when the pin is in none of the 30 barangays.
+// The barangay a search text names, or null. Matches the whole text (not a
+// part of it) so typing "san" does not light up San Jose. Accepts a leading
+// "Barangay", "Brgy" or "Brgy." and ignores case, accents and extra spaces.
+function normalizeName(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/^(barangay|brgy\.?)\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function matchBarangay(query: string, features: BarangayFeature[]): BarangayFeature | null {
+  const wanted = normalizeName(query);
+  if (wanted === "") return null;
+  return features.find((f) => normalizeName(f.properties.name) === wanted) ?? null;
+}
+
 export function withBarangay<T extends { latitude: number | null; longitude: number | null }>(
   rows: T[],
   features: BarangayFeature[] | null,
