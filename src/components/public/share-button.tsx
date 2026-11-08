@@ -73,10 +73,11 @@ export function ShareButton({ kind, id, name }: Readonly<ShareButtonProps>) {
         size="sm"
         className="gap-2"
         disabled={pending}
+        loading={pending}
         onClick={handleShare}
       >
-        <ShareNetwork weight="bold" className="h-4 w-4" aria-hidden="true" />
-        Share
+        {!pending && <ShareNetwork weight="bold" className="h-4 w-4" aria-hidden="true" />}
+        {pending ? "Sharing…" : "Share"}
       </Button>
       <p className="text-xs text-muted-foreground" aria-live="polite">
         {message}
