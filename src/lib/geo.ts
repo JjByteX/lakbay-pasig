@@ -27,6 +27,163 @@ export function distanceKm(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+// Off-route detection phase 1: the minimum great-circle distance (km) from
+// `point` to any segment of `line`, a polyline given as [longitude,
+// latitude] pairs in GeoJSON order -- the same shape RouteGeometry.
+// coordinates already uses (directions.ts), so a route's own geometry can
+// be passed here with no conversion.
+//
+// Projects each segment onto a local flat-plane approximation (equirect-
+// angular: longitude scaled by cos(latitude) to correct for meridians
+// converging toward the poles) rather than true great-circle segment
+// math, which is the same tier of simplification distanceKm's own
+// haversine formula already accepts for this codebase's distances (a
+// city's worth of road, not a transcontinental one) -- correct to a few
+// meters at Pasig's latitude and scale, not perfectly spherical. Returns
+// the distance from the point to the nearest point *on* the nearest
+// segment (clamped to that segment's own endpoints), not just to the
+// nearest vertex, so a long straight stretch between two sparse polyline
+// points doesn't under-detect someone who has drifted sideways off it
+// mid-segment.
+export function distanceToPolylineKm(
+  point: LatLng,
+  line: readonly (readonly [number, number])[],
+): number {
+  if (line.length === 0) return Infinity;
+  if (line.length === 1) {
+    return distanceKm(point, { longitude: line[0][0], latitude: line[0][1] });
+  }
+
+  // Local scale: 1 degree of latitude is ~111.32 km everywhere; 1 degree
+  // of longitude shrinks by cos(latitude) moving away from the equator.
+  // Using the point's own latitude as the reference for this local patch,
+  // same approach boundsAround above already takes for the same reason.
+  const kmPerDegLat = 111.32;
+  const kmPerDegLon = kmPerDegLat * Math.max(Math.cos((point.latitude * Math.PI) / 180), 0.01);
+
+  const toLocalKm = (lon: number, lat: number) => ({
+    x: (lon - point.longitude) * kmPerDegLon,
+    y: (lat - point.latitude) * kmPerDegLat,
+  });
+
+  const p = toLocalKm(point.longitude, point.latitude); // always {x:0, y:0}, kept explicit for clarity over the formula below
+
+  let minDistanceKm = Infinity;
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = toLocalKm(line[i][0], line[i][1]);
+    const b = toLocalKm(line[i + 1][0], line[i + 1][1]);
+    const segmentDx = b.x - a.x;
+    const segmentDy = b.y - a.y;
+    const segmentLengthSquared = segmentDx * segmentDx + segmentDy * segmentDy;
+
+    // Degenerate segment (two identical consecutive points, which OSRM's
+    // own geometry can produce at a sharp maneuver): falls back to the
+    // distance to that single point rather than dividing by zero below.
+    let t = 0;
+    if (segmentLengthSquared > 0) {
+      t = ((p.x - a.x) * segmentDx + (p.y - a.y) * segmentDy) / segmentLengthSquared;
+      t = Math.max(0, Math.min(1, t)); // clamp onto the segment, not its infinite extension
+    }
+
+    const closestX = a.x + t * segmentDx;
+    const closestY = a.y + t * segmentDy;
+    const dx = p.x - closestX;
+    const dy = p.y - closestY;
+    const segmentDistanceKm = Math.sqrt(dx * dx + dy * dy);
+    if (segmentDistanceKm < minDistanceKm) minDistanceKm = segmentDistanceKm;
+  }
+  return minDistanceKm;
+}
+
+export interface PolylineSnap {
+  // The nearest point on the line, as a position.
+  point: LatLng;
+  // How far `point` is from the input position, in km.
+  offsetKm: number;
+  // Index of the line segment the point sits on (segment i runs from
+  // line[i] to line[i + 1]).
+  segmentIndex: number;
+  // Distance along the line from its start to `point`, in km.
+  alongKm: number;
+  // Length of the whole line, in km.
+  totalKm: number;
+}
+
+// Navigation phase 1: the nearest point on a polyline and how far along it
+// that point is. Same local flat-plane projection as distanceToPolylineKm,
+// with the segment index and the running distance kept so a caller can
+// tell where on the route someone is, not only how far off it they are.
+// `line` is [longitude, latitude] pairs, the shape RouteGeometry.coordinates
+// already has. Returns null for a line with fewer than two points.
+export function snapToPolyline(
+  position: LatLng,
+  line: readonly (readonly [number, number])[],
+): PolylineSnap | null {
+  if (line.length < 2) return null;
+
+  const kmPerDegLat = 111.32;
+  const kmPerDegLon = kmPerDegLat * Math.max(Math.cos((position.latitude * Math.PI) / 180), 0.01);
+  const toLocalKm = (lon: number, lat: number) => ({
+    x: (lon - position.longitude) * kmPerDegLon,
+    y: (lat - position.latitude) * kmPerDegLat,
+  });
+
+  let bestOffsetKm = Infinity;
+  let bestSegment = 0;
+  let bestT = 0;
+  let bestAlongKm = 0;
+  let runningKm = 0;
+
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = toLocalKm(line[i][0], line[i][1]);
+    const b = toLocalKm(line[i + 1][0], line[i + 1][1]);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const segmentKm = Math.sqrt(lengthSquared);
+
+    // The position is the origin of this local plane, so the projection of
+    // the origin onto the segment is (-a . d) / |d|^2.
+    let t = 0;
+    if (lengthSquared > 0) {
+      t = (-a.x * dx - a.y * dy) / lengthSquared;
+      t = Math.max(0, Math.min(1, t));
+    }
+    const offsetKm = Math.hypot(a.x + t * dx, a.y + t * dy);
+    if (offsetKm < bestOffsetKm) {
+      bestOffsetKm = offsetKm;
+      bestSegment = i;
+      bestT = t;
+      bestAlongKm = runningKm + t * segmentKm;
+    }
+    runningKm += segmentKm;
+  }
+
+  const start = line[bestSegment];
+  const end = line[bestSegment + 1];
+  return {
+    point: {
+      longitude: start[0] + bestT * (end[0] - start[0]),
+      latitude: start[1] + bestT * (end[1] - start[1]),
+    },
+    offsetKm: bestOffsetKm,
+    segmentIndex: bestSegment,
+    alongKm: bestAlongKm,
+    totalKm: runningKm,
+  };
+}
+
+// Navigation phase 1: compass bearing from `from` to `to`, in degrees from
+// north, clockwise, 0 to 360.
+export function bearingDegrees(from: LatLng, to: LatLng): number {
+  const lat1 = (from.latitude * Math.PI) / 180;
+  const lat2 = (to.latitude * Math.PI) / 180;
+  const dLon = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 // [west, south, east, north], the same order as PASIG_BOUNDS in map-style.ts.
 export type BoundingBox = readonly [west: number, south: number, east: number, north: number];
 

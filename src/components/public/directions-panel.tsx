@@ -1,10 +1,20 @@
 import { useState } from "react";
-import { Car, Bicycle, Footprints, MapPin, X } from "@phosphor-icons/react";
+import { Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { formatDistance, type DirectionsErrorReason, type TravelMode } from "@/lib/directions";
+import {
+  formatDistance,
+  viaName,
+  type DirectionsErrorReason,
+  type RouteGeometry,
+  type RouteStep,
+  type TravelMode,
+} from "@/lib/directions";
+import { formatStepInstruction } from "@/lib/osrm-instructions";
 import type { DiscoverResult } from "@/lib/discover-types";
 import type { CustomFrom } from "@/components/public/public-shell";
+import { Button } from "@/components/ui/button";
 import { FromSearch } from "./from-search";
+import { stepIcon } from "./step-icon";
 
 // directions-panel-phases.md Phase 3: static shell only, no fetch, no
 // open/close wiring, no mode switching -- confirms the layout fits before
@@ -33,7 +43,7 @@ const MODES: { mode: TravelMode; label: string; icon: typeof Car }[] = [
 // Inventory Before Suggesting rule) -- the one other duration field in
 // the app, routes.estimated_duration, is a free-text staff-entered
 // string, not a seconds value, so there's nothing to share this with.
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   const totalMinutes = Math.round(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -51,7 +61,7 @@ function formatDuration(seconds: number): string {
 // off of once discover.tsx has caught it and narrowed to a reason (see
 // discover.tsx's handleSelectMode), so the strings are declared here
 // directly rather than reconstructing an Error just to read `.message`.
-const ERROR_MESSAGES: Record<DirectionsErrorReason, string> = {
+export const ERROR_MESSAGES: Record<DirectionsErrorReason, string> = {
   network: "Couldn't reach the routing service, try again.",
   "rate-limited": "Too many requests right now, wait a moment and try again.",
   "no-route": "No route found to this location.",
@@ -71,6 +81,21 @@ interface DirectionsPanelProps {
   // for the currently selected mode, same lifecycle as durationSeconds
   // above -- null under the same conditions, set and cleared together.
   distanceMeters: number | null;
+  // Turn-by-turn phase 1: the first leg's steps (RouteGeometry.legs?.[0]?.
+  // steps, directions.ts) for the currently selected mode, same lifecycle
+  // as durationSeconds/distanceMeters above. Only the first leg: every
+  // existing caller of fetchRoute passes no `via` points, so a route here
+  // only ever has one leg; `via`-bearing callers (the itinerary generator)
+  // don't render through this panel. Null/undefined (absent) both mean
+  // "nothing to show" -- the panel renders the duration/distance row only,
+  // same as before this phase, rather than an empty list.
+  steps: RouteStep[] | null | undefined;
+  // Alternative routes: the selected route, whose `alternatives` (directions.ts)
+  // are the other options. With none, the panel shows the plain time and
+  // distance row as before. onSelectRoute swaps one in (public-shell.tsx's
+  // handleSelectRoute), nothing is fetched.
+  route: RouteGeometry | null;
+  onSelectRoute: (alternative: RouteGeometry) => void;
   // Phase 6.1: true while a mode tap's fetchRoute is in flight
   // (discover.tsx's modeLoading, already tracked since 5.3's single-
   // flight guard -- reused here rather than a second loading flag).
@@ -102,6 +127,22 @@ interface DirectionsPanelProps {
   // whole Directions session -- Phase 5.3 asks for two clearly labeled
   // controls so the two are never confused.
   onCancelPickOnMap: () => void;
+  // Voice guidance phase 1: mirrors public-shell.tsx's own
+  // voiceMuted/setVoiceMuted/voiceSupported (useVoiceGuidance,
+  // use-voice-guidance.ts) one for one. voiceSupported false hides the
+  // button entirely (see its use below) rather than showing a control
+  // that silently does nothing on a browser with no speechSynthesis.
+  voiceMuted: boolean;
+  onToggleVoiceMuted: () => void;
+  voiceSupported: boolean;
+  // Navigation: Start sits at the bottom of the panel. While navigating the
+  // panel is not shown at all (the navigation view replaces it).
+  navigating: boolean;
+  canStartNavigation: boolean;
+  // Why Start is unavailable, when the person can fix it. Null when Start is
+  // available or is only waiting on a route to load.
+  startBlockedReason: "no-location" | "custom-from" | null;
+  onStartNavigation: () => void;
   // desktop-directions-panel-phases.md Phase 1.1: the two variants share
   // every prop and every inner row -- only the outer wrapper's
   // positioning and card chrome differ (mobile: viewport-fixed bottom
@@ -110,6 +151,41 @@ interface DirectionsPanelProps {
   // Defaults to "mobile" so every existing call site (discover.tsx's
   // mobile render branch) is unaffected by this prop's addition.
   variant?: "mobile" | "desktop";
+}
+
+// Turn-by-turn phase 1, human-asked ("let's make the navigation better"):
+// one row per OSRM step, instruction sentence (osrm-instructions.ts) plus
+// this step's own distance (formatDistance, already used by the duration/
+// distance row above). Scrolls inside its own max-height rather than
+// growing the panel unbounded -- a long drive across Pasig can have
+// dozens of steps, and an unbounded list would push the Cancel/mode row
+// off-screen on a short mobile viewport.
+//
+// All steps render, including the final "arrive" row -- Google's own
+// directions list does the same (the destination is its own last step,
+// not folded into the preceding one), and RouteStep carries nothing that
+// would let this component tell "second-to-last" from "last" more
+// cheaply than just rendering every entry in order.
+function StepList({ steps }: Readonly<{ steps: RouteStep[] }>) {
+  return (
+    <ol className="mt-3 max-h-48 space-y-1 overflow-y-auto border-t border-border pt-3">
+      {steps.map((step, index) => (
+        // index is stable here: `steps` is a fresh array from the latest
+        // fetchRoute response each time (directions.ts's readSteps), never
+        // reordered or filtered in place, so index doubles safely as the
+        // key without a per-step id to key on instead.
+        <li key={index} className="flex items-start gap-2 text-sm">
+          {stepIcon(step)}
+          <span className="min-w-0 flex-1 text-foreground">{formatStepInstruction(step)}</span>
+          {step.distance > 0 && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatDistance(step.distance)}
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 // Sonar (nested ternary): the loading/error/duration row used to be an
@@ -141,6 +217,57 @@ function DirectionsStatusRow({
   const distance = distanceMeters === null ? null : formatDistance(distanceMeters);
   const text = [duration, distance].filter(Boolean).join(" · ");
   return <p className="mt-4 text-sm text-muted-foreground">{text}</p>;
+}
+
+// OSRM times are what the road allows with no traffic, and the app has no
+// live traffic to correct them with. Said once, under the time, for car only:
+// a walk or a ride is not held up by traffic the same way.
+export function TrafficNote({ mode }: Readonly<{ mode: TravelMode }>) {
+  if (mode !== "car") return null;
+  return <p className="mt-1 text-xs text-muted-foreground">Time is an estimate without traffic.</p>;
+}
+
+// Alternative routes, as Google Maps lists them: one row per route with its
+// time, distance and main road, the fastest first. The selected row has a
+// filled background, not a colored edge line (ux-ui-guidelines.md, Style).
+// Sorted by time so the order does not change when a pick swaps routes.
+function RouteOptions({
+  route,
+  onSelectRoute,
+}: Readonly<{ route: RouteGeometry; onSelectRoute: (alternative: RouteGeometry) => void }>) {
+  const options = [route, ...(route.alternatives ?? [])].sort((a, b) => a.duration - b.duration);
+  return (
+    <ul className="mt-4 flex flex-col gap-1">
+      {options.map((option, index) => {
+        const selected = option === route;
+        const via = viaName(option);
+        return (
+          <li key={`${index}-${Math.round(option.duration)}-${Math.round(option.distance)}`}>
+            <button
+              type="button"
+              aria-pressed={selected}
+              onClick={() => {
+                if (!selected) onSelectRoute(option);
+              }}
+              className={cn(
+                "flex min-h-10 w-full items-center justify-between gap-4 rounded-lg px-4 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                selected ? "bg-muted" : "hover:bg-muted",
+              )}
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">{formatDuration(option.duration)}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {via ? `Via ${via}, ` : ""}
+                  {formatDistance(option.distance)}
+                </span>
+              </span>
+              {index === 0 && <span className="shrink-0 text-xs text-muted-foreground">Fastest</span>}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 // directions-distance-and-from-phases.md Phase 4.6: the From row's three
@@ -247,6 +374,11 @@ function DirectionsFromRow({
 // out so that shared content is written once, not copy-pasted into a
 // second near-identical return block that would drift the next time one
 // copy gets edited and the other doesn't.
+const START_BLOCKED_MESSAGES = {
+  "no-location": "Turn on location to start.",
+  "custom-from": "Start needs your location as the starting point.",
+} as const;
+
 function DirectionsPanelContent({
   result,
   selectedMode,
@@ -254,6 +386,9 @@ function DirectionsPanelContent({
   onCancel,
   durationSeconds,
   distanceMeters,
+  steps,
+  route,
+  onSelectRoute,
   isLoading,
   errorReason,
   fromLabel,
@@ -262,7 +397,13 @@ function DirectionsPanelContent({
   onPickOnMap,
   pickingOnMap,
   onCancelPickOnMap,
-}: Readonly<Omit<DirectionsPanelProps, "variant">>) {
+  voiceMuted,
+  onToggleVoiceMuted,
+  voiceSupported,
+  canStartNavigation,
+  startBlockedReason,
+  onStartNavigation,
+}: Readonly<Omit<DirectionsPanelProps, "variant" | "navigating">>) {
   // directions-distance-and-from-phases.md Phase 4.6: UI-only. Whether the
   // From row is currently swapped for the search field. It does not need
   // to survive a tab switch: the field closes on its own (outside tap,
@@ -321,14 +462,36 @@ function DirectionsPanelContent({
             );
           })}
         </div>
-        <button
-          type="button"
-          aria-label="Cancel"
-          onClick={onCancel}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <X className="h-5 w-5 shrink-0" />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Voice guidance phase 1: hidden entirely rather than shown
+              disabled when this browser has no speechSynthesis (see
+              voiceSupported's own doc comment on DirectionsPanelProps
+              above) -- a control that can never do anything is worse than
+              no control. */}
+          {voiceSupported && (
+            <button
+              type="button"
+              aria-label={voiceMuted ? "Unmute voice guidance" : "Mute voice guidance"}
+              aria-pressed={voiceMuted}
+              onClick={onToggleVoiceMuted}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {voiceMuted ? (
+                <SpeakerX className="h-5 w-5 shrink-0" />
+              ) : (
+                <SpeakerHigh className="h-5 w-5 shrink-0" />
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={onCancel}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-5 w-5 shrink-0" />
+          </button>
+        </div>
       </div>
 
       {/* Phase 3.4/3.5: From/To rows, stacked, matching the reference
@@ -371,20 +534,54 @@ function DirectionsPanelContent({
           own destructive-text treatment (text-destructive) so a routing
           failure reads the same way in both surfaces, not a panel-
           specific color introduced for this one row. */}
-      <DirectionsStatusRow
-        isLoading={isLoading}
-        errorReason={errorReason}
-        durationSeconds={durationSeconds}
-        distanceMeters={distanceMeters}
-      />
+      {/* Alternative routes replace the single time and distance row when
+          OSRM returned more than one route, since the selected row already
+          carries both numbers. Loading and error still win, same
+          mutual exclusion as above. */}
+      {!isLoading && !errorReason && route && (route.alternatives?.length ?? 0) > 0 ? (
+        <RouteOptions route={route} onSelectRoute={onSelectRoute} />
+      ) : (
+        <DirectionsStatusRow
+          isLoading={isLoading}
+          errorReason={errorReason}
+          durationSeconds={durationSeconds}
+          distanceMeters={distanceMeters}
+        />
+      )}
+      {!isLoading && !errorReason && <TrafficNote mode={selectedMode} />}
+
+      {/* Turn-by-turn phase 1: only once a route has actually loaded --
+          same mutual-exclusion the status row above relies on (isLoading
+          and errorReason are never both/either true alongside a populated
+          steps list, directions.ts's fetchRoute/useDirectionsState only
+          ever set one of the three at a time). A route with no steps
+          (service omitted them, or readSteps' shape check in directions.ts
+          rejected a malformed response) renders nothing extra here -- the
+          duration/distance row above already covers that case. */}
+      {!isLoading && !errorReason && steps && steps.length > 0 && <StepList steps={steps} />}
+
+      {/* Navigation: the one primary action, at the bottom of the panel.
+          Disabled (visibly, with the reason when the person can fix it)
+          until a route with steps is loaded and the live position is the
+          starting point. */}
+      <div className="mt-4">
+        <Button className="min-h-10 w-full" disabled={!canStartNavigation} onClick={onStartNavigation}>
+          Start
+        </Button>
+        {startBlockedReason && (
+          <p className="mt-2 text-xs text-muted-foreground">{START_BLOCKED_MESSAGES[startBlockedReason]}</p>
+        )}
+      </div>
     </>
   );
 }
 
 export function DirectionsPanel({
   variant = "mobile",
+  navigating,
   ...contentProps
 }: Readonly<DirectionsPanelProps>) {
+  if (navigating) return null;
   if (variant === "desktop") {
     // desktop-directions-panel-phases.md Phase 1.1: `absolute`, not
     // `fixed` -- this renders inside DiscoverMap's own relatively-

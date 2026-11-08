@@ -16,7 +16,7 @@ import {
   MOCHA,
   buildStyle,
   PASIG_CENTER,
-  DEFAULT_ZOOM,
+  defaultZoomForScreen,
   BASE_BOUNDS,
   GROW_LIMIT,
   inBounds,
@@ -36,7 +36,9 @@ import { TrailOverlay, type TrailMapStop } from "./discover-trail-overlay";
 import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 import { DirectionsPanel } from "./directions-panel";
-import type { CustomFrom } from "./public-shell";
+import { useDirections, type CustomFrom } from "./public-shell";
+import { useBarangayFeatures } from "@/hooks/use-barangay-features";
+import { matchBarangay } from "@/lib/barangay";
 
 // Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
 // raster tiles with a `mix-blend-mode: color` div. Positron's raster tiles
@@ -396,16 +398,39 @@ function layoutMarkers(
 // locate-me-and-directions-phases.md Phase 3.5: one GeoJSON source/line
 // layer pair, added and removed imperatively, the same shape buildStyle
 // already uses for the waterway layer -- no new rendering library.
+// Navigation follow camera: zoom per mode (slower travel gets a closer view),
+// how far below center the person sits in heading-up (so more of the road
+// ahead shows), and how long each ease runs (about one GPS tick, linear).
+const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
+const FOLLOW_LOOKAHEAD_PX = 96;
+const FOLLOW_EASE_MS = 900;
+
+// Barangay highlight: a dashed outline round the barangay a search names, and
+// a light veil over everything outside it.
+const BARANGAY_SOURCE_ID = "barangay-highlight";
+const BARANGAY_MASK_SOURCE_ID = "barangay-highlight-mask";
+const BARANGAY_MASK_LAYER_ID = "barangay-highlight-mask-fill";
+const BARANGAY_LINE_LAYER_ID = "barangay-highlight-line";
+const BARANGAY_VEIL_OPACITY = 0.35;
+
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
 const ROUTE_CASING_LAYER_ID = "directions-route-casing";
+// Alternative routes: the other options from the same request, drawn in a
+// quieter road grey under the selected route. A tap on one selects it.
+const ALT_SOURCE_ID = "directions-route-alternatives";
+const ALT_LAYER_ID = "directions-route-alternatives-line";
+const ALT_CASING_LAYER_ID = "directions-route-alternatives-casing";
+// Finger-sized hit area (px) around a tap, since the line is thin.
+const ALT_TAP_RADIUS = 12;
 
 // Ring border for verification status, shared by markerElement and the
 // legend's Status swatches so the two cannot drift. Verified is a solid
-// card-token ring, pending a dashed muted-foreground ring. The circle's own
+// card-token ring, pending a dashed card-token ring (muted-foreground flips to
+// the opposite theme's text color, so it looked like the other theme). The circle's own
 // fill is the category color, so status has to live on the ring.
 const RING_VERIFIED = "border-2 border-card";
-const RING_PENDING = "border-2 border-dashed border-muted-foreground";
+const RING_PENDING = "border-2 border-dashed border-card";
 
 // Marker: a filled circle in the category's color (Category Colors, like
 // Apple Maps), the category icon as a glyph in --category-foreground, the
@@ -513,6 +538,8 @@ interface DiscoverMapProps {
   onMapPick: (coordinates: Coordinates, name?: string) => void;
   resultsLoading: boolean;
   resultsError: string | null;
+  // The search text. When it names a barangay, that barangay is outlined.
+  barangayQuery?: string;
   // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
   // control update discover.tsx's own userLocation state (same setter its
   // one-shot geolocation effect already uses), so this file never owns a
@@ -535,6 +562,9 @@ interface DiscoverMapProps {
   // through to discover.tsx unchanged -- this file has no reason to read
   // it itself, its own drawRoute call still only ever reads `route`.
   onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
+  // Alternative routes: a tap on an alternative line, or a row in the desktop
+  // panel below, hands that route up to the shell (handleSelectRoute).
+  onSelectRoute: (alternative: RouteGeometry) => void;
   // desktop-directions-panel-phases.md Phase 2.3: the desktop directions
   // panel renders inside this component (not as a discover.tsx-level
   // sibling like mobile's fixed panel) since it needs to be `absolute`
@@ -580,6 +610,18 @@ interface DiscoverMapProps {
   onResetFrom: () => void;
   onPickOnMap: () => void;
   onCancelPickOnMap: () => void;
+  // Voice guidance phase 1: threaded straight through to the desktop
+  // DirectionsPanel below, same as every other directions prop above --
+  // this file reads none of these itself.
+  voiceMuted: boolean;
+  onToggleVoiceMuted: () => void;
+  voiceSupported: boolean;
+  // Navigation: threaded straight through to the desktop DirectionsPanel,
+  // same as the voice props above -- this file reads none of them itself.
+  navigating: boolean;
+  canStartNavigation: boolean;
+  startBlockedReason: "no-location" | "custom-from" | null;
+  onStartNavigation: () => void;
   // Trail mode (Resume trail lands here): the trail's stops with their state,
   // drawn as numbered markers joined by a line. Optional, absent means the map
   // is the ordinary Discover map.
@@ -749,6 +791,7 @@ function MapCornerControls({
   categoriesLoading,
   onLocationFound,
   onRecenterRequested,
+  onNorthUp,
 }: Readonly<{
   map: maplibregl.Map | null;
   placeCategories: PlaceCategory[];
@@ -764,6 +807,8 @@ function MapCornerControls({
   // half (it now keys off this signal instead of onLocationFound's
   // coordinate). Optional for the same reason onLocationFound is.
   onRecenterRequested?: () => void;
+  // Navigation: the compass was tapped, so the map is going north up.
+  onNorthUp?: () => void;
 }>) {
   const [legendOpen, setLegendOpen] = useState(false);
   const [locateStatus, setLocateStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -858,7 +903,7 @@ function MapCornerControls({
         )}
       </div>
 
-      <CompassControl map={map} />
+      <CompassControl map={map} onNorthUp={onNorthUp} />
 
       {locateStatus === "error" && locateError && (
         <span className="max-w-56 break-words rounded-md border border-border bg-card px-3 py-1.5 text-right text-xs text-destructive shadow">
@@ -874,7 +919,10 @@ function MapCornerControls({
 // north up. Hidden at north because it would be a button that does nothing.
 // Sits in MapCornerControls' column, under the pill, so it moves with it
 // instead of using its own offset from the header.
-function CompassControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
+function CompassControl({
+  map,
+  onNorthUp,
+}: Readonly<{ map: maplibregl.Map | null; onNorthUp?: () => void }>) {
   const [bearing, setBearing] = useState(0);
   useEffect(() => {
     if (!map) return;
@@ -897,7 +945,10 @@ function CompassControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
       size="icon"
       className="h-9 w-9 rounded-full border border-input bg-card shadow hover:bg-muted"
       aria-label="Reset map to north"
-      onClick={() => map.easeTo({ bearing: 0 })}
+      onClick={() => {
+        map.easeTo({ bearing: 0 });
+        onNorthUp?.();
+      }}
     >
       {/* Needle: red points north, grey south. The map turns by `bearing`,
           so north on screen is at -bearing. */}
@@ -1301,9 +1352,11 @@ export function DiscoverMap({
   onMapPick,
   resultsLoading,
   resultsError,
+  barangayQuery = "",
   onLocationFound,
   route,
   onRouteFound,
+  onSelectRoute,
   directionsPanelResult,
   selectedMode,
   onSelectMode,
@@ -1317,10 +1370,18 @@ export function DiscoverMap({
   onResetFrom,
   onPickOnMap,
   onCancelPickOnMap,
+  voiceMuted,
+  onToggleVoiceMuted,
+  voiceSupported,
+  navigating,
+  canStartNavigation,
+  startBlockedReason,
+  onStartNavigation,
   trailStops,
   selectedTrailStopId = null,
   onSelectTrailStop,
 }: Readonly<DiscoverMapProps>) {
+  const { tripProgress, following, setFollowing } = useDirections();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -1350,7 +1411,9 @@ export function DiscoverMap({
   const [grown, setGrown] = useState(false);
   const growIfNeeded = (points: Coordinates[]) => {
     const map = mapRef.current;
-    if (!map || grown) return;
+    // Offline the pack only covers the base box, so growing into tiles that
+    // were never downloaded would leave a blank map.
+    if (!map || grown || !navigator.onLine) return;
     if (points.some((p) => !inBounds(BASE_BOUNDS, p) && inBounds(GROW_LIMIT, p))) {
       map.setMaxBounds(GROW_LIMIT);
       setGrown(true);
@@ -1437,7 +1500,7 @@ export function DiscoverMap({
       container: containerRef.current,
       style: buildStyle(isDark() ? MOCHA : LATTE),
       center: [PASIG_CENTER.longitude, PASIG_CENTER.latitude],
-      zoom: DEFAULT_ZOOM,
+      zoom: defaultZoomForScreen(),
       // map-bounds-plan.md: Discover stays near Pasig. maxBounds keeps the
       // whole screen inside the box, and grows once (growIfNeeded below).
       // Rotation is on, like Google Maps: two finger twist on touch,
@@ -1635,7 +1698,6 @@ export function DiscoverMap({
     return () => {
       mapInstance.off("rotate", applyConeRotation);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapInstance]);
 
   // Bugfix (map stuck / snaps back to center while dragging): the camera
@@ -1654,7 +1716,11 @@ export function DiscoverMap({
   // so the map still moves off the default Pasig center automatically
   // once, without that first move counting as a second "request".
   const [recenterRequestId, setRecenterRequestId] = useState(0);
-  const requestRecenter = () => setRecenterRequestId((n) => n + 1);
+  const requestRecenter = () => {
+    setRecenterRequestId((n) => n + 1);
+    // While navigating, a locate tap also means "follow me again".
+    if (navigating) setFollowing(true);
+  };
   const hasAutoCenteredRef = useRef(false);
   const lastRecenterRequestIdRef = useRef(0);
 
@@ -1688,9 +1754,15 @@ export function DiscoverMap({
       inBounds(GROW_LIMIT, userLocation)
     ) {
       map.setCenter([userLocation.longitude, userLocation.latitude]);
-      map.setZoom(DEFAULT_ZOOM);
+      map.setZoom(defaultZoomForScreen());
     }
     hasAutoCenteredRef.current = true;
+
+    // Navigation phase 5: while navigating the dot sits on the route line
+    // (trip progress snaps it when the fix is close enough to the line), so
+    // GPS noise does not push it beside the road. Otherwise, and whenever the
+    // fix is too far from the line to snap, it is the raw position.
+    const dotPosition = navigating && tripProgress ? tripProgress.snappedPosition : userLocation;
 
     if (!userMarkerRef.current) {
       // google-style-location-heading-indicator: three stacked layers,
@@ -1767,10 +1839,10 @@ export function DiscoverMap({
       wrapper.appendChild(dot);
 
       userMarkerRef.current = new maplibregl.Marker({ element: wrapper })
-        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .setLngLat([dotPosition.longitude, dotPosition.latitude])
         .addTo(map);
     } else {
-      userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
+      userMarkerRef.current.setLngLat([dotPosition.longitude, dotPosition.latitude]);
     }
 
     // google-style-location-heading-indicator: rotate/show-hide the cone
@@ -1796,7 +1868,77 @@ export function DiscoverMap({
     // growIfNeeded is deliberately not a dependency: it is recreated every
     // render, and it only ever grows once, so a stale copy is harmless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userLocation, customFrom, directionsPanelResult, recenterRequestId]);
+  }, [userLocation, customFrom, directionsPanelResult, recenterRequestId, navigating, tripProgress]);
+
+  // Navigation phase 4: follow camera. While navigating and following, the
+  // camera eases to the snapped position, turned to the bearing of the route
+  // ahead (heading-up) with the person a little below center, or kept north-up
+  // after a compass tap. This is a separate path from the recenter effect
+  // above, which keeps standing down during directions.
+  //
+  // Zoom is applied once when following starts (or resumes), not on every
+  // tick, so a pinch zoom is respected until Recenter. Dragging or turning the
+  // map by hand turns following off; Recenter (or a locate tap) turns it back
+  // on and returns to heading-up.
+  const [northUp, setNorthUp] = useState(false);
+  const followZoomPendingRef = useRef(true);
+  const wasNavigatingRef = useRef(false);
+  const wasFollowingRef = useRef(true);
+
+  useEffect(() => {
+    if (navigating) {
+      if (!wasNavigatingRef.current) setNorthUp(false);
+      wasNavigatingRef.current = true;
+      return;
+    }
+    if (wasNavigatingRef.current) {
+      // Navigation ended: put the map back to north up.
+      wasNavigatingRef.current = false;
+      mapRef.current?.easeTo({ bearing: 0 });
+    }
+  }, [navigating]);
+
+  useEffect(() => {
+    if (!navigating || !following) followZoomPendingRef.current = true;
+    if (navigating && following && !wasFollowingRef.current) setNorthUp(false);
+    wasFollowingRef.current = following;
+  }, [navigating, following]);
+
+  useEffect(() => {
+    if (!mapInstance || !navigating) return;
+    const stopFollowing = (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) setFollowing(false); // a hand on the map, not our own easeTo
+    };
+    mapInstance.on("dragstart", stopFollowing);
+    mapInstance.on("rotatestart", stopFollowing);
+    return () => {
+      mapInstance.off("dragstart", stopFollowing);
+      mapInstance.off("rotatestart", stopFollowing);
+    };
+  }, [mapInstance, navigating, setFollowing]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !navigating || !following || !tripProgress) return;
+    const target = tripProgress.snappedPosition;
+    // map-bounds-plan.md: grow first, so the camera is not clamped to the old box.
+    growIfNeeded([target]);
+    const options: Parameters<maplibregl.Map["easeTo"]>[0] = {
+      center: [target.longitude, target.latitude],
+      bearing: northUp ? 0 : tripProgress.bearingAheadDegrees,
+      offset: northUp ? [0, 0] : [0, FOLLOW_LOOKAHEAD_PX],
+      duration: FOLLOW_EASE_MS,
+      easing: (t: number) => t,
+    };
+    if (followZoomPendingRef.current) {
+      options.zoom = FOLLOW_ZOOM[selectedMode];
+      followZoomPendingRef.current = false;
+    }
+    map.easeTo(options);
+    // growIfNeeded is recreated every render and only ever grows once, so a
+    // stale copy is harmless, same as the recenter effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigating, following, northUp, tripProgress, selectedMode]);
 
   useEffect(() => {
     return () => {
@@ -1943,9 +2085,35 @@ export function DiscoverMap({
     if (!map.isStyleLoaded()) return;
     const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
     const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    const alternatives = geometry.alternatives ?? [];
+    const alternativeData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: alternatives.map((alternative, index) => ({
+        type: "Feature",
+        properties: { index },
+        geometry: { type: "LineString", coordinates: alternative.coordinates },
+      })),
+    };
     if (source) {
       source.setData({ type: "Feature", properties: {}, geometry });
+      (map.getSource(ALT_SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(alternativeData);
     } else {
+      // Alternatives go in first so the selected route's layers sit above them.
+      map.addSource(ALT_SOURCE_ID, { type: "geojson", data: alternativeData });
+      map.addLayer({
+        id: ALT_CASING_LAYER_ID,
+        type: "line",
+        source: ALT_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": palette.casing, "line-width": 8 },
+      });
+      map.addLayer({
+        id: ALT_LAYER_ID,
+        type: "line",
+        source: ALT_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": palette.roadDark, "line-width": 5 },
+      });
       map.addSource(ROUTE_SOURCE_ID, {
         type: "geojson",
         data: { type: "Feature", properties: {}, geometry },
@@ -1967,9 +2135,12 @@ export function DiscoverMap({
         paint: { "line-color": palette.mauve, "line-width": 5 },
       });
     }
-    const bounds = geometry.coordinates.reduce(
+    // Fit every option, so all the lines show and a pick between them does
+    // not move the camera.
+    const allCoordinates = [geometry, ...alternatives].flatMap((r) => r.coordinates);
+    const bounds = allCoordinates.reduce(
       (b, coord) => b.extend(coord as [number, number]),
-      new maplibregl.LngLatBounds(geometry.coordinates[0], geometry.coordinates[0]),
+      new maplibregl.LngLatBounds(allCoordinates[0], allCoordinates[0]),
     );
     // map-bounds-plan.md: grow before fitBounds, or fitBounds clamps to the
     // old box and crops a route that starts outside it.
@@ -1979,7 +2150,9 @@ export function DiscoverMap({
       { latitude: southWest.lat, longitude: southWest.lng },
       { latitude: northEast.lat, longitude: northEast.lng },
     ]);
-    map.fitBounds(bounds, { padding: 48 });
+    // While navigating the follow camera owns the view, so a reroute or an
+    // alternative swap redraws the line without pulling the camera out.
+    if (!navigating) map.fitBounds(bounds, { padding: 48 });
   };
 
   // directions-panel-phases.md Phase 2.2: the counterpart to drawRoute
@@ -1993,7 +2166,45 @@ export function DiscoverMap({
     if (!map?.isStyleLoaded()) return;
     const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     source?.setData({ type: "FeatureCollection", features: [] });
+    const alternativeSource = map.getSource(ALT_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    alternativeSource?.setData({ type: "FeatureCollection", features: [] });
   };
+
+  // Alternative routes: a tap near an alternative line selects it. Refs, not
+  // the props, because the listener is attached once per map and would
+  // otherwise keep the route it was created with. Stands down while the map is
+  // picking a start point, and for taps on a place marker, same two rules the
+  // pick listener above follows.
+  const routeRef = useRef(route);
+  const onSelectRouteRef = useRef(onSelectRoute);
+  useEffect(() => {
+    routeRef.current = route;
+    onSelectRouteRef.current = onSelectRoute;
+  }, [route, onSelectRoute]);
+
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map) return;
+    const handleAlternativeClick = (e: maplibregl.MapMouseEvent) => {
+      if (pickingOnMapRef.current || !map.getLayer(ALT_LAYER_ID)) return;
+      const target = e.originalEvent.target as Node | null;
+      if (target && markersRef.current.some((m) => m.getElement().contains(target))) return;
+      const { x, y } = e.point;
+      const hit = map.queryRenderedFeatures(
+        [
+          [x - ALT_TAP_RADIUS, y - ALT_TAP_RADIUS],
+          [x + ALT_TAP_RADIUS, y + ALT_TAP_RADIUS],
+        ],
+        { layers: [ALT_LAYER_ID] },
+      )[0];
+      const alternative = routeRef.current?.alternatives?.[Number(hit?.properties?.index)];
+      if (alternative) onSelectRouteRef.current(alternative);
+    };
+    map.on("click", handleAlternativeClick);
+    return () => {
+      map.off("click", handleAlternativeClick);
+    };
+  }, [mapInstance]);
 
   // Draws whenever there's a route to draw AND the map is actually ready
   // to accept a source/layer -- covers every case in one effect instead of
@@ -2022,6 +2233,84 @@ export function DiscoverMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, styleReady]);
+
+  // Barangay highlight. Same imperative pattern as the route: drawn once the
+  // style is ready, and redrawn after a theme switch (setStyle drops it, then
+  // styleReady flips back). Sits under the route layers so a route stays on top.
+  const barangayFeatures = useBarangayFeatures();
+  const highlighted = useMemo(
+    () => (barangayFeatures ? matchBarangay(barangayQuery, barangayFeatures) : null),
+    [barangayFeatures, barangayQuery],
+  );
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady || !map.isStyleLoaded()) return;
+
+    for (const layerId of [BARANGAY_LINE_LAYER_ID, BARANGAY_MASK_LAYER_ID]) {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+    }
+    for (const sourceId of [BARANGAY_SOURCE_ID, BARANGAY_MASK_SOURCE_ID]) {
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+    if (!highlighted) return;
+
+    const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
+    const polygons =
+      highlighted.geometry.type === "Polygon" ? [highlighted.geometry.coordinates] : highlighted.geometry.coordinates;
+    // A box round the world with the barangay's outer ring(s) cut out of it.
+    const world = [
+      [-180, -85],
+      [180, -85],
+      [180, 85],
+      [-180, 85],
+      [-180, -85],
+    ];
+    const beforeId = map.getLayer(ALT_CASING_LAYER_ID) ? ALT_CASING_LAYER_ID : undefined;
+    map.addSource(BARANGAY_MASK_SOURCE_ID, {
+      type: "geojson",
+      data: {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Polygon", coordinates: [world, ...polygons.map((poly) => poly[0])] },
+      },
+    });
+    map.addLayer(
+      {
+        id: BARANGAY_MASK_LAYER_ID,
+        type: "fill",
+        source: BARANGAY_MASK_SOURCE_ID,
+        paint: { "fill-color": palette.base, "fill-opacity": BARANGAY_VEIL_OPACITY },
+      },
+      beforeId,
+    );
+    map.addSource(BARANGAY_SOURCE_ID, {
+      type: "geojson",
+      data: { type: "Feature", properties: {}, geometry: highlighted.geometry },
+    });
+    map.addLayer(
+      {
+        id: BARANGAY_LINE_LAYER_ID,
+        type: "line",
+        source: BARANGAY_SOURCE_ID,
+        layout: { "line-join": "round" },
+        paint: { "line-color": palette.mauve, "line-width": 2, "line-dasharray": [2, 2] },
+      },
+      beforeId,
+    );
+
+    // Frame it, unless a route or a trip already owns the camera.
+    if (!route && !navigating) {
+      const points = polygons.flatMap((poly) => poly[0]);
+      const bounds = points.reduce(
+        (b, coord) => b.extend(coord as [number, number]),
+        new maplibregl.LngLatBounds(points[0] as [number, number], points[0] as [number, number]),
+      );
+      map.fitBounds(bounds, { padding: 48, duration: 600 });
+    }
+    // route and navigating are read only to decide whether to move the camera;
+    // a route change alone must not re-frame the barangay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlighted, styleReady]);
 
   // directions-panel-phases.md Phase 2.2: route can now go from a value
   // back to null (discover.tsx's setRoute(null), wired to Phase 4's panel
@@ -2310,6 +2599,9 @@ export function DiscoverMap({
         categoriesLoading={categoriesLoading}
         onLocationFound={onLocationFound}
         onRecenterRequested={requestRecenter}
+        onNorthUp={() => {
+          if (navigating) setNorthUp(true);
+        }}
       />
 
       {/* Bottom-right +/- zoom pill, desktop only, per direct instruction
@@ -2329,7 +2621,7 @@ export function DiscoverMap({
         focusStopId={selectedTrailStopId}
         onFit={(points) => {
           const map = mapRef.current;
-          if (!map || points.length === 0) return;
+          if (navigating || !map || points.length === 0) return;
           growIfNeeded(points);
           const bounds = points.reduce(
             (b, p) => b.extend([p.longitude, p.latitude]),
@@ -2355,6 +2647,21 @@ export function DiscoverMap({
           onSelectMode={onSelectMode}
           durationSeconds={routeDuration}
           distanceMeters={routeDistance}
+          // Turn-by-turn phase 1: same derivation as discover.tsx's mobile
+          // DirectionsPanel call -- `route` is already a prop on this
+          // component (desktop-directions-panel-phases.md's own Files
+          // Touched plumbing), so this is the one place its first leg's
+          // steps turn into the prop the desktop variant reads.
+          steps={route?.legs?.[0]?.steps}
+          route={route}
+          onSelectRoute={onSelectRoute}
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={onToggleVoiceMuted}
+          voiceSupported={voiceSupported}
+          navigating={navigating}
+          canStartNavigation={canStartNavigation}
+          startBlockedReason={startBlockedReason}
+          onStartNavigation={onStartNavigation}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={onCancelDirections}

@@ -5,6 +5,7 @@ import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
+import { NavigationView } from "@/components/public/navigation-banner";
 import { DiscoverTrailPanel } from "@/components/public/discover-trail-panel";
 import type { TrailMapStop } from "@/components/public/discover-trail-overlay";
 import {
@@ -35,7 +36,9 @@ import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } fr
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { usePageTitle } from "@/lib/page-title";
 import { useOnline } from "@/lib/offline/status";
-import { MAP_NEEDS_CONNECTION } from "@/lib/offline/messages";
+import { useMapPack } from "@/lib/offline/map-pack";
+import { MAP_NEEDS_CONNECTION, MAP_OUTSIDE_DOWNLOAD } from "@/lib/offline/messages";
+import { BASE_BOUNDS, inBounds } from "@/lib/map-style";
 
 /**
  * Phase 5 (step-5-phases.md): search and list on top of Phase 4's map, one
@@ -133,7 +136,19 @@ export default function DiscoverPage() {
     handleMapPick,
     handleRouteFound,
     handleSelectMode,
+    handleSelectRoute,
     handleCancelDirections,
+    // Voice guidance phase 1: straight from the shell's useVoiceGuidance
+    // call (public-shell.tsx), handed to both DirectionsPanel render
+    // sites same as every other directions prop above.
+    voiceMuted,
+    setVoiceMuted,
+    voiceSupported,
+    // Navigation: Start state and action, handed to both DirectionsPanel
+    // render sites. NavigationView reads the rest from the same context.
+    navigating,
+    canStartNavigation,
+    startNavigation,
   } = useDirections();
 
   const [results, setResults] = useState<DiscoverResult[]>([]);
@@ -143,10 +158,15 @@ export default function DiscoverPage() {
   // effect below, same retry-counter shape trails.tsx and saved.tsx use.
   const [reload, setReload] = useState(0);
   const [viewChoice, setViewChoice] = useState<"map" | "list">("map");
-  // Offline there are no map tiles, so the list opens instead and the Map tab
-  // says why it is off. The choice comes back when the connection does.
+  // Offline with no downloaded map there are no tiles, so the list opens
+  // instead and the Map tab says why it is off. A downloaded map (Offline
+  // modal) keeps the Map tab on. The choice comes back with the connection.
   const online = useOnline();
-  const view = online ? viewChoice : "list";
+  const mapDownloaded = useMapPack().state === "downloaded";
+  const mapReady = online || mapDownloaded;
+  // The downloaded map only holds the base box, so offline outside it is blank.
+  const outsideDownload = !online && mapDownloaded && !!userLocation && !inBounds(BASE_BOUNDS, userLocation);
+  const view = mapReady ? viewChoice : "list";
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
   // case), not "match nothing" -- widened from the original single
@@ -419,7 +439,7 @@ export default function DiscoverPage() {
                   align to. */}
         <Tabs value={view} onValueChange={(v) => setViewChoice(v as "map" | "list")}>
           <TabsList>
-            <TabsTrigger value="map" className="gap-1" disabled={!online}>
+            <TabsTrigger value="map" className="gap-1" disabled={!mapReady}>
               <MapIcon className="h-4 w-4" />
               Map
             </TabsTrigger>
@@ -429,7 +449,8 @@ export default function DiscoverPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        {!online && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
+        {!mapReady && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
+        {outsideDownload && <p className="text-xs text-muted-foreground">{MAP_OUTSIDE_DOWNLOAD}</p>}
       </div>
 
       {/* Category filter: multi-select grid of pill buttons, replacing the
@@ -613,6 +634,14 @@ export default function DiscoverPage() {
   // and every doc comment describing *why* each does what it does moved
   // there unchanged; nothing here duplicates it.
 
+  // Start needs the map: navigation is drawn over it, so a Start tapped in the
+  // list view switches to the map first.
+  const startBlockedReason = customFrom ? "custom-from" : userLocation ? null : "no-location";
+  const handleStartNavigation = () => {
+    setViewChoice("map");
+    startNavigation();
+  };
+
   return (
     // data-swipe-owner (map view only): on mobile this page lives inside the
     // swipe pager (page-pager.tsx). MapLibre pans with the finger, so the map
@@ -642,9 +671,11 @@ export default function DiscoverPage() {
           onCancelPickOnMap={handleCancelPickOnMap}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
+          barangayQuery={query}
           onLocationFound={setUserLocation}
           route={route}
           onRouteFound={handleRouteFound}
+          onSelectRoute={handleSelectRoute}
           // desktop-directions-panel-phases.md Phase 2.3: the desktop
           // panel lives inside DiscoverMap's own relatively-positioned
           // container (same coordinate space as ZoomControl/
@@ -666,6 +697,16 @@ export default function DiscoverPage() {
           onSelectFrom={handleSelectFrom}
           onResetFrom={handleResetFrom}
           onPickOnMap={handlePickFromOnMap}
+          // Voice guidance phase 1: same props as the mobile
+          // DirectionsPanel call above, threaded down so DiscoverMap's
+          // own internal desktop-variant panel gets them too.
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
+          voiceSupported={voiceSupported}
+          navigating={navigating}
+          canStartNavigation={canStartNavigation}
+          startBlockedReason={startBlockedReason}
+          onStartNavigation={handleStartNavigation}
           trailStops={trailMapStops}
           selectedTrailStopId={trail?.stops[selectedStopIndex]?.id ?? null}
           onSelectTrailStop={(stopId) => {
@@ -690,6 +731,10 @@ export default function DiscoverPage() {
           }}
         />
       )}
+      {/* Navigation view: banner and bottom bar. Rendered whenever navigating,
+          not only on the map, so End is always reachable (List tab, or the map
+          unavailable offline). */}
+      {navigating && <NavigationView />}
       {/* Trail mode panel. Hidden while a Directions panel is open (both want
           the bottom of the screen), and in list view, where there is no map for
           the stops to be on. */}
@@ -732,6 +777,24 @@ export default function DiscoverPage() {
           onSelectMode={handleSelectMode}
           durationSeconds={routeDuration}
           distanceMeters={routeDistance}
+          // Turn-by-turn phase 1: derived from `route` (already destructured
+          // above from useDirections()), not a new piece of shell state --
+          // RouteGeometry.legs now carries `steps` end to end from
+          // fetchRoute (directions.ts), and this is the one place that
+          // leg's steps turn into the prop DirectionsPanel reads. Only the
+          // first leg: every call reaching this panel has no `via` points
+          // (see RouteStep's own note in directions-panel.tsx), so a route
+          // here only ever has one leg.
+          steps={route?.legs?.[0]?.steps}
+          route={route}
+          onSelectRoute={handleSelectRoute}
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
+          voiceSupported={voiceSupported}
+          navigating={navigating}
+          canStartNavigation={canStartNavigation}
+          startBlockedReason={startBlockedReason}
+          onStartNavigation={handleStartNavigation}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={handleCancelDirections}

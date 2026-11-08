@@ -232,6 +232,13 @@ export interface Coordinates {
   // Coordinates producer in the app leaves it unset, which is fine since
   // every field below is optional.
   heading?: number | null;
+  // Navigation phase 1: the rest of the live fix, straight off
+  // GeolocationPosition. accuracy is the fix's radius in meters, speed is in
+  // meters per second (null when the device reports none), timestamp is the
+  // fix time in ms. Only the shell's watchPosition populates them.
+  accuracy?: number | null;
+  speed?: number | null;
+  timestamp?: number | null;
 }
 
 // distanceKm now lives in geo.ts so plain-Node code can import it without

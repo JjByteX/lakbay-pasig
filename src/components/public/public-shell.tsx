@@ -29,6 +29,10 @@ import {
   type RouteGeometry,
   type TravelMode,
 } from "@/lib/directions";
+import { useVoiceGuidance } from "@/lib/use-voice-guidance";
+import { useTripProgress, type TripProgress } from "@/lib/use-trip-progress";
+import { useOffRouteReroute } from "@/lib/use-off-route-reroute";
+import { useWakeLock } from "@/lib/use-wake-lock";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
@@ -185,6 +189,9 @@ interface DirectionsContextValue {
   handleRouteFound: (geometry: RouteGeometry, foundResult: DiscoverResult) => void;
   handleSelectMode: (mode: TravelMode) => Promise<void>;
   handleCancelDirections: () => void;
+  // Alternative routes: swaps one of route.alternatives in as the route, the
+  // old route taking its place in the list. Nothing is fetched.
+  handleSelectRoute: (alternative: RouteGeometry) => void;
   // Phase 2.4: sets customFrom, leaves pickingOnMap off (a search pick and
   // a map pick are different entry points; picking on the map turns
   // itself off separately, see handlePickFromOnMap/discover-map.tsx),
@@ -210,6 +217,30 @@ interface DirectionsContextValue {
   // data, and a tap on empty map passes none and gets the generic label.
   // Same path as a search pick from there on (handleSelectFrom).
   handleMapPick: (coordinates: Coordinates, name?: string) => Promise<void>;
+  // Voice guidance phase 1: mirrors use-voice-guidance.ts's own
+  // VoiceGuidanceState one for one. Exposed on this same context, not a
+  // separate provider, since every consumer that would want a mute toggle
+  // (DirectionsPanel, both variants) already reads this context for
+  // everything else directions-related.
+  voiceMuted: boolean;
+  setVoiceMuted: (muted: boolean) => void;
+  voiceSupported: boolean;
+  // Navigation phase 2: true from Start until End, Cancel, or the route
+  // going away. A reroute keeps it true.
+  navigating: boolean;
+  // Start is allowed: a route with steps is loaded and not loading, there is
+  // no error, there is a live position, and the route starts from that
+  // position (not a custom starting point).
+  canStartNavigation: boolean;
+  startNavigation: () => void;
+  endNavigation: () => void;
+  // Where the person is on the route (use-trip-progress.ts). Null with no
+  // route or position, and for a route that starts from a custom point.
+  tripProgress: TripProgress | null;
+  // Navigation phase 4: whether the camera is following the person. True from
+  // Start; dragging the map turns it off, Recenter turns it back on.
+  following: boolean;
+  setFollowing: (following: boolean) => void;
 }
 
 const DirectionsContext = createContext<DirectionsContextValue | undefined>(
@@ -244,6 +275,9 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
   // directions-distance-and-from-phases.md Phase 2.2: null (no custom
   // From) is the common case -- origin then falls back to userLocation.
   const [customFrom, setCustomFrom] = useState<CustomFrom | null>(null);
+  // Navigation phase 2: Start pressed and not yet ended.
+  const [navigating, setNavigating] = useState(false);
+  const [following, setFollowing] = useState(true);
   // Phase 2.4: on while the map-tap-to-pick-From mode (Phase 5) is active.
   const [pickingOnMap, setPickingOnMap] = useState(false);
 
@@ -300,6 +334,34 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     [],
   );
 
+  // Off-route detection phase 1, human-asked ("let's make the navigation
+  // better"): refetches the current route from wherever the person
+  // actually is now, once useOffRouteReroute (use-off-route-reroute.ts)
+  // decides they've truly left it. Reuses `refetch` itself -- the same
+  // function handleSelectMode/handleSelectFrom/handleResetFrom already
+  // call -- rather than a second fetchRoute call site, so a reroute
+  // behaves exactly like any other "fetch a new route for the current
+  // mode/destination" request (same single-flight guard via
+  // fetchSeqRef, same loading/error state).
+  //
+  // Guarded the same way handleSelectMode already is (no origin, no
+  // active session, already loading): a reroute attempt with nothing to
+  // reroute *to* is a no-op, not an error state -- useOffRouteReroute
+  // itself only calls this when its own route/position are both
+  // present, but origin can still be null (no GPS and no custom From)
+  // and directionsPanelResult can still be null (Cancel landed between
+  // the off-route decision and this callback running) by the time this
+  // actually runs, same race either of those two existing handlers
+  // already guards against.
+  const handleOffRouteReroute = useCallback(() => {
+    if (modeLoading || !origin || !directionsPanelResult) return;
+    void refetch(selectedMode, origin, directionsPanelResult);
+  }, [modeLoading, origin, directionsPanelResult, selectedMode, refetch]);
+
+  // A route that starts from a custom point is not the person's own trip, so
+  // their live position is never measured against it: no position, no reroute.
+  useOffRouteReroute(route, customFrom ? null : userLocation, handleOffRouteReroute);
+
   const handleRouteFound = useCallback(
     (geometry: RouteGeometry, foundResult: DiscoverResult) => {
       // Phase 2.6: receives a route already fetched from the current
@@ -349,12 +411,31 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     setModeErrorReason(null);
     setCustomFrom(null);
     setPickingOnMap(false);
+    setNavigating(false);
   }, []);
+
+  // Alternative routes: the picked route becomes `route` and the others, the
+  // old route included, stay in its `alternatives`, so voice guidance, the
+  // step list, off-route reroute and the map line all keep reading one route.
+  // Duration and distance follow it. Nothing is fetched, so a pick works with
+  // a weak connection.
+  const handleSelectRoute = useCallback(
+    (alternative: RouteGeometry) => {
+      if (!route?.alternatives?.includes(alternative)) return;
+      const { alternatives, ...current } = route;
+      const others = [current, ...(alternatives ?? []).filter((r) => r !== alternative)];
+      setRoute({ ...alternative, alternatives: others });
+      setRouteDuration(alternative.duration);
+      setRouteDistance(alternative.distance);
+    },
+    [route],
+  );
 
   const handleSelectFrom = useCallback(
     async (from: CustomFrom) => {
       setCustomFrom(from);
       setPickingOnMap(false);
+      setNavigating(false); // a custom starting point is not the person's own trip
       if (!directionsPanelResult) return; // no active session to reroute yet
       await refetch(selectedMode, from.coordinates, directionsPanelResult);
     },
@@ -397,6 +478,53 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     [handleSelectFrom],
   );
 
+  // Voice guidance phase 1: mounted once here, not per-panel-variant, so
+  // Cancel/mute state survives a mobile<->desktop layout change mid-route
+  // (same reasoning this whole hook's state already lives in
+  // useDirectionsState rather than discover.tsx: it must not reset just
+  // because the component tree holding the panel remounts). `route` is
+  // this same hook's own state above; `userLocation` is the param this
+  // function already takes. Only the first leg's steps, same reasoning
+  // directions-panel.tsx's own `steps` prop doc gives: every caller that
+  // reaches here passes no `via` points, so a route has at most one leg.
+  //
+  // Navigation phase 2: where the person is on the route. Null for a route
+  // that starts from a custom point, same rule the off-route check follows.
+  const tripProgress = useTripProgress(route, customFrom ? null : userLocation, selectedMode);
+
+  // Voice speaks only while navigating, and reads the next step from the
+  // same trip progress the banner will.
+  const { muted: voiceMuted, setMuted: setVoiceMuted, supported: voiceSupported } =
+    useVoiceGuidance(route?.legs?.[0]?.steps, tripProgress, navigating, selectedMode);
+
+  const canStartNavigation =
+    route !== null &&
+    (route.legs?.[0]?.steps?.length ?? 0) > 0 &&
+    !modeLoading &&
+    modeErrorReason === null &&
+    !customFrom &&
+    userLocation !== null;
+
+  const startNavigation = useCallback(() => {
+    if (!canStartNavigation) return;
+    setFollowing(true);
+    setNavigating(true);
+  }, [canStartNavigation]);
+
+  const endNavigation = useCallback(() => {
+    setNavigating(false);
+  }, []);
+
+  // The route can go away without Cancel (a reset with no live position), and
+  // a later route must not start navigating on its own.
+  useEffect(() => {
+    if (!route) setNavigating(false);
+  }, [route]);
+
+  // Screen stays on while a route is showing, so the phone does not sleep
+  // mid-trip. Same lifetime as the session: Cancel clears `route`.
+  useWakeLock(route !== null);
+
   // Memoized on purpose. This object used to be rebuilt on every render of
   // PublicShell, so every consumer of DirectionsContext (DiscoverPage)
   // re-rendered whenever the shell did. DiscoverPage hands the shell a new
@@ -420,11 +548,22 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       handleRouteFound,
       handleSelectMode,
       handleCancelDirections,
+      handleSelectRoute,
       handleSelectFrom,
       handleResetFrom,
       handlePickFromOnMap,
       handleCancelPickOnMap,
       handleMapPick,
+      voiceMuted,
+      setVoiceMuted,
+      voiceSupported,
+      navigating,
+      canStartNavigation,
+      startNavigation,
+      endNavigation,
+      tripProgress,
+      following,
+      setFollowing,
     }),
     [
       route,
@@ -440,11 +579,22 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       handleRouteFound,
       handleSelectMode,
       handleCancelDirections,
+      handleSelectRoute,
       handleSelectFrom,
       handleResetFrom,
       handlePickFromOnMap,
       handleCancelPickOnMap,
       handleMapPick,
+      voiceMuted,
+      setVoiceMuted,
+      voiceSupported,
+      navigating,
+      canStartNavigation,
+      startNavigation,
+      endNavigation,
+      tripProgress,
+      following,
+      setFollowing,
     ],
   );
 }
@@ -1095,6 +1245,11 @@ export function PublicShell() {
           // its plain dot with no cone -- no separate "moving" flag
           // needed, the null itself is the signal.
           heading: position.coords.heading,
+          // Trip progress needs the rest of the fix: how precise it is, how
+          // fast the device is moving, and when it was taken.
+          accuracy: position.coords.accuracy,
+          speed: position.coords.speed,
+          timestamp: position.timestamp,
         });
       },
       () => {

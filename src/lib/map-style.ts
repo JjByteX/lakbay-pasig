@@ -8,6 +8,12 @@ import type { Coordinates } from "@/lib/discover-query";
 
 export const PASIG_CENTER: Coordinates = { latitude: 14.5764, longitude: 121.0851 };
 export const DEFAULT_ZOOM = 14;
+// Same zoom shows more area, with the same small labels, on a wider screen, so
+// a desktop opens one level closer than a phone (768 matches use-mobile.tsx).
+export const DESKTOP_ZOOM = 15;
+export function defaultZoomForScreen(): number {
+  return window.innerWidth < 768 ? DEFAULT_ZOOM : DESKTOP_ZOOM;
+}
 
 // Catppuccin Latte (light) / Mocha (dark) hex values, one per OpenMapTiles
 // feature type. Latte is the default; MOCHA overrides apply when `.dark` is

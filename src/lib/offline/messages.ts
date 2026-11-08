@@ -6,6 +6,7 @@ import type { FailReason } from "./rules";
 export const OFFLINE_LABEL = "Offline";
 export const NEEDS_CONNECTION = "Needs a connection.";
 export const MAP_NEEDS_CONNECTION = "Map needs a connection.";
+export const MAP_OUTSIDE_DOWNLOAD = "You are outside the downloaded map area. The map is blank here until you connect.";
 export const PAGE_NOT_DOWNLOADED = "This page was not downloaded. Connect to load it.";
 
 export function noticeText(syncedAt: number | null): string {
