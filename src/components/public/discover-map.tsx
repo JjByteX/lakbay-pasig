@@ -404,6 +404,13 @@ function layoutMarkers(
 // ahead shows), and how long each ease runs (about one GPS tick, linear).
 const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
 const FOLLOW_LOOKAHEAD_PX = 96;
+// Route fit padding, px, all on the 8px grid. Top clears the status pill;
+// right clears the legend/locate/compass column (12px inset + 36px wide, plus
+// a marker radius); left needs only breathing room; bottom is breathing room
+// on top of whatever the mobile directions panel covers. The cover is capped
+// at this share of the map's height so the fit always has room to work.
+const ROUTE_FIT_PADDING = { top: 56, right: 64, bottom: 32, left: 32 } as const;
+const ROUTE_FIT_MAX_COVER_RATIO = 0.5;
 const FOLLOW_EASE_MS = 900;
 
 // Barangay highlight: a dashed outline round the barangay picked in the search,
@@ -1679,16 +1686,15 @@ export function DiscoverMap({
   // setLngLat on every userLocation change, rather than removed/recreated,
   // since the coordinate is the only thing that ever changes about it.
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
-  // google-style-location-heading-indicator: refs onto the two child
-  // elements that change on every GPS tick without needing to touch the
-  // rest of the marker's DOM (which never changes once built) -- the
-  // cone's rotation and its own show/hide, and the accuracy-circle radius.
+  // google-style-location-heading-indicator: ref onto the child element
+  // that changes on every GPS tick without needing to touch the rest of the
+  // marker's DOM (which never changes once built) -- the cone's rotation and
+  // its own show/hide.
   // Plain refs rather than re-querying the marker element each time, same
   // reasoning as userMarkerRef itself: this callback can fire once a
   // second from watchPosition, so re-running querySelector on every tick
   // is needless work for values a ref reads/writes in one step.
   const userMarkerConeRef = useRef<HTMLDivElement | null>(null);
-  const userMarkerAccuracyRef = useRef<HTMLDivElement | null>(null);
   // The device compass heading in degrees from north, null when the device
   // reports none. Kept in a ref so the cone can be re-aimed on every map
   // rotation, not only on a GPS tick.
@@ -1785,38 +1791,22 @@ export function DiscoverMap({
     const dotPosition = navigating && tripProgress ? tripProgress.snappedPosition : userLocation;
 
     if (!userMarkerRef.current) {
-      // google-style-location-heading-indicator: three stacked layers,
-      // same convention Google Maps/Google-style apps use for "you are
-      // here" -- a soft accuracy-circle halo (furthest back), a
-      // direction cone that rotates to the compass heading (middle), and
-      // the solid white-bordered dot on top (unchanged from the old
-      // single-div marker, so the no-heading look is identical to
-      // before). All three live inside one wrapper div so MapLibre still
-      // anchors/positions them as the single marker element it expects;
-      // only the cone and halo need refs since only those two change
-      // after creation (see userMarkerConeRef/userMarkerAccuracyRef
-      // above) -- the dot itself never changes, no ref needed for it.
+      // google-style-location-heading-indicator: two stacked layers -- a
+      // direction cone that rotates to the compass heading (behind), and
+      // the solid white-bordered dot with its pulse on top. The large
+      // accuracy disc that used to sit behind both was removed. Both live
+      // inside one wrapper div so MapLibre still anchors/positions them as
+      // the single marker element it expects; only the cone needs a ref
+      // since only it changes after creation (see userMarkerConeRef above).
       const wrapper = document.createElement("div");
       // 14px: the wrapper is exactly the dot's size, so MapLibre's center anchor
-      // keeps the dot on the coordinate. Halo and cone below are scaled with it.
+      // keeps the dot on the coordinate. The cone below is scaled with it.
       wrapper.className = "relative flex h-3.5 w-3.5 items-center justify-center";
       wrapper.setAttribute("aria-label", "Your location");
 
-      // Accuracy circle: a large, low-opacity blue disc behind everything
-      // else, the same "roughly this precise" halo Google Maps draws
-      // around its own dot. Fixed size (not derived from
-      // position.coords.accuracy in meters-per-pixel) since this map has
-      // no need to be metrically precise about GPS accuracy -- it's
-      // reading as the same soft ambient glow every Google-style
-      // implementation uses, not a literal accuracy radius.
-      const accuracy = document.createElement("div");
-      accuracy.className =
-        "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 h-14 w-14 pointer-events-none";
-      userMarkerAccuracyRef.current = accuracy;
-
       // Direction cone: a CSS-only wedge (radial gradient clipped to a
       // circle sector), not an SVG/image, so recoloring it is just the
-      // existing --primary token same as the dot and halo already use,
+      // existing --primary token same as the dot already uses,
       // no separate asset. Rotated in place around the dot's own center
       // (transform-origin, not repositioned) via userMarkerConeRef.
       // Hidden by default (no heading yet on first paint) and shown only
@@ -1854,7 +1844,6 @@ export function DiscoverMap({
       dot.className =
         "relative h-3.5 w-3.5 rounded-full border-2 border-white bg-primary shadow-md user-location-pulse";
 
-      wrapper.appendChild(accuracy);
       wrapper.appendChild(cone);
       wrapper.appendChild(dot);
 
@@ -1965,7 +1954,6 @@ export function DiscoverMap({
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
       userMarkerConeRef.current = null;
-      userMarkerAccuracyRef.current = null;
     };
   }, []);
 
@@ -2260,11 +2248,13 @@ export function DiscoverMap({
   bottomCoverRef.current = bottomCover;
   const fitPadding = () => {
     const container = containerRef.current;
-    const base = 48;
-    if (!container) return { top: base, right: base, bottom: base, left: base };
+    if (!container) return { ...ROUTE_FIT_PADDING };
     const rect = container.getBoundingClientRect();
     const overlap = Math.max(0, bottomCoverRef.current - (window.innerHeight - rect.bottom));
-    return { top: base, right: base, bottom: base + Math.min(overlap, rect.height * 0.6), left: base };
+    return {
+      ...ROUTE_FIT_PADDING,
+      bottom: ROUTE_FIT_PADDING.bottom + Math.min(overlap, rect.height * ROUTE_FIT_MAX_COVER_RATIO),
+    };
   };
 
   const fitRoute = (geometry: RouteGeometry) => {

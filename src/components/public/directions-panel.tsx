@@ -467,8 +467,9 @@ function DirectionsPanelContent({
   const detailsRequired = collapsible && (noOrigin || pickingOnMap);
   const showDetails = !collapsible || expanded || detailsRequired;
   const hasAlternatives = !isLoading && !errorReason && route !== null && (route.alternatives?.length ?? 0) > 0;
-  // Mobile touch targets are 44px (h-11); desktop keeps 36px.
-  const iconButtonSize = collapsible ? "h-11 w-11" : "h-9 w-9";
+  // Mobile touch targets are 48px (h-12), the nearest 8px grid step at or above
+  // the 44px minimum (ux-ui-guidelines.md, Spacing); desktop keeps 36px.
+  const iconButtonSize = collapsible ? "h-12 w-12" : "h-9 w-9";
 
   return (
     <>
@@ -486,7 +487,7 @@ function DirectionsPanelContent({
           the icon (bg-primary), not a colored border line, which the
           style rules ban outright. Unselected: no background until
           hover, matching the `ghost` variant's own token pair. */}
-      <div className="flex shrink-0 items-center justify-between">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {MODES.map(({ mode, label, icon: Icon }) => {
             const selected = mode === selectedMode;
@@ -655,7 +656,7 @@ function DirectionsPanelContent({
       <div className="mt-4 shrink-0">
         <div className="flex items-center gap-2">
           <Button
-            className={cn("flex-1", collapsible ? "min-h-11" : "min-h-10 w-full")}
+            className={cn("flex-1", collapsible ? "min-h-12" : "min-h-10 w-full")}
             disabled={!canStartNavigation}
             onClick={onStartNavigation}
           >
@@ -665,7 +666,7 @@ function DirectionsPanelContent({
             <Button
               type="button"
               variant="outline"
-              className="min-h-11 gap-2"
+              className="min-h-12 gap-2"
               aria-expanded={expanded}
               onClick={() => setExpanded((open) => !open)}
             >

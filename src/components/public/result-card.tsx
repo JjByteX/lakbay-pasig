@@ -18,7 +18,6 @@ import { useMapPack } from "@/lib/offline/map-pack";
 import { MAP_NEEDS_CONNECTION, NEEDS_CONNECTION } from "@/lib/offline/messages";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { useDirections } from "./public-shell";
-import { ShareButton } from "./share-button";
 
 // Phase 6.1 (step-5-phases.md), pulled forward because Phase 4.4 requires
 // it to exist: "the same result card component Phase 6 defines." Scoped
@@ -214,17 +213,14 @@ export function ResultCard({
                 <VerificationBadge status={result.verification_status} />
               </div>
               <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2 sm:justify-between">
-                <div className="flex items-center gap-2">
-                  <Button asChild variant="link" className="gap-1 px-0">
-                    {/* Plain link: the route change unmounts the map page, which
-                        closes this popup with it. No click handler needed. */}
-                    <Link to={`/discover/${result.kind}/${result.id}`}>
-                      View
-                      <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                  </Button>
-                  <ShareButton kind={result.kind} id={result.id} name={result.name} />
-                </div>
+                <Button asChild variant="link" className="gap-1 px-0">
+                  {/* Plain link: the route change unmounts the map page, which
+                      closes this popup with it. No click handler needed. */}
+                  <Link to={`/discover/${result.kind}/${result.id}`}>
+                    View
+                    <ArrowUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+                  </Link>
+                </Button>
                 <div className="flex flex-col items-end gap-1">
                   {/* No origin: the hint replaces the button entirely (one
                       row, no dead control), per the Disabled/gated rule's
