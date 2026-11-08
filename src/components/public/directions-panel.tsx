@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { ArrowUp, Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { formatDistance, type DirectionsErrorReason, type RouteStep, type TravelMode } from "@/lib/directions";
+import {
+  formatDistance,
+  viaName,
+  type DirectionsErrorReason,
+  type RouteGeometry,
+  type RouteStep,
+  type TravelMode,
+} from "@/lib/directions";
 import { formatStepInstruction } from "@/lib/osrm-instructions";
 import type { DiscoverResult } from "@/lib/discover-types";
 import type { CustomFrom } from "@/components/public/public-shell";
@@ -81,6 +88,12 @@ interface DirectionsPanelProps {
   // "nothing to show" -- the panel renders the duration/distance row only,
   // same as before this phase, rather than an empty list.
   steps: RouteStep[] | null | undefined;
+  // Alternative routes: the selected route, whose `alternatives` (directions.ts)
+  // are the other options. With none, the panel shows the plain time and
+  // distance row as before. onSelectRoute swaps one in (public-shell.tsx's
+  // handleSelectRoute), nothing is fetched.
+  route: RouteGeometry | null;
+  onSelectRoute: (alternative: RouteGeometry) => void;
   // Phase 6.1: true while a mode tap's fetchRoute is in flight
   // (discover.tsx's modeLoading, already tracked since 5.3's single-
   // flight guard -- reused here rather than a second loading flag).
@@ -234,6 +247,57 @@ function DirectionsStatusRow({
   return <p className="mt-4 text-sm text-muted-foreground">{text}</p>;
 }
 
+// OSRM times are what the road allows with no traffic, and the app has no
+// live traffic to correct them with. Said once, under the time, for car only:
+// a walk or a ride is not held up by traffic the same way.
+function TrafficNote({ mode }: Readonly<{ mode: TravelMode }>) {
+  if (mode !== "car") return null;
+  return <p className="mt-1 text-xs text-muted-foreground">Time is an estimate without traffic.</p>;
+}
+
+// Alternative routes, as Google Maps lists them: one row per route with its
+// time, distance and main road, the fastest first. The selected row has a
+// filled background, not a colored edge line (ux-ui-guidelines.md, Style).
+// Sorted by time so the order does not change when a pick swaps routes.
+function RouteOptions({
+  route,
+  onSelectRoute,
+}: Readonly<{ route: RouteGeometry; onSelectRoute: (alternative: RouteGeometry) => void }>) {
+  const options = [route, ...(route.alternatives ?? [])].sort((a, b) => a.duration - b.duration);
+  return (
+    <ul className="mt-4 flex flex-col gap-1">
+      {options.map((option, index) => {
+        const selected = option === route;
+        const via = viaName(option);
+        return (
+          <li key={`${Math.round(option.duration)}-${Math.round(option.distance)}`}>
+            <button
+              type="button"
+              aria-pressed={selected}
+              onClick={() => {
+                if (!selected) onSelectRoute(option);
+              }}
+              className={cn(
+                "flex min-h-10 w-full items-center justify-between gap-4 rounded-lg px-4 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                selected ? "bg-muted" : "hover:bg-muted",
+              )}
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">{formatDuration(option.duration)}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {via ? `Via ${via}, ` : ""}
+                  {formatDistance(option.distance)}
+                </span>
+              </span>
+              {index === 0 && <span className="shrink-0 text-xs text-muted-foreground">Fastest</span>}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 // directions-distance-and-from-phases.md Phase 4.6: the From row's three
 // mutually exclusive states, as early returns rather than a nested ternary
 // (same Sonar reason DirectionsStatusRow above gives). Order matters:
@@ -346,6 +410,8 @@ function DirectionsPanelContent({
   durationSeconds,
   distanceMeters,
   steps,
+  route,
+  onSelectRoute,
   isLoading,
   errorReason,
   fromLabel,
@@ -488,12 +554,21 @@ function DirectionsPanelContent({
           own destructive-text treatment (text-destructive) so a routing
           failure reads the same way in both surfaces, not a panel-
           specific color introduced for this one row. */}
-      <DirectionsStatusRow
-        isLoading={isLoading}
-        errorReason={errorReason}
-        durationSeconds={durationSeconds}
-        distanceMeters={distanceMeters}
-      />
+      {/* Alternative routes replace the single time and distance row when
+          OSRM returned more than one route, since the selected row already
+          carries both numbers. Loading and error still win, same
+          mutual exclusion as above. */}
+      {!isLoading && !errorReason && route && (route.alternatives?.length ?? 0) > 0 ? (
+        <RouteOptions route={route} onSelectRoute={onSelectRoute} />
+      ) : (
+        <DirectionsStatusRow
+          isLoading={isLoading}
+          errorReason={errorReason}
+          durationSeconds={durationSeconds}
+          distanceMeters={distanceMeters}
+        />
+      )}
+      {!isLoading && !errorReason && <TrafficNote mode={selectedMode} />}
 
       {/* Turn-by-turn phase 1: only once a route has actually loaded --
           same mutual-exclusion the status row above relies on (isLoading

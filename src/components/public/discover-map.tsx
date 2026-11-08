@@ -399,6 +399,13 @@ function layoutMarkers(
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
 const ROUTE_CASING_LAYER_ID = "directions-route-casing";
+// Alternative routes: the other options from the same request, drawn in a
+// quieter road grey under the selected route. A tap on one selects it.
+const ALT_SOURCE_ID = "directions-route-alternatives";
+const ALT_LAYER_ID = "directions-route-alternatives-line";
+const ALT_CASING_LAYER_ID = "directions-route-alternatives-casing";
+// Finger-sized hit area (px) around a tap, since the line is thin.
+const ALT_TAP_RADIUS = 12;
 
 // Ring border for verification status, shared by markerElement and the
 // legend's Status swatches so the two cannot drift. Verified is a solid
@@ -535,6 +542,9 @@ interface DiscoverMapProps {
   // through to discover.tsx unchanged -- this file has no reason to read
   // it itself, its own drawRoute call still only ever reads `route`.
   onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
+  // Alternative routes: a tap on an alternative line, or a row in the desktop
+  // panel below, hands that route up to the shell (handleSelectRoute).
+  onSelectRoute: (alternative: RouteGeometry) => void;
   // desktop-directions-panel-phases.md Phase 2.3: the desktop directions
   // panel renders inside this component (not as a discover.tsx-level
   // sibling like mobile's fixed panel) since it needs to be `absolute`
@@ -1310,6 +1320,7 @@ export function DiscoverMap({
   onLocationFound,
   route,
   onRouteFound,
+  onSelectRoute,
   directionsPanelResult,
   selectedMode,
   onSelectMode,
@@ -1951,9 +1962,35 @@ export function DiscoverMap({
     if (!map.isStyleLoaded()) return;
     const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
     const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    const alternatives = geometry.alternatives ?? [];
+    const alternativeData: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: alternatives.map((alternative, index) => ({
+        type: "Feature",
+        properties: { index },
+        geometry: { type: "LineString", coordinates: alternative.coordinates },
+      })),
+    };
     if (source) {
       source.setData({ type: "Feature", properties: {}, geometry });
+      (map.getSource(ALT_SOURCE_ID) as maplibregl.GeoJSONSource | undefined)?.setData(alternativeData);
     } else {
+      // Alternatives go in first so the selected route's layers sit above them.
+      map.addSource(ALT_SOURCE_ID, { type: "geojson", data: alternativeData });
+      map.addLayer({
+        id: ALT_CASING_LAYER_ID,
+        type: "line",
+        source: ALT_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": palette.casing, "line-width": 8 },
+      });
+      map.addLayer({
+        id: ALT_LAYER_ID,
+        type: "line",
+        source: ALT_SOURCE_ID,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": palette.roadDark, "line-width": 5 },
+      });
       map.addSource(ROUTE_SOURCE_ID, {
         type: "geojson",
         data: { type: "Feature", properties: {}, geometry },
@@ -1975,9 +2012,12 @@ export function DiscoverMap({
         paint: { "line-color": palette.mauve, "line-width": 5 },
       });
     }
-    const bounds = geometry.coordinates.reduce(
+    // Fit every option, so all the lines show and a pick between them does
+    // not move the camera.
+    const allCoordinates = [geometry, ...alternatives].flatMap((r) => r.coordinates);
+    const bounds = allCoordinates.reduce(
       (b, coord) => b.extend(coord as [number, number]),
-      new maplibregl.LngLatBounds(geometry.coordinates[0], geometry.coordinates[0]),
+      new maplibregl.LngLatBounds(allCoordinates[0], allCoordinates[0]),
     );
     // map-bounds-plan.md: grow before fitBounds, or fitBounds clamps to the
     // old box and crops a route that starts outside it.
@@ -2001,7 +2041,45 @@ export function DiscoverMap({
     if (!map?.isStyleLoaded()) return;
     const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     source?.setData({ type: "FeatureCollection", features: [] });
+    const alternativeSource = map.getSource(ALT_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    alternativeSource?.setData({ type: "FeatureCollection", features: [] });
   };
+
+  // Alternative routes: a tap near an alternative line selects it. Refs, not
+  // the props, because the listener is attached once per map and would
+  // otherwise keep the route it was created with. Stands down while the map is
+  // picking a start point, and for taps on a place marker, same two rules the
+  // pick listener above follows.
+  const routeRef = useRef(route);
+  const onSelectRouteRef = useRef(onSelectRoute);
+  useEffect(() => {
+    routeRef.current = route;
+    onSelectRouteRef.current = onSelectRoute;
+  }, [route, onSelectRoute]);
+
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map) return;
+    const handleAlternativeClick = (e: maplibregl.MapMouseEvent) => {
+      if (pickingOnMapRef.current || !map.getLayer(ALT_LAYER_ID)) return;
+      const target = e.originalEvent.target as Node | null;
+      if (target && markersRef.current.some((m) => m.getElement().contains(target))) return;
+      const { x, y } = e.point;
+      const hit = map.queryRenderedFeatures(
+        [
+          [x - ALT_TAP_RADIUS, y - ALT_TAP_RADIUS],
+          [x + ALT_TAP_RADIUS, y + ALT_TAP_RADIUS],
+        ],
+        { layers: [ALT_LAYER_ID] },
+      )[0];
+      const alternative = routeRef.current?.alternatives?.[Number(hit?.properties?.index)];
+      if (alternative) onSelectRouteRef.current(alternative);
+    };
+    map.on("click", handleAlternativeClick);
+    return () => {
+      map.off("click", handleAlternativeClick);
+    };
+  }, [mapInstance]);
 
   // Draws whenever there's a route to draw AND the map is actually ready
   // to accept a source/layer -- covers every case in one effect instead of
@@ -2369,6 +2447,8 @@ export function DiscoverMap({
           // Touched plumbing), so this is the one place its first leg's
           // steps turn into the prop the desktop variant reads.
           steps={route?.legs?.[0]?.steps}
+          route={route}
+          onSelectRoute={onSelectRoute}
           voiceMuted={voiceMuted}
           onToggleVoiceMuted={onToggleVoiceMuted}
           voiceSupported={voiceSupported}

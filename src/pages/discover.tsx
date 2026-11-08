@@ -134,6 +134,7 @@ export default function DiscoverPage() {
     handleMapPick,
     handleRouteFound,
     handleSelectMode,
+    handleSelectRoute,
     handleCancelDirections,
     // Voice guidance phase 1: straight from the shell's useVoiceGuidance
     // call (public-shell.tsx), handed to both DirectionsPanel render
@@ -655,6 +656,7 @@ export default function DiscoverPage() {
           onLocationFound={setUserLocation}
           route={route}
           onRouteFound={handleRouteFound}
+          onSelectRoute={handleSelectRoute}
           // desktop-directions-panel-phases.md Phase 2.3: the desktop
           // panel lives inside DiscoverMap's own relatively-positioned
           // container (same coordinate space as ZoomControl/
@@ -757,6 +759,8 @@ export default function DiscoverPage() {
           // (see RouteStep's own note in directions-panel.tsx), so a route
           // here only ever has one leg.
           steps={route?.legs?.[0]?.steps}
+          route={route}
+          onSelectRoute={handleSelectRoute}
           voiceMuted={voiceMuted}
           onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
           voiceSupported={voiceSupported}

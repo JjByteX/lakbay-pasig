@@ -31,6 +31,7 @@ import {
 } from "@/lib/directions";
 import { useVoiceGuidance } from "@/lib/use-voice-guidance";
 import { useOffRouteReroute } from "@/lib/use-off-route-reroute";
+import { useWakeLock } from "@/lib/use-wake-lock";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
@@ -187,6 +188,9 @@ interface DirectionsContextValue {
   handleRouteFound: (geometry: RouteGeometry, foundResult: DiscoverResult) => void;
   handleSelectMode: (mode: TravelMode) => Promise<void>;
   handleCancelDirections: () => void;
+  // Alternative routes: swaps one of route.alternatives in as the route, the
+  // old route taking its place in the list. Nothing is fetched.
+  handleSelectRoute: (alternative: RouteGeometry) => void;
   // Phase 2.4: sets customFrom, leaves pickingOnMap off (a search pick and
   // a map pick are different entry points; picking on the map turns
   // itself off separately, see handlePickFromOnMap/discover-map.tsx),
@@ -387,6 +391,23 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     setPickingOnMap(false);
   }, []);
 
+  // Alternative routes: the picked route becomes `route` and the others, the
+  // old route included, stay in its `alternatives`, so voice guidance, the
+  // step list, off-route reroute and the map line all keep reading one route.
+  // Duration and distance follow it. Nothing is fetched, so a pick works with
+  // a weak connection.
+  const handleSelectRoute = useCallback(
+    (alternative: RouteGeometry) => {
+      if (!route?.alternatives?.includes(alternative)) return;
+      const { alternatives, ...current } = route;
+      const others = [current, ...(alternatives ?? []).filter((r) => r !== alternative)];
+      setRoute({ ...alternative, alternatives: others });
+      setRouteDuration(alternative.duration);
+      setRouteDistance(alternative.distance);
+    },
+    [route],
+  );
+
   const handleSelectFrom = useCallback(
     async (from: CustomFrom) => {
       setCustomFrom(from);
@@ -445,6 +466,10 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
   const { muted: voiceMuted, setMuted: setVoiceMuted, supported: voiceSupported } =
     useVoiceGuidance(route?.legs?.[0]?.steps, userLocation);
 
+  // Screen stays on while a route is showing, so the phone does not sleep
+  // mid-trip. Same lifetime as the session: Cancel clears `route`.
+  useWakeLock(route !== null);
+
   // Memoized on purpose. This object used to be rebuilt on every render of
   // PublicShell, so every consumer of DirectionsContext (DiscoverPage)
   // re-rendered whenever the shell did. DiscoverPage hands the shell a new
@@ -468,6 +493,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       handleRouteFound,
       handleSelectMode,
       handleCancelDirections,
+      handleSelectRoute,
       handleSelectFrom,
       handleResetFrom,
       handlePickFromOnMap,
@@ -491,6 +517,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       handleRouteFound,
       handleSelectMode,
       handleCancelDirections,
+      handleSelectRoute,
       handleSelectFrom,
       handleResetFrom,
       handlePickFromOnMap,

@@ -100,6 +100,13 @@ export interface RouteGeometry {
   // order, destination), so a two-point route has one. Optional: absent if the
   // service omits it. Existing callers never read it.
   legs?: RouteLeg[];
+  // Alternative routes for the same trip, slower or longer than this one and
+  // different enough that OSRM kept them. Only on the route fetchRoute
+  // returns, never on an entry inside this list. Absent when there are none,
+  // and always absent on a `via` route (OSRM gives no alternatives past two
+  // points). Picking one swaps it in as the route (public-shell.tsx's
+  // handleSelectRoute), so everything that reads one route keeps working.
+  alternatives?: RouteGeometry[];
 }
 
 // Distinguishable failure shapes so result-card.tsx can render a specific
@@ -140,7 +147,11 @@ export async function fetchRoute(
   // endpoint or a second round trip. Costs a bigger response body (each
   // step repeats a small geometry + instruction payload) but no extra
   // requests against the FOSSGIS rate limit.
-  const url = `${OSRM_BASE_URL}/routed-${mode}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+  // alternatives=true: same request and same rate limit, OSRM adds up to one
+  // more route to the same response. Left off for a `via` trip, which OSRM
+  // does not give alternatives for.
+  const alternatives = via.length === 0 ? "&alternatives=true" : "";
+  const url = `${OSRM_BASE_URL}/routed-${mode}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true${alternatives}`;
 
   let response: Response;
   try {
@@ -170,12 +181,46 @@ export async function fetchRoute(
     throw new DirectionsError("no-route", "No route found to this location.");
   }
 
+  const best = readRoute(data.routes[0]);
+  const others: RouteGeometry[] = data.routes.slice(1).map(readRoute);
+  return others.length > 0 ? { ...best, alternatives: others } : best;
+}
+
+// One entry of OSRM's `routes`, as this app's RouteGeometry. Same fields the
+// single route always had, now shared by the best route and each alternative.
+function readRoute(raw: {
+  geometry: object;
+  duration: number;
+  distance: number;
+  legs: unknown;
+}): RouteGeometry {
   return {
-    ...data.routes[0].geometry,
-    duration: data.routes[0].duration,
-    distance: data.routes[0].distance,
-    legs: readLegs(data.routes[0].legs),
+    ...raw.geometry,
+    duration: raw.duration,
+    distance: raw.distance,
+    legs: readLegs(raw.legs),
   } as RouteGeometry;
+}
+
+/**
+ * The road a route spends the most distance on, for the "via" line that tells
+ * route options apart (Google Maps' own pattern). Null when the route has no
+ * named steps.
+ */
+export function viaName(route: RouteGeometry): string | null {
+  const totals = new Map<string, number>();
+  for (const step of route.legs?.[0]?.steps ?? []) {
+    if (step.name) totals.set(step.name, (totals.get(step.name) ?? 0) + step.distance);
+  }
+  let best: string | null = null;
+  let bestMeters = 0;
+  for (const [name, meters] of totals) {
+    if (meters > bestMeters) {
+      best = name;
+      bestMeters = meters;
+    }
+  }
+  return best;
 }
 
 // OSRM's route.legs, kept to the two numbers the app reads, now also the
