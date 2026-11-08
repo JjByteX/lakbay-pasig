@@ -580,6 +580,12 @@ interface DiscoverMapProps {
   onResetFrom: () => void;
   onPickOnMap: () => void;
   onCancelPickOnMap: () => void;
+  // Voice guidance phase 1: threaded straight through to the desktop
+  // DirectionsPanel below, same as every other directions prop above --
+  // this file reads none of these itself.
+  voiceMuted: boolean;
+  onToggleVoiceMuted: () => void;
+  voiceSupported: boolean;
   // Trail mode (Resume trail lands here): the trail's stops with their state,
   // drawn as numbered markers joined by a line. Optional, absent means the map
   // is the ordinary Discover map.
@@ -1317,6 +1323,9 @@ export function DiscoverMap({
   onResetFrom,
   onPickOnMap,
   onCancelPickOnMap,
+  voiceMuted,
+  onToggleVoiceMuted,
+  voiceSupported,
   trailStops,
   selectedTrailStopId = null,
   onSelectTrailStop,
@@ -2355,6 +2364,15 @@ export function DiscoverMap({
           onSelectMode={onSelectMode}
           durationSeconds={routeDuration}
           distanceMeters={routeDistance}
+          // Turn-by-turn phase 1: same derivation as discover.tsx's mobile
+          // DirectionsPanel call -- `route` is already a prop on this
+          // component (desktop-directions-panel-phases.md's own Files
+          // Touched plumbing), so this is the one place its first leg's
+          // steps turn into the prop the desktop variant reads.
+          steps={route?.legs?.[0]?.steps}
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={onToggleVoiceMuted}
+          voiceSupported={voiceSupported}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={onCancelDirections}

@@ -29,6 +29,8 @@ import {
   type RouteGeometry,
   type TravelMode,
 } from "@/lib/directions";
+import { useVoiceGuidance } from "@/lib/use-voice-guidance";
+import { useOffRouteReroute } from "@/lib/use-off-route-reroute";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AVATAR_SIZE } from "@/lib/avatar-storage";
@@ -210,6 +212,14 @@ interface DirectionsContextValue {
   // data, and a tap on empty map passes none and gets the generic label.
   // Same path as a search pick from there on (handleSelectFrom).
   handleMapPick: (coordinates: Coordinates, name?: string) => Promise<void>;
+  // Voice guidance phase 1: mirrors use-voice-guidance.ts's own
+  // VoiceGuidanceState one for one. Exposed on this same context, not a
+  // separate provider, since every consumer that would want a mute toggle
+  // (DirectionsPanel, both variants) already reads this context for
+  // everything else directions-related.
+  voiceMuted: boolean;
+  setVoiceMuted: (muted: boolean) => void;
+  voiceSupported: boolean;
 }
 
 const DirectionsContext = createContext<DirectionsContextValue | undefined>(
@@ -299,6 +309,32 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     },
     [],
   );
+
+  // Off-route detection phase 1, human-asked ("let's make the navigation
+  // better"): refetches the current route from wherever the person
+  // actually is now, once useOffRouteReroute (use-off-route-reroute.ts)
+  // decides they've truly left it. Reuses `refetch` itself -- the same
+  // function handleSelectMode/handleSelectFrom/handleResetFrom already
+  // call -- rather than a second fetchRoute call site, so a reroute
+  // behaves exactly like any other "fetch a new route for the current
+  // mode/destination" request (same single-flight guard via
+  // fetchSeqRef, same loading/error state).
+  //
+  // Guarded the same way handleSelectMode already is (no origin, no
+  // active session, already loading): a reroute attempt with nothing to
+  // reroute *to* is a no-op, not an error state -- useOffRouteReroute
+  // itself only calls this when its own route/position are both
+  // present, but origin can still be null (no GPS and no custom From)
+  // and directionsPanelResult can still be null (Cancel landed between
+  // the off-route decision and this callback running) by the time this
+  // actually runs, same race either of those two existing handlers
+  // already guards against.
+  const handleOffRouteReroute = useCallback(() => {
+    if (modeLoading || !origin || !directionsPanelResult) return;
+    void refetch(selectedMode, origin, directionsPanelResult);
+  }, [modeLoading, origin, directionsPanelResult, selectedMode, refetch]);
+
+  useOffRouteReroute(route, userLocation, handleOffRouteReroute);
 
   const handleRouteFound = useCallback(
     (geometry: RouteGeometry, foundResult: DiscoverResult) => {
@@ -397,6 +433,18 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     [handleSelectFrom],
   );
 
+  // Voice guidance phase 1: mounted once here, not per-panel-variant, so
+  // Cancel/mute state survives a mobile<->desktop layout change mid-route
+  // (same reasoning this whole hook's state already lives in
+  // useDirectionsState rather than discover.tsx: it must not reset just
+  // because the component tree holding the panel remounts). `route` is
+  // this same hook's own state above; `userLocation` is the param this
+  // function already takes. Only the first leg's steps, same reasoning
+  // directions-panel.tsx's own `steps` prop doc gives: every caller that
+  // reaches here passes no `via` points, so a route has at most one leg.
+  const { muted: voiceMuted, setMuted: setVoiceMuted, supported: voiceSupported } =
+    useVoiceGuidance(route?.legs?.[0]?.steps, userLocation);
+
   // Memoized on purpose. This object used to be rebuilt on every render of
   // PublicShell, so every consumer of DirectionsContext (DiscoverPage)
   // re-rendered whenever the shell did. DiscoverPage hands the shell a new
@@ -425,6 +473,9 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       handlePickFromOnMap,
       handleCancelPickOnMap,
       handleMapPick,
+      voiceMuted,
+      setVoiceMuted,
+      voiceSupported,
     }),
     [
       route,
@@ -445,6 +496,9 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       handlePickFromOnMap,
       handleCancelPickOnMap,
       handleMapPick,
+      voiceMuted,
+      setVoiceMuted,
+      voiceSupported,
     ],
   );
 }

@@ -134,6 +134,12 @@ export default function DiscoverPage() {
     handleRouteFound,
     handleSelectMode,
     handleCancelDirections,
+    // Voice guidance phase 1: straight from the shell's useVoiceGuidance
+    // call (public-shell.tsx), handed to both DirectionsPanel render
+    // sites same as every other directions prop above.
+    voiceMuted,
+    setVoiceMuted,
+    voiceSupported,
   } = useDirections();
 
   const [results, setResults] = useState<DiscoverResult[]>([]);
@@ -666,6 +672,12 @@ export default function DiscoverPage() {
           onSelectFrom={handleSelectFrom}
           onResetFrom={handleResetFrom}
           onPickOnMap={handlePickFromOnMap}
+          // Voice guidance phase 1: same props as the mobile
+          // DirectionsPanel call above, threaded down so DiscoverMap's
+          // own internal desktop-variant panel gets them too.
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
+          voiceSupported={voiceSupported}
           trailStops={trailMapStops}
           selectedTrailStopId={trail?.stops[selectedStopIndex]?.id ?? null}
           onSelectTrailStop={(stopId) => {
@@ -732,6 +744,18 @@ export default function DiscoverPage() {
           onSelectMode={handleSelectMode}
           durationSeconds={routeDuration}
           distanceMeters={routeDistance}
+          // Turn-by-turn phase 1: derived from `route` (already destructured
+          // above from useDirections()), not a new piece of shell state --
+          // RouteGeometry.legs now carries `steps` end to end from
+          // fetchRoute (directions.ts), and this is the one place that
+          // leg's steps turn into the prop DirectionsPanel reads. Only the
+          // first leg: every call reaching this panel has no `via` points
+          // (see RouteStep's own note in directions-panel.tsx), so a route
+          // here only ever has one leg.
+          steps={route?.legs?.[0]?.steps}
+          voiceMuted={voiceMuted}
+          onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
+          voiceSupported={voiceSupported}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={handleCancelDirections}
