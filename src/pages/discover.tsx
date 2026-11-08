@@ -324,6 +324,9 @@ export default function DiscoverPage() {
   // one opened) and follows along when walking opens the next, so the panel is
   // never left on stale information.
   const [selectedStopIndex, setSelectedStopIndex] = useState(0);
+  // Mobile directions panel: how much of the screen it covers, reported by
+  // the panel itself. The map fits the route above it.
+  const [panelCover, setPanelCover] = useState(0);
   useEffect(() => {
     setSelectedStopIndex(Math.max(highestUnlockedIndex, 0));
   }, [trail, highestUnlockedIndex]);
@@ -730,6 +733,7 @@ export default function DiscoverPage() {
           route={route}
           onRouteFound={handleRouteFound}
           onSelectRoute={handleSelectRoute}
+          bottomCover={isMobile ? panelCover : 0}
           // desktop-directions-panel-phases.md Phase 2.3: the desktop
           // panel lives inside DiscoverMap's own relatively-positioned
           // container (same coordinate space as ZoomControl/
@@ -875,6 +879,7 @@ export default function DiscoverPage() {
           onPickOnMap={handlePickFromOnMap}
           pickingOnMap={pickingOnMap}
           onCancelPickOnMap={handleCancelPickOnMap}
+          onCoverChange={setPanelCover}
         />,
         document.body,
       )}

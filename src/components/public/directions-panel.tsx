@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
+import { Car, Bicycle, CaretDown, CaretUp, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import {
   formatDistance,
@@ -151,6 +151,12 @@ interface DirectionsPanelProps {
   // Defaults to "mobile" so every existing call site (discover.tsx's
   // mobile render branch) is unaffected by this prop's addition.
   variant?: "mobile" | "desktop";
+  // Mobile only. How far the panel's top edge sits above the bottom of the
+  // viewport, in px, reported on mount and on every size change (collapse,
+  // expand, font size, rotation) and as 0 when the panel goes away. The map
+  // uses it as bottom padding so the route is fitted above the panel
+  // (mobile-directions-panel-collapse.md, Decision 3).
+  onCoverChange?: (coverPx: number) => void;
 }
 
 // Turn-by-turn phase 1, human-asked ("let's make the navigation better"):
@@ -166,9 +172,11 @@ interface DirectionsPanelProps {
 // not folded into the preceding one), and RouteStep carries nothing that
 // would let this component tell "second-to-last" from "last" more
 // cheaply than just rendering every entry in order.
-function StepList({ steps }: Readonly<{ steps: RouteStep[] }>) {
+function StepList({ steps, nested = true }: Readonly<{ steps: RouteStep[]; nested?: boolean }>) {
   return (
-    <ol className="mt-3 max-h-48 space-y-1 overflow-y-auto border-t border-border pt-3">
+    // nested false: the mobile panel's own details region scrolls, so the
+    // list must not add a second scroll area inside it.
+    <ol className={cn("mt-3 space-y-1 border-t border-border pt-3", nested && "max-h-48 overflow-y-auto")}>
       {steps.map((step, index) => (
         // index is stable here: `steps` is a fresh array from the latest
         // fetchRoute response each time (directions.ts's readSteps), never
@@ -429,7 +437,8 @@ function DirectionsPanelContent({
   canStartNavigation,
   startBlockedReason,
   onStartNavigation,
-}: Readonly<Omit<DirectionsPanelProps, "variant" | "navigating">>) {
+  collapsible,
+}: Readonly<Omit<DirectionsPanelProps, "variant" | "navigating" | "onCoverChange"> & { collapsible: boolean }>) {
   // directions-distance-and-from-phases.md Phase 4.6: UI-only. Whether the
   // From row is currently swapped for the search field. It does not need
   // to survive a tab switch: the field closes on its own (outside tap,
@@ -448,6 +457,19 @@ function DirectionsPanelContent({
     if (!noOrigin && !fromInUseRef.current) setEditingFrom(false);
   }, [noOrigin]);
 
+  // Mobile collapsed by default: mode row, time and distance, Start. Details
+  // opens From/To, route options, traffic note and the step list. Desktop is
+  // never collapsible. The From field must stay reachable when the panel
+  // needs it (no starting point yet, or picking on the map), so those two
+  // cases show the details and the button steps aside rather than sit there
+  // doing nothing.
+  const [expanded, setExpanded] = useState(false);
+  const detailsRequired = collapsible && (noOrigin || pickingOnMap);
+  const showDetails = !collapsible || expanded || detailsRequired;
+  const hasAlternatives = !isLoading && !errorReason && route !== null && (route.alternatives?.length ?? 0) > 0;
+  // Mobile touch targets are 44px (h-11); desktop keeps 36px.
+  const iconButtonSize = collapsible ? "h-11 w-11" : "h-9 w-9";
+
   return (
     <>
       {/* Phase 3.3: mode row, Car/Bike/Walk in that order per the
@@ -464,7 +486,7 @@ function DirectionsPanelContent({
           the icon (bg-primary), not a colored border line, which the
           style rules ban outright. Unselected: no background until
           hover, matching the `ghost` variant's own token pair. */}
-      <div className="flex items-center justify-between">
+      <div className="flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-2">
           {MODES.map(({ mode, label, icon: Icon }) => {
             const selected = mode === selectedMode;
@@ -488,7 +510,8 @@ function DirectionsPanelContent({
                 disabled={disabled}
                 onClick={() => onSelectMode(mode)}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                  "flex items-center justify-center rounded-full transition-colors",
+                  iconButtonSize,
                   selected
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -512,7 +535,10 @@ function DirectionsPanelContent({
               aria-label={voiceMuted ? "Unmute voice guidance" : "Mute voice guidance"}
               aria-pressed={voiceMuted}
               onClick={onToggleVoiceMuted}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className={cn(
+                "flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                iconButtonSize,
+              )}
             >
               {voiceMuted ? (
                 <SpeakerX className="h-5 w-5 shrink-0" />
@@ -525,13 +551,20 @@ function DirectionsPanelContent({
             type="button"
             aria-label="Cancel"
             onClick={onCancel}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className={cn(
+              "flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              iconButtonSize,
+            )}
           >
             <X className="h-5 w-5 shrink-0" />
           </button>
         </div>
       </div>
 
+      {/* Everything between the mode row and Start. On mobile this is the
+          one scroll area (the card is height-capped), so the mode row and
+          Start never scroll out of view. */}
+      <div className={cn(collapsible && "min-h-0 flex-1 overflow-y-auto")}>
       {/* Phase 3.4/3.5: From/To rows, stacked, matching the reference
           image's circle-then-pin marker pair.
           directions-distance-and-from-phases.md Phase 4.6: From used to
@@ -545,6 +578,7 @@ function DirectionsPanelContent({
           gap-2/mt-4 throughout (8px grid, ux-ui-guidelines.md's Spacing
           Rules), not gap-3/mt-3 -- 12px isn't a valid grid step, only
           4px is allowed as the one tight-space exception. */}
+      {showDetails && (
       <div className="mt-4 flex flex-col gap-2">
         <DirectionsFromRow
           fromLabel={fromLabel}
@@ -572,6 +606,7 @@ function DirectionsPanelContent({
           <p className="text-sm text-foreground">{result.name}</p>
         </div>
       </div>
+      )}
 
       {/* Phase 6.1/6.2: loading and error both take over this row --
           they're mutually exclusive with the duration and with each
@@ -586,7 +621,7 @@ function DirectionsPanelContent({
           OSRM returned more than one route, since the selected row already
           carries both numbers. Loading and error still win, same
           mutual exclusion as above. */}
-      {!isLoading && !errorReason && route && (route.alternatives?.length ?? 0) > 0 ? (
+      {hasAlternatives && route && showDetails ? (
         <RouteOptions route={route} onSelectRoute={onSelectRoute} />
       ) : (
         <DirectionsStatusRow
@@ -598,7 +633,7 @@ function DirectionsPanelContent({
           onRetry={route === null ? () => onSelectMode(selectedMode) : null}
         />
       )}
-      {!isLoading && !errorReason && !noOrigin && <TrafficNote mode={selectedMode} />}
+      {showDetails && !isLoading && !errorReason && !noOrigin && <TrafficNote mode={selectedMode} />}
 
       {/* Turn-by-turn phase 1: only once a route has actually loaded --
           same mutual-exclusion the status row above relies on (isLoading
@@ -608,16 +643,41 @@ function DirectionsPanelContent({
           (service omitted them, or readSteps' shape check in directions.ts
           rejected a malformed response) renders nothing extra here -- the
           duration/distance row above already covers that case. */}
-      {!isLoading && !errorReason && steps && steps.length > 0 && <StepList steps={steps} />}
+      {showDetails && !isLoading && !errorReason && steps && steps.length > 0 && (
+        <StepList steps={steps} nested={!collapsible} />
+      )}
+      </div>
 
       {/* Navigation: the one primary action, at the bottom of the panel.
           Disabled (visibly, with the reason when the person can fix it)
           until a route with steps is loaded and the live position is the
           starting point. */}
-      <div className="mt-4">
-        <Button className="min-h-10 w-full" disabled={!canStartNavigation} onClick={onStartNavigation}>
-          Start
-        </Button>
+      <div className="mt-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <Button
+            className={cn("flex-1", collapsible ? "min-h-11" : "min-h-10 w-full")}
+            disabled={!canStartNavigation}
+            onClick={onStartNavigation}
+          >
+            Start
+          </Button>
+          {collapsible && !detailsRequired && (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 gap-2"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((open) => !open)}
+            >
+              Details
+              {expanded ? (
+                <CaretDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <CaretUp className="h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+            </Button>
+          )}
+        </div>
         {startBlockedReason && (
           <p className="mt-2 text-xs text-muted-foreground">{START_BLOCKED_MESSAGES[startBlockedReason]}</p>
         )}
@@ -629,8 +689,34 @@ function DirectionsPanelContent({
 export function DirectionsPanel({
   variant = "mobile",
   navigating,
+  onCoverChange,
   ...contentProps
 }: Readonly<DirectionsPanelProps>) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const mobileShowing = variant === "mobile" && !navigating;
+
+  // Report how much of the screen the panel covers, so the map can fit the
+  // route above it. Measured, not assumed: collapse, expand, a larger font
+  // and a wrapped line all change the height.
+  useEffect(() => {
+    if (!onCoverChange) return;
+    const card = cardRef.current;
+    if (!mobileShowing || !card) {
+      onCoverChange(0);
+      return;
+    }
+    const report = () => onCoverChange(Math.max(0, Math.round(window.innerHeight - card.getBoundingClientRect().top)));
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(card);
+    window.addEventListener("resize", report);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", report);
+      onCoverChange(0);
+    };
+  }, [mobileShowing, onCoverChange]);
+
   if (navigating) return null;
   if (variant === "desktop") {
     // desktop-directions-panel-phases.md Phase 1.1: `absolute`, not
@@ -654,7 +740,7 @@ export function DirectionsPanel({
     // transplanted mobile component.
     return (
       <div className="absolute bottom-6 left-1/2 z-[1000] w-80 -translate-x-1/2 rounded-2xl border border-input bg-card p-4 shadow">
-        <DirectionsPanelContent {...contentProps} />
+        <DirectionsPanelContent {...contentProps} collapsible={false} />
       </div>
     );
   }
@@ -669,8 +755,11 @@ export function DirectionsPanel({
         "mx-auto w-full max-w-md px-4 pb-2",
       )}
     >
-      <div className="rounded-2xl border border-border bg-card p-4 shadow-md">
-        <DirectionsPanelContent {...contentProps} />
+      <div
+        ref={cardRef}
+        className="flex max-h-[60svh] flex-col rounded-2xl border border-border bg-card p-4 shadow-md"
+      >
+        <DirectionsPanelContent {...contentProps} collapsible />
       </div>
     </div>
   );

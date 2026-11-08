@@ -578,6 +578,10 @@ interface DiscoverMapProps {
   // Alternative routes: a tap on an alternative line, or a row in the desktop
   // panel below, hands that route up to the shell (handleSelectRoute).
   onSelectRoute: (alternative: RouteGeometry) => void;
+  // Mobile: px of the screen the directions panel covers, measured from the
+  // bottom of the viewport. The route is fitted above it. 0 when there is no
+  // panel (desktop, or closed).
+  bottomCover?: number;
   // desktop-directions-panel-phases.md Phase 2.3: the desktop directions
   // panel renders inside this component (not as a discover.tsx-level
   // sibling like mobile's fixed panel) since it needs to be `absolute`
@@ -1392,6 +1396,7 @@ export function DiscoverMap({
   canStartNavigation,
   startBlockedReason,
   onStartNavigation,
+  bottomCover = 0,
   trailStops,
   selectedTrailStopId = null,
   onSelectTrailStop,
@@ -2244,6 +2249,28 @@ export function DiscoverMap({
         paint: { "line-color": palette.mauve, "line-width": 5 },
       });
     }
+    fitRoute(geometry);
+  };
+
+  // Padding under the route so the line is never hidden behind the mobile
+  // directions panel. Only the part of the panel that actually overlaps the
+  // map counts (the map stops above the bottom nav), and it is capped so the
+  // fit still has room to work in a short viewport.
+  const bottomCoverRef = useRef(bottomCover);
+  bottomCoverRef.current = bottomCover;
+  const fitPadding = () => {
+    const container = containerRef.current;
+    const base = 48;
+    if (!container) return { top: base, right: base, bottom: base, left: base };
+    const rect = container.getBoundingClientRect();
+    const overlap = Math.max(0, bottomCoverRef.current - (window.innerHeight - rect.bottom));
+    return { top: base, right: base, bottom: base + Math.min(overlap, rect.height * 0.6), left: base };
+  };
+
+  const fitRoute = (geometry: RouteGeometry) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const alternatives = geometry.alternatives ?? [];
     // Fit every option, so all the lines show and a pick between them does
     // not move the camera.
     const allCoordinates = [geometry, ...alternatives].flatMap((r) => r.coordinates);
@@ -2261,7 +2288,7 @@ export function DiscoverMap({
     ]);
     // While navigating the follow camera owns the view, so a reroute or an
     // alternative swap redraws the line without pulling the camera out.
-    if (!navigating) map.fitBounds(bounds, { padding: 48 });
+    if (!navigating) map.fitBounds(bounds, { padding: fitPadding() });
   };
 
   // directions-panel-phases.md Phase 2.2: the counterpart to drawRoute
@@ -2342,6 +2369,16 @@ export function DiscoverMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, styleReady]);
+
+  // The panel changed height (Details opened or closed, bigger font): fit the
+  // route above it again. Not while a start point is being picked, where the
+  // camera should stay put under the person's hand.
+  useEffect(() => {
+    if (!styleReady || !route || navigating || pickingOnMap) return;
+    fitRoute(route);
+    // Only a change in the cover re-fits; route changes are handled above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bottomCover]);
 
   // Barangay highlight. Same imperative pattern as the route: drawn once the
   // style is ready, and redrawn after a theme switch (setStyle drops it, then
