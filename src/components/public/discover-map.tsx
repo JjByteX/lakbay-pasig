@@ -29,6 +29,7 @@ import { fetchActiveCategories as fetchActiveBusinessCategories, type BusinessCa
 import { getBusinessCategoryIcon } from "@/lib/business-category-icons";
 import { categoryColor } from "@/lib/category-colors";
 import { cn } from "@/lib/utils";
+import { haptic } from "@/lib/motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -405,16 +406,18 @@ const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
 const FOLLOW_LOOKAHEAD_PX = 96;
 const FOLLOW_EASE_MS = 900;
 
-// Barangay highlight: a dashed outline round the barangay a search names, and
-// a light veil over everything outside it.
+// Barangay highlight: a dashed outline round the barangay picked in the search,
+// and a veil over everything outside it.
 const BARANGAY_SOURCE_ID = "barangay-highlight";
 const BARANGAY_MASK_SOURCE_ID = "barangay-highlight-mask";
 const BARANGAY_MASK_LAYER_ID = "barangay-highlight-mask-fill";
 const BARANGAY_LINE_LAYER_ID = "barangay-highlight-line";
 // The veil has to darken in both themes. The theme's base color is near white
 // in light mode, so filling with it brightened the outside instead. Light uses
-// the dark text token, dark uses the crust token (casing), both lightly.
-const BARANGAY_VEIL_OPACITY_LIGHT = 0.12;
+// a fixed deep navy at a stronger opacity (the old 12% of the text token was
+// too faint on a near-white map to read as a dim); dark uses the crust token
+// (casing) lightly.
+const BARANGAY_VEIL_OPACITY_LIGHT = 0.3;
 const BARANGAY_VEIL_OPACITY_DARK = 0.35;
 
 const ROUTE_SOURCE_ID = "directions-route";
@@ -542,10 +545,14 @@ interface DiscoverMapProps {
   onMapPick: (coordinates: Coordinates, name?: string) => void;
   resultsLoading: boolean;
   resultsError: string | null;
-  // The search text. When it names a barangay, that barangay is outlined.
-  barangayQuery?: string;
-  // A street or landmark picked from the search dropdown: gets a pin.
+  // A street, landmark or barangay picked from the search dropdown: gets a
+  // pin, and a barangay is outlined and framed too (searchedPlace.barangay).
   searchedPlace?: SearchedPlace | null;
+  // A press-and-hold (touch) or right-click (mouse) on empty map drops a pin
+  // there, like Google Maps. The shell turns it into a searched place.
+  onDropPin?: (coordinates: Coordinates) => void;
+  // A tap on empty map while a dropped pin is showing clears it.
+  onClearPin?: () => void;
   // Locate-me-and-directions-plan.md Part 1: lets a tap on the locate
   // control update discover.tsx's own userLocation state (same setter its
   // one-shot geolocation effect already uses), so this file never owns a
@@ -571,6 +578,10 @@ interface DiscoverMapProps {
   // Alternative routes: a tap on an alternative line, or a row in the desktop
   // panel below, hands that route up to the shell (handleSelectRoute).
   onSelectRoute: (alternative: RouteGeometry) => void;
+  // Mobile: px of the screen the directions panel covers, measured from the
+  // bottom of the viewport. The route is fitted above it. 0 when there is no
+  // panel (desktop, or closed).
+  bottomCover?: number;
   // desktop-directions-panel-phases.md Phase 2.3: the desktop directions
   // panel renders inside this component (not as a discover.tsx-level
   // sibling like mobile's fixed panel) since it needs to be `absolute`
@@ -1358,8 +1369,9 @@ export function DiscoverMap({
   onMapPick,
   resultsLoading,
   resultsError,
-  barangayQuery = "",
   searchedPlace = null,
+  onDropPin,
+  onClearPin,
   onLocationFound,
   route,
   onRouteFound,
@@ -1384,6 +1396,7 @@ export function DiscoverMap({
   canStartNavigation,
   startBlockedReason,
   onStartNavigation,
+  bottomCover = 0,
   trailStops,
   selectedTrailStopId = null,
   onSelectTrailStop,
@@ -2059,6 +2072,100 @@ export function DiscoverMap({
     };
   }, [pickingOnMap, onCancelPickOnMap]);
 
+  // Drop a pin by holding. Touch: a finger held still for HOLD_MS. Mouse: a
+  // right-click (the browser's contextmenu event, which Android also fires on
+  // a long press, so the two are de-duplicated). Off while picking a From
+  // point (a tap already means something there) and while navigating. A hold
+  // that starts on a place marker is left to the marker.
+  const onDropPinRef = useRef(onDropPin);
+  const onClearPinRef = useRef(onClearPin);
+  // When the last pin was dropped, so the click that can trail a hold never
+  // counts as a tap that clears it.
+  const lastPinDropRef = useRef(0);
+  useEffect(() => {
+    onDropPinRef.current = onDropPin;
+    onClearPinRef.current = onClearPin;
+  }, [onDropPin, onClearPin]);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || pickingOnMap || navigating) return;
+    const HOLD_MS = 500;
+    const MOVE_TOLERANCE_PX = 10;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let startPoint: { x: number; y: number } | null = null;
+    const onMarker = (e: Event) => {
+      const target = e.target as Node | null;
+      return !!target && markersRef.current.some((m) => m.getElement().contains(target));
+    };
+    const drop = (lngLat: maplibregl.LngLat) => {
+      lastPinDropRef.current = Date.now();
+      haptic();
+      onDropPinRef.current?.({ latitude: lngLat.lat, longitude: lngLat.lng });
+    };
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      startPoint = null;
+    };
+    const handleTouchStart = (e: maplibregl.MapTouchEvent) => {
+      cancel();
+      if (e.originalEvent.touches.length !== 1 || onMarker(e.originalEvent)) return;
+      startPoint = { x: e.point.x, y: e.point.y };
+      const lngLat = e.lngLat;
+      timer = setTimeout(() => {
+        timer = null;
+        drop(lngLat);
+      }, HOLD_MS);
+    };
+    const handleTouchMove = (e: maplibregl.MapTouchEvent) => {
+      if (!timer || !startPoint) return;
+      if (Math.hypot(e.point.x - startPoint.x, e.point.y - startPoint.y) > MOVE_TOLERANCE_PX) cancel();
+    };
+    const handleContextMenu = (e: maplibregl.MapMouseEvent) => {
+      e.originalEvent.preventDefault();
+      if (onMarker(e.originalEvent) || Date.now() - lastPinDropRef.current < 800) return;
+      cancel();
+      drop(e.lngLat);
+    };
+    map.on("touchstart", handleTouchStart);
+    map.on("touchmove", handleTouchMove);
+    map.on("touchend", cancel);
+    map.on("touchcancel", cancel);
+    map.on("movestart", cancel);
+    map.on("zoomstart", cancel);
+    map.on("contextmenu", handleContextMenu);
+    return () => {
+      cancel();
+      map.off("touchstart", handleTouchStart);
+      map.off("touchmove", handleTouchMove);
+      map.off("touchend", cancel);
+      map.off("touchcancel", cancel);
+      map.off("movestart", cancel);
+      map.off("zoomstart", cancel);
+      map.off("contextmenu", handleContextMenu);
+    };
+  }, [mapInstance, pickingOnMap, navigating]);
+
+  // Tap empty map to clear a dropped pin, like Google Maps. Only for a pin
+  // dropped by holding (a place picked from the search keeps its X), and only
+  // while nothing else owns the tap: no From pick, no route, no trip. A tap on
+  // any marker is left to that marker.
+  const droppedPinShowing = !!searchedPlace?.dropped;
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !droppedPinShowing || pickingOnMap || navigating || route || directionsPanelResult) return;
+    const handleClear = (e: maplibregl.MapMouseEvent) => {
+      if (Date.now() - lastPinDropRef.current < 800) return;
+      const target = e.originalEvent.target as Element | null;
+      if (target?.closest?.(".maplibregl-marker")) return;
+      onClearPinRef.current?.();
+    };
+    map.on("click", handleClear);
+    return () => {
+      map.off("click", handleClear);
+    };
+  }, [mapInstance, droppedPinShowing, pickingOnMap, navigating, route, directionsPanelResult]);
+
   // locate-me-and-directions-phases.md Phase 3.5-3.7: route line, drawn
   // imperatively on demand rather than kept in buildStyle (buildStyle
   // rebuilds the whole style on every dark/light toggle via the
@@ -2142,6 +2249,28 @@ export function DiscoverMap({
         paint: { "line-color": palette.mauve, "line-width": 5 },
       });
     }
+    fitRoute(geometry);
+  };
+
+  // Padding under the route so the line is never hidden behind the mobile
+  // directions panel. Only the part of the panel that actually overlaps the
+  // map counts (the map stops above the bottom nav), and it is capped so the
+  // fit still has room to work in a short viewport.
+  const bottomCoverRef = useRef(bottomCover);
+  bottomCoverRef.current = bottomCover;
+  const fitPadding = () => {
+    const container = containerRef.current;
+    const base = 48;
+    if (!container) return { top: base, right: base, bottom: base, left: base };
+    const rect = container.getBoundingClientRect();
+    const overlap = Math.max(0, bottomCoverRef.current - (window.innerHeight - rect.bottom));
+    return { top: base, right: base, bottom: base + Math.min(overlap, rect.height * 0.6), left: base };
+  };
+
+  const fitRoute = (geometry: RouteGeometry) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const alternatives = geometry.alternatives ?? [];
     // Fit every option, so all the lines show and a pick between them does
     // not move the camera.
     const allCoordinates = [geometry, ...alternatives].flatMap((r) => r.coordinates);
@@ -2159,7 +2288,7 @@ export function DiscoverMap({
     ]);
     // While navigating the follow camera owns the view, so a reroute or an
     // alternative swap redraws the line without pulling the camera out.
-    if (!navigating) map.fitBounds(bounds, { padding: 48 });
+    if (!navigating) map.fitBounds(bounds, { padding: fitPadding() });
   };
 
   // directions-panel-phases.md Phase 2.2: the counterpart to drawRoute
@@ -2241,13 +2370,24 @@ export function DiscoverMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, styleReady]);
 
+  // The panel changed height (Details opened or closed, bigger font): fit the
+  // route above it again. Not while a start point is being picked, where the
+  // camera should stay put under the person's hand.
+  useEffect(() => {
+    if (!styleReady || !route || navigating || pickingOnMap) return;
+    fitRoute(route);
+    // Only a change in the cover re-fits; route changes are handled above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bottomCover]);
+
   // Barangay highlight. Same imperative pattern as the route: drawn once the
   // style is ready, and redrawn after a theme switch (setStyle drops it, then
   // styleReady flips back). Sits under the route layers so a route stays on top.
   const barangayFeatures = useBarangayFeatures();
+  const highlightedName = searchedPlace?.barangay;
   const highlighted = useMemo(
-    () => (barangayFeatures ? matchBarangay(barangayQuery, barangayFeatures) : null),
-    [barangayFeatures, barangayQuery],
+    () => (barangayFeatures && highlightedName ? matchBarangay(highlightedName, barangayFeatures) : null),
+    [barangayFeatures, highlightedName],
   );
   useEffect(() => {
     const map = mapRef.current;
@@ -2336,7 +2476,8 @@ export function DiscoverMap({
     // Grow first so the move is not clamped, and leave the camera alone while
     // a trip is being followed.
     growIfNeeded([searchedPlace.coordinates]);
-    if (!navigating) {
+    // A barangay is framed whole by the outline effect above, so no zoom-in here.
+    if (!navigating && !searchedPlace.barangay) {
       map.flyTo({
         center: [searchedPlace.coordinates.longitude, searchedPlace.coordinates.latitude],
         zoom: Math.max(map.getZoom(), 17),

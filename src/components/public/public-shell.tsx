@@ -76,6 +76,11 @@ export interface SearchedPlace {
   name: string;
   address: string | null;
   coordinates: Coordinates;
+  // Dropped by holding on the map rather than picked from the search.
+  dropped?: boolean;
+  // The barangay this place is, by its exact name. Set only by picking it in
+  // the search; the map then outlines and dims it and frames the whole area.
+  barangay?: string;
 }
 
 interface GlobalSearchContextValue {
@@ -198,6 +203,10 @@ interface DirectionsContextValue {
   // risking the two falling out of sync.
   origin: Coordinates | null;
   handleRouteFound: (geometry: RouteGeometry, foundResult: DiscoverResult) => void;
+  // Opens the directions panel for a destination with no route yet. Used when
+  // there is no starting point (no location and no custom From): the panel
+  // asks for one, and picking it fetches the route (handleSelectFrom).
+  handleOpenDirections: (destination: DiscoverResult) => void;
   handleSelectMode: (mode: TravelMode) => Promise<void>;
   handleCancelDirections: () => void;
   // Alternative routes: swaps one of route.alternatives in as the route, the
@@ -369,6 +378,18 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     void refetch(selectedMode, origin, directionsPanelResult);
   }, [modeLoading, origin, directionsPanelResult, selectedMode, refetch]);
 
+  // The panel can open with no origin (no GPS yet, no custom From). When the
+  // first origin then arrives, fetch the route for the open session so the
+  // person is not left with a disabled Start and no next step. Fires only on
+  // the null -> origin change, so a failed fetch does not retry in a loop.
+  const hadOriginRef = useRef(origin !== null);
+  useEffect(() => {
+    const hadOrigin = hadOriginRef.current;
+    hadOriginRef.current = origin !== null;
+    if (hadOrigin || !origin || !directionsPanelResult || route || modeLoading) return;
+    void refetch(selectedMode, origin, directionsPanelResult);
+  }, [origin, directionsPanelResult, route, modeLoading, selectedMode, refetch]);
+
   // A route that starts from a custom point is not the person's own trip, so
   // their live position is never measured against it: no position, no reroute.
   useOffRouteReroute(route, customFrom ? null : userLocation, handleOffRouteReroute);
@@ -390,12 +411,25 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     [],
   );
 
+  const handleOpenDirections = useCallback((destination: DiscoverResult) => {
+    fetchSeqRef.current++; // a fetch still in flight belongs to the old session
+    setModeLoading(false);
+    setRoute(null);
+    setDirectionsPanelResult(destination);
+    setSelectedMode("foot");
+    setRouteDuration(null);
+    setRouteDistance(null);
+    setModeErrorReason(null);
+  }, []);
+
   const handleSelectMode = useCallback(
     async (mode: TravelMode) => {
       // Phase 2.3: guard changed from !userLocation to !origin, so a
       // custom From (no GPS needed) still allows a mode switch.
       if (modeLoading || !origin || !directionsPanelResult) return;
-      if (mode === selectedMode) return;
+      // Already on this mode: nothing to do, unless there is no route because
+      // the first request failed, in which case tapping it again retries.
+      if (mode === selectedMode && route) return;
       const ok = await refetch(mode, origin, directionsPanelResult);
       // Mode only commits on a successful fetch -- same rule the pre-
       // Phase-2 version enforced by setting it inside the try block.
@@ -403,7 +437,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       // reuse it without changing mode, per Phase 2.3.
       if (ok) setSelectedMode(mode);
     },
-    [modeLoading, origin, directionsPanelResult, selectedMode, refetch],
+    [modeLoading, origin, directionsPanelResult, selectedMode, route, refetch],
   );
 
   const handleCancelDirections = useCallback(() => {
@@ -557,6 +591,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       pickingOnMap,
       origin,
       handleRouteFound,
+      handleOpenDirections,
       handleSelectMode,
       handleCancelDirections,
       handleSelectRoute,
@@ -588,6 +623,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       pickingOnMap,
       origin,
       handleRouteFound,
+      handleOpenDirections,
       handleSelectMode,
       handleCancelDirections,
       handleSelectRoute,

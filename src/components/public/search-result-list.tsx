@@ -17,7 +17,7 @@ import { formatItemPrice } from "@/lib/item-match";
 export function ResultGroup({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   return (
     <div className="border-b border-border py-1 last:border-b-0">
-      <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="px-4 pb-1 pt-2 text-sm font-normal text-muted-foreground">
         {label}
       </p>
       <ul className="flex flex-col">{children}</ul>
@@ -43,7 +43,7 @@ export function ResultRow({
         onClick={onClick}
         className="flex w-full flex-col items-start gap-1 px-4 py-2 text-left transition-colors hover:bg-muted"
       >
-        <span className="text-sm font-semibold text-foreground">{title}</span>
+        <span className="text-sm font-normal text-foreground">{title}</span>
         {(subtitle || badge) && (
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             {subtitle}
@@ -86,7 +86,7 @@ export function ItemRow({
         )}
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-normal text-foreground">{name}</span>
             <span className="shrink-0 text-sm text-foreground">{formatItemPrice(price)}</span>
           </span>
           <span className="truncate text-xs text-muted-foreground">{businessName}</span>

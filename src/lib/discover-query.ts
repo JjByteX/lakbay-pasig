@@ -3,6 +3,7 @@ import { readEmbeddedName, readEmbeddedIcon, readEmbeddedColor } from "./place-c
 import { fetchCoverPhotoUrls } from "./home-query";
 import type { DiscoverBusiness, DiscoverPlace, DiscoverResult } from "./discover-types";
 import { matchingItem } from "./item-match";
+import { getOpenStatus } from "./hours";
 import { distanceKm, type BoundingBox } from "./geo";
 
 // Phase 3.1: places (places_select_public, migration 0003, verified only,
@@ -72,7 +73,7 @@ function placesQuery(bounds: BoundingBox | undefined) {
   let query = supabase
     .from("places")
     .select(
-      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon, color), facility_ids"
+      "id, name, description, latitude, longitude, verification_status, place_categories(name, icon, color), facility_ids, operating_hours"
     );
   if (bounds) {
     const [west, south, east, north] = bounds;
@@ -94,7 +95,7 @@ function businessesQuery(bounds: BoundingBox | undefined) {
   let query = supabase
     .from("businesses")
     .select(
-      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, business_items(name, price)"
+      "id, name, business_categories(name, icon, color), description, latitude, longitude, verification_status, business_items(name, price), opening_hours"
     );
   if (bounds) {
     const [west, south, east, north] = bounds;
@@ -161,6 +162,7 @@ async function fetchPlaces(options: ResolvedDiscoverOptions): Promise<DiscoverPl
     // defaults to '{}' (migration 0028), never actually null.
     facility_ids: row.facility_ids ?? [],
     coverPhotoUrl: coverPhotos.get(row.id) ?? null,
+    hours: row.operating_hours ?? null,
   }));
 }
 
@@ -203,6 +205,7 @@ async function fetchBusinesses(options: ResolvedDiscoverOptions): Promise<Discov
     verification_status: row.verification_status as "verified" | "pending",
     items: row.business_items ?? [],
     coverPhotoUrl: coverPhotos.get(row.id) ?? null,
+    hours: row.opening_hours ?? null,
   }));
 }
 
@@ -332,7 +335,8 @@ export function filterDiscoverResults(
   query: string,
   categories: string[],
   priceRange: { min: number | null; max: number | null } | null = null,
-  facilities: string[] = []
+  facilities: string[] = [],
+  openAt: Date | null = null
 ): DiscoverResult[] {
   const q = query.trim().toLowerCase();
 
@@ -341,8 +345,18 @@ export function filterDiscoverResults(
       matchesQuery(result, q) &&
       matchesCategories(result, categories) &&
       matchesPriceRange(result, priceRange) &&
-      matchesFacilities(result, facilities)
+      matchesFacilities(result, facilities) &&
+      matchesOpenNow(result, openAt)
   );
+}
+
+// Open now keeps only results whose stored hours say open at `openAt`, on
+// Manila's clock. null means the filter is off.
+// No hours, or legacy free text, is "unknown" (getOpenStatus returns null),
+// and unknown is left out rather than guessed open.
+function matchesOpenNow(result: DiscoverResult, openAt: Date | null): boolean {
+  if (!openAt) return true;
+  return getOpenStatus(result.hours, openAt)?.open === true;
 }
 
 // Name, or an item name for businesses (places carry no items).

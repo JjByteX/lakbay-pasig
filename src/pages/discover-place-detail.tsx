@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VerificationBadge } from "@/components/public/result-card";
 import { PageDirectionsButton } from "@/components/public/page-directions-button";
+import { ShareButton } from "@/components/public/share-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SaveButton } from "@/components/public/save-button";
 import { HoursDisplay } from "@/components/public/hours-display";
@@ -293,6 +294,7 @@ export default function DiscoverPlaceDetailPage() {
                 until the place has a label. */}
             <SeasonLabel kind="place" itemId={place.id} />
             {/* Directions, same as the preview modal; the full page lost it. */}
+            <div className="flex flex-wrap items-start gap-2">
             <PageDirectionsButton
               result={{
                 kind: "place",
@@ -309,6 +311,8 @@ export default function DiscoverPlaceDetailPage() {
                 coverPhotoUrl: photos[0] ?? null,
               }}
             />
+            <ShareButton kind="place" id={place.id} name={place.name} />
+            </div>
           </div>
 
           {/* Map hover/full-details photos phase: every uploaded photo,

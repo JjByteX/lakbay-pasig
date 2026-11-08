@@ -6,6 +6,7 @@ import { readEmbeddedName } from "@/lib/place-categories";
 import { Button } from "@/components/ui/button";
 import { VerificationBadge } from "@/components/public/result-card";
 import { PageDirectionsButton } from "@/components/public/page-directions-button";
+import { ShareButton } from "@/components/public/share-button";
 import { useUserLocation } from "@/components/public/public-shell";
 import { distanceAway, joinMeta } from "@/lib/distance-label";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -288,6 +289,7 @@ export default function DiscoverBusinessDetailPage() {
                 until the business has a label. */}
             <SeasonLabel kind="business" itemId={business.id} />
             {/* Directions, same as the preview modal; the full page lost it. */}
+            <div className="flex flex-wrap items-start gap-2">
             <PageDirectionsButton
               result={{
                 kind: "business",
@@ -304,6 +306,8 @@ export default function DiscoverBusinessDetailPage() {
                 coverPhotoUrl: photos[0] ?? null,
               }}
             />
+            <ShareButton kind="business" id={business.id} name={business.name} />
+            </div>
           </div>
 
           {/* Map hover/full-details photos phase: same placement as the

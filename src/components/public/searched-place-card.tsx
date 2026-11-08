@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ArrowBendUpRight, X } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { DirectionsError, fetchRoute } from "@/lib/directions";
+import { reverseGeocode } from "@/lib/geocode";
+import { useDirections } from "./public-shell";
 import type { Coordinates } from "@/lib/discover-query";
 import type { DiscoverBusiness, DiscoverResult } from "@/lib/discover-types";
 import { useOnline } from "@/lib/offline/status";
@@ -45,14 +47,33 @@ function standInResult(place: SearchedPlace): DiscoverBusiness {
 
 export function SearchedPlaceCard({ place, userLocation, onRouteFound, onClose }: Readonly<SearchedPlaceCardProps>) {
   const online = useOnline();
+  const { handleOpenDirections } = useDirections();
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  // A dropped pin starts with its coordinates as the address line; the street
+  // address replaces them when the lookup finds one. No result, offline or a
+  // failed lookup leave the coordinates in place.
+  const [foundAddress, setFoundAddress] = useState<string | null>(null);
 
   // A different place starts clean, same as the result card.
   useEffect(() => {
     setStatus("idle");
     setError(null);
   }, [place]);
+
+  useEffect(() => {
+    setFoundAddress(null);
+    if (!place.dropped || !online) return;
+    let cancelled = false;
+    reverseGeocode(place.coordinates)
+      .then((address) => {
+        if (!cancelled) setFoundAddress(address);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [place, online]);
 
   async function handleDirections() {
     if (!userLocation) return;
@@ -75,15 +96,14 @@ export function SearchedPlaceCard({ place, userLocation, onRouteFound, onClose }
       <div className="pointer-events-auto mx-auto flex w-full max-w-md items-start justify-between gap-4 rounded-2xl border border-input bg-card p-4 shadow">
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-foreground">{place.name}</p>
-          {place.address && <p className="truncate text-sm text-muted-foreground">{place.address}</p>}
-          {status === "error" && error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-          {!userLocation && (
-            <p className="mt-1 text-xs text-muted-foreground">Turn on location to get directions</p>
+          {(foundAddress ?? place.address) && (
+            <p className="truncate text-sm text-muted-foreground">{foundAddress ?? place.address}</p>
           )}
+          {status === "error" && error && <p className="mt-1 text-xs text-destructive">{error}</p>}
           {!online && <p className="mt-1 text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {userLocation && (
+          {userLocation ? (
             <Button
               type="button"
               variant="outline"
@@ -95,6 +115,17 @@ export function SearchedPlaceCard({ place, userLocation, onRouteFound, onClose }
             >
               {status === "loading" ? "Getting directions…" : "Directions"}
               {status !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-10 gap-2"
+              onClick={() => handleOpenDirections(standInResult(place))}
+            >
+              Directions
+              <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
           <button

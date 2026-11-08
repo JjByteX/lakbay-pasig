@@ -61,6 +61,8 @@ interface DiscoverListProps {
   // geometry (result-card.tsx's own widened signature), passed straight
   // through unchanged -- this file has no reason to read it itself.
   onRouteFound: (geometry: RouteGeometry, result: DiscoverResult) => void;
+  // No starting point: opens the directions panel (the map view) for a result.
+  onOpenDirections: (result: DiscoverResult) => void;
 }
 
 // Same grid saved.tsx uses for its photo cards (PHOTO_GRID): two across on
@@ -238,6 +240,7 @@ export function DiscoverList({
   hasFilters,
   onClearFilters,
   onRouteFound,
+  onOpenDirections,
 }: Readonly<DiscoverListProps>) {
   const [selected, setSelected] = useState<DiscoverResult | null>(null);
   const { session } = useAuth();
@@ -373,6 +376,7 @@ export function DiscoverList({
         userLocation={origin}
         distanceFrom={userLocation}
         onRouteFound={onRouteFound}
+        onOpenDirections={onOpenDirections}
       />
     </>
   );

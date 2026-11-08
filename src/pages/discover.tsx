@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
+import { Clock, List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
@@ -136,6 +136,7 @@ export default function DiscoverPage() {
     // panel never sets From from a tap itself.
     handleMapPick,
     handleRouteFound,
+    handleOpenDirections,
     handleSelectMode,
     handleSelectRoute,
     handleCancelDirections,
@@ -173,6 +174,19 @@ export default function DiscoverPage() {
   // case), not "match nothing" -- widened from the original single
   // `category: string | null` per direct request.
   const [categories, setCategories] = useState<string[]>([]);
+  // Open now: keeps only places and businesses whose hours say open on
+  // Manila's clock. Off by default, so nothing is hidden until asked.
+  const [openNow, setOpenNow] = useState(false);
+  // Ticks every minute while Open now is on, so the list follows the clock:
+  // a place that closes drops out, one that opens comes in, with no other
+  // filter change needed.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!openNow) return;
+    setClock(Date.now());
+    const timer = setInterval(() => setClock(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [openNow]);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
 
@@ -253,8 +267,9 @@ export default function DiscoverPage() {
   }, [minPrice, maxPrice]);
 
   const filtered = useMemo(
-    () => filterDiscoverResults(results, query, categories, priceRange, facilities),
-    [results, query, categories, priceRange, facilities],
+    () =>
+      filterDiscoverResults(results, query, categories, priceRange, facilities, openNow ? new Date(clock) : null),
+    [results, query, categories, priceRange, facilities, openNow, clock],
   );
 
   // Trail mode: "Resume trail" on a trail page lands here as /discover?trail=<id>.
@@ -309,6 +324,9 @@ export default function DiscoverPage() {
   // one opened) and follows along when walking opens the next, so the panel is
   // never left on stale information.
   const [selectedStopIndex, setSelectedStopIndex] = useState(0);
+  // Mobile directions panel: how much of the screen it covers, reported by
+  // the panel itself. The map fits the route above it.
+  const [panelCover, setPanelCover] = useState(0);
   useEffect(() => {
     setSelectedStopIndex(Math.max(highestUnlockedIndex, 0));
   }, [trail, highestUnlockedIndex]);
@@ -354,7 +372,14 @@ export default function DiscoverPage() {
   const [trailDirectionsError, setTrailDirectionsError] = useState<string | null>(null);
   async function handleGetTrailDirections(stop: TrailStop) {
     if (!origin) {
-      setTrailDirectionsError("Turn on location to get directions.");
+      // No starting point: open the panel and let the person choose one.
+      const destination = trailStopAsDiscoverResult(stop);
+      if (destination.latitude == null || destination.longitude == null) {
+        setTrailDirectionsError("This stop has no location to route to yet.");
+        return;
+      }
+      setTrailDirectionsError(null);
+      handleOpenDirections(destination);
       return;
     }
     setTrailDirectionsLoading(true);
@@ -393,11 +418,12 @@ export default function DiscoverPage() {
   // and one action that undoes all of it (search text, categories,
   // facilities, price range) so a filtered-to-nothing list is not a dead end.
   const hasFilters =
-    query.trim() !== "" || categories.length > 0 || facilities.length > 0 || priceRange !== null;
+    query.trim() !== "" || categories.length > 0 || facilities.length > 0 || priceRange !== null || openNow;
   const clearFilters = () => {
     setQuery("");
     setCategories([]);
     setFacilities([]);
+    setOpenNow(false);
     setMinPrice("");
     setMaxPrice("");
   };
@@ -579,6 +605,23 @@ export default function DiscoverPage() {
         </div>
       </div>
 
+      {/* Open now: one toggle chip, same Button convention as the category
+                and facility chips. Uses each result's stored hours; a result
+                with no hours is left out while this is on, since it cannot be
+                confirmed open. */}
+      <div className={cn("flex flex-col gap-2", isMobile ? "mx-auto w-full max-w-md" : "w-full")}>
+        <Button
+          type="button"
+          variant={openNow ? "default" : "outline"}
+          aria-pressed={openNow}
+          className="h-11 justify-start gap-2 self-start rounded-full px-4 font-normal"
+          onClick={() => setOpenNow((prev) => !prev)}
+        >
+          <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Open now
+        </Button>
+      </div>
+
       {/* Phase 7.1: price range filter, businesses only per step-5-plan.md
                 section 3. Own row beneath the toggle/category row rather than
                 crammed into it, the max-w-md mobile container (public-shell.tsx)
@@ -600,7 +643,7 @@ export default function DiscoverPage() {
         )}
       >
         <div className="flex flex-col gap-1">
-          <Label htmlFor="discover-price-min">Min price (₱)</Label>
+          <Label htmlFor="discover-price-min" className="font-normal">Min price (₱)</Label>
           <Input
             id="discover-price-min"
             type="number"
@@ -613,7 +656,7 @@ export default function DiscoverPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="discover-price-max">Max price (₱)</Label>
+          <Label htmlFor="discover-price-max" className="font-normal">Max price (₱)</Label>
           <Input
             id="discover-price-max"
             type="number"
@@ -672,12 +715,25 @@ export default function DiscoverPage() {
           onCancelPickOnMap={handleCancelPickOnMap}
           resultsLoading={resultsLoading}
           resultsError={resultsError}
-          barangayQuery={query}
           searchedPlace={searchedPlace}
+          onDropPin={(coordinates) => {
+            setSearchedPlace({
+              name: "Dropped pin",
+              address: `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`,
+              coordinates,
+              dropped: true,
+            });
+            setQuery("Dropped pin");
+          }}
+          onClearPin={() => {
+            setQuery("");
+            setSearchedPlace(null);
+          }}
           onLocationFound={setUserLocation}
           route={route}
           onRouteFound={handleRouteFound}
           onSelectRoute={handleSelectRoute}
+          bottomCover={isMobile ? panelCover : 0}
           // desktop-directions-panel-phases.md Phase 2.3: the desktop
           // panel lives inside DiscoverMap's own relatively-positioned
           // container (same coordinate space as ZoomControl/
@@ -731,6 +787,10 @@ export default function DiscoverPage() {
             handleRouteFound(geometry, foundResult);
             setViewChoice("map");
           }}
+          onOpenDirections={(foundResult) => {
+            handleOpenDirections(foundResult);
+            setViewChoice("map");
+          }}
         />
       )}
       {/* Navigation view: banner and bottom bar. Rendered whenever navigating,
@@ -739,7 +799,7 @@ export default function DiscoverPage() {
       {navigating && <NavigationView />}
       {/* A street or landmark picked from the search: name, Directions, and a
           way to clear it. Steps aside while a route is open. */}
-      {view === "map" && searchedPlace && !route && !navigating && (
+      {view === "map" && searchedPlace && !route && !navigating && !directionsPanelResult && (
         <SearchedPlaceCard
           place={searchedPlace}
           userLocation={userLocation}
@@ -819,6 +879,7 @@ export default function DiscoverPage() {
           onPickOnMap={handlePickFromOnMap}
           pickingOnMap={pickingOnMap}
           onCancelPickOnMap={handleCancelPickOnMap}
+          onCoverChange={setPanelCover}
         />,
         document.body,
       )}
