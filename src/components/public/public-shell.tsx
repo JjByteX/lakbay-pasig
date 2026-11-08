@@ -30,6 +30,7 @@ import {
   type TravelMode,
 } from "@/lib/directions";
 import { useVoiceGuidance } from "@/lib/use-voice-guidance";
+import { useTripProgress, type TripProgress } from "@/lib/use-trip-progress";
 import { useOffRouteReroute } from "@/lib/use-off-route-reroute";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
@@ -224,6 +225,22 @@ interface DirectionsContextValue {
   voiceMuted: boolean;
   setVoiceMuted: (muted: boolean) => void;
   voiceSupported: boolean;
+  // Navigation phase 2: true from Start until End, Cancel, or the route
+  // going away. A reroute keeps it true.
+  navigating: boolean;
+  // Start is allowed: a route with steps is loaded and not loading, there is
+  // no error, there is a live position, and the route starts from that
+  // position (not a custom starting point).
+  canStartNavigation: boolean;
+  startNavigation: () => void;
+  endNavigation: () => void;
+  // Where the person is on the route (use-trip-progress.ts). Null with no
+  // route or position, and for a route that starts from a custom point.
+  tripProgress: TripProgress | null;
+  // Navigation phase 4: whether the camera is following the person. True from
+  // Start; dragging the map turns it off, Recenter turns it back on.
+  following: boolean;
+  setFollowing: (following: boolean) => void;
 }
 
 const DirectionsContext = createContext<DirectionsContextValue | undefined>(
@@ -258,6 +275,9 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
   // directions-distance-and-from-phases.md Phase 2.2: null (no custom
   // From) is the common case -- origin then falls back to userLocation.
   const [customFrom, setCustomFrom] = useState<CustomFrom | null>(null);
+  // Navigation phase 2: Start pressed and not yet ended.
+  const [navigating, setNavigating] = useState(false);
+  const [following, setFollowing] = useState(true);
   // Phase 2.4: on while the map-tap-to-pick-From mode (Phase 5) is active.
   const [pickingOnMap, setPickingOnMap] = useState(false);
 
@@ -338,7 +358,9 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     void refetch(selectedMode, origin, directionsPanelResult);
   }, [modeLoading, origin, directionsPanelResult, selectedMode, refetch]);
 
-  useOffRouteReroute(route, userLocation, handleOffRouteReroute);
+  // A route that starts from a custom point is not the person's own trip, so
+  // their live position is never measured against it: no position, no reroute.
+  useOffRouteReroute(route, customFrom ? null : userLocation, handleOffRouteReroute);
 
   const handleRouteFound = useCallback(
     (geometry: RouteGeometry, foundResult: DiscoverResult) => {
@@ -389,6 +411,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     setModeErrorReason(null);
     setCustomFrom(null);
     setPickingOnMap(false);
+    setNavigating(false);
   }, []);
 
   // Alternative routes: the picked route becomes `route` and the others, the
@@ -412,6 +435,7 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     async (from: CustomFrom) => {
       setCustomFrom(from);
       setPickingOnMap(false);
+      setNavigating(false); // a custom starting point is not the person's own trip
       if (!directionsPanelResult) return; // no active session to reroute yet
       await refetch(selectedMode, from.coordinates, directionsPanelResult);
     },
@@ -463,8 +487,39 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
   // function already takes. Only the first leg's steps, same reasoning
   // directions-panel.tsx's own `steps` prop doc gives: every caller that
   // reaches here passes no `via` points, so a route has at most one leg.
+  //
+  // Navigation phase 2: where the person is on the route. Null for a route
+  // that starts from a custom point, same rule the off-route check follows.
+  const tripProgress = useTripProgress(route, customFrom ? null : userLocation, selectedMode);
+
+  // Voice speaks only while navigating, and reads the next step from the
+  // same trip progress the banner will.
   const { muted: voiceMuted, setMuted: setVoiceMuted, supported: voiceSupported } =
-    useVoiceGuidance(route?.legs?.[0]?.steps, userLocation);
+    useVoiceGuidance(route?.legs?.[0]?.steps, tripProgress, navigating, selectedMode);
+
+  const canStartNavigation =
+    route !== null &&
+    (route.legs?.[0]?.steps?.length ?? 0) > 0 &&
+    !modeLoading &&
+    modeErrorReason === null &&
+    !customFrom &&
+    userLocation !== null;
+
+  const startNavigation = useCallback(() => {
+    if (!canStartNavigation) return;
+    setFollowing(true);
+    setNavigating(true);
+  }, [canStartNavigation]);
+
+  const endNavigation = useCallback(() => {
+    setNavigating(false);
+  }, []);
+
+  // The route can go away without Cancel (a reset with no live position), and
+  // a later route must not start navigating on its own.
+  useEffect(() => {
+    if (!route) setNavigating(false);
+  }, [route]);
 
   // Screen stays on while a route is showing, so the phone does not sleep
   // mid-trip. Same lifetime as the session: Cancel clears `route`.
@@ -502,6 +557,13 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       voiceMuted,
       setVoiceMuted,
       voiceSupported,
+      navigating,
+      canStartNavigation,
+      startNavigation,
+      endNavigation,
+      tripProgress,
+      following,
+      setFollowing,
     }),
     [
       route,
@@ -526,6 +588,13 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
       voiceMuted,
       setVoiceMuted,
       voiceSupported,
+      navigating,
+      canStartNavigation,
+      startNavigation,
+      endNavigation,
+      tripProgress,
+      following,
+      setFollowing,
     ],
   );
 }
@@ -1176,6 +1245,11 @@ export function PublicShell() {
           // its plain dot with no cone -- no separate "moving" flag
           // needed, the null itself is the signal.
           heading: position.coords.heading,
+          // Trip progress needs the rest of the fix: how precise it is, how
+          // fast the device is moving, and when it was taken.
+          accuracy: position.coords.accuracy,
+          speed: position.coords.speed,
+          timestamp: position.timestamp,
         });
       },
       () => {

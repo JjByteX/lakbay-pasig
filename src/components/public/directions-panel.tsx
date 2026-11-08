@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
+import { Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import {
   formatDistance,
@@ -12,7 +12,9 @@ import {
 import { formatStepInstruction } from "@/lib/osrm-instructions";
 import type { DiscoverResult } from "@/lib/discover-types";
 import type { CustomFrom } from "@/components/public/public-shell";
+import { Button } from "@/components/ui/button";
 import { FromSearch } from "./from-search";
+import { stepIcon } from "./step-icon";
 
 // directions-panel-phases.md Phase 3: static shell only, no fetch, no
 // open/close wiring, no mode switching -- confirms the layout fits before
@@ -41,7 +43,7 @@ const MODES: { mode: TravelMode; label: string; icon: typeof Car }[] = [
 // Inventory Before Suggesting rule) -- the one other duration field in
 // the app, routes.estimated_duration, is a free-text staff-entered
 // string, not a seconds value, so there's nothing to share this with.
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   const totalMinutes = Math.round(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -59,7 +61,7 @@ function formatDuration(seconds: number): string {
 // off of once discover.tsx has caught it and narrowed to a reason (see
 // discover.tsx's handleSelectMode), so the strings are declared here
 // directly rather than reconstructing an Error just to read `.message`.
-const ERROR_MESSAGES: Record<DirectionsErrorReason, string> = {
+export const ERROR_MESSAGES: Record<DirectionsErrorReason, string> = {
   network: "Couldn't reach the routing service, try again.",
   "rate-limited": "Too many requests right now, wait a moment and try again.",
   "no-route": "No route found to this location.",
@@ -133,6 +135,14 @@ interface DirectionsPanelProps {
   voiceMuted: boolean;
   onToggleVoiceMuted: () => void;
   voiceSupported: boolean;
+  // Navigation: Start sits at the bottom of the panel. While navigating the
+  // panel is not shown at all (the navigation view replaces it).
+  navigating: boolean;
+  canStartNavigation: boolean;
+  // Why Start is unavailable, when the person can fix it. Null when Start is
+  // available or is only waiting on a route to load.
+  startBlockedReason: "no-location" | "custom-from" | null;
+  onStartNavigation: () => void;
   // desktop-directions-panel-phases.md Phase 1.1: the two variants share
   // every prop and every inner row -- only the outer wrapper's
   // positioning and card chrome differ (mobile: viewport-fixed bottom
@@ -141,44 +151,6 @@ interface DirectionsPanelProps {
   // Defaults to "mobile" so every existing call site (discover.tsx's
   // mobile render branch) is unaffected by this prop's addition.
   variant?: "mobile" | "desktop";
-}
-
-// Turn-by-turn phase 1: one icon (ArrowUp), rotated per OSRM modifier,
-// rather than importing a separate Phosphor icon per direction. Phosphor's
-// own bend-arrow icons (ArrowBendUpLeft etc.) exist but aren't confirmed
-// available at this project's pinned @phosphor-icons/react version without
-// checking each name individually; a single rotated arrow is the safer,
-// and visually simpler, choice -- it's also the same "one glyph, several
-// directions" approach the roundabout/turn arrows in Google's own
-// walking-directions panel use. "straight"/undefined point up (0deg,
-// ArrowUp's own resting direction), "uturn" reuses 180deg since OSRM gives
-// this app no distinct U-turn glyph to draw instead.
-const MODIFIER_ROTATION: Record<string, number> = {
-  uturn: 180,
-  "sharp right": 135,
-  right: 90,
-  "slight right": 45,
-  straight: 0,
-  "slight left": -45,
-  left: -90,
-  "sharp left": -135,
-};
-
-// "depart"/"notification"/"new name" etc. have no modifier at all (see
-// RouteStep in directions.ts); "arrive" gets its own dot, not an arrow, to
-// read as "you're done" rather than "continue this way" at a glance.
-function stepIcon(step: RouteStep) {
-  if (step.type === "arrive") {
-    return <span className="block h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />;
-  }
-  const rotation = step.modifier ? MODIFIER_ROTATION[step.modifier] ?? 0 : 0;
-  return (
-    <ArrowUp
-      className="h-4 w-4 shrink-0 text-primary"
-      style={{ transform: `rotate(${rotation}deg)` }}
-      aria-hidden="true"
-    />
-  );
 }
 
 // Turn-by-turn phase 1, human-asked ("let's make the navigation better"):
@@ -250,7 +222,7 @@ function DirectionsStatusRow({
 // OSRM times are what the road allows with no traffic, and the app has no
 // live traffic to correct them with. Said once, under the time, for car only:
 // a walk or a ride is not held up by traffic the same way.
-function TrafficNote({ mode }: Readonly<{ mode: TravelMode }>) {
+export function TrafficNote({ mode }: Readonly<{ mode: TravelMode }>) {
   if (mode !== "car") return null;
   return <p className="mt-1 text-xs text-muted-foreground">Time is an estimate without traffic.</p>;
 }
@@ -402,6 +374,11 @@ function DirectionsFromRow({
 // out so that shared content is written once, not copy-pasted into a
 // second near-identical return block that would drift the next time one
 // copy gets edited and the other doesn't.
+const START_BLOCKED_MESSAGES = {
+  "no-location": "Turn on location to start.",
+  "custom-from": "Start needs your location as the starting point.",
+} as const;
+
 function DirectionsPanelContent({
   result,
   selectedMode,
@@ -423,7 +400,10 @@ function DirectionsPanelContent({
   voiceMuted,
   onToggleVoiceMuted,
   voiceSupported,
-}: Readonly<Omit<DirectionsPanelProps, "variant">>) {
+  canStartNavigation,
+  startBlockedReason,
+  onStartNavigation,
+}: Readonly<Omit<DirectionsPanelProps, "variant" | "navigating">>) {
   // directions-distance-and-from-phases.md Phase 4.6: UI-only. Whether the
   // From row is currently swapped for the search field. It does not need
   // to survive a tab switch: the field closes on its own (outside tap,
@@ -579,14 +559,29 @@ function DirectionsPanelContent({
           rejected a malformed response) renders nothing extra here -- the
           duration/distance row above already covers that case. */}
       {!isLoading && !errorReason && steps && steps.length > 0 && <StepList steps={steps} />}
+
+      {/* Navigation: the one primary action, at the bottom of the panel.
+          Disabled (visibly, with the reason when the person can fix it)
+          until a route with steps is loaded and the live position is the
+          starting point. */}
+      <div className="mt-4">
+        <Button className="min-h-10 w-full" disabled={!canStartNavigation} onClick={onStartNavigation}>
+          Start
+        </Button>
+        {startBlockedReason && (
+          <p className="mt-2 text-xs text-muted-foreground">{START_BLOCKED_MESSAGES[startBlockedReason]}</p>
+        )}
+      </div>
     </>
   );
 }
 
 export function DirectionsPanel({
   variant = "mobile",
+  navigating,
   ...contentProps
 }: Readonly<DirectionsPanelProps>) {
+  if (navigating) return null;
   if (variant === "desktop") {
     // desktop-directions-panel-phases.md Phase 1.1: `absolute`, not
     // `fixed` -- this renders inside DiscoverMap's own relatively-

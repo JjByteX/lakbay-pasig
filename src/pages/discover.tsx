@@ -5,6 +5,7 @@ import { List, MapTrifold as MapIcon } from "@phosphor-icons/react";
 import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
+import { NavigationView } from "@/components/public/navigation-banner";
 import { DiscoverTrailPanel } from "@/components/public/discover-trail-panel";
 import type { TrailMapStop } from "@/components/public/discover-trail-overlay";
 import {
@@ -142,6 +143,11 @@ export default function DiscoverPage() {
     voiceMuted,
     setVoiceMuted,
     voiceSupported,
+    // Navigation: Start state and action, handed to both DirectionsPanel
+    // render sites. NavigationView reads the rest from the same context.
+    navigating,
+    canStartNavigation,
+    startNavigation,
   } = useDirections();
 
   const [results, setResults] = useState<DiscoverResult[]>([]);
@@ -624,6 +630,14 @@ export default function DiscoverPage() {
   // and every doc comment describing *why* each does what it does moved
   // there unchanged; nothing here duplicates it.
 
+  // Start needs the map: navigation is drawn over it, so a Start tapped in the
+  // list view switches to the map first.
+  const startBlockedReason = customFrom ? "custom-from" : userLocation ? null : "no-location";
+  const handleStartNavigation = () => {
+    setViewChoice("map");
+    startNavigation();
+  };
+
   return (
     // data-swipe-owner (map view only): on mobile this page lives inside the
     // swipe pager (page-pager.tsx). MapLibre pans with the finger, so the map
@@ -684,6 +698,10 @@ export default function DiscoverPage() {
           voiceMuted={voiceMuted}
           onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
           voiceSupported={voiceSupported}
+          navigating={navigating}
+          canStartNavigation={canStartNavigation}
+          startBlockedReason={startBlockedReason}
+          onStartNavigation={handleStartNavigation}
           trailStops={trailMapStops}
           selectedTrailStopId={trail?.stops[selectedStopIndex]?.id ?? null}
           onSelectTrailStop={(stopId) => {
@@ -708,6 +726,8 @@ export default function DiscoverPage() {
           }}
         />
       )}
+      {/* Navigation view: banner and bottom bar, over the map. */}
+      {view === "map" && navigating && <NavigationView />}
       {/* Trail mode panel. Hidden while a Directions panel is open (both want
           the bottom of the screen), and in list view, where there is no map for
           the stops to be on. */}
@@ -764,6 +784,10 @@ export default function DiscoverPage() {
           voiceMuted={voiceMuted}
           onToggleVoiceMuted={() => setVoiceMuted(!voiceMuted)}
           voiceSupported={voiceSupported}
+          navigating={navigating}
+          canStartNavigation={canStartNavigation}
+          startBlockedReason={startBlockedReason}
+          onStartNavigation={handleStartNavigation}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={handleCancelDirections}

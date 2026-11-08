@@ -36,7 +36,7 @@ import { TrailOverlay, type TrailMapStop } from "./discover-trail-overlay";
 import type { RouteGeometry, TravelMode, DirectionsErrorReason } from "@/lib/directions";
 import { ResultCard, VerificationBadge } from "./result-card";
 import { DirectionsPanel } from "./directions-panel";
-import type { CustomFrom } from "./public-shell";
+import { useDirections, type CustomFrom } from "./public-shell";
 
 // Path B (map-vector-restyle-plan.md): Path A recolored CARTO Positron
 // raster tiles with a `mix-blend-mode: color` div. Positron's raster tiles
@@ -396,6 +396,13 @@ function layoutMarkers(
 // locate-me-and-directions-phases.md Phase 3.5: one GeoJSON source/line
 // layer pair, added and removed imperatively, the same shape buildStyle
 // already uses for the waterway layer -- no new rendering library.
+// Navigation follow camera: zoom per mode (slower travel gets a closer view),
+// how far below center the person sits in heading-up (so more of the road
+// ahead shows), and how long each ease runs (about one GPS tick, linear).
+const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
+const FOLLOW_LOOKAHEAD_PX = 96;
+const FOLLOW_EASE_MS = 900;
+
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
 const ROUTE_CASING_LAYER_ID = "directions-route-casing";
@@ -596,6 +603,12 @@ interface DiscoverMapProps {
   voiceMuted: boolean;
   onToggleVoiceMuted: () => void;
   voiceSupported: boolean;
+  // Navigation: threaded straight through to the desktop DirectionsPanel,
+  // same as the voice props above -- this file reads none of them itself.
+  navigating: boolean;
+  canStartNavigation: boolean;
+  startBlockedReason: "no-location" | "custom-from" | null;
+  onStartNavigation: () => void;
   // Trail mode (Resume trail lands here): the trail's stops with their state,
   // drawn as numbered markers joined by a line. Optional, absent means the map
   // is the ordinary Discover map.
@@ -765,6 +778,7 @@ function MapCornerControls({
   categoriesLoading,
   onLocationFound,
   onRecenterRequested,
+  onNorthUp,
 }: Readonly<{
   map: maplibregl.Map | null;
   placeCategories: PlaceCategory[];
@@ -780,6 +794,8 @@ function MapCornerControls({
   // half (it now keys off this signal instead of onLocationFound's
   // coordinate). Optional for the same reason onLocationFound is.
   onRecenterRequested?: () => void;
+  // Navigation: the compass was tapped, so the map is going north up.
+  onNorthUp?: () => void;
 }>) {
   const [legendOpen, setLegendOpen] = useState(false);
   const [locateStatus, setLocateStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -874,7 +890,7 @@ function MapCornerControls({
         )}
       </div>
 
-      <CompassControl map={map} />
+      <CompassControl map={map} onNorthUp={onNorthUp} />
 
       {locateStatus === "error" && locateError && (
         <span className="max-w-56 break-words rounded-md border border-border bg-card px-3 py-1.5 text-right text-xs text-destructive shadow">
@@ -890,7 +906,10 @@ function MapCornerControls({
 // north up. Hidden at north because it would be a button that does nothing.
 // Sits in MapCornerControls' column, under the pill, so it moves with it
 // instead of using its own offset from the header.
-function CompassControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
+function CompassControl({
+  map,
+  onNorthUp,
+}: Readonly<{ map: maplibregl.Map | null; onNorthUp?: () => void }>) {
   const [bearing, setBearing] = useState(0);
   useEffect(() => {
     if (!map) return;
@@ -913,7 +932,10 @@ function CompassControl({ map }: Readonly<{ map: maplibregl.Map | null }>) {
       size="icon"
       className="h-9 w-9 rounded-full border border-input bg-card shadow hover:bg-muted"
       aria-label="Reset map to north"
-      onClick={() => map.easeTo({ bearing: 0 })}
+      onClick={() => {
+        map.easeTo({ bearing: 0 });
+        onNorthUp?.();
+      }}
     >
       {/* Needle: red points north, grey south. The map turns by `bearing`,
           so north on screen is at -bearing. */}
@@ -1337,10 +1359,15 @@ export function DiscoverMap({
   voiceMuted,
   onToggleVoiceMuted,
   voiceSupported,
+  navigating,
+  canStartNavigation,
+  startBlockedReason,
+  onStartNavigation,
   trailStops,
   selectedTrailStopId = null,
   onSelectTrailStop,
 }: Readonly<DiscoverMapProps>) {
+  const { tripProgress, following, setFollowing } = useDirections();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -1673,7 +1700,11 @@ export function DiscoverMap({
   // so the map still moves off the default Pasig center automatically
   // once, without that first move counting as a second "request".
   const [recenterRequestId, setRecenterRequestId] = useState(0);
-  const requestRecenter = () => setRecenterRequestId((n) => n + 1);
+  const requestRecenter = () => {
+    setRecenterRequestId((n) => n + 1);
+    // While navigating, a locate tap also means "follow me again".
+    if (navigating) setFollowing(true);
+  };
   const hasAutoCenteredRef = useRef(false);
   const lastRecenterRequestIdRef = useRef(0);
 
@@ -1710,6 +1741,12 @@ export function DiscoverMap({
       map.setZoom(DEFAULT_ZOOM);
     }
     hasAutoCenteredRef.current = true;
+
+    // Navigation phase 5: while navigating the dot sits on the route line
+    // (trip progress snaps it when the fix is close enough to the line), so
+    // GPS noise does not push it beside the road. Otherwise, and whenever the
+    // fix is too far from the line to snap, it is the raw position.
+    const dotPosition = navigating && tripProgress ? tripProgress.snappedPosition : userLocation;
 
     if (!userMarkerRef.current) {
       // google-style-location-heading-indicator: three stacked layers,
@@ -1786,10 +1823,10 @@ export function DiscoverMap({
       wrapper.appendChild(dot);
 
       userMarkerRef.current = new maplibregl.Marker({ element: wrapper })
-        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .setLngLat([dotPosition.longitude, dotPosition.latitude])
         .addTo(map);
     } else {
-      userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
+      userMarkerRef.current.setLngLat([dotPosition.longitude, dotPosition.latitude]);
     }
 
     // google-style-location-heading-indicator: rotate/show-hide the cone
@@ -1815,7 +1852,77 @@ export function DiscoverMap({
     // growIfNeeded is deliberately not a dependency: it is recreated every
     // render, and it only ever grows once, so a stale copy is harmless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userLocation, customFrom, directionsPanelResult, recenterRequestId]);
+  }, [userLocation, customFrom, directionsPanelResult, recenterRequestId, navigating, tripProgress]);
+
+  // Navigation phase 4: follow camera. While navigating and following, the
+  // camera eases to the snapped position, turned to the bearing of the route
+  // ahead (heading-up) with the person a little below center, or kept north-up
+  // after a compass tap. This is a separate path from the recenter effect
+  // above, which keeps standing down during directions.
+  //
+  // Zoom is applied once when following starts (or resumes), not on every
+  // tick, so a pinch zoom is respected until Recenter. Dragging or turning the
+  // map by hand turns following off; Recenter (or a locate tap) turns it back
+  // on and returns to heading-up.
+  const [northUp, setNorthUp] = useState(false);
+  const followZoomPendingRef = useRef(true);
+  const wasNavigatingRef = useRef(false);
+  const wasFollowingRef = useRef(true);
+
+  useEffect(() => {
+    if (navigating) {
+      if (!wasNavigatingRef.current) setNorthUp(false);
+      wasNavigatingRef.current = true;
+      return;
+    }
+    if (wasNavigatingRef.current) {
+      // Navigation ended: put the map back to north up.
+      wasNavigatingRef.current = false;
+      mapRef.current?.easeTo({ bearing: 0 });
+    }
+  }, [navigating]);
+
+  useEffect(() => {
+    if (!navigating || !following) followZoomPendingRef.current = true;
+    if (navigating && following && !wasFollowingRef.current) setNorthUp(false);
+    wasFollowingRef.current = following;
+  }, [navigating, following]);
+
+  useEffect(() => {
+    if (!mapInstance || !navigating) return;
+    const stopFollowing = (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) setFollowing(false); // a hand on the map, not our own easeTo
+    };
+    mapInstance.on("dragstart", stopFollowing);
+    mapInstance.on("rotatestart", stopFollowing);
+    return () => {
+      mapInstance.off("dragstart", stopFollowing);
+      mapInstance.off("rotatestart", stopFollowing);
+    };
+  }, [mapInstance, navigating, setFollowing]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !navigating || !following || !tripProgress) return;
+    const target = tripProgress.snappedPosition;
+    // map-bounds-plan.md: grow first, so the camera is not clamped to the old box.
+    growIfNeeded([target]);
+    const options: Parameters<maplibregl.Map["easeTo"]>[0] = {
+      center: [target.longitude, target.latitude],
+      bearing: northUp ? 0 : tripProgress.bearingAheadDegrees,
+      offset: northUp ? [0, 0] : [0, FOLLOW_LOOKAHEAD_PX],
+      duration: FOLLOW_EASE_MS,
+      easing: (t: number) => t,
+    };
+    if (followZoomPendingRef.current) {
+      options.zoom = FOLLOW_ZOOM[selectedMode];
+      followZoomPendingRef.current = false;
+    }
+    map.easeTo(options);
+    // growIfNeeded is recreated every render and only ever grows once, so a
+    // stale copy is harmless, same as the recenter effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigating, following, northUp, tripProgress, selectedMode]);
 
   useEffect(() => {
     return () => {
@@ -2027,7 +2134,9 @@ export function DiscoverMap({
       { latitude: southWest.lat, longitude: southWest.lng },
       { latitude: northEast.lat, longitude: northEast.lng },
     ]);
-    map.fitBounds(bounds, { padding: 48 });
+    // While navigating the follow camera owns the view, so a reroute or an
+    // alternative swap redraws the line without pulling the camera out.
+    if (!navigating) map.fitBounds(bounds, { padding: 48 });
   };
 
   // directions-panel-phases.md Phase 2.2: the counterpart to drawRoute
@@ -2396,6 +2505,9 @@ export function DiscoverMap({
         categoriesLoading={categoriesLoading}
         onLocationFound={onLocationFound}
         onRecenterRequested={requestRecenter}
+        onNorthUp={() => {
+          if (navigating) setNorthUp(true);
+        }}
       />
 
       {/* Bottom-right +/- zoom pill, desktop only, per direct instruction
@@ -2415,7 +2527,7 @@ export function DiscoverMap({
         focusStopId={selectedTrailStopId}
         onFit={(points) => {
           const map = mapRef.current;
-          if (!map || points.length === 0) return;
+          if (navigating || !map || points.length === 0) return;
           growIfNeeded(points);
           const bounds = points.reduce(
             (b, p) => b.extend([p.longitude, p.latitude]),
@@ -2452,6 +2564,10 @@ export function DiscoverMap({
           voiceMuted={voiceMuted}
           onToggleVoiceMuted={onToggleVoiceMuted}
           voiceSupported={voiceSupported}
+          navigating={navigating}
+          canStartNavigation={canStartNavigation}
+          startBlockedReason={startBlockedReason}
+          onStartNavigation={onStartNavigation}
           isLoading={modeLoading}
           errorReason={modeErrorReason}
           onCancel={onCancelDirections}

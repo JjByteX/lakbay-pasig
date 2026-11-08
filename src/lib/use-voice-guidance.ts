@@ -1,150 +1,115 @@
 import { useEffect, useRef, useState } from "react";
-import { distanceKm } from "@/lib/geo";
 import { formatStepInstruction } from "@/lib/osrm-instructions";
-import type { Coordinates } from "@/lib/discover-query";
-import type { RouteStep } from "@/lib/directions";
+import type { RouteStep, TravelMode } from "@/lib/directions";
+import type { TripProgress } from "@/lib/use-trip-progress";
 
-// Voice guidance phase 1, human-asked ("let's make the navigation better" ->
-// "no third party needed, go"): speaks each turn-by-turn step
-// (osrm-instructions.ts) once, as the person gets close to it, using the
-// browser's own Web Speech API (SpeechSynthesisUtterance) -- no network
-// call, no npm package, no API key. Every serious open-source nav app this
-// was researched against (see the brainstorm earlier in this
-// conversation -- miles, firstproject, Roadstr) pairs its OSRM steps with
-// this same browser API rather than a paid TTS service, for the same
-// reason: it's free, works offline, and needs nothing from the person but
-// a device with sound.
+// Voice guidance: speaks each turn-by-turn step (osrm-instructions.ts) once,
+// as the person gets close to it, using the browser's own Web Speech API
+// (SpeechSynthesisUtterance) -- no network call, no npm package, no API key.
 //
-// `position` comes from the caller (public-shell.tsx's watchPosition),
-// same convention use-trail-walk.ts already follows for the same reason:
-// one geolocation watch for the whole shell, not a second one started in
-// here.
+// It speaks only while navigating (after Start). A route that is only being
+// previewed is silent. Which step is next, and how far away it is, comes from
+// useTripProgress, so the banner and the voice always agree.
 
-// How close (meters) the person needs to be to a step's maneuver point
-// before it's spoken. Google's own driving nav announces a turn 100-300m
-// out depending on speed and road type; this app has no speed estimate (no
-// live-traffic / speed data, per the earlier brainstorm) and covers
-// walking, biking and driving with one number, so 60m was picked as a
-// single middle ground: close enough that a walked block (Pasig's own
-// streets are short, per the screenshots used earlier this session) still
-// gets its own announcement rather than two steps firing back to back, far
-// enough that a car moving at typical city speed still has a few seconds'
-// warning before the actual turn.
-const ANNOUNCE_RADIUS_METERS = 60;
+// How close (meters) the person needs to be to the next maneuver before it is
+// spoken, per mode. Slower travel needs a shorter lead: a walked block still
+// gets its own announcement, and a car still has a few seconds of warning.
+const ANNOUNCE_RADIUS_METERS: Record<TravelMode, number> = {
+  foot: 25,
+  bike: 60,
+  car: 150,
+};
 
-// Re-announce the departure step immediately rather than waiting for a
-// position fix to arrive within ANNOUNCE_RADIUS_METERS of it -- "depart"
-// has no meaningful "distance until" the way a turn does; the moment a
-// route exists, the person is already standing at its start.
 function isDepartStep(step: RouteStep): boolean {
   return step.type === "depart";
 }
 
 export interface VoiceGuidanceState {
-  // Whether speech is currently allowed to speak. Starts true; the mute
-  // toggle (navigation UI, next phase) flips this off without losing the
-  // hook's own progress through the step list -- muting and un-muting
-  // mid-route should not re-announce every step already passed.
+  // True while speech is silenced. Starts false; the mute toggle flips it
+  // without losing the hook's progress through the step list, so muting and
+  // un-muting mid-route does not re-announce every step already passed.
   muted: boolean;
   setMuted: (muted: boolean) => void;
-  // Whether this browser actually exposes speechSynthesis at all. Every
-  // evergreen desktop/mobile browser does, but a caller showing a mute
-  // button can use this to hide it entirely rather than show a control
-  // that silently does nothing (Safari on some older iOS versions and
-  // some embedded WebViews are the known gaps).
+  // Whether this browser exposes speechSynthesis at all, so a caller showing
+  // a mute button can hide it rather than show a control that does nothing.
   supported: boolean;
 }
 
 /**
- * Speaks each step in `steps`, in order, once the person's live `position`
- * comes within ANNOUNCE_RADIUS_METERS of that step's maneuver point
- * (RouteStep.location, directions.ts). Call this once, anywhere a route is
- * actively being followed -- it has no UI of its own; `muted`/`setMuted`
- * from the returned state is what a Cancel/mute button should wire to.
+ * Speaks the steps in `steps`, in order, while `navigating`. The departure
+ * line is spoken once, when navigation starts. After that each step is spoken
+ * once, when `progress` says it is the next step and it is within the mode's
+ * announce distance.
  *
- * Resets its own progress (which step was last announced) whenever `steps`
- * changes identity -- a new fetchRoute call (a reroute, or a fresh
- * Directions session) always returns a new array, so this fires exactly
- * when it should: a new route starts announcing from its own first step,
- * never from wherever the previous route's announcements left off.
+ * A new `steps` array while navigating (a reroute, or a different alternative
+ * picked) restarts the step counter without speaking the departure line
+ * again: the trip is the same trip, only the route under it changed.
  */
 export function useVoiceGuidance(
   steps: RouteStep[] | null | undefined,
-  position: Coordinates | null,
+  progress: TripProgress | null,
+  navigating: boolean,
+  mode: TravelMode,
 ): VoiceGuidanceState {
   const [muted, setMuted] = useState(false);
-  // Browser support is static for the life of the tab, so this is read
-  // once via useState's lazy initializer, not re-checked on every render.
   const [supported] = useState(
     () => typeof window !== "undefined" && "speechSynthesis" in window,
   );
 
-  // Index into `steps` of the next step still owed an announcement. -1
-  // means "nothing announced yet for this `steps` array". A ref, not
-  // state: advancing it must not itself trigger a re-render (no caller
-  // reads "which step" back out of this hook -- directions-panel.tsx's own
-  // StepList already shows the full list unconditionally), only the
-  // speaking side-effect below needs to run.
-  const nextIndexRef = useRef(-1);
-  // Identity of the `steps` array last reset against, so the effect below
-  // can tell "steps changed, start over" apart from "same steps, position
-  // moved" without steps itself being a dependency that would otherwise
-  // need an eslint-disable for the comparison it's actually doing.
+  // Index of the last step already owed no further announcement. 0 means only
+  // the departure step is behind us. A ref: advancing it must not re-render.
+  const lastAnnouncedRef = useRef(-1);
+  // The `steps` array last seen while navigating, to tell a new route from a
+  // new position on the same route.
   const stepsRef = useRef<RouteStep[] | null | undefined>(null);
+  const wasNavigatingRef = useRef(false);
+
+  const nextStepIndex = progress?.nextStepIndex ?? null;
+  const distanceToNextStepMeters = progress?.distanceToNextStepMeters ?? null;
 
   useEffect(() => {
     if (!supported) return;
-    if (!steps || steps.length === 0) {
-      // Route cleared (Cancel) or not loaded yet: nothing to announce,
-      // and the next real route -- even one that happens to be the exact
-      // same array reference, which can't actually happen since fetchRoute
-      // always returns a fresh object, but kept for clarity -- starts
-      // counting from its own first step via the reset branch below.
+
+    if (!navigating || !steps || steps.length === 0) {
+      wasNavigatingRef.current = false;
       stepsRef.current = steps;
-      nextIndexRef.current = -1;
+      lastAnnouncedRef.current = -1;
       return;
     }
 
-    if (stepsRef.current !== steps) {
-      // New route: reset progress and announce "depart" immediately,
-      // rather than waiting for a position fix near its own location
-      // (which is approximately the person's current position anyway, so
-      // waiting would mean never, or only once they'd already set off).
+    if (!wasNavigatingRef.current) {
+      // Start: speak the departure line once.
+      wasNavigatingRef.current = true;
       stepsRef.current = steps;
-      nextIndexRef.current = 0;
+      lastAnnouncedRef.current = 0;
       if (!muted && isDepartStep(steps[0])) {
         window.speechSynthesis.speak(
           new SpeechSynthesisUtterance(formatStepInstruction(steps[0])),
         );
-        nextIndexRef.current = 1;
       }
       return;
     }
 
-    if (muted) return;
-    if (!position) return;
-    const index = nextIndexRef.current;
-    if (index < 0 || index >= steps.length) return; // every step already announced
-
-    const step = steps[index];
-    const metersAway = distanceKm(position, step.location) * 1000;
-    if (metersAway <= ANNOUNCE_RADIUS_METERS) {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(formatStepInstruction(step)));
-      nextIndexRef.current = index + 1;
+    if (stepsRef.current !== steps) {
+      // Reroute or alternative swap: same trip, new steps. No departure line.
+      stepsRef.current = steps;
+      lastAnnouncedRef.current = 0;
+      return;
     }
-    // Deliberately re-runs on every position update (userLocation changes
-    // roughly once per watchPosition callback, public-shell.tsx), same
-    // "no debounce/throttle" characteristic that file's own ponytail note
-    // already calls out for watchPosition itself -- an extra effect run
-    // per GPS fix is cheap compared to a missed or duplicated
-    // announcement would be.
-  }, [steps, position, muted, supported]);
 
-  // Mute stops future announcements, per muted's own doc comment above,
-  // but speechSynthesis.speak() calls already queued/speaking before the
-  // toggle flips are left to finish naturally rather than cut off --
-  // cancel() would stop mid-sentence, which reads as a glitch, not as
-  // "muted".
+    if (muted) return;
+    if (nextStepIndex === null || distanceToNextStepMeters === null) return;
+    if (nextStepIndex <= lastAnnouncedRef.current) return; // already spoken
+    if (distanceToNextStepMeters > ANNOUNCE_RADIUS_METERS[mode]) return;
+
+    window.speechSynthesis.speak(
+      new SpeechSynthesisUtterance(formatStepInstruction(steps[nextStepIndex])),
+    );
+    lastAnnouncedRef.current = nextStepIndex;
+  }, [steps, navigating, muted, supported, mode, nextStepIndex, distanceToNextStepMeters]);
+
+  // Mute stops future announcements; speech already queued is left to finish
+  // rather than cut off mid-sentence, which would read as a glitch.
 
   return { muted, setMuted, supported };
 }
