@@ -17,6 +17,14 @@ import {
   removeTrail,
   type Progress,
 } from "@/lib/offline/download";
+import {
+  cancelMapDownload,
+  downloadMap,
+  estimateMapBytes,
+  removeMap,
+  useMapPack,
+  type MapProgress,
+} from "@/lib/offline/map-pack";
 import { formatSize, type TrailPack } from "@/lib/offline/rules";
 import { FAIL_TEXT, NEEDS_CONNECTION, OFFLINE_LABEL, droppedText } from "@/lib/offline/messages";
 import { formatDateTimeNoSeconds } from "@/lib/datetime";
@@ -45,6 +53,66 @@ function TrailRow({ pack }: Readonly<{ pack: TrailPack }>) {
         Remove
       </Button>
     </li>
+  );
+}
+
+// The offline map: its own download beside the content one (lib/offline/
+// map-pack.ts). Same states: Download, Downloading, Downloaded with Remove,
+// and Failed with Try again.
+function MapSection({ online }: Readonly<{ online: boolean }>) {
+  const pack = useMapPack();
+  const [progress, setProgress] = useState<MapProgress | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  function start() {
+    setProgress({ done: 0, total: 0 });
+    void downloadMap(setProgress);
+  }
+
+  async function remove() {
+    setRemoving(true);
+    try {
+      await removeMap();
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  let body;
+  if (pack.state === "downloading") {
+    body = <OfflineProgress done={progress?.done ?? 0} total={progress?.total ?? 0} onCancel={cancelMapDownload} />;
+  } else if (pack.state === "downloaded" && pack.syncedAt !== null) {
+    body = (
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{formatSize(pack.bytes)}</p>
+          <p className="text-xs text-muted-foreground">{formatDateTimeNoSeconds(new Date(pack.syncedAt))}</p>
+        </div>
+        <Button variant="outline" size="sm" loading={removing} onClick={() => void remove()}>
+          Remove
+        </Button>
+      </div>
+    );
+  } else if (pack.state === "failed") {
+    body = <ErrorState onRetry={start}>{FAIL_TEXT[pack.reason ?? "unknown"]}</ErrorState>;
+  } else {
+    body = (
+      <div className="flex flex-col gap-2">
+        <Button size="lg" variant="outline" disabled={!online} onClick={start}>
+          <DownloadSimple className="mr-2 h-4 w-4" aria-hidden="true" />
+          Download map
+          <span className="ml-1 font-normal opacity-80">{formatSize(estimateMapBytes())}</span>
+        </Button>
+        {!online && <p className="text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
+      <p className="text-xs text-muted-foreground">Map</p>
+      {body}
+    </div>
   );
 }
 
@@ -166,6 +234,7 @@ export default function OfflineDialog() {
           </ul>
         )}
         {dropped > 0 && <p className="text-xs text-muted-foreground">{droppedText(dropped)}</p>}
+        <MapSection online={online} />
         {meta.trails.length > 0 && (
           <div className="flex flex-col gap-3 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">Trails</p>

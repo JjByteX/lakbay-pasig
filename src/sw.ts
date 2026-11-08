@@ -6,6 +6,9 @@
  * Only a Download (or the daily sync) does, and it stores what a Guest sees,
  * so a signed in user's rows are never kept for the next person on the phone.
  * A user's own tables (OWN_TABLES) skip the data cache altogether.
+ * Map: tiles, TileJSON and fonts from OpenFreeMap, stored by the Offline map
+ * Download (lib/offline/map-pack.ts) in its own map-* cache and answered from
+ * there first. Browsing never writes to it.
  *
  * Built by vite-plugin-pwa (injectManifest), which fills self.__WB_MANIFEST
  * with every built file. No Workbox runtime is imported, so the worker is one
@@ -70,6 +73,10 @@ const PHOTO_CAP = 200;
 const THUMB_SUFFIX = ".thumb.webp";
 // On a weak signal a read would hang. After this long, fall back to the copy.
 const NET_TIMEOUT_MS = 8000;
+// The map host, and the shorter wait before a stored map tile or TileJSON wins.
+const MAP_HOST = "tiles.openfreemap.org";
+const MAP_TILEJSON_PATH = "/planet";
+const MAP_TIMEOUT_MS = 6000;
 
 interface DownloadSettings {
   anon: string;
@@ -251,6 +258,23 @@ async function handlePhoto(e: FetchEv): Promise<Response> {
   }
 }
 
+// Map requests. A stored tile or font never changes (its address carries the
+// planet version), so it is answered from the map cache without asking the
+// network. The TileJSON does change, so it asks the network first and falls
+// back to the stored copy, which names the tiles that were downloaded. A map
+// that was never downloaded has no copy, so everything goes to the network as
+// before.
+async function handleMap(request: Request, url: URL): Promise<Response> {
+  const hit = await caches.match(bare(request.url), { ignoreVary: true });
+  if (hit && url.pathname !== MAP_TILEJSON_PATH) return hit;
+  try {
+    return await (hit ? withTimeout(fetch(request), MAP_TIMEOUT_MS) : fetch(request));
+  } catch (err) {
+    if (hit) return hit;
+    throw err;
+  }
+}
+
 async function fromShell(key: string, request: Request): Promise<Response> {
   const hit = await caches.match(key, { cacheName: SHELL });
   return hit ?? fetch(request);
@@ -263,9 +287,10 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== origin) {
-    // Supabase reads and public photos. Auth and everything else (tiles) go
+    // Supabase reads, public photos and map tiles. Auth and everything else go
     // straight to the network, as they do today.
-    if (OWN_TABLES.test(url.pathname)) e.respondWith(handleOwnRead(request));
+    if (url.hostname === MAP_HOST) e.respondWith(handleMap(request, url));
+    else if (OWN_TABLES.test(url.pathname)) e.respondWith(handleOwnRead(request));
     else if (url.pathname.startsWith("/rest/v1/")) e.respondWith(handleRead(request));
     else if (url.pathname.startsWith("/storage/v1/object/public/")) e.respondWith(handlePhoto(e));
     return;

@@ -35,6 +35,7 @@ import { fetchActiveCategories as fetchActiveFacilities, type PlaceFacility } fr
 import { getFacilityIcon } from "@/lib/place-facility-icons";
 import { usePageTitle } from "@/lib/page-title";
 import { useOnline } from "@/lib/offline/status";
+import { useMapPack } from "@/lib/offline/map-pack";
 import { MAP_NEEDS_CONNECTION } from "@/lib/offline/messages";
 
 /**
@@ -149,10 +150,13 @@ export default function DiscoverPage() {
   // effect below, same retry-counter shape trails.tsx and saved.tsx use.
   const [reload, setReload] = useState(0);
   const [viewChoice, setViewChoice] = useState<"map" | "list">("map");
-  // Offline there are no map tiles, so the list opens instead and the Map tab
-  // says why it is off. The choice comes back when the connection does.
+  // Offline with no downloaded map there are no tiles, so the list opens
+  // instead and the Map tab says why it is off. A downloaded map (Offline
+  // modal) keeps the Map tab on. The choice comes back with the connection.
   const online = useOnline();
-  const view = online ? viewChoice : "list";
+  const mapDownloaded = useMapPack().state === "downloaded";
+  const mapReady = online || mapDownloaded;
+  const view = mapReady ? viewChoice : "list";
   // Multi-select: every selected category is a match (OR), empty array is
   // the "All categories" no-op state (filterDiscoverResults' own empty-list
   // case), not "match nothing" -- widened from the original single
@@ -425,7 +429,7 @@ export default function DiscoverPage() {
                   align to. */}
         <Tabs value={view} onValueChange={(v) => setViewChoice(v as "map" | "list")}>
           <TabsList>
-            <TabsTrigger value="map" className="gap-1" disabled={!online}>
+            <TabsTrigger value="map" className="gap-1" disabled={!mapReady}>
               <MapIcon className="h-4 w-4" />
               Map
             </TabsTrigger>
@@ -435,7 +439,7 @@ export default function DiscoverPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        {!online && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
+        {!mapReady && <p className="text-xs text-muted-foreground">{MAP_NEEDS_CONNECTION}</p>}
       </div>
 
       {/* Category filter: multi-select grid of pill buttons, replacing the

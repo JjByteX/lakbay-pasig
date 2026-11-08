@@ -3,6 +3,7 @@ import { startStatus } from "./status";
 import { startQueue } from "./queue";
 import { startSync } from "./sync";
 import { isEvicted, prunePacks, withoutContent } from "./rules";
+import { repairMapPack } from "./map-pack";
 
 // The screens import status.ts and meta.ts directly, so the shell does not pull
 // the download code (and every query file it reads) into the first page load.
@@ -21,6 +22,7 @@ export {
 } from "./download";
 export { cancelTrailDownload, useTrailJob } from "./trail-jobs";
 export { replayQueue } from "./queue";
+export { downloadMap, cancelMapDownload, removeMap, useMapPack, estimateMapBytes } from "./map-pack";
 export { formatSize } from "./rules";
 
 // Runs once, after the first paint (main.tsx).
@@ -43,6 +45,9 @@ export async function initOffline(): Promise<void> {
   } catch {
     // No Cache API, nothing could have been downloaded.
   }
+
+  // The offline map has its own cache and meta, repaired the same way.
+  await repairMapPack();
 
   startSync();
 }
