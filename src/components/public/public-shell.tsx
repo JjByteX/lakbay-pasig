@@ -378,6 +378,18 @@ function useDirectionsState(userLocation: Coordinates | null): DirectionsContext
     void refetch(selectedMode, origin, directionsPanelResult);
   }, [modeLoading, origin, directionsPanelResult, selectedMode, refetch]);
 
+  // The panel can open with no origin (no GPS yet, no custom From). When the
+  // first origin then arrives, fetch the route for the open session so the
+  // person is not left with a disabled Start and no next step. Fires only on
+  // the null -> origin change, so a failed fetch does not retry in a loop.
+  const hadOriginRef = useRef(origin !== null);
+  useEffect(() => {
+    const hadOrigin = hadOriginRef.current;
+    hadOriginRef.current = origin !== null;
+    if (hadOrigin || !origin || !directionsPanelResult || route || modeLoading) return;
+    void refetch(selectedMode, origin, directionsPanelResult);
+  }, [origin, directionsPanelResult, route, modeLoading, selectedMode, refetch]);
+
   // A route that starts from a custom point is not the person's own trip, so
   // their live position is never measured against it: no position, no reroute.
   useOffRouteReroute(route, customFrom ? null : userLocation, handleOffRouteReroute);

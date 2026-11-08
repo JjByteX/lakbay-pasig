@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Car, Bicycle, Footprints, MapPin, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import {
@@ -422,6 +422,13 @@ function DirectionsPanelContent({
   // this panel needs from the person.
   const noOrigin = startBlockedReason === "no-location";
   const [editingFrom, setEditingFrom] = useState(noOrigin);
+  // A live fix can arrive after the panel opened with no origin. The shell
+  // then fetches the route itself, so the open search field is no longer
+  // needed. Only the no-origin -> origin change closes it, so a person who
+  // opens it on purpose later is not interrupted.
+  useEffect(() => {
+    if (!noOrigin) setEditingFrom(false);
+  }, [noOrigin]);
 
   return (
     <>

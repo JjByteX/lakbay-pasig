@@ -35,11 +35,13 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
   if (!origin) {
     // No starting point: open the panel on the map and let the person choose one.
     return (
+      <div className="flex flex-col items-start gap-1">
       <Button
         type="button"
         variant="outline"
         size="sm"
         className="gap-2"
+        disabled={!online}
         onClick={() => {
           handleOpenDirections(result);
           navigate("/discover");
@@ -48,6 +50,8 @@ export function PageDirectionsButton({ result }: Readonly<{ result: DiscoverResu
         Directions
         <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
       </Button>
+      {!online && <p className="text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
+      </div>
     );
   }
   const start = origin;

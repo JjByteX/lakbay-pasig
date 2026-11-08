@@ -417,7 +417,6 @@ const BARANGAY_LINE_LAYER_ID = "barangay-highlight-line";
 // a fixed deep navy at a stronger opacity (the old 12% of the text token was
 // too faint on a near-white map to read as a dim); dark uses the crust token
 // (casing) lightly.
-const BARANGAY_VEIL_COLOR_LIGHT = "#0b1226";
 const BARANGAY_VEIL_OPACITY_LIGHT = 0.3;
 const BARANGAY_VEIL_OPACITY_DARK = 0.35;
 
@@ -2392,7 +2391,7 @@ export function DiscoverMap({
         type: "fill",
         source: BARANGAY_MASK_SOURCE_ID,
         paint: {
-          "fill-color": isDarkTheme ? palette.casing : BARANGAY_VEIL_COLOR_LIGHT,
+          "fill-color": isDarkTheme ? palette.casing : palette.text,
           "fill-opacity": isDarkTheme ? BARANGAY_VEIL_OPACITY_DARK : BARANGAY_VEIL_OPACITY_LIGHT,
         },
       },

@@ -242,11 +242,13 @@ export function ResultCard({
                   ) : (
                     result.latitude != null &&
                     result.longitude != null && (
+                      <>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         className="gap-2"
+                        disabled={!online}
                         onClick={() => {
                           onOpenChange(false);
                           openDirections(result);
@@ -255,6 +257,8 @@ export function ResultCard({
                         Directions
                         <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
                       </Button>
+                      {!online && <p className="text-right text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
+                      </>
                     )
                   )}
                 </div>
