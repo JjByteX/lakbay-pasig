@@ -2334,7 +2334,9 @@ export function DiscoverMap({
         zoom: Math.max(map.getZoom(), 17),
       });
     }
-    return () => marker.remove();
+    return () => {
+      marker.remove();
+    };
     // navigating and growIfNeeded are read once, when the pin is placed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchedPlace]);
