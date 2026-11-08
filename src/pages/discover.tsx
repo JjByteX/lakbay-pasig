@@ -605,9 +605,6 @@ export default function DiscoverPage() {
           <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
           Open now
         </Button>
-        {openNow && (
-          <p className="px-1 text-xs text-muted-foreground">Places with no listed hours are hidden.</p>
-        )}
       </div>
 
       {/* Phase 7.1: price range filter, businesses only per step-5-plan.md

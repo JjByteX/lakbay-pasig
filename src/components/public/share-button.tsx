@@ -6,9 +6,6 @@ interface ShareButtonProps {
   kind: "place" | "business";
   id: string;
   name: string;
-  // Icon only, for tight spots like the map preview. The label stays for
-  // screen readers.
-  iconOnly?: boolean;
 }
 
 const COPIED_MS = 2000;
@@ -19,7 +16,7 @@ const COPIED_MS = 2000;
  * and say so. The link is the detail page, not a route: the person who opens
  * it taps Directions from their own location.
  */
-export function ShareButton({ kind, id, name, iconOnly = false }: Readonly<ShareButtonProps>) {
+export function ShareButton({ kind, id, name }: Readonly<ShareButtonProps>) {
   const [message, setMessage] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,13 +57,12 @@ export function ShareButton({ kind, id, name, iconOnly = false }: Readonly<Share
       <Button
         type="button"
         variant="outline"
-        size={iconOnly ? "icon" : "sm"}
-        className={iconOnly ? undefined : "gap-2"}
-        aria-label={iconOnly ? `Share ${name}` : undefined}
+        size="sm"
+        className="gap-2"
         onClick={handleShare}
       >
         <ShareNetwork weight="bold" className="h-4 w-4" aria-hidden="true" />
-        {!iconOnly && "Share"}
+        Share
       </Button>
       <p className="text-xs text-muted-foreground" aria-live="polite">
         {message}

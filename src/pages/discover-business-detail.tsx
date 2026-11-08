@@ -289,6 +289,7 @@ export default function DiscoverBusinessDetailPage() {
                 until the business has a label. */}
             <SeasonLabel kind="business" itemId={business.id} />
             {/* Directions, same as the preview modal; the full page lost it. */}
+            <div className="flex flex-wrap items-start gap-2">
             <PageDirectionsButton
               result={{
                 kind: "business",
@@ -306,6 +307,7 @@ export default function DiscoverBusinessDetailPage() {
               }}
             />
             <ShareButton kind="business" id={business.id} name={business.name} />
+            </div>
           </div>
 
           {/* Map hover/full-details photos phase: same placement as the

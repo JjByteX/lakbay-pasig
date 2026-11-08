@@ -294,6 +294,7 @@ export default function DiscoverPlaceDetailPage() {
                 until the place has a label. */}
             <SeasonLabel kind="place" itemId={place.id} />
             {/* Directions, same as the preview modal; the full page lost it. */}
+            <div className="flex flex-wrap items-start gap-2">
             <PageDirectionsButton
               result={{
                 kind: "place",
@@ -311,6 +312,7 @@ export default function DiscoverPlaceDetailPage() {
               }}
             />
             <ShareButton kind="place" id={place.id} name={place.name} />
+            </div>
           </div>
 
           {/* Map hover/full-details photos phase: every uploaded photo,
