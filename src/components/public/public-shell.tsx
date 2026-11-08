@@ -74,6 +74,7 @@ import logo from "@/assets/lakbay-pasig-logo.svg";
 // search text stops being its name.
 export interface SearchedPlace {
   name: string;
+  address: string | null;
   coordinates: Coordinates;
 }
 

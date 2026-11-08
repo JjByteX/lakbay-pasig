@@ -411,7 +411,11 @@ const BARANGAY_SOURCE_ID = "barangay-highlight";
 const BARANGAY_MASK_SOURCE_ID = "barangay-highlight-mask";
 const BARANGAY_MASK_LAYER_ID = "barangay-highlight-mask-fill";
 const BARANGAY_LINE_LAYER_ID = "barangay-highlight-line";
-const BARANGAY_VEIL_OPACITY = 0.35;
+// The veil has to darken in both themes. The theme's base color is near white
+// in light mode, so filling with it brightened the outside instead. Light uses
+// the dark text token, dark uses the crust token (casing), both lightly.
+const BARANGAY_VEIL_OPACITY_LIGHT = 0.12;
+const BARANGAY_VEIL_OPACITY_DARK = 0.35;
 
 const ROUTE_SOURCE_ID = "directions-route";
 const ROUTE_LAYER_ID = "directions-route-line";
@@ -2257,7 +2261,8 @@ export function DiscoverMap({
     }
     if (!highlighted) return;
 
-    const palette = document.documentElement.classList.contains("dark") ? MOCHA : LATTE;
+    const isDarkTheme = document.documentElement.classList.contains("dark");
+    const palette = isDarkTheme ? MOCHA : LATTE;
     const polygons =
       highlighted.geometry.type === "Polygon" ? [highlighted.geometry.coordinates] : highlighted.geometry.coordinates;
     // A box round the world with the barangay's outer ring(s) cut out of it.
@@ -2282,7 +2287,10 @@ export function DiscoverMap({
         id: BARANGAY_MASK_LAYER_ID,
         type: "fill",
         source: BARANGAY_MASK_SOURCE_ID,
-        paint: { "fill-color": palette.base, "fill-opacity": BARANGAY_VEIL_OPACITY },
+        paint: {
+          "fill-color": isDarkTheme ? palette.casing : palette.text,
+          "fill-opacity": isDarkTheme ? BARANGAY_VEIL_OPACITY_DARK : BARANGAY_VEIL_OPACITY_LIGHT,
+        },
       },
       beforeId,
     );

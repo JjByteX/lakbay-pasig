@@ -6,6 +6,7 @@ import { DiscoverMap } from "@/components/public/discover-map";
 import { DiscoverList } from "@/components/public/discover-list";
 import { DirectionsPanel } from "@/components/public/directions-panel";
 import { NavigationView } from "@/components/public/navigation-banner";
+import { SearchedPlaceCard } from "@/components/public/searched-place-card";
 import { DiscoverTrailPanel } from "@/components/public/discover-trail-panel";
 import type { TrailMapStop } from "@/components/public/discover-trail-overlay";
 import {
@@ -91,7 +92,7 @@ import { BASE_BOUNDS, inBounds } from "@/lib/map-style";
  */
 export default function DiscoverPage() {
   usePageTitle("Discover");
-  const { query, setQuery, searchedPlace } = useGlobalSearchQuery();
+  const { query, setQuery, searchedPlace, setSearchedPlace } = useGlobalSearchQuery();
   // Same viewport breakpoint public-shell.tsx's own mobile/desktop shell
   // branch already uses (useIsMobile). The filter markup below is one
   // shared block registered via useDiscoverFilters for both shells (the
@@ -736,6 +737,19 @@ export default function DiscoverPage() {
           not only on the map, so End is always reachable (List tab, or the map
           unavailable offline). */}
       {navigating && <NavigationView />}
+      {/* A street or landmark picked from the search: name, Directions, and a
+          way to clear it. Steps aside while a route is open. */}
+      {view === "map" && searchedPlace && !route && !navigating && (
+        <SearchedPlaceCard
+          place={searchedPlace}
+          userLocation={userLocation}
+          onRouteFound={handleRouteFound}
+          onClose={() => {
+            setQuery("");
+            setSearchedPlace(null);
+          }}
+        />
+      )}
       {/* Trail mode panel. Hidden while a Directions panel is open (both want
           the bottom of the screen), and in list view, where there is no map for
           the stops to be on. */}

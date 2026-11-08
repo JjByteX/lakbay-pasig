@@ -179,7 +179,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
 
   function pickMapPlace(hit: PlaceResult) {
     const name = hit.name ?? hit.address;
-    setSearchedPlace({ name, coordinates: hit.location });
+    setSearchedPlace({ name, address: hit.name ? hit.address || null : null, coordinates: hit.location });
     onQueryChange(name);
     goTo("/discover");
   }
@@ -273,7 +273,6 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                 <ResultRow
                   key={barangay.name}
                   title={barangay.name}
-                  subtitle="Barangay"
                   onClick={() => pickBarangay(barangay.name)}
                 />
               ))}
@@ -390,7 +389,7 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
           {!loading && mapLoading && hasAnyResults(results) && (
             <p className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
               <SquareLoader size="xs" />
-              Looking on the map…
+              Searching…
             </p>
           )}
         </div>
