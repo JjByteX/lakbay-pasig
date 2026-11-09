@@ -816,8 +816,14 @@ function MapCornerControls({
   onLocationFound,
   onRecenterRequested,
   onNorthUp,
+  raised = false,
 }: Readonly<{
   map: maplibregl.Map | null;
+  // While navigating no status pill competes for the top of the map, so the
+  // controls move up to top-8, level with the navigation banner
+  // (navigation-banner.tsx, pt-8). Otherwise they stay at top-14, clear of
+  // the status pills.
+  raised?: boolean;
   placeCategories: PlaceCategory[];
   businessCategories: BusinessCategory[];
   categoriesLoading: boolean;
@@ -885,7 +891,7 @@ function MapCornerControls({
   };
 
   return (
-    <div className="absolute right-3 top-14 z-[1000] flex flex-col items-end gap-2">
+    <div className={cn("absolute right-3 z-[1000] flex flex-col items-end gap-2", raised ? "top-8" : "top-14")}>
       <div className="relative flex flex-col items-center rounded-2xl border border-input bg-card shadow">
         {/* 1.8: disabled with a muted icon while categories are still
             resolving, same "visibly disabled, not silently unresponsive"
@@ -2770,6 +2776,7 @@ export function DiscoverMap({
         onNorthUp={() => {
           if (navigating) setNorthUp(true);
         }}
+        raised={navigating}
       />
 
       {/* Bottom-right +/- zoom pill, desktop only, per direct instruction

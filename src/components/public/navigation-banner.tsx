@@ -95,10 +95,11 @@ export function NavigationView() {
   return (
     <>
       {/* Right padding clears the map's corner controls (locate, legend) that
-          sit in the top-right corner. Top padding is pt-14, the same offset
-          as those controls (top-14 in MapCornerControls), so the banner's top
-          edge lines up with theirs and sits clear of the header. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] pb-3 pl-3 pr-16 pt-14">
+          sit in the top-right corner. Top padding is pt-8, the same offset
+          the controls use while navigating (top-8 in MapCornerControls), so
+          the banner's top edge lines up with theirs and sits clear of the
+          header's drag handle. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] pb-3 pl-3 pr-16 pt-8">
         <div className={`pointer-events-auto mx-auto w-full max-w-md ${CARD_CLASS}`}>{bannerContent}</div>
       </div>
 
