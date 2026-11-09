@@ -26,14 +26,23 @@ const MODIFIER_ROTATION: Record<string, number> = {
 // RouteStep in directions.ts); "arrive" gets its own dot, not an arrow, to
 // read as "you're done" rather than "continue this way" at a glance.
 // Shared by the directions panel's step list and the navigation banner.
-export function stepIcon(step: RouteStep) {
+//
+// prominent: the navigation banner's version, a normal-size arrow in the text
+// color with no background tile behind it, so it reads at a glance.
+// The step list keeps the small primary-colored icon.
+export function stepIcon(step: RouteStep, prominent = false) {
   if (step.type === "arrive") {
-    return <span className="block h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />;
+    return (
+      <span
+        className={prominent ? "block h-4 w-4 shrink-0 rounded-full bg-foreground" : "block h-2 w-2 shrink-0 rounded-full bg-primary"}
+        aria-hidden="true"
+      />
+    );
   }
   const rotation = step.modifier ? MODIFIER_ROTATION[step.modifier] ?? 0 : 0;
   return (
     <ArrowUp
-      className="h-4 w-4 shrink-0 text-primary"
+      className={prominent ? "h-6 w-6 shrink-0 text-foreground" : "h-4 w-4 shrink-0 text-primary"}
       style={{ transform: `rotate(${rotation}deg)` }}
       aria-hidden="true"
     />

@@ -71,9 +71,9 @@ export function NavigationView() {
     bannerContent = <p className="text-sm text-muted-foreground">Waiting for your location…</p>;
   } else {
     bannerContent = (
-      <div className="flex items-center gap-4">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-          {stepIcon(step)}
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+          {stepIcon(step, true)}
         </span>
         <div className="min-w-0">
           <p className="text-base font-semibold text-foreground">
@@ -143,23 +143,23 @@ export function NavigationView() {
                   aria-label={voiceMuted ? "Unmute voice guidance" : "Mute voice guidance"}
                   aria-pressed={voiceMuted}
                   onClick={() => setVoiceMuted(!voiceMuted)}
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
                 >
                   {voiceMuted ? (
-                    <SpeakerX className="h-5 w-5 shrink-0" />
+                    <SpeakerX className="h-6 w-6 shrink-0" />
                   ) : (
-                    <SpeakerHigh className="h-5 w-5 shrink-0" />
+                    <SpeakerHigh className="h-6 w-6 shrink-0" />
                   )}
                 </button>
               )}
-              <Button
-                variant="outline"
+              <button
+                type="button"
                 aria-label="End navigation"
-                className="h-10 w-10 rounded-full p-0"
                 onClick={endNavigation}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted"
               >
-                <X className="h-5 w-5 shrink-0" aria-hidden="true" />
-              </Button>
+                <X className="h-6 w-6 shrink-0" aria-hidden="true" />
+              </button>
             </div>
           </div>
         </div>
