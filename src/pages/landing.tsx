@@ -31,6 +31,7 @@ import {
   type FanItem,
 } from "@/components/public/landing-photo-fan";
 import { HeroCarousel } from "@/components/public/hero-carousel";
+import { NeonAurora } from "@/components/neon-aurora/neon-aurora";
 import { useAuthModal } from "@/lib/auth-modal";
 import { usePageTitle } from "@/lib/page-title";
 import { useAuth } from "@/lib/auth-context";
@@ -55,6 +56,10 @@ const CATO_MAP_EMBED_SRC = `https://maps.google.com/maps?q=${encodeURIComponent(
 const CATO_MAP_DIRECTIONS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(CATO_ADDRESS)}`;
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+// Fades the aurora out behind the hero title, subtitle and buttons so the
+// text stays readable; the bars show fully toward the edges and the bottom.
+const AURORA_MASK = "radial-gradient(ellipse 38% 24% at 50% 24%, transparent 0%, transparent 45%, black 100%)";
 
 // Same blue as the "Reviewed by CATO" tile in About (bg-primary). The fixed
 // header and the hero panel share it, so they stay the exact same color.
@@ -195,8 +200,35 @@ function LandingHeader() {
     return () => query.removeEventListener("change", onChange);
   }, []);
 
+  // Over the hero the bar has no background and no outline, so the hero shows
+  // through. Once the hero has scrolled up under the bar, the blue background
+  // and the hairline come back.
+  const [pastHero, setPastHero] = useState(false);
+  useEffect(() => {
+    const update = () => {
+      const hero = document.getElementById("hero");
+      const bar = headerRef.current;
+      if (!hero || !bar) return;
+      setPastHero(hero.getBoundingClientRect().bottom <= bar.offsetHeight);
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  // An open mobile menu always gets the solid bar so its panel reads as one piece.
+  const solid = pastHero || menuOpen;
+
   return (
-    <header ref={headerRef} className={`fixed inset-x-0 top-0 z-50 border-b border-primary-foreground/20 ${HERO_TINT}`}>
+    <header
+      ref={headerRef}
+      className={`fixed inset-x-0 top-0 z-50 border-b text-primary-foreground transition-colors duration-300 ${
+        solid ? "border-primary-foreground/20 bg-primary" : "border-transparent bg-transparent"
+      }`}
+    >
       <div className="flex h-16 w-full items-center justify-between gap-6 px-6 lg:px-10">
         <Link to="/welcome" className="flex items-center gap-2.5">
           <img src={logo} alt="" className="h-8 w-8" />
@@ -639,9 +671,26 @@ export default function LandingPage() {
         {/* Hero: centered title, subtitle and buttons, then the carousel,
             which fades in. */}
         <Section
+          id="hero"
           bg={HERO_TINT}
-          className="flex flex-col items-center gap-8 pb-16 pt-24 text-center lg:pt-28"
+          className="relative isolate flex flex-col items-center gap-8 overflow-hidden pb-16 pt-24 text-center lg:pt-28"
         >
+          {/* neon.com's hero background, copied as published at ui.neon.com.
+              Its black is dropped with a screen blend against a blue layer of
+              its own, so the hero stays the brand blue (same as the header), and the bars are tinted light
+              blue and white to sit on it. Only the component's own props are
+              used. */}
+          <div aria-hidden="true" className="absolute inset-0 isolate bg-primary">
+            <NeonAurora
+              className="mix-blend-screen"
+              colors={["#0a4a8f", "#2f86d9", "#6fb4f0"]}
+              intensity={1.1}
+              glare={0.45}
+              flare={0}
+              whiteFlare={0.3}
+              style={{ maskImage: AURORA_MASK, WebkitMaskImage: AURORA_MASK }}
+            />
+          </div>
           <div className="relative z-10 flex max-w-3xl flex-col items-center gap-4 px-6 lg:px-12">
             <RevealText
               as="h1"
