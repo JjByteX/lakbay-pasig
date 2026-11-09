@@ -52,9 +52,8 @@ import { loopIndex, shortestStep, tileOffsetPx, tileWidthPx, wrappedSlot } from 
  *   gradient that rises from the bottom (so the picture stays visible
  *   above it). This is a deliberate exception to ux-ui-guidelines.md's
  *   no-gradient rule, made by instruction. See CaptionOverlay. The
- *   3-layer progressive backdrop blur that used to sit on the same band
- *   is gone (hero lag fix): backdrop-filter on every tile, while the
- *   tiles are being translated, is re-blurred every frame.
+ *   caption also carries a light masked blur, the same as Home's photo
+ *   cards, so the landing and the app read the same.
  * - Slide motion stays off the React render path (hero lag fix). Each
  *   tile derives its own `x` from the spring with useTransform, so a
  *   frame of travel updates transforms directly. The parent re-renders
@@ -311,21 +310,30 @@ function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
   return width;
 }
 
-// Caption over the photo, no box behind the text. The overlay covers only
-// the bottom band of the image (a caption is one or two lines): a light
-// linear gradient rising from the bottom so the white text stays readable
-// on any photo. It ignores the pointer so drag and click still reach the
-// tile.
+// Caption over the photo, no box behind the text. Same treatment as Home's
+// photo cards (photo-caption-overlay.tsx): a soft Gaussian blur that fades in
+// toward the bottom edge, with a neutral black gradient painted over it. The
+// blur is its own masked layer so it has no hard top edge. Text is fixed
+// white because it sits on a photo, not on the theme. Both layers ignore the
+// pointer so drag and click still reach the tile. Spans only: HeroTile is a
+// button, where a <p> or <div> is invalid HTML.
+const BLUR_MASK = "linear-gradient(to top, black 0%, transparent 100%)";
+
 function CaptionOverlay({ caption }: Readonly<{ caption: string }>) {
   return (
     <>
-      <div
+      <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] min-h-20 bg-gradient-to-t from-black/55 via-black/25 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 backdrop-blur-[3px]"
+        style={{ WebkitMaskImage: BLUR_MASK, maskImage: BLUR_MASK }}
       />
-      <p className="absolute inset-x-3 bottom-3 line-clamp-2 text-sm font-semibold text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.45)] sm:inset-x-4 sm:bottom-4 sm:text-base">
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/70 via-black/35 to-transparent"
+      />
+      <span className="pointer-events-none absolute inset-x-3 bottom-3 line-clamp-2 text-sm font-semibold text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.45)] sm:inset-x-4 sm:bottom-4 sm:text-base">
         {caption}
-      </p>
+      </span>
     </>
   );
 }
@@ -470,7 +478,7 @@ function HeroFilmstripInner({
         if (mask[i] !== "1") return null;
         return (
           <HeroTile
-            key={slide.id}
+            key={`${slide.id}-${i}`}
             slide={slide}
             index={i}
             count={count}
@@ -548,10 +556,17 @@ export function HeroCarousel({ slides }: Readonly<HeroCarouselProps>) {
   return <HeroFilmstrip slides={slides} />;
 }
 
-function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
+function HeroFilmstrip({ slides: realSlides }: Readonly<{ slides: LandingSlide[] }>) {
+  // Two slides would leave the center tile with a neighbor on one side only
+  // (the loop folds its midpoint to one side), so the strip would fall back
+  // to a single image. Playing the two twice around the loop gives the full
+  // center-plus-both-neighbors layout; the dots still show the real slides.
+  const realCount = realSlides.length;
+  const slides = realCount === 2 ? [...realSlides, ...realSlides] : realSlides;
   const count = slides.length;
   const { tick, paused, setPaused, goToTick } = useSyncedCarousel(true);
   const index = loopIndex(tick, count);
+  const activeDot = index % realCount;
   const track = useFilmstripTrack(index, count);
 
   // Measured on the strip itself, so tile count follows the panel's real
@@ -635,7 +650,7 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
   }, [setPaused]);
 
   return (
-    <div className="flex h-full w-full flex-col gap-3 p-3 sm:p-4">
+    <div className="flex h-full w-full flex-col gap-3 py-3 sm:py-4">
       {/* <section> with an accessible name is the native "region" landmark,
           which the carousel pattern allows for its container. It replaces
           a div with role="group" (SonarCloud: prefer the native element). */}
@@ -648,7 +663,7 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
           if (e.pointerType === "mouse") setPaused(false);
         }}
         {...swipe.handlers}
-        className="relative min-h-0 w-full flex-1 touch-pan-y overflow-hidden rounded-lg"
+        className="relative min-h-0 w-full flex-1 touch-pan-y overflow-hidden"
         aria-roledescription="carousel"
         aria-label="Featured Pasig places"
       >
@@ -668,24 +683,24 @@ function HeroFilmstrip({ slides }: Readonly<{ slides: LandingSlide[] }>) {
           widens and fills over SLIDE_DURATION; the key restarts the fill
           on every index change. While paused the fill holds where it is. */}
       <div className="flex shrink-0 items-center justify-center gap-2">
-        {slides.map((slide, i) => (
+        {realSlides.map((slide, i) => (
           <button
             key={slide.id}
             type="button"
             onClick={() => goToIndex(i)}
             aria-label={`Show ${slide.caption}`}
-            aria-current={i === index ? "true" : undefined}
+            aria-current={i === activeDot ? "true" : undefined}
             className="group/dot relative flex h-4 items-center"
           >
             <span
-              className={`relative block h-2 overflow-hidden rounded-full bg-secondary-foreground/30 transition-all duration-300 ${
-                i === index ? "w-8" : "w-2 group-hover/dot:bg-secondary-foreground/60"
+              className={`relative block h-2.5 overflow-hidden rounded-full bg-primary-foreground/40 transition-all duration-300 ${
+                i === activeDot ? "w-10" : "w-2.5 group-hover/dot:bg-primary-foreground/70"
               }`}
             >
-              {i === index && (
+              {i === activeDot && (
                 <motion.span
                   key={`${slide.id}-${index}`}
-                  className="absolute inset-y-0 left-0 rounded-full bg-primary"
+                  className="absolute inset-y-0 left-0 rounded-full bg-primary-foreground"
                   initial={{ width: "0%" }}
                   animate={{ width: paused ? undefined : "100%" }}
                   transition={{ duration: SLIDE_DURATION / 1000, ease: "linear" }}

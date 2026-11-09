@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Envelope,
-  Phone,
-  MapPin,
-  FacebookLogo,
   ArrowSquareOut,
-  SealCheck,
-  MapTrifold,
-  Storefront,
   CalendarBlank,
+  Envelope,
+  FacebookLogo,
   List,
+  MapPin,
+  MapTrifold,
+  Phone,
+  SealCheck,
+  Storefront,
   X,
 } from "@phosphor-icons/react";
 import {
@@ -18,175 +18,61 @@ import {
   MotionConfig,
   animate,
   motion,
-  useReducedMotion,
-  useScroll,
-  useTransform,
 } from "motion/react";
 import logo from "@/assets/lakbay-pasig-logo.svg";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { fetchActiveSlides, type LandingSlide } from "@/lib/landing-slides";
 import { fetchHomeShowcase } from "@/lib/home-query";
 import { CATO_EMAIL, CATO_FACEBOOK, CATO_NAME, CATO_PHONE } from "@/lib/cato-contact";
 import type { CategoryRow } from "@/lib/home-types";
 import {
-  CategoryPhotoRow,
-  CategoryPhotoRowSkeleton,
-  type CategoryPhotoRowItem,
-} from "@/components/public/category-photo-row";
+  LandingPhotoFan,
+  LandingPhotoFanSkeleton,
+  type FanItem,
+} from "@/components/public/landing-photo-fan";
 import { HeroCarousel } from "@/components/public/hero-carousel";
-import { HeroLinesBackground } from "@/components/public/hero-lines-background";
 import { useAuthModal } from "@/lib/auth-modal";
 import { usePageTitle } from "@/lib/page-title";
 import { useAuth } from "@/lib/auth-context";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 
 /**
- * landing-hero-phases.md Phase 6. Route /welcome, outside PublicShell --
- * per landing-hero-plan.md's Layout Pattern Rules citation, this is a
- * single-purpose entry surface, not a tab in the multi-section app, so
- * it gets no bottom nav, no global search, no sidebar of its own, same
- * reasoning admin-landing.tsx never borrows AdminDataTable for 2 rows.
+ * Route /welcome, outside PublicShell: a single-purpose entry surface with no
+ * bottom nav, global search or sidebar.
  *
- * Landing redesign (Notion-style, stacked hero), per direct reference
- * image (notion.com marketing hero) + spec: this replaces the earlier
- * two-column split (headline left, carousel right, both full viewport
- * height -- see git history / decision-log for that version) with a
- * single centered column: centered nav, then a centered headline +
- * subtitle + CTAs block, then the HeroCarousel BELOW that text, full
- * width, page flows/scrolls normally rather than the old lg:h-screen
- * split panels.
+ * Header and pill buttons follow Pixel Point's marketing style (flat,
+ * monochrome, hairline borders). The hero, About, Features, final call to action and
+ * Contact are the original scroll-panel layout, without the animated wave
+ * lines (HeroLinesBackground is no longer used here).
  *
- * HeroLinesBackground (the animated blue line artwork) went through
- * three states across this redesign: (1) originally the fill of the old
- * left column only; (2) removed entirely in the first stacked-hero pass,
- * reasoning it had no equivalent placement outside that column; (3)
- * brought BACK per direct instruction ("the wave lines should be in the
- * background") -- now mounted once as a full-bleed absolute backdrop
- * behind the WHOLE hero (headline through carousel), not one column of
- * it. See the hero markup's own comment below for the stacking-context
- * mechanics (relative/overflow-hidden wrapper, inset-0 backdrop layer,
- * relative z-10 content on top). The component file itself
- * (hero-lines-background.tsx) is unchanged internally -- same left-
- * cluster-only crop, same blue tint filter, same bottom-left anchoring
- * -- only where landing.tsx mounts it changed.
- *
- * HeroCarousel (components/public/hero-carousel.tsx) is unchanged as a
- * component -- same fetchActiveSlides query, same autoplay/spring/
- * filmstrip drag, same progress dots. Its landing.tsx sizing went
- * through a similar back-and-forth: originally a lg:h-screen lg:w-1/2
- * side column; then a centered max-w-5xl contained box; then briefly
- * full-bleed (edge-to-edge, no max-width) per a "slap it in the
- * background" instruction about its BORDER/shadow, which also
- * inadvertently grew its width; then reverted back to the max-w-5xl
- * contained size per direct follow-up ("don't make the picture bigger
- * please, I liked the size of it before") while keeping the borderless/
- * shadowless treatment from that same instruction -- those two
- * properties (contained width vs. bordered/shadowed) are independent,
- * and only the width was ever meant to regress back.
- *
- * The header (LandingHeader, below) is now a centered nav to match the
- * reference: logo left, nav links CENTERED as their own group in the
- * middle of the bar, sign-in action pinned right -- a three-part
- * (left/center/right) bar via a 3-column grid, rather than the old
- * single flex row with logo-left/links-and-action-right. Still spans
- * the FULL page width and stays fixed for the entire page's scroll
- * range (unchanged reasoning from the previous revision: a header
- * scoped to a column or merely `sticky` within one disappears once the
- * page scrolls past that column's own height into About/Features/
- * Contact -- see the original note this replaced, preserved in git
- * history).
- *
- * Hero copy shortened post-launch (not in the original landing-hero-
- * plan.md): the original headline carried project-brief.md's full "The
- * Goal" sentence verbatim, which read as a wall of text above the fold.
- * Trimmed to a short headline plus one line, still sourced from the same
- * line rather than invented, not the full sentence restated.
- *
- * Three actions, three distinct triggers, no duplicates elsewhere on the
- * screen, per 6.3: Get started opens the popup in signup mode, Continue
- * as Guest is a plain Link to "/" -- now rendered as an outline Button
- * (Button asChild wrapping the Link) rather than an underlined text
- * link, per direct instruction to make it "a button"; it still
- * navigates as a plain Link under the hood (no new trigger, no popup),
- * only its visual treatment changed, so this is still the same single
- * guest-entry trigger, just styled as the secondary button beside Get
- * started rather than a text link beneath it. Log in is deliberately
- * NOT repeated here anymore -- ux-ui-guidelines.md's "one action, one
- * trigger, one place" rule (What Must Never Happen: "if a Sign In link
- * exists in the header, there is no Sign In button elsewhere on the
- * same screen") means the header's own NavAction (Sign in / Go to
- * Dashboard) is now the only sign-in trigger on this page; the old
- * second Log in button next to Get started was a duplicate of it and
- * has been removed. The popup itself (auth-modal.tsx) is a fully
- * separate file/concern, this page only calls into it.
- *
- * About and Contact sections, below the hero, same single page (no
- * separate routes, no nav to build for a multi-section site). About's
- * copy is project-brief.md's own "The Problem" and "The Goal" lines, not
- * new marketing text, matching how the hero copy above is sourced rather
- * than invented. Contact is now two columns per direct spec: left is the
- * same real CATO details as before (address, email, phone, Facebook, not
- * fabricated, per decision-log.md entry #17's standing rule on sourcing
- * real content), right is a plain Google Maps iframe embed centered on
- * that same address -- no API key needed (a bare maps.google.com/maps?
- * output=embed URL), and this is a separate concern from discover-map.tsx's
- * MapLibre-based discovery map: that map plots live verified places for
- * browsing, this one just shows CATO's own office location, a "find us"
- * embed, not an interactive feature, so pulling in a second mapping
- * approach here doesn't create a real inconsistency.
- *
- * Features section, between About and Contact: reuses home.tsx's own
- * Places/Businesses photo showcase wholesale (fetchHomeShowcase from
- * home-query.ts, CategoryPhotoRow from category-photo-row.tsx), the
- * exact same live, verified content a signed-in resident sees on their
- * Home feed, so a guest scrolling this page sees real Pasig places and
- * businesses instead of stock-photo placeholders. Works signed out
- * because places_select_public/businesses_select_public (the same RLS
- * policies Discover and Home already read under) are public-readable for
- * verified rows, no session required. Trails and Events are named
- * alongside it as a plain line, not a third live query: trail-card.tsx's
- * own row shape (name/theme/duration, no photo) doesn't match
- * CategoryPhotoRow's photo-tile shape, so folding it into the same strip
- * would look like a broken row rather than a second kind of card.
- *
- * This page now genuinely exceeds one viewport, so it scrolls;
- * ux-ui-guidelines.md's Layout Pattern Rules calls scrolling appropriate
- * exactly when content volume exceeds a single screen, not before.
+ * Copy rules: no comparison with other platforms, no blanket "everything is
+ * verified" claim, no em dashes. Contact details are the real CATO details
+ * from cato-contact.ts.
  */
 const CATO_ADDRESS = "4th Floor, Pasig Revolving Tower, Market Avenue, Barangay San Nicolas, Pasig City, 1600 Metro Manila";
-// Plain Google Maps embed, no API key: maps.google.com/maps?q=<address>&output=embed
-// resolves the same free-text address CATO_ADDRESS already carries, same
-// URL shape Google documents for a keyless iframe embed.
+// Plain Google Maps embed, no API key.
 const CATO_MAP_EMBED_SRC = `https://maps.google.com/maps?q=${encodeURIComponent(CATO_ADDRESS)}&output=embed`;
 const CATO_MAP_DIRECTIONS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(CATO_ADDRESS)}`;
 
-// Header action, session-dependent per direct spec: a guest sees Sign
-// in (opens the shared auth popup, this is now the page's ONLY sign-in
-// trigger, per this file's own top comment on the removed duplicate Log
-// in button); a signed-in staff/admin sees Go to Dashboard (-> /admin,
-// matching App.tsx's staff shell root); a signed-in resident sees Go to
-// Dashboard too, but routed to "/" (Home feed), per direct answer, since
-// residents have no /admin equivalent -- the label stays the same across
-// both signed-in cases, only the destination differs, so this isn't a
-// third branch, just one signed-in branch with a role-picked target.
-//
-// `mobile` is the same action inside the mobile menu: full width and the
-// regular button height, and `onAction` closes the menu first so it is not
-// left open behind the auth popup or the page navigation.
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+// Same blue as the "Reviewed by CATO" tile in About (bg-primary). The fixed
+// header and the hero panel share it, so they stay the exact same color.
+const HERO_TINT = "bg-primary text-primary-foreground";
+const PILL = "h-11 rounded-full px-6 text-sm";
+const PILL_PRIMARY = `${PILL} border-transparent bg-card text-foreground hover:bg-card/90`;
+const PILL_GHOST = `${PILL} border border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground`;
+
+// Header action: a guest sees Sign in (the page's only sign-in trigger); a
+// signed-in user sees a dashboard button, staff to /admin, residents to "/".
+// `mobile` is the same action inside the mobile menu, full width, and
+// `onAction` closes the menu first.
 function NavAction({ mobile = false, onAction }: Readonly<{ mobile?: boolean; onAction?: () => void }>) {
   const { session, profile } = useAuth();
   const { openAuth } = useAuthModal();
   const navigate = useNavigate();
 
-  // The header itself is now bg-card (light), full page width, per this
-  // file's own top comment on LandingHeader -- no longer the dark navy
-  // panel this button was originally tuned against. variant="secondary"
-  // (bg-secondary navy, secondary-foreground text) now supplies the
-  // needed contrast directly, so this no longer needs its own pill
-  // override or the "outline" variant's border-stripping.
-  const size = mobile ? "lg" : "sm";
-  const className = mobile ? "w-full" : undefined;
+  const className = `${PILL_PRIMARY} ${mobile ? "w-full" : "h-9 px-5"}`;
 
   if (!session) {
     return (
@@ -195,8 +81,6 @@ function NavAction({ mobile = false, onAction }: Readonly<{ mobile?: boolean; on
           onAction?.();
           openAuth("login");
         }}
-        variant="secondary"
-        size={size}
         className={className}
       >
         Sign in
@@ -213,8 +97,6 @@ function NavAction({ mobile = false, onAction }: Readonly<{ mobile?: boolean; on
         onAction?.();
         navigate(dashboardPath);
       }}
-      variant="secondary"
-      size={size}
       className={className}
     >
       {isStaff ? "Go to Dashboard" : "Go to Home"}
@@ -222,82 +104,11 @@ function NavAction({ mobile = false, onAction }: Readonly<{ mobile?: boolean; on
   );
 }
 
-// Header, now full page width and fixed for the ENTIRE page, not scoped
-// to the left (hero) column and not merely sticky-within-that-column.
-// Direct instruction: the bar was "just half" (it stopped at the hero's
-// lg:w-1/2 split) and needed to "still appear down to the bottom part of
-// the page" while scrolling -- a plain `sticky` header inside the left
-// column only tracks that column, and that column's own min-h-screen
-// height means the header visually disappears once the page scrolls past
-// the hero into About/Features/Contact. `fixed inset-x-0 top-0` pins it
-// to the viewport itself (spanning full width, both former columns) for
-// the page's entire scroll range, the same "persistent element never
-// resizes or disappears on navigation" rule ux-ui-guidelines.md's Layout
-// Pattern Rules states for header/nav/footer, applied here to scroll
-// position rather than route navigation. z-50 keeps it above the hero
-// content and every section below. Since a fixed
-// element is pulled out of flow, the hero wrapper below adds matching
-// top padding (pt-16, this header's own h-16) so no content starts
-// underneath it.
-//
-// Originally translucent + backdrop-blur, "like Apple," per an earlier
-// direct answer, over bg-card/80 rather than bg-secondary/70 since the
-// header spans past the hero into the light About/Features/Contact
-// sections beneath it and a navy-tinted translucency would mismatch
-// those. That translucency is gone now -- see the fifteenth-instruction
-// comment right below, on LandingHeader itself, for why plain, fully
-// opaque bg-card replaced it.
-// Three-part bar (logo / centered links / action) via a 3-column grid,
-// per the Notion reference: nav links sit centered as their own group in
-// the middle of the bar, independent of the logo's and action's own
-// widths, rather than the previous single flex row that grouped links
-// with the action on the right. The outer two grid columns are mirrored
-// (each 1fr) so the CENTER column -- and the nav links inside it -- stays
-// visually centered on the bar as a whole, not just centered between
-// wherever the logo and action happen to end; the logo and action each
-// sit in their own column with justify-self so they don't stretch.
-// Fifteenth direct instruction ("remove all outline dividers and
-// outline in the top bar in the landing page completely. also nav and
-// background color of hero must be identical"): two related changes.
-//
-// border-b border-border is dropped from this header entirely -- that
-// was the one border/divider actually on the top bar itself (at the
-// time, the section dividers further down the page -- About/Features/
-// Contact's own border-t border-border -- were a different, separate
-// part of the page this instruction didn't reference, so those were
-// left alone here; a follow-up sixteenth instruction removed those too,
-// see the About section's own comment). With no border-bottom, there is
-// no outline left on the top bar at all.
-//
-// bg-card/80 + backdrop-blur-md is also dropped, down to a plain, fully
-// opaque bg-card. Those were there because this header floats `fixed`
-// over the page and other sections scroll up underneath it -- partial
-// opacity plus blur is what let whatever was scrolling by underneath
-// show through softly instead of a hard cut. But partial opacity is, by
-// definition, never IDENTICAL to a flat color behind it -- once
-// anything other than the hero's own flat bg-card scrolls underneath
-// (About, Features, Contact, all bg-card or bg-background depending on
-// section), the header would render as a translucent blend of bg-card
-// and whatever's beneath it, not bg-card itself. Since the instruction
-// specifically requires the nav and the hero background to be
-// IDENTICAL colors, not just similar, this header now uses plain
-// bg-card at full opacity -- the exact same class the hero wrapper
-// itself uses (landing.tsx's hero <div>, see its own comment) -- so the
-// two are the same color under every circumstance, not just while the
-// page happens to be scrolled to the top.
-
-// Header nav: click animates the page scroll instead of jumping.
-//
-// The links keep real href="#id" so open-in-new-tab, copy-link and no-JS
-// still work; a plain left click is intercepted and animated with motion's
-// `animate`. The URL hash is deliberately not touched: the app runs on a
-// data router (main.tsx), and writing history state behind its back can
-// corrupt its back/forward bookkeeping.
-//
-// Duration grows with distance (long jumps get more time, short ones stay
-// snappy) and uses an ease-in-out curve. The animation stops the moment the
-// visitor takes over the scroll themselves (wheel, touch, scroll keys), so it
-// never fights them, and is skipped entirely for reduced-motion users.
+// Header nav: a click animates the page scroll instead of jumping. The links
+// keep a real href="#id" so open-in-new-tab and copy-link still work; a plain
+// left click is intercepted and animated with motion's `animate`. The URL hash
+// is not touched (the app runs on a data router). The animation stops as soon
+// as the visitor takes over the scroll, and is skipped for reduced motion.
 const NAV_LINKS = [
   { id: "top", label: "Home" },
   { id: "about", label: "About" },
@@ -364,13 +175,11 @@ function handleNavClick(e: MouseEvent<HTMLAnchorElement>, id: string) {
   scrollToSection(id);
 }
 
-// Below the sm breakpoint the centered links and the action would not fit
-// in the pill (the links used to simply disappear on phones, leaving only
-// the logo and Sign in), so there the pill shows the logo and a menu button.
-// The button opens a dropdown card under the pill with the same nav links
-// (animated scroll, same handler as desktop) and the same NavAction. It
-// closes on a link or action tap, Escape, a tap outside the header, or when
-// the viewport grows past the breakpoint. Desktop layout is unchanged.
+// Flat, full-width bar pinned for the whole page: logo and wordmark left,
+// plain text links, one pill action right. Hairline bottom border only.
+// Below the sm breakpoint the links and action collapse into a menu button
+// that opens a flat panel under the bar; it closes on a link or action tap,
+// Escape, a tap outside, or when the viewport grows past the breakpoint.
 function LandingHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
@@ -387,72 +196,70 @@ function LandingHeader() {
   }, []);
 
   return (
-    <header
-      ref={headerRef}
-      className="fixed inset-x-4 top-4 z-50 mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center rounded-full border border-border bg-card/70 px-5 backdrop-blur-md"
-    >
-      <Link to="/welcome" className="flex items-center gap-2 justify-self-start">
-        <img src={logo} alt="Lakbay Pasig" className="h-8 w-8" />
-      </Link>
+    <header ref={headerRef} className={`fixed inset-x-0 top-0 z-50 border-b border-primary-foreground/20 ${HERO_TINT}`}>
+      <div className="flex h-16 w-full items-center justify-between gap-6 px-6 lg:px-10">
+        <Link to="/welcome" className="flex items-center gap-2.5">
+          <img src={logo} alt="" className="h-8 w-8" />
+          <span className="text-base font-semibold tracking-tight text-primary-foreground">Lakbay Pasig</span>
+        </Link>
 
-      <nav className="col-start-2 hidden items-center gap-6 justify-self-center sm:flex">
-        {NAV_LINKS.map((link) => (
-          <motion.a
-            key={link.id}
-            href={`#${link.id}`}
-            onClick={(e) => handleNavClick(e, link.id)}
-            whileTap={{ scale: 0.94 }}
-            className="text-sm font-medium text-foreground/80 hover:text-foreground"
-          >
-            {link.label}
-          </motion.a>
-        ))}
-      </nav>
+        <nav aria-label="Landing page sections" className="hidden items-center gap-8 sm:flex">
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.id}
+              href={`#${link.id}`}
+              onClick={(e) => handleNavClick(e, link.id)}
+              className="text-sm font-medium text-primary-foreground transition-opacity hover:opacity-80"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
 
-      <div className="col-start-3 hidden justify-self-end sm:block">
-        <NavAction />
+        <div className="hidden sm:block">
+          <NavAction />
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:hidden"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          aria-controls="landing-mobile-menu"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <List className="h-5 w-5" aria-hidden="true" />}
+        </Button>
       </div>
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="col-start-3 justify-self-end rounded-full sm:hidden"
-        aria-label={menuOpen ? "Close menu" : "Open menu"}
-        aria-expanded={menuOpen}
-        aria-controls="landing-mobile-menu"
-        onClick={() => setMenuOpen((open) => !open)}
-      >
-        {menuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <List className="h-5 w-5" aria-hidden="true" />}
-      </Button>
 
       <AnimatePresence>
         {menuOpen && (
           <motion.div
             id="landing-mobile-menu"
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2, ease: EASE }}
-            className="absolute inset-x-0 top-full mt-2 origin-top rounded-nest-xl-3 border border-border bg-card p-3 shadow-lg sm:hidden"
+            className={`absolute inset-x-0 top-full border-b border-primary-foreground/20 ${HERO_TINT} px-6 pb-6 pt-2 sm:hidden`}
           >
             <nav aria-label="Landing page sections" className="flex flex-col">
               {NAV_LINKS.map((link) => (
-                <motion.a
+                <a
                   key={link.id}
                   href={`#${link.id}`}
                   onClick={(e) => {
                     handleNavClick(e, link.id);
                     closeMenu();
                   }}
-                  whileTap={{ scale: 0.97 }}
-                  className="rounded-xl px-4 py-3 text-base font-medium text-foreground hover:bg-muted"
+                  className="border-b border-primary-foreground/20 py-4 text-lg font-medium tracking-tight text-primary-foreground"
                 >
                   {link.label}
-                </motion.a>
+                </a>
               ))}
             </nav>
-            <div className="mt-2 border-t border-border pt-3">
+            <div className="mt-5">
               <NavAction mobile onAction={closeMenu} />
             </div>
           </motion.div>
@@ -462,27 +269,7 @@ function LandingHeader() {
   );
 }
 
-// The hero carousel just fades in. It used to also scale and slide as it
-// scrolled into view; that scroll-linked transform sat on top of the
-// carousel and the animated line artwork and was a big part of the hero lag,
-// so it is gone. No extra container around it.
-function HeroCarouselFrame({ slides }: Readonly<{ slides: LandingSlide[] }>) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.6, delay: 0.5 }}
-      className="relative z-10 aspect-[16/10] w-full max-w-5xl overflow-hidden rounded-lg sm:aspect-[16/9]"
-    >
-      <HeroCarousel slides={slides} />
-    </motion.div>
-  );
-}
-
-// Landing motion helpers (framer-motion, via the `motion` package already
-// in the project). MotionConfig below honors the OS reduced-motion setting.
-const EASE = [0.22, 1, 0.36, 1] as const;
-
+// Landing motion helpers. MotionConfig below honors the OS reduced-motion setting.
 function Reveal({ children, delay = 0, className }: Readonly<{ children: ReactNode; delay?: number; className?: string }>) {
   return (
     <motion.div
@@ -540,66 +327,17 @@ function RevealWords({
   );
 }
 
-// Scroll-driven section container. Only the panel behind the content
-// animates (scale and corner radius); the content on top never moves.
-// "enter": the panel starts inset with rounded corners and opens to full
-// width as it arrives. "exit": the panel shrinks and rounds off as it
-// scrolls away. The layer sits at -z-10 inside an isolated stacking
-// context, so children need no extra positioning.
-//
-// "enter" settles at progress 1 when the section's top reaches 30% of the
-// viewport. A section that sits at the very bottom of the page (Contact,
-// followed only by the footer) can never be scrolled that far up, so its
-// progress stalled short of 1 and the panel stayed shrunken and rounded
-// forever. `settleAtEnd` finishes the animation when the section's bottom
-// edge reaches the viewport bottom instead, which every last section can
-// reach.
-//
-// "exit" only scales (a compositor-only transform) and keeps a fixed bottom
-// radius. Animating borderRadius on an overflow-hidden layer forces a
-// repaint of everything inside it each frame, and the hero layer holds the
-// animated line artwork.
-function ScrollPanel({
+// Section container: a plain full-width section with its own background. It
+// used to animate (scale and corner radius as it scrolled in and out); that
+// scroll-driven background animation is gone.
+function Section({
   id,
-  mode,
   bg,
-  layer,
   className,
-  settleAtEnd = false,
   children,
-}: Readonly<{
-  id?: string;
-  mode: "enter" | "exit";
-  bg: string;
-  layer?: ReactNode;
-  className?: string;
-  settleAtEnd?: boolean;
-  children: ReactNode;
-}>) {
-  const ref = useRef<HTMLElement>(null);
-  const reduceMotion = useReducedMotion();
-  const exiting = mode === "exit";
-  let offset: NonNullable<Parameters<typeof useScroll>[0]>["offset"];
-  if (exiting) offset = ["start start", "end start"];
-  else if (settleAtEnd) offset = ["start end", "end end"];
-  else offset = ["start end", "start 0.3"];
-  const { scrollYProgress } = useScroll({ target: ref, offset });
-  const scale = useTransform(scrollYProgress, [0, 1], exiting ? [1, 0.93] : [0.9, 1]);
-  const borderRadius = useTransform(scrollYProgress, [0, 1], [56, 0]);
-  // Reduced motion: no scroll-driven style at all. Exit: scale only.
-  let layerStyle;
-  if (reduceMotion) layerStyle = undefined;
-  else if (exiting) layerStyle = { scale };
-  else layerStyle = { scale, borderRadius };
+}: Readonly<{ id?: string; bg: string; className?: string; children: ReactNode }>) {
   return (
-    <section ref={ref} id={id} className={`relative isolate ${className ?? ""}`}>
-      <motion.div
-        aria-hidden="true"
-        className={`absolute inset-0 -z-10 overflow-hidden ${bg} ${exiting ? "rounded-b-[2.5rem] will-change-transform" : ""}`}
-        style={layerStyle}
-      >
-        {layer}
-      </motion.div>
+    <section id={id} className={`${bg} ${className ?? ""}`}>
       {children}
     </section>
   );
@@ -620,7 +358,177 @@ function Tile({ className, delay = 0, children }: Readonly<{ className: string; 
   );
 }
 
-const HEADLINE = ["Lakbay", "Pasig."];
+// The hero carousel runs edge to edge (Qula-style full-bleed filmstrip: the
+// center slide with its neighbors peeking in on both sides) and just fades in.
+function HeroCarouselFrame({ slides }: Readonly<{ slides: LandingSlide[] }>) {
+  // The carousel is not mounted until the title reveal has finished. Mounting
+  // it at the start made the browser lay out, decode and paint several large
+  // photos while the title was fading in, which dropped frames on the title.
+  // The frame itself is always there so the page height never jumps. The
+  // photos are only fetched (not decoded) in the meantime, so they are in the
+  // cache by the time the carousel appears.
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), REVEAL.end * 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    for (const slide of slides) {
+      const image = new Image();
+      image.src = slide.image_url;
+    }
+  }, [slides]);
+
+  return (
+    <div className="relative z-10 h-[420px] w-full overflow-hidden sm:h-[460px] lg:h-[540px]">
+      {ready && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="h-full w-full"
+        >
+          <HeroCarousel slides={slides} />
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+// Hero title reveal, adapted from Pixel Point's own site (their home hero,
+// components/shared/title-animation). How theirs stays calm:
+//   - No slide, no blur. A word just appears (opacity 0 to 1 in 0.05s), one
+//     after the other, so the eye reads it like typing, not like motion.
+//   - A highlighted word appears in an accent color, the line holds for 0.3s,
+//     then that word fades to the text color over 0.2s. The hold is the only
+//     pause; everything else runs at 0.05s a word.
+//   - Their accents are saturated brand colors on black, settling to white, so
+//     the flash reads as "emphasis" and the end state is the quietest color.
+// Ours keeps those exact timings but is gentler on purpose:
+//   - The accent is a tint of the final color (a soft sky blue that settles to
+//     white, or a mid blue that settles to dark text in dark mode), so the
+//     change is small. Dark navy on this blue flipped to white, a big
+//     brightness jump that read as a flicker.
+//   - One highlighted word in total ("Pasig."), not one per line.
+const COLOR_DURATION = 0.6;
+// No hold on the accent: it starts easing toward the final color almost as
+// soon as the word appears. A held soft-blue word on this blue background looks
+// like a half-faded white word, which read as a pause on "Pasig.".
+const COLOR_DELAY = 0.1;
+// Unlike Pixel Point (whose reveal waits until its full-screen hero is in
+// view, on an otherwise still page), ours has to wait on purpose: a short
+// pause so the nav and page settle before the first word.
+//
+// Their words are body-size text that pops in (0.05s), which works at that
+// size. Our headline is huge, and a 0.05s pop on two giant words feels forced,
+// so each group has its own pace: the headline fades its words in slowly with
+// a beat between them, the subtitle types at reading pace, and a short beat
+// separates the two.
+const REVEAL_START = 0.5;
+const GROUP_GAP = 0.1;
+const HEADLINE_PACE = { step: 0.35, fade: 0.5 };
+// A fade longer than the step means each word is still fading in while the
+// next begins, so the line flows instead of ticking word by word.
+const SUBTITLE_PACE = { step: 0.09, fade: 0.35 };
+
+// Picks the accent from the text color the word settles on: light text gets a
+// soft sky blue, dark text (dark mode) gets a mid blue.
+function accentFor(finalColor: string) {
+  const [r, g, b] = (finalColor.match(/\d+(\.\d+)?/g) ?? ["255", "255", "255"]).map(Number);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.5 ? "#9CCBF2" : "#2F6FB0";
+}
+
+type RevealItem = { value: string; accent?: boolean };
+type TimedItem = RevealItem & { delayOpacity: number; delayColor: number; fade: number };
+
+const HEADLINE_ITEMS: RevealItem[] = [{ value: "Lakbay" }, { value: "Pasig.", accent: true }];
+const SUBTITLE_ITEMS: RevealItem[] = [
+  { value: "Thousand" },
+  { value: "moments" },
+  { value: "in" },
+  { value: "this" },
+  { value: "city" },
+  { value: "worth living for." },
+];
+
+// One sequence across headline and subtitle, so the subtitle starts typing
+// right after the headline lands. `end` is when the last word has finished,
+// used to bring the buttons and carousel in after the text.
+function buildReveal(groups: { items: RevealItem[]; step: number; fade: number }[]) {
+  let previous = REVEAL_START;
+  let first = true;
+  const timed = groups.map(({ items, step, fade }, groupIndex) =>
+    items.map((item, itemIndex): TimedItem => {
+      if (!first) previous += step + (itemIndex === 0 && groupIndex > 0 ? GROUP_GAP : 0);
+      first = false;
+      const delayOpacity = previous;
+      const delayColor = previous + COLOR_DELAY;
+      // The accent word settles while the next words are already arriving, so
+      // the line never stops and waits on it.
+      if (item.accent) previous += fade * 0.6;
+      return { ...item, delayOpacity, delayColor, fade };
+    })
+  );
+  const last = groups[groups.length - 1];
+  return { timed, end: previous + last.fade };
+}
+
+const REVEAL = buildReveal([
+  { items: HEADLINE_ITEMS, ...HEADLINE_PACE },
+  { items: SUBTITLE_ITEMS, ...SUBTITLE_PACE },
+]);
+
+// The words are plain inline spans (trailing space included), so the text
+// wraps like normal text. Every animation here is opacity only. Animating
+// `color` on a 96px word repaints the text on every frame (opacity runs on
+// the GPU, color does not), and that was the choppiness on "Pasig.". So an
+// accent word is two stacked copies: the base in the real text color, and an
+// accent-colored copy on top that starts visible and fades out, which reads as
+// a color change. `final` is the element's real text color, read from the DOM
+// once, only to pick the accent tint and to hold the start until it is known.
+function RevealText({
+  as: Tag,
+  items,
+  className,
+}: Readonly<{ as: "h1" | "p"; items: TimedItem[]; className: string }>) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  const [final, setFinal] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    if (ref.current) setFinal(getComputedStyle(ref.current).color);
+  }, []);
+  const Component = (Tag === "h1" ? motion.h1 : motion.p) as typeof motion.h1;
+  return (
+    <Component ref={ref} className={className}>
+      {items.map((item) => (
+        <Fragment key={item.value}>
+          <motion.span
+            className={item.accent ? "relative inline-block" : undefined}
+            initial={{ opacity: 0 }}
+            animate={final ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: item.fade, delay: item.delayOpacity, ease: "easeOut" }}
+          >
+            {item.value}
+            {item.accent && final && (
+              <motion.span
+                aria-hidden="true"
+                className="absolute inset-0"
+                style={{ color: accentFor(final) }}
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 0 }}
+                transition={{ duration: COLOR_DURATION, delay: item.delayColor, ease: "easeInOut" }}
+              >
+                {item.value}
+              </motion.span>
+            )}
+          </motion.span>{" "}
+        </Fragment>
+      ))}
+    </Component>
+  );
+}
 
 export default function LandingPage() {
   usePageTitle("Welcome");
@@ -696,128 +604,76 @@ export default function LandingPage() {
   // 5.3): /discover/:kind/:id, same route a signed-in Home visitor lands
   // on, so a guest tapping a card here sees the same detail page rather
   // than a dead end or a forced sign-in.
-  const openShowcaseItem = (item: CategoryPhotoRowItem) =>
-    navigate(`/discover/${item.kind}/${item.id}`);
+  const openShowcaseItem = (item: FanItem) => navigate(`/discover/${item.kind}/${item.id}`);
 
-  const showcaseIsEmpty = placeCategoryRows.length === 0 && businessCategoryRows.length === 0;
+  // Every verified item with a photo, places and businesses together. The fan
+  // shuffles and trims this to what fits the screen.
+  const fanItems = useMemo(() => {
+    const seen = new Set<string>();
+    const all: FanItem[] = [];
+    for (const row of [...placeCategoryRows, ...businessCategoryRows]) {
+      for (const item of row.items) {
+        const key = `${item.kind}-${item.id}`;
+        if (!item.coverPhotoUrl || seen.has(key)) continue;
+        seen.add(key);
+        all.push(item);
+      }
+    }
+    return all;
+  }, [placeCategoryRows, businessCategoryRows]);
 
-  let featuresBody: ReactNode;
-  if (showcaseError) {
-    featuresBody = <p className="text-sm text-destructive">Could not load featured content.</p>;
-  } else if (showcaseLoading) {
-    featuresBody = (
-      <div className="flex flex-col gap-6">
-        <CategoryPhotoRowSkeleton />
-        <CategoryPhotoRowSkeleton />
-      </div>
-    );
-  } else if (showcaseIsEmpty) {
-    featuresBody = <EmptyState icon={SealCheck}>Verified places and businesses will appear here.</EmptyState>;
-  } else {
-    featuresBody = (
-      <div className="flex flex-col gap-8">
-        {placeCategoryRows.length > 0 && (
-          <div className="flex flex-col gap-4">
-            <h3 className="text-lg font-semibold text-foreground">Heritage Places</h3>
-            {placeCategoryRows.map((row) => (
-              <CategoryPhotoRow
-                key={row.categoryId}
-                categoryName={row.categoryName}
-                items={row.items}
-                onSelect={openShowcaseItem}
-              />
-            ))}
-          </div>
-        )}
-
-        {businessCategoryRows.length > 0 && (
-          <div className="flex flex-col gap-4">
-            <h3 className="text-lg font-semibold text-foreground">Local Businesses</h3>
-            {businessCategoryRows.map((row) => (
-              <CategoryPhotoRow
-                key={row.categoryId}
-                categoryName={row.categoryName}
-                items={row.items}
-                onSelect={openShowcaseItem}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
+  // The fan lives inside the final call to action. When the showcase fails or
+  // has no photos there is nothing to show, so the block is just the text.
+  let featuresBody: ReactNode = null;
+  if (showcaseLoading) {
+    featuresBody = <LandingPhotoFanSkeleton />;
+  } else if (!showcaseError && fanItems.length > 0) {
+    featuresBody = <LandingPhotoFan items={fanItems} onSelect={openShowcaseItem} />;
   }
 
   return (
     <MotionConfig reducedMotion="user">
-    {/* The root paints --landing-backdrop (index.css), the layer that shows
-        behind the scroll panels while they scale and round. It used to be
-        the page's own near-white --background, which is almost identical
-        to the white panels, so the layer was barely visible in light mode
-        and only faintly in dark mode. */}
-    <div id="top" className="flex min-h-screen flex-col bg-[hsl(var(--landing-backdrop))]">
-      <LandingHeader />
+      <div id="top" className="flex min-h-screen flex-col bg-background text-foreground">
+        <LandingHeader />
 
-      {/* Hero: centered title, subtitle and buttons, then the carousel,
-          which fades in. */}
-      <ScrollPanel
-        mode="exit"
-        bg="bg-card"
-        layer={<HeroLinesBackground />}
-        className="flex flex-col items-center gap-8 px-6 pb-16 pt-24 text-center lg:px-12 lg:pt-28"
-      >
-
-        <div className="relative z-10 flex max-w-3xl flex-col items-center gap-4">
-          <motion.h1
-            className="text-5xl font-semibold text-foreground lg:text-6xl"
-            initial="hidden"
-            animate="show"
-            variants={{ show: { transition: { staggerChildren: 0.14 } } }}
-          >
-            {HEADLINE.map((word) => (
-              <motion.span
-                key={word}
-                className="mr-[0.25em] inline-block last:mr-0"
-                variants={{ hidden: { opacity: 0, y: 48 }, show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: EASE } } }}
-              >
-                {word}
-              </motion.span>
-            ))}
-          </motion.h1>
-          <motion.p
-            className="max-w-xl text-base text-muted-foreground lg:text-xl"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: EASE, delay: 0.45 }}
-          >
-            Thousand moments in this city worth living for.
-          </motion.p>
-        </div>
-
-        <motion.div
-          className="relative z-10 flex flex-col items-center gap-3 sm:flex-row"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: EASE, delay: 0.65 }}
+        {/* Hero: centered title, subtitle and buttons, then the carousel,
+            which fades in. */}
+        <Section
+          bg={HERO_TINT}
+          className="flex flex-col items-center gap-8 pb-16 pt-24 text-center lg:pt-28"
         >
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="w-full sm:w-auto">
-            <Button onClick={() => openAuth("signup")} size="lg" className="w-full sm:w-auto">
+          <div className="relative z-10 flex max-w-3xl flex-col items-center gap-4 px-6 lg:px-12">
+            <RevealText
+              as="h1"
+              items={REVEAL.timed[0]}
+              className="text-5xl font-semibold text-primary-foreground lg:text-6xl"
+            />
+            <RevealText
+              as="p"
+              items={REVEAL.timed[1]}
+              className="max-w-xl text-base text-primary-foreground/85 lg:text-xl"
+            />
+          </div>
+
+          <motion.div
+            className="relative z-10 flex flex-col items-center gap-3 px-6 sm:flex-row lg:px-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: REVEAL.end }}
+          >
+            <Button onClick={() => openAuth("signup")} className={`${PILL_PRIMARY} w-full sm:w-auto`}>
               Get started
             </Button>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }} className="w-full sm:w-auto">
-            <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
+            <Button asChild variant="outline" className={`${PILL_GHOST} w-full sm:w-auto`}>
               <Link to="/">Continue as Guest</Link>
             </Button>
           </motion.div>
-        </motion.div>
 
-        <HeroCarouselFrame slides={heroSlides} />
-      </ScrollPanel>
+          <HeroCarouselFrame slides={heroSlides} />
+        </Section>
 
-      {/* About: scroll-lit statement, then a bento grid. Copy rules still
-          hold: no comparison with other platforms, no blanket "everything
-          is verified" claim, no em dashes. */}
-      <ScrollPanel id="about" mode="enter" bg="bg-card" className="scroll-mt-20 px-6 py-28 lg:px-16">
+        {/* About: scroll-lit statement, then a bento grid. */}
+        <Section id="about" bg="bg-card" className="scroll-mt-20 px-6 py-28 lg:px-16">
         <div className="mx-auto flex max-w-6xl flex-col gap-20">
 <RevealWords
             className="text-3xl font-semibold leading-tight text-foreground sm:text-4xl lg:text-5xl"
@@ -859,88 +715,78 @@ export default function LandingPage() {
             </Tile>
           </div>
         </div>
-      </ScrollPanel>
+        </Section>
 
-      {/* Features: same live verified showcase (fetchHomeShowcase,
-          CategoryPhotoRow). The #features id stays for the header link.
-          This used to be a plain bg-background <section>: fully opaque and
-          not a ScrollPanel, so it had no container animation and painted
-          over the page backdrop. It is now a ScrollPanel on bg-card like
-          About and Contact, so the panel opens up against the backdrop as
-          it scrolls in. */}
-      <ScrollPanel id="features" mode="enter" bg="bg-card" className="scroll-mt-20 px-6 py-24 lg:px-16">
-        <Reveal className="mx-auto flex max-w-3xl flex-col gap-6">
-          <h2 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">See what is waiting for you</h2>
-          {featuresBody}
-        </Reveal>
-      </ScrollPanel>
+        {/* Final call to action. On md and up the photo fan is its own layer
+            across the right of the block, on top of it, not a grid column
+            the text wraps around; the text sits on the left. The block does
+            not clip, so a big fan can reach past its top and bottom edge. The #features
+            id stays here for the header link. */}
+        <section id="features" className="scroll-mt-20 bg-background px-4 py-16">
+          <Reveal
+            className={`relative mx-auto flex max-w-6xl flex-col gap-10 rounded-[2rem] bg-primary px-6 py-14 text-primary-foreground sm:px-10 md:px-12 ${
+              featuresBody ? "md:min-h-[26rem] md:justify-center" : "items-center text-center"
+            }`}
+          >
+            <div className={`relative z-0 flex flex-col gap-6 ${featuresBody ? "items-center text-center md:max-w-[44%] md:items-start md:text-left" : "items-center"}`}>
+              <h2 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">See what is waiting for you</h2>
+              <p className="max-w-lg text-lg text-primary-foreground/85">
+                <span className="block">Sign in to unlock trails and events,</span>
+                <span className="block">or browse the city as a guest.</span>
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button onClick={() => openAuth("signup")} className={`${PILL} w-full border-transparent bg-card text-foreground hover:bg-card/90 sm:w-auto`}>
+                  Get started
+                </Button>
+                <Button asChild variant="outline" className={`${PILL} w-full border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:w-auto`}>
+                  <Link to="/">Continue as Guest</Link>
+                </Button>
+              </div>
+            </div>
+            {featuresBody && (
+              <div className="pointer-events-none relative z-10 w-full md:absolute md:-right-3 md:top-1/2 md:w-[68%] md:-translate-y-1/2">
+                {featuresBody}
+              </div>
+            )}
+          </Reveal>
+        </section>
 
-      {/* Final call to action: flat rounded block, no decoration */}
-      <section className="bg-background px-4 py-16">
-        <Reveal className="mx-auto flex max-w-6xl flex-col items-center gap-6 rounded-[2rem] bg-primary px-6 py-20 text-center text-primary-foreground">
-          <h2 className="text-4xl font-semibold tracking-tight sm:text-6xl">Start walking.</h2>
-          <p className="max-w-md text-lg text-primary-foreground/85">
-            Sign in to unlock trails and events, or browse the city as a guest.
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button onClick={() => openAuth("signup")} size="lg" className="w-full border-transparent bg-card text-foreground hover:bg-card/90 sm:w-auto">
-              Get started
-            </Button>
-            <Button asChild variant="outline" size="lg" className="w-full border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:w-auto">
-              <Link to="/">Continue as Guest</Link>
-            </Button>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* Contact: two columns per direct spec. Left keeps the real CATO
-          details exactly as before (icon-plus-label per ux-ui-
-          guidelines.md's Icon Rules, MapPin reused from directions-
-          panel.tsx/discover-map.tsx rather than a new icon for the same
-          address concept). Right is a plain Google Maps iframe embed
-          centered on that same CATO_ADDRESS, no API key needed -- a
-          separate, simpler concern from discover-map.tsx's own MapLibre
-          discovery map (that one plots live verified places for
-          browsing; this one just shows where the office is), so it
-          doesn't need to share that map's tile setup. A "Get directions"
-          link beneath the embed opens the same address in Google Maps
-          proper, for anyone who wants turn-by-turn rather than just a
-          look at the pin. */}
-      <ScrollPanel id="contact" mode="enter" settleAtEnd bg="bg-card" className="scroll-mt-20 px-6 py-16 lg:px-16">
+        {/* Contact: real CATO details left, keyless Google Maps embed right. */}
+      <Section id="contact" bg={HERO_TINT} className="scroll-mt-20 px-6 py-16 lg:px-16">
         <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
-            <h2 className="text-2xl font-semibold text-foreground">Contact</h2>
-            <p className="text-base text-muted-foreground">
+            <h2 className="text-2xl font-semibold text-primary-foreground">Contact</h2>
+            <p className="text-base text-primary-foreground/80">
               {CATO_NAME}
             </p>
 
             <div className="flex flex-col gap-4">
               <div className="flex items-start gap-3">
-                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="text-base text-foreground">{CATO_ADDRESS}</span>
+                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary-foreground/80" aria-hidden="true" />
+                <span className="text-base text-primary-foreground">{CATO_ADDRESS}</span>
               </div>
 
               <div className="flex items-center gap-3">
-                <Envelope className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <a href={`mailto:${CATO_EMAIL}`} className="text-base text-foreground underline">
+                <Envelope className="h-5 w-5 shrink-0 text-primary-foreground/80" aria-hidden="true" />
+                <a href={`mailto:${CATO_EMAIL}`} className="text-base text-primary-foreground underline">
                   {CATO_EMAIL}
                 </a>
               </div>
 
               <div className="flex items-center gap-3">
-                <Phone className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <a href={`tel:${CATO_PHONE.replace(/\s+/g, "")}`} className="text-base text-foreground underline">
+                <Phone className="h-5 w-5 shrink-0 text-primary-foreground/80" aria-hidden="true" />
+                <a href={`tel:${CATO_PHONE.replace(/\s+/g, "")}`} className="text-base text-primary-foreground underline">
                   {CATO_PHONE}
                 </a>
               </div>
 
               <div className="flex items-center gap-3">
-                <FacebookLogo className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <FacebookLogo className="h-5 w-5 shrink-0 text-primary-foreground/80" aria-hidden="true" />
                 <a
                   href={CATO_FACEBOOK}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-base text-foreground underline"
+                  className="text-base text-primary-foreground underline"
                 >
                   facebook.com/CATOPasig
                 </a>
@@ -949,7 +795,7 @@ export default function LandingPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="h-64 w-full overflow-hidden rounded-lg border border-border lg:h-auto lg:min-h-64 lg:flex-1">
+            <div className="h-64 w-full overflow-hidden rounded-lg border border-primary-foreground/30 lg:h-auto lg:min-h-64 lg:flex-1">
               <iframe
                 title="CATO office location"
                 src={CATO_MAP_EMBED_SRC}
@@ -962,21 +808,21 @@ export default function LandingPage() {
               href={CATO_MAP_DIRECTIONS_URL}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 self-start text-sm text-foreground underline"
+              className="flex items-center gap-1.5 self-start text-sm text-primary-foreground underline"
             >
               Get directions
               <ArrowSquareOut className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           </div>
         </div>
-      </ScrollPanel>
-    <footer className="bg-card px-6 py-6 text-center text-sm text-muted-foreground">
-        Lakbay Pasig. Places and businesses reviewed by the Pasig City Tourism Office (CATO).{" "}
-        <Link to="/privacy" className="underline hover:text-foreground">
-          Privacy Policy
-        </Link>
-      </footer>
-    </div>
+      </Section>
+        <footer className={`border-t border-primary-foreground/20 ${HERO_TINT} px-6 py-6 text-center text-sm text-primary-foreground/80`}>
+          Lakbay Pasig. Places and businesses reviewed by the Pasig City Tourism Office (CATO).{" "}
+          <Link to="/privacy" className="underline hover:text-primary-foreground">
+            Privacy Policy
+          </Link>
+        </footer>
+      </div>
     </MotionConfig>
   );
 }
