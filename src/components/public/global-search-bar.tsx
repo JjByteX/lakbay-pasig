@@ -10,7 +10,7 @@ import { ItemRow, ResultGroup, ResultRow } from "./search-result-list";
 import { useDismissOnOutsideOrEscape } from "@/hooks/use-dismiss-on-outside-or-escape";
 import { isVoiceSearchSupported, useVoiceSearch } from "@/hooks/use-voice-search";
 import { useOnline } from "@/lib/offline/status";
-import { searchPlaces as searchMapPlaces, type PlaceResult } from "@/lib/geocode";
+import { parseHouseNumber, searchPlaces as searchMapPlaces, type PlaceResult } from "@/lib/geocode";
 import { barangayCenter, matchBarangay, matchBarangayHit } from "@/lib/barangay";
 import { useBarangayFeatures } from "@/hooks/use-barangay-features";
 import { useGlobalSearchQuery } from "./public-shell";
@@ -209,6 +209,9 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
 
   const trimmed = query.trim();
   const showPanel = open && trimmed.length > 0;
+  // A house-number address the map has no point for: only streets came back.
+  const houseQuery = parseHouseNumber(trimmed);
+  const noExactAddress = houseQuery !== null && mapHits.length > 0 && !mapHits.some((hit) => hit.exactHouse);
 
   // One line under the bar while listening, uploading, or after a failure.
   // Same panel style as the results, and never at the same time as them.
@@ -407,6 +410,13 @@ export function GlobalSearchBar({ query, onQueryChange }: Readonly<GlobalSearchB
                 />
               ))}
             </ResultGroup>
+          )}
+
+          {!loading && !mapLoading && noExactAddress && houseQuery && (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              No exact match for {houseQuery.number}
+              {houseQuery.suffix ? `-${houseQuery.suffix}` : ""} on the map. Hold the map to drop a pin where it is.
+            </p>
           )}
 
           {!loading && mapLoading && hasAnyResults(results) && (

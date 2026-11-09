@@ -71,7 +71,40 @@ export interface PlaceResult {
   // address parts at all.
   address: string;
   location: Coordinates;
+  // True when the hit is an address point whose house number matches the one
+  // typed (see searchPlaces). Lets the search bar say when nothing matched.
+  exactHouse?: boolean;
 }
+
+// "93-b e. mendoza st." -> { number: "93", suffix: "b", street: "e. mendoza st." }.
+// A suffix counts only when it is attached (93-b, 93b), so "93 E Mendoza"
+// keeps its E as part of the street. null when the text has no leading house
+// number and a street after it.
+export interface HouseNumberQuery {
+  number: string;
+  suffix: string | null;
+  street: string;
+}
+
+export function parseHouseNumber(text: string): HouseNumberQuery | null {
+  const match = /^\s*(\d+)(?:\s*-\s*([A-Za-z0-9]+)|([A-Za-z]))?\s+(\S.*?)\s*$/.exec(text);
+  if (!match) return null;
+  const [, number, hyphenSuffix, letterSuffix, street] = match;
+  return { number, suffix: hyphenSuffix ?? letterSuffix ?? null, street };
+}
+
+// Dots out, spaces collapsed, a trailing "st"/"ave"/... spelled out, the way
+// OpenStreetMap writes them: "e. mendoza st." -> "e mendoza street".
+export function normalizeStreet(street: string): string {
+  const words = street.toLowerCase().replace(/\./g, " ").split(/\s+/).filter(Boolean);
+  const last = words.length - 1;
+  const full: Record<string, string> = { st: "street", ave: "avenue", blvd: "boulevard", rd: "road", dr: "drive" };
+  if (last > 0 && full[words[last]]) words[last] = full[words[last]];
+  return words.join(" ");
+}
+
+// Letters and digits only, for comparing house numbers and street names.
+const compact = (value: string | undefined) => (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // One address line: house number and street, then locality (the
 // barangay), then city. Every part is optional, since street was missing
@@ -104,15 +137,21 @@ async function getJson(url: string): Promise<{ features?: PhotonFeature[] }> {
 // Top 5 hits inside Pasig for the typed text. Runs only when the caller
 // asks (Enter or the search icon). Empty text returns [] with no request.
 // Photon returns [lon, lat], GeoJSON order.
-export async function searchPlaces(text: string): Promise<PlaceResult[]> {
-  const q = text.trim();
-  if (!q) return [];
+//
+// A text that starts with a house number ("93-b e. mendoza st.") is also asked
+// the way OpenStreetMap writes it ("93b e mendoza street", "93 e mendoza
+// street"): the typed form rarely matches an address point. Hits whose house
+// number and street match the typed ones go first, marked exactHouse. If
+// OpenStreetMap has no point for that number, the street hits are returned as
+// before and the caller can say so.
+// A hit plus the two Photon fields the house-number match reads.
+type PhotonHit = PlaceResult & { housenumber?: string; street?: string };
 
+async function searchPhoton(q: string): Promise<PhotonHit[]> {
   const data = await getJson(
     `${PHOTON_BASE_URL}/api/?q=${encodeURIComponent(q)}&limit=${RESULT_LIMIT}&bbox=${PASIG_BBOX}`,
   );
-
-  const results: PlaceResult[] = [];
+  const results: PhotonHit[] = [];
   for (const feature of data.features ?? []) {
     const [longitude, latitude] = feature.geometry?.coordinates ?? [];
     if (typeof latitude !== "number" || typeof longitude !== "number") continue;
@@ -122,9 +161,57 @@ export async function searchPlaces(text: string): Promise<PlaceResult[]> {
       name,
       address: formatAddress(props) || name || "",
       location: { latitude, longitude },
+      housenumber: props.housenumber,
+      street: props.street,
     });
   }
   return results;
+}
+
+const toPlaceResult = ({ name, address, location }: PhotonHit): PlaceResult => ({ name, address, location });
+
+export async function searchPlaces(text: string): Promise<PlaceResult[]> {
+  const q = text.trim();
+  if (!q) return [];
+
+  const parsed = parseHouseNumber(q);
+  if (!parsed) return (await searchPhoton(q)).map(toPlaceResult);
+
+  const street = normalizeStreet(parsed.street);
+  const withSuffix = parsed.suffix ? `${parsed.number}${parsed.suffix}` : parsed.number;
+  const variants = [...new Set([`${withSuffix} ${street}`, `${parsed.number} ${street}`])];
+  // The typed text must succeed (its errors surface); the rewrites are extra.
+  const [typed, ...rewritten] = await Promise.all([
+    searchPhoton(q),
+    ...variants.map((v) => searchPhoton(v).catch(() => [] as PhotonHit[])),
+  ]);
+
+  const wantedStreet = compact(street);
+  const wantedFull = compact(withSuffix);
+  const wantedNumber = compact(parsed.number);
+  // 2: same house number and suffix, 1: same number, 0: not this address.
+  const rank = (hit: PhotonHit): number => {
+    const hitStreet = compact(hit.street);
+    if (!hit.housenumber || !hitStreet) return 0;
+    if (!hitStreet.includes(wantedStreet) && !wantedStreet.includes(hitStreet)) return 0;
+    const number = compact(hit.housenumber);
+    if (number === wantedFull) return 2;
+    return number === wantedNumber ? 1 : 0;
+  };
+
+  const seen = new Set<string>();
+  const merged: PhotonHit[] = [];
+  for (const hit of [...rewritten.flat(), ...typed]) {
+    const key = `${hit.location.latitude.toFixed(5)},${hit.location.longitude.toFixed(5)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(hit);
+  }
+  merged.sort((x, y) => rank(y) - rank(x));
+  return merged.slice(0, RESULT_LIMIT).map((hit) => {
+    const result = toPlaceResult(hit);
+    return rank(hit) > 0 ? { ...result, exactHouse: true } : result;
+  });
 }
 
 // Address line for a pin. null when nothing usable comes back, which is a
@@ -177,6 +264,18 @@ function demo() {
   );
   assertEqual(formatAddress({ street: "  ", city: "Pasig" }), "Pasig", "blank parts skipped");
   assertEqual(formatAddress({ housenumber: "77", locality: "Kapitolyo" }), "Kapitolyo", "house number with no street");
+
+  const parsedFull = parseHouseNumber("93-b e. mendoza st.");
+  assertEqual(parsedFull?.number, "93", "parse: number");
+  assertEqual(parsedFull?.suffix, "b", "parse: hyphen suffix");
+  assertEqual(parsedFull?.street, "e. mendoza st.", "parse: street");
+  assertEqual(parseHouseNumber("93 E Mendoza")?.suffix, null, "parse: spaced E stays in the street");
+  assertEqual(parseHouseNumber("93 E Mendoza")?.street, "E Mendoza", "parse: spaced E street");
+  assertEqual(parseHouseNumber("93b e mendoza")?.suffix, "b", "parse: attached letter suffix");
+  assertEqual(parseHouseNumber("mendoza"), null, "parse: no number");
+  assertEqual(parseHouseNumber("93"), null, "parse: number only");
+  assertEqual(normalizeStreet("e. mendoza st."), "e mendoza street", "normalize: dots and st");
+  assertEqual(normalizeStreet("st. joseph"), "st joseph", "normalize: leading st kept");
 
   console.log("geocode.ts demo: all checks passed");
 }
