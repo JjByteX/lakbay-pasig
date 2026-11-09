@@ -587,7 +587,13 @@ function DirectionsPanelContent({
       <div
         ref={scrollRef}
         onScroll={updateMoreBelow}
-        className={cn(collapsible && "scrollbar-hidden-mobile min-h-0 flex-1 overflow-y-auto")}
+        className={cn(
+          collapsible && "scrollbar-hidden-mobile min-h-0 flex-1 overflow-y-auto border-b",
+          // The scrollbar is hidden on mobile, so a flat divider at the bottom
+          // edge says there is more below, and goes transparent at the end of
+          // the content. The border is always there, so nothing changes size.
+          collapsible && (moreBelow ? "border-border" : "border-transparent"),
+        )}
       >
       {/* Phase 3.4/3.5: From/To rows, stacked, matching the reference
           image's circle-then-pin marker pair.
@@ -671,14 +677,6 @@ function DirectionsPanelContent({
         <StepList steps={steps} nested={!collapsible} />
       )}
       </div>
-      {/* The scrollbar is hidden on mobile, so a soft fade at the bottom edge
-          says there is more below, and goes away at the end of the content. */}
-      {collapsible && moreBelow && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card to-transparent"
-        />
-      )}
       </div>
 
       {/* Navigation: the one primary action, at the bottom of the panel.
