@@ -1,4 +1,4 @@
-import { NavigationArrow, SpeakerHigh, SpeakerX } from "@phosphor-icons/react";
+import { NavigationArrow, SpeakerHigh, SpeakerX, X } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { formatDistance } from "@/lib/directions";
 import { formatStepInstruction } from "@/lib/osrm-instructions";
@@ -104,50 +104,63 @@ export function NavigationView() {
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1000] p-3">
-        <div className={`pointer-events-auto mx-auto flex w-full max-w-md flex-wrap items-center justify-between gap-x-4 gap-y-2 ${CARD_CLASS}`}>
-          {/* min-w-40 keeps the time and distance readable: when the buttons
-              leave less than that (narrow phone, Recenter showing), they drop
-              to their own row instead of squeezing this into a column. */}
-          <div className="min-w-40 flex-1">
-            {tripProgress ? (
-              <>
-                <p className="text-base font-semibold text-foreground">
-                  {formatDuration(tripProgress.timeRemainingSeconds)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatDistance(tripProgress.distanceRemainingMeters)} · {arrival}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">No position yet</p>
-            )}
-            <TrafficNote mode={selectedMode} />
-          </div>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {voiceSupported && (
-              <button
-                type="button"
-                aria-label={voiceMuted ? "Unmute voice guidance" : "Mute voice guidance"}
-                aria-pressed={voiceMuted}
-                onClick={() => setVoiceMuted(!voiceMuted)}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {voiceMuted ? (
-                  <SpeakerX className="h-5 w-5 shrink-0" />
-                ) : (
-                  <SpeakerHigh className="h-5 w-5 shrink-0" />
-                )}
-              </button>
-            )}
-            {!following && (
-              <Button variant="outline" className="min-h-10 gap-2" onClick={() => setFollowing(true)}>
-                <NavigationArrow className="h-4 w-4 shrink-0" aria-hidden="true" />
-                Recenter
-              </Button>
-            )}
-            <Button variant="outline" className="min-h-10" onClick={endNavigation}>
-              End
+        <div className="mx-auto flex w-full max-w-md flex-col items-start gap-2">
+          {/* Recenter floats over the map, above the bar, only while the camera
+              is not following -- a labeled button (the arrow is not a
+              universally recognized icon) that costs the bar no width. */}
+          {!following && (
+            <Button
+              variant="outline"
+              className="pointer-events-auto min-h-10 gap-2 shadow"
+              onClick={() => setFollowing(true)}
+            >
+              <NavigationArrow className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Recenter
             </Button>
+          )}
+          {/* One row: time and distance, then voice and end as icon buttons.
+              End is the close X, one of the icons the guidelines allow alone. */}
+          <div className={`pointer-events-auto flex w-full items-center justify-between gap-2 ${CARD_CLASS}`}>
+            <div className="min-w-0 flex-1">
+              {tripProgress ? (
+                <>
+                  <p className="text-base font-semibold text-foreground">
+                    {formatDuration(tripProgress.timeRemainingSeconds)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDistance(tripProgress.distanceRemainingMeters)} · {arrival}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">No position yet</p>
+              )}
+              <TrafficNote mode={selectedMode} />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {voiceSupported && (
+                <button
+                  type="button"
+                  aria-label={voiceMuted ? "Unmute voice guidance" : "Mute voice guidance"}
+                  aria-pressed={voiceMuted}
+                  onClick={() => setVoiceMuted(!voiceMuted)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  {voiceMuted ? (
+                    <SpeakerX className="h-5 w-5 shrink-0" />
+                  ) : (
+                    <SpeakerHigh className="h-5 w-5 shrink-0" />
+                  )}
+                </button>
+              )}
+              <Button
+                variant="outline"
+                aria-label="End navigation"
+                className="h-10 w-10 rounded-full p-0"
+                onClick={endNavigation}
+              >
+                <X className="h-5 w-5 shrink-0" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
