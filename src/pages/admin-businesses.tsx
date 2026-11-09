@@ -279,6 +279,9 @@ export default function AdminBusinessesPage() {
   let bulkSubmitLabel = bulkAction ? BULK_ACTIONS[bulkAction].verb : "";
   if (bulkSubmitting) bulkSubmitLabel = "Submitting…";
 
+  // The View icon and a click on the row both open the business.
+  const viewBusiness = (business: BusinessRow) => navigate(`/admin/businesses/${business.id}`);
+
   const columns: AdminColumn<BusinessRow & { barangay: string }>[] = [
     {
       key: "name",
@@ -322,7 +325,7 @@ export default function AdminBusinessesPage() {
       label: "",
       render: (business) => (
         <AdminIconActions>
-          <AdminIconAction icon={Eye} label="View" onClick={() => navigate(`/admin/businesses/${business.id}`)} />
+          <AdminIconAction icon={Eye} label="View" onClick={() => viewBusiness(business)} />
           {business.verificationStatus === "pending" && (
             <>
               <AdminIconAction
@@ -361,6 +364,7 @@ export default function AdminBusinessesPage() {
         keyField="id"
         autoPageSize
         selection={{ selectedIds, onChange: setSelectedIds }}
+        onRowClick={viewBusiness}
         emptyIcon={Storefront}
         empty={businesses && businesses.length > 0 ? "Matching businesses will appear here." : "Businesses will appear here."}
         toolbar={

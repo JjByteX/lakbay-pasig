@@ -282,6 +282,18 @@ function SortableHeaderCell<T>({
   );
 }
 
+// Row click (onRowClick) is the shared "open this row" behavior: any table
+// with a View action passes the same handler to both, so clicking anywhere on
+// the row does what the View icon does. A click that lands on a control inside
+// the row (a link, button, checkbox, field) or that ends a text selection
+// belongs to that, not to the row.
+const ROW_CLICK_IGNORED = 'a, button, input, select, textarea, label, [role="button"], [role="checkbox"]';
+
+function shouldOpenRow(e: MouseEvent): boolean {
+  if (e.target instanceof Element && e.target.closest(ROW_CLICK_IGNORED)) return false;
+  return !window.getSelection()?.toString();
+}
+
 // The browser would also select the text between the two rows on a
 // shift-click; stop that, the click itself still goes through.
 function keepShiftClickFromSelectingText(e: MouseEvent) {
@@ -440,7 +452,7 @@ export default function AdminDataTable<T>({
               key={rowKey}
               style={ROW_STYLE}
               data-state={checked ? "selected" : undefined}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onClick={onRowClick ? (e) => shouldOpenRow(e) && onRowClick(row) : undefined}
               className={onRowClick ? "cursor-pointer" : undefined}
             >
               {selection && (

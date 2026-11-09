@@ -112,6 +112,12 @@ function typeFilterOptionLabel(option: (typeof TYPE_OPTIONS)[number]): string {
 // Discovery (trail content) rows are always reviewable; place rows only while
 // pending. Used by the row actions and by bulk selection, so a row that can't
 // be reviewed can't be checked either.
+// Discovery (trail content) rows live under /admin/places/discovery, place
+// rows under /admin/places. The View icon and a click on the row both go here.
+function viewPath(row: QueueRow): string {
+  return row.kind === "place" ? `/admin/places/${row.id}` : `/admin/places/discovery/${row.id}`;
+}
+
 function isReviewable(row: QueueRow): boolean {
   return row.kind !== "place" || row.verification_status === "pending";
 }
@@ -301,10 +307,10 @@ export default function AdminPlacesPage() {
       key: "actions",
       label: "",
       render: (row) => {
-        // Discovery (trail content) rows live under /admin/places/discovery
-        // and are always reviewable; place rows can only be reviewed while
-        // pending. Same split the three-dot menus had.
-        const base = row.kind === "place" ? `/admin/places/${row.id}` : `/admin/places/discovery/${row.id}`;
+        // Discovery (trail content) rows are always reviewable; place rows
+        // can only be reviewed while pending. Same split the three-dot menus
+        // had.
+        const base = viewPath(row);
         const reviewable = isReviewable(row);
         return (
           <AdminIconActions>
@@ -385,6 +391,7 @@ export default function AdminPlacesPage() {
         keyField="id"
         autoPageSize
         selection={{ selectedIds, onChange: setSelectedIds, isSelectable: isReviewable }}
+        onRowClick={(row) => navigate(viewPath(row))}
         emptyIcon={Bank}
         empty={rows && rows.length > 0 ? "Matching places will appear here." : "Places will appear here."}
         toolbar={
