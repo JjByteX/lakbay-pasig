@@ -95,14 +95,19 @@ export function NavigationView() {
   return (
     <>
       {/* Right padding clears the map's corner controls (locate, legend) that
-          sit in the top-right corner. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] py-3 pl-3 pr-16">
+          sit in the top-right corner. Top padding is pt-14, the same offset
+          as those controls (top-14 in MapCornerControls), so the banner's top
+          edge lines up with theirs and sits clear of the header. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1000] pb-3 pl-3 pr-16 pt-14">
         <div className={`pointer-events-auto mx-auto w-full max-w-md ${CARD_CLASS}`}>{bannerContent}</div>
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1000] p-3">
-        <div className={`pointer-events-auto mx-auto flex w-full max-w-md items-center justify-between gap-4 ${CARD_CLASS}`}>
-          <div className="min-w-0">
+        <div className={`pointer-events-auto mx-auto flex w-full max-w-md flex-wrap items-center justify-between gap-x-4 gap-y-2 ${CARD_CLASS}`}>
+          {/* min-w-40 keeps the time and distance readable: when the buttons
+              leave less than that (narrow phone, Recenter showing), they drop
+              to their own row instead of squeezing this into a column. */}
+          <div className="min-w-40 flex-1">
             {tripProgress ? (
               <>
                 <p className="text-base font-semibold text-foreground">
@@ -117,7 +122,7 @@ export function NavigationView() {
             )}
             <TrafficNote mode={selectedMode} />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {voiceSupported && (
               <button
                 type="button"

@@ -28,11 +28,11 @@ interface SearchedPlaceCardProps {
   onClose: () => void;
 }
 
-function standInResult(place: SearchedPlace): DiscoverBusiness {
+function standInResult(place: SearchedPlace, label: string): DiscoverBusiness {
   return {
     kind: "business",
     id: `map:${place.coordinates.latitude},${place.coordinates.longitude}`,
-    name: place.name,
+    name: label,
     category: null,
     categoryIcon: null,
     categoryColor: null,
@@ -75,6 +75,13 @@ export function SearchedPlaceCard({ place, userLocation, onRouteFound, onClose }
     };
   }, [place, online]);
 
+  // A dropped pin has no name worth showing (the person just placed it), so
+  // the street address, or the coordinates until it is found, leads the card.
+  // A searched street or landmark keeps its name with the address beneath.
+  const address = foundAddress ?? place.address;
+  const title = place.dropped ? (address ?? "Pinned location") : place.name;
+  const subtitle = place.dropped ? null : address;
+
   async function handleDirections() {
     if (!userLocation) return;
     setStatus("loading");
@@ -88,46 +95,25 @@ export function SearchedPlaceCard({ place, userLocation, onRouteFound, onClose }
       return;
     }
     setStatus("idle");
-    onRouteFound(geometry, standInResult(place));
+    onRouteFound(geometry, standInResult(place, title));
   }
 
+  const directionsLabel = status === "loading" ? "Getting directions…" : "Directions";
+  const directionsIcon =
+    status !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />;
+
+  // Title row on top (with the close button where cards put it), the one
+  // action on its own full-width row beneath, so neither is squeezed.
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1000] p-3">
-      <div className="pointer-events-auto mx-auto flex w-full max-w-md items-start justify-between gap-4 rounded-2xl border border-input bg-card p-4 shadow">
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-foreground">{place.name}</p>
-          {(foundAddress ?? place.address) && (
-            <p className="truncate text-sm text-muted-foreground">{foundAddress ?? place.address}</p>
-          )}
-          {status === "error" && error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-          {!online && <p className="mt-1 text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {userLocation ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-10 gap-2"
-              disabled={status === "loading" || !online}
-              loading={status === "loading"}
-              onClick={() => void handleDirections()}
-            >
-              {status === "loading" ? "Getting directions…" : "Directions"}
-              {status !== "loading" && <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-10 gap-2"
-              onClick={() => handleOpenDirections(standInResult(place))}
-            >
-              Directions
-              <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          )}
+      <div className="pointer-events-auto mx-auto flex w-full max-w-md flex-col gap-4 rounded-2xl border border-input bg-card p-4 shadow">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="line-clamp-2 break-words text-base font-semibold text-foreground">{title}</p>
+            {subtitle && <p className="line-clamp-2 break-words text-sm text-muted-foreground">{subtitle}</p>}
+            {status === "error" && error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+            {!online && <p className="mt-1 text-xs text-muted-foreground">{NEEDS_CONNECTION}</p>}
+          </div>
           <button
             type="button"
             aria-label="Clear place"
@@ -137,6 +123,31 @@ export function SearchedPlaceCard({ place, userLocation, onRouteFound, onClose }
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
+        {userLocation ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-10 w-full gap-2"
+            disabled={status === "loading" || !online}
+            loading={status === "loading"}
+            onClick={() => void handleDirections()}
+          >
+            {directionsLabel}
+            {directionsIcon}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-10 w-full gap-2"
+            onClick={() => handleOpenDirections(standInResult(place, title))}
+          >
+            Directions
+            <ArrowBendUpRight weight="bold" className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
       </div>
     </div>
   );

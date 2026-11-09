@@ -2462,7 +2462,7 @@ export function DiscoverMap({
     const marker = new maplibregl.Marker({ color: palette.mauve })
       .setLngLat([searchedPlace.coordinates.longitude, searchedPlace.coordinates.latitude])
       .addTo(map);
-    marker.getElement().setAttribute("aria-label", searchedPlace.name);
+    marker.getElement().setAttribute("aria-label", searchedPlace.name || "Dropped pin");
     // Grow first so the move is not clamped, and leave the camera alone while
     // a trip is being followed.
     growIfNeeded([searchedPlace.coordinates]);

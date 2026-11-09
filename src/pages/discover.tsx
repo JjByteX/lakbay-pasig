@@ -523,7 +523,10 @@ export default function DiscoverPage() {
         <Label className="px-1 text-sm font-normal text-muted-foreground">
           Categories
         </Label>
-        <div className="grid grid-cols-2 gap-2">
+        {/* Wrapping flex, not a fixed two-column grid: the chips keep their
+            labels (Button is whitespace-nowrap), so a fixed-width cell clips
+            longer names like "Barangay Hall" on a narrow phone. */}
+        <div className="flex flex-wrap gap-2">
           {categoryOptions.map((c) => {
             const Icon = getCategoryIcon(c.icon);
             return (
@@ -580,7 +583,10 @@ export default function DiscoverPage() {
         <Label className="px-1 text-sm font-normal text-muted-foreground">
           Facilities
         </Label>
-        <div className="grid grid-cols-2 gap-2">
+        {/* Wrapping flex, not a fixed two-column grid: the chips keep their
+            labels (Button is whitespace-nowrap), so a fixed-width cell clips
+            longer names like "Barangay Hall" on a narrow phone. */}
+        <div className="flex flex-wrap gap-2">
           {facilityOptions.map((f) => {
             const Icon = getFacilityIcon(f.icon);
             return (
@@ -717,13 +723,16 @@ export default function DiscoverPage() {
           resultsError={resultsError}
           searchedPlace={searchedPlace}
           onDropPin={(coordinates) => {
+            // The person just dropped it, so the search bar stays empty and
+            // the card leads with the address. An empty name still matches the
+            // empty query, so the shell does not clear the pin.
             setSearchedPlace({
-              name: "Dropped pin",
+              name: "",
               address: `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`,
               coordinates,
               dropped: true,
             });
-            setQuery("Dropped pin");
+            setQuery("");
           }}
           onClearPin={() => {
             setQuery("");

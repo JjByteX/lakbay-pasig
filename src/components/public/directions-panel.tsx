@@ -471,6 +471,21 @@ function DirectionsPanelContent({
   // the 44px minimum (ux-ui-guidelines.md, Spacing); desktop keeps 36px.
   const iconButtonSize = collapsible ? "h-12 w-12" : "h-9 w-9";
 
+  // Whether the mobile details area has content below the visible part.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  const updateMoreBelow = () => {
+    const el = scrollRef.current;
+    setMoreBelow(!!el && collapsible && el.scrollHeight - el.scrollTop - el.clientHeight > 1);
+  };
+  // Content changes arrive as renders, so re-check after every one; setState
+  // bails out when the value is unchanged. Window resize covers rotation.
+  useEffect(() => {
+    updateMoreBelow();
+    window.addEventListener("resize", updateMoreBelow);
+    return () => window.removeEventListener("resize", updateMoreBelow);
+  });
+
   return (
     <>
       {/* Phase 3.3: mode row, Car/Bike/Walk in that order per the
@@ -488,7 +503,10 @@ function DirectionsPanelContent({
           style rules ban outright. Unselected: no background until
           hover, matching the `ghost` variant's own token pair. */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        {/* Tighter gaps on mobile: the buttons are rem-sized, so at the default
+            18px root five 54px buttons plus gaps overflowed a 375px phone by a
+            few px and the voice and close buttons dropped to a second row. */}
+        <div className={cn("flex items-center", collapsible ? "gap-1" : "gap-2")}>
           {MODES.map(({ mode, label, icon: Icon }) => {
             const selected = mode === selectedMode;
             // Phase 6.3: a not-yet-selected mode is disabled while a
@@ -524,7 +542,7 @@ function DirectionsPanelContent({
             );
           })}
         </div>
-        <div className="flex items-center gap-1">
+        <div className={cn("flex items-center", collapsible ? "gap-0" : "gap-1")}>
           {/* Voice guidance phase 1: hidden entirely rather than shown
               disabled when this browser has no speechSynthesis (see
               voiceSupported's own doc comment on DirectionsPanelProps
@@ -565,7 +583,12 @@ function DirectionsPanelContent({
       {/* Everything between the mode row and Start. On mobile this is the
           one scroll area (the card is height-capped), so the mode row and
           Start never scroll out of view. */}
-      <div className={cn(collapsible && "min-h-0 flex-1 overflow-y-auto")}>
+      <div className={cn("relative", collapsible && "flex min-h-0 flex-1 flex-col")}>
+      <div
+        ref={scrollRef}
+        onScroll={updateMoreBelow}
+        className={cn(collapsible && "scrollbar-hidden-mobile min-h-0 flex-1 overflow-y-auto")}
+      >
       {/* Phase 3.4/3.5: From/To rows, stacked, matching the reference
           image's circle-then-pin marker pair.
           directions-distance-and-from-phases.md Phase 4.6: From used to
@@ -646,6 +669,15 @@ function DirectionsPanelContent({
           duration/distance row above already covers that case. */}
       {showDetails && !isLoading && !errorReason && steps && steps.length > 0 && (
         <StepList steps={steps} nested={!collapsible} />
+      )}
+      </div>
+      {/* The scrollbar is hidden on mobile, so a soft fade at the bottom edge
+          says there is more below, and goes away at the end of the content. */}
+      {collapsible && moreBelow && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card to-transparent"
+        />
       )}
       </div>
 
