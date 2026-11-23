@@ -43,11 +43,20 @@ export type NeonAuroraProps = Omit<ComponentProps<"canvas">, "children"> & {
  */
 const SMOOTH_TAU = 0.12;
 
+// Default palette comes from the theme tokens (navy, blue, bright blue).
+// Callers can still pass any CSS color.
 const DEFAULT_COLORS: [string, string, string] = [
-  "#0e5f45",
-  "#00e599",
-  "#3b82f6",
+  "hsl(var(--secondary))",
+  "hsl(var(--primary))",
+  "hsl(var(--ring))",
 ];
+
+// A canvas fillStyle does not resolve CSS variables, so swap each var(--x)
+// for its computed value before parsing.
+const resolveCssVars = (css: string) =>
+  css.replace(/var\((--[\w-]+)\)/g, (_match, name: string) =>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  );
 
 const parseColor = (css: string): [number, number, number] => {
   const probe = document.createElement("canvas");
@@ -59,7 +68,7 @@ const parseColor = (css: string): [number, number, number] => {
     return [0, 0.9, 0.6];
   }
 
-  context.fillStyle = css;
+  context.fillStyle = resolveCssVars(css);
   context.fillRect(0, 0, 1, 1);
   const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
   return [(r ?? 0) / 255, (g ?? 0) / 255, (b ?? 0) / 255];

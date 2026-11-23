@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import maplibregl from "maplibre-gl";
-import { GpsFix, MapPin, Plus, Minus } from "@phosphor-icons/react";
+import { GpsFix, MapPin, NavigationArrow, Plus, Minus } from "@phosphor-icons/react";
 import {
   motion,
   useMotionValue,
@@ -1897,17 +1897,20 @@ export function DiscoverMap({
       dot.className =
         "relative h-3.5 w-3.5 rounded-full border-2 border-white bg-primary shadow-md user-location-pulse";
 
-      // Navigation arrow: a filled chevron with a white border, in the same
-      // --primary token as the dot. Hidden until navigation starts. One inline
-      // transform (centering + rotation), same reason as the cone above.
+      // Navigation arrow: Phosphor's NavigationArrow, filled, in the same
+      // --primary token as the dot, rendered outside React like the other
+      // marker icons. The glyph points up-left, so rotate-45 makes it face
+      // up at a rotation of 0. Hidden until navigation starts. One inline
+      // transform (centering + route bearing), same reason as the cone above.
       const arrow = document.createElement("div");
       arrow.className =
         "absolute left-1/2 top-1/2 h-8 w-8 pointer-events-none opacity-0 transition-opacity duration-300";
       arrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
       arrow.style.transformOrigin = "center";
-      arrow.style.filter = "drop-shadow(0 1px 2px rgba(0,0,0,0.35))";
-      arrow.innerHTML =
-        '<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><path d="M12 2.5 20.5 21 12 16.5 3.5 21Z" stroke="white" stroke-width="2" stroke-linejoin="round" style="fill:hsl(var(--primary))"/></svg>';
+      arrow.style.filter = "drop-shadow(0 1px 2px hsl(var(--foreground) / 0.35))";
+      arrow.innerHTML = renderToStaticMarkup(
+        <NavigationArrow weight="fill" className="block h-8 w-8 rotate-45 text-primary" aria-hidden="true" />,
+      );
       userMarkerDotRef.current = dot;
       userMarkerArrowRef.current = arrow;
 

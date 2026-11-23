@@ -23,9 +23,9 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 // for half a second. It plays once shortly after load, then on hover.
 const GLITCH_SHADOWS = [
   "0px 0 0 transparent, 0px 0 0 transparent",
-  "3px 0 0 #DD0000, -3px 0 0 #1175BE",
-  "-2px 0 0 #DD0000, 2px 0 0 #1175BE",
-  "2px 0 0 #DD0000, -2px 0 0 #1175BE",
+  "3px 0 0 hsl(var(--brand-red)), -3px 0 0 hsl(var(--brand-blue))",
+  "-2px 0 0 hsl(var(--brand-red)), 2px 0 0 hsl(var(--brand-blue))",
+  "2px 0 0 hsl(var(--brand-red)), -2px 0 0 hsl(var(--brand-blue))",
   "0px 0 0 transparent, 0px 0 0 transparent",
 ];
 
@@ -50,7 +50,7 @@ export function GlitchWord({ children }: Readonly<{ children: ReactNode }>) {
 // must be `relative` and put its content above this with z-10.
 const SHAPES = [
   "h-14 w-14 rounded-full bg-primary",
-  "h-16 w-10 rounded-t-full bg-[#A24C43]",
+  "h-16 w-10 rounded-t-full bg-brick",
   "h-14 w-14 rounded-tl-full bg-destructive",
   "h-10 w-20 rounded-t-full bg-secondary",
 ] as const;
@@ -125,8 +125,7 @@ export function AsciiRiver() {
   return (
     <div
       aria-hidden="true"
-      className="select-none overflow-hidden font-mono text-sm leading-6 text-muted-foreground/50"
-      style={{ maskImage: "linear-gradient(90deg, transparent, black 15%, black 85%, transparent)" }}
+      className="mask-fade-x select-none overflow-hidden font-mono text-sm leading-6 text-muted-foreground/50"
     >
       {[0, 1].map((row) => (
         <motion.div

@@ -57,6 +57,13 @@
        panels, makes it read as a deliberate backdrop. */
     --landing-backdrop: 210 30% 88%;
 
+    /* Pasig brand colors that look the same in both themes, unlike
+       --destructive and --accent-foreground, which lift in dark mode. Used by
+       the landing motifs (components/public/pasig-motifs.tsx). */
+    --brand-red: 0 100% 43%;
+    --brand-blue: 205 84% 41%;
+    --brand-brick: 6 41% 45%;
+
     /* Category colors. An admin picks one per Place and Business category,
        and the Discover map fills the marker, colors its label, and tints
        the legend with it. The category tables store the key (red, teal),
@@ -542,4 +549,18 @@
 
 ::view-transition-new(root) {
   z-index: 2;
+}
+
+/* Edge fades for decorative layers. Masks, not colors: the layer fades to
+   transparent, whatever sits behind it shows through. .mask-fade-x fades both
+   left and right edges, .mask-fade-up fades from solid at the bottom to
+   nothing at the top. */
+.mask-fade-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 15%, black 85%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 15%, black 85%, transparent);
+}
+
+.mask-fade-up {
+  -webkit-mask-image: linear-gradient(to top, black 0%, transparent 100%);
+  mask-image: linear-gradient(to top, black 0%, transparent 100%);
 }
