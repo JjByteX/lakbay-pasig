@@ -695,12 +695,12 @@ export default function LandingPage() {
             <RevealText
               as="h1"
               items={REVEAL.timed[0]}
-              className="text-5xl font-semibold text-primary-foreground lg:text-6xl"
+              className="text-5xl font-semibold text-primary-foreground lg:text-6xl [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
             />
             <RevealText
               as="p"
               items={REVEAL.timed[1]}
-              className="max-w-xl text-base text-primary-foreground/85 lg:text-xl"
+              className="max-w-xl text-base text-primary-foreground/85 lg:text-xl [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
             />
           </div>
 
@@ -778,8 +778,8 @@ export default function LandingPage() {
             }`}
           >
             <div className={`relative z-0 flex flex-col gap-6 ${featuresBody ? "items-center text-center md:max-w-[44%] md:items-start md:text-left" : "items-center"}`}>
-              <h2 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">See what is waiting for you</h2>
-              <p className="max-w-lg text-lg text-primary-foreground/85">
+              <h2 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]">See what is waiting for you</h2>
+              <p className="max-w-lg text-lg text-primary-foreground/85 [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]">
                 <span className="block">Sign in to unlock trails and events,</span>
                 <span className="block">or browse the city as a guest.</span>
               </p>

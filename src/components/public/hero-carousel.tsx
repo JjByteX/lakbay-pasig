@@ -331,7 +331,7 @@ function CaptionOverlay({ caption }: Readonly<{ caption: string }>) {
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/70 via-black/35 to-transparent"
       />
-      <span className="pointer-events-none absolute inset-x-3 bottom-3 line-clamp-2 text-sm font-semibold text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.45)] sm:inset-x-4 sm:bottom-4 sm:text-base">
+      <span className="pointer-events-none absolute inset-x-3 bottom-3 line-clamp-2 text-sm font-semibold text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.2)] sm:inset-x-4 sm:bottom-4 sm:text-base">
         {caption}
       </span>
     </>

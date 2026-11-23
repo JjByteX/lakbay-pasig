@@ -200,7 +200,7 @@ export function LandingPhotoFan({
                     type="button"
                     onClick={() => onSelect(item)}
                     aria-label={item.name}
-                    className="block h-full w-full overflow-hidden rounded-2xl border border-primary-foreground/20 bg-primary-foreground/15 shadow-lg transition-transform duration-300 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="block h-full w-full overflow-hidden rounded-2xl border border-primary-foreground/20 bg-primary-foreground/15 shadow-[0_4px_24px_rgb(0_0_0/0.18)] transition-transform duration-300 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <img src={item.coverPhotoUrl ?? ""} alt="" className="h-full w-full object-cover" draggable={false} />
                   </button>
