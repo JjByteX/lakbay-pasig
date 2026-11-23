@@ -822,9 +822,17 @@ function MapCornerControls({
   onLocationFound,
   onRecenterRequested,
   onNorthUp,
+  northUpActive = false,
+  onHeadingUp,
   raised = false,
+  hideButtons = false,
 }: Readonly<{
   map: maplibregl.Map | null;
+  // Mobile directions session: the legend and locate buttons give their
+  // corner back to the route and the navigation banner. The compass stays,
+  // it is the only way to the north-up overview and shows only when the map
+  // is turned.
+  hideButtons?: boolean;
   // While navigating no status pill competes for the top of the map, so the
   // controls move up to top-8, level with the navigation banner
   // (navigation-banner.tsx, pt-8). Otherwise they stay at top-14, clear of
@@ -845,6 +853,10 @@ function MapCornerControls({
   onRecenterRequested?: () => void;
   // Navigation: the compass was tapped, so the map is going north up.
   onNorthUp?: () => void;
+  // Navigation: the map is held north up. The compass stays on screen in that
+  // state, and a tap goes back to heading-up (and the driving tilt).
+  northUpActive?: boolean;
+  onHeadingUp?: () => void;
 }>) {
   const [legendOpen, setLegendOpen] = useState(false);
   const [locateStatus, setLocateStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -898,6 +910,7 @@ function MapCornerControls({
 
   return (
     <div className={cn("absolute right-3 z-[1000] flex flex-col items-end gap-2", raised ? "top-8" : "top-14")}>
+      {!hideButtons && (
       <div className="relative flex flex-col items-center rounded-2xl border border-input bg-card shadow">
         {/* 1.8: disabled with a muted icon while categories are still
             resolving, same "visibly disabled, not silently unresponsive"
@@ -938,10 +951,11 @@ function MapCornerControls({
           />
         )}
       </div>
+      )}
 
-      <CompassControl map={map} onNorthUp={onNorthUp} />
+      <CompassControl map={map} onNorthUp={onNorthUp} northUpActive={northUpActive} onHeadingUp={onHeadingUp} />
 
-      {locateStatus === "error" && locateError && (
+      {!hideButtons && locateStatus === "error" && locateError && (
         <span className="max-w-56 break-words rounded-md border border-border bg-card px-3 py-1.5 text-right text-xs text-destructive shadow">
           {locateError}
         </span>
@@ -958,7 +972,14 @@ function MapCornerControls({
 function CompassControl({
   map,
   onNorthUp,
-}: Readonly<{ map: maplibregl.Map | null; onNorthUp?: () => void }>) {
+  northUpActive,
+  onHeadingUp,
+}: Readonly<{
+  map: maplibregl.Map | null;
+  onNorthUp?: () => void;
+  northUpActive?: boolean;
+  onHeadingUp?: () => void;
+}>) {
   const [bearing, setBearing] = useState(0);
   useEffect(() => {
     if (!map) return;
@@ -972,7 +993,11 @@ function CompassControl({
 
   // Half a degree of slack: a twist that ends a hair off north should not
   // leave a compass showing for no visible reason.
-  if (!map || Math.abs(bearing) < 0.5) return null;
+  // The one exception is navigation held north up: the map is at north on
+  // purpose, and this button is how the person goes back to heading-up.
+  const atNorth = Math.abs(bearing) < 0.5;
+  if (!map || (atNorth && !northUpActive)) return null;
+  const backToHeadingUp = atNorth && !!northUpActive;
 
   return (
     <Button
@@ -980,8 +1005,12 @@ function CompassControl({
       variant="ghost"
       size="icon"
       className="h-9 w-9 rounded-full border border-input bg-card shadow hover:bg-muted"
-      aria-label="Reset map to north"
+      aria-label={backToHeadingUp ? "Face direction of travel" : "Reset map to north"}
       onClick={() => {
+        if (backToHeadingUp) {
+          onHeadingUp?.();
+          return;
+        }
         map.easeTo({ bearing: 0 });
         onNorthUp?.();
       }}
@@ -2340,13 +2369,21 @@ export function DiscoverMap({
   // fit still has room to work in a short viewport.
   const bottomCoverRef = useRef(bottomCover);
   bottomCoverRef.current = bottomCover;
+  // On mobile the legend and locate buttons are hidden for a whole Directions
+  // session (MapCornerControls), so the route does not need to keep the right
+  // edge clear for them and fits as wide as the left.
+  const hideCornerButtons = isMobile && (!!directionsPanelResult || navigating);
   const fitPadding = () => {
+    const base = {
+      ...ROUTE_FIT_PADDING,
+      right: isMobile ? ROUTE_FIT_PADDING.left : ROUTE_FIT_PADDING.right,
+    };
     const container = containerRef.current;
-    if (!container) return { ...ROUTE_FIT_PADDING };
+    if (!container) return base;
     const rect = container.getBoundingClientRect();
     const overlap = Math.max(0, bottomCoverRef.current - (window.innerHeight - rect.bottom));
     return {
-      ...ROUTE_FIT_PADDING,
+      ...base,
       bottom: ROUTE_FIT_PADDING.bottom + Math.min(overlap, rect.height * ROUTE_FIT_MAX_COVER_RATIO),
     };
   };
@@ -2864,7 +2901,10 @@ export function DiscoverMap({
         onNorthUp={() => {
           if (navigating) setNorthUp(true);
         }}
+        northUpActive={navigating && northUp}
+        onHeadingUp={() => setNorthUp(false)}
         raised={navigating}
+        hideButtons={hideCornerButtons}
       />
 
       {/* Bottom-right +/- zoom pill, desktop only, per direct instruction
