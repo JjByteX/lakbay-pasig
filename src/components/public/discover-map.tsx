@@ -404,6 +404,12 @@ function layoutMarkers(
 // ahead shows), and how long each ease runs (about one GPS tick, linear).
 const FOLLOW_ZOOM: Record<TravelMode, number> = { car: 16, bike: 17, foot: 18 };
 const FOLLOW_LOOKAHEAD_PX = 96;
+// Driving gets a chase camera: tilted so the road ahead fills the screen and
+// the car sits low, like a car navigation view. Bike and walking stay flat
+// heading-up, where a tilt would only hide the street around the person.
+const CHASE_PITCH = 55;
+const CHASE_ZOOM = 17;
+const CHASE_LOOKAHEAD_PX = 150;
 // Route fit padding, px, all on the 8px grid. Top clears the status pill;
 // right clears the legend/locate/compass column (12px inset + 36px wide, plus
 // a marker radius); left needs only breathing room; bottom is breathing room
@@ -1541,11 +1547,14 @@ export function DiscoverMap({
       // maxBounds still assumes north up, so while the map is turned the
       // corners of the screen can show a little past the box. The camera
       // center stays inside it, which is the part that matters. Tilt stays
-      // off (maxPitch 0): this is a flat map, and tilting would make the
-      // markers and labels hard to read.
+      // off (maxPitch 0, no touch tilt): this is a flat map, and tilting
+      // would make the markers and labels hard to read. The one exception is
+      // the driving chase camera, which raises maxPitch only while it runs
+      // (follow camera effect below) and puts it back when navigation ends.
       maxBounds: BASE_BOUNDS,
       dragRotate: true,
       pitchWithRotate: false,
+      touchPitch: false,
       maxPitch: 0,
       attributionControl: {
         // locate-me-and-directions-phases.md Phase 3.8: OSRM/OSM ODbL credit
@@ -1564,7 +1573,7 @@ export function DiscoverMap({
     mapRef.current = map;
     // Rotation is left on for the two finger twist and the keyboard too
     // (MapLibre's defaults), so there is nothing to disable here. Tilt is
-    // already off through maxPitch above.
+    // already off through maxPitch and touchPitch above.
     // Zoom control: see mapInstance's own declaration comment above --
     // this is the one write that carries the map instance across a
     // render boundary so ZoomControl's prop actually receives it.
@@ -1705,6 +1714,16 @@ export function DiscoverMap({
   // reports none. Kept in a ref so the cone can be re-aimed on every map
   // rotation, not only on a GPS tick.
   const userHeadingRef = useRef<number | null>(null);
+  // Navigation: while a trip is running the dot and cone give way to an
+  // arrow, like a car navigation view. navArrowBearingRef holds the route's
+  // compass bearing ahead of the person (null when not navigating, which also
+  // means "show the dot"). The arrow lies flat on the map (map-aligned marker),
+  // so in the tilted chase view it looks painted on the road, and it turns with
+  // the map, so its own angle is the route bearing itself.
+  const userMarkerDotRef = useRef<HTMLDivElement | null>(null);
+  const userMarkerArrowRef = useRef<HTMLDivElement | null>(null);
+  const navArrowBearingRef = useRef<number | null>(null);
+  const markerMapAlignedRef = useRef(false);
   // The cone sits in a marker, which stays upright on screen when the map
   // turns. So the angle drawn is the heading minus the map's bearing: with the
   // map turned 90 degrees, someone facing north has the cone pointing up-left
@@ -1714,7 +1733,7 @@ export function DiscoverMap({
     const cone = userMarkerConeRef.current;
     if (!cone) return;
     const heading = userHeadingRef.current;
-    if (heading === null) {
+    if (heading === null || navArrowBearingRef.current !== null) {
       cone.style.opacity = "0";
       return;
     }
@@ -1724,11 +1743,39 @@ export function DiscoverMap({
     // where this transform is first set.
     cone.style.transform = `translate(-50%, -50%) rotate(${heading - bearing}deg)`;
   };
+  // Swaps the dot for the arrow while navigating, and back afterwards. The
+  // marker is lying on the map only while the arrow shows, so the dot and cone
+  // keep their upright, screen-facing look the rest of the time.
+  const applyArrow = () => {
+    const arrow = userMarkerArrowRef.current;
+    const dot = userMarkerDotRef.current;
+    const marker = userMarkerRef.current;
+    if (!arrow || !dot || !marker) return;
+    const bearing = navArrowBearingRef.current;
+    const wantMapAligned = bearing !== null;
+    if (wantMapAligned !== markerMapAlignedRef.current) {
+      markerMapAlignedRef.current = wantMapAligned;
+      marker.setRotationAlignment(wantMapAligned ? "map" : "auto");
+      marker.setPitchAlignment(wantMapAligned ? "map" : "auto");
+    }
+    if (bearing === null) {
+      arrow.style.opacity = "0";
+      dot.style.opacity = "1";
+      return;
+    }
+    arrow.style.opacity = "1";
+    dot.style.opacity = "0";
+    arrow.style.transform = `translate(-50%, -50%) rotate(${bearing}deg)`;
+  };
+  const applyMarkerRotation = () => {
+    applyConeRotation();
+    applyArrow();
+  };
   useEffect(() => {
     if (!mapInstance) return;
-    mapInstance.on("rotate", applyConeRotation);
+    mapInstance.on("rotate", applyMarkerRotation);
     return () => {
-      mapInstance.off("rotate", applyConeRotation);
+      mapInstance.off("rotate", applyMarkerRotation);
     };
   }, [mapInstance]);
 
@@ -1850,8 +1897,23 @@ export function DiscoverMap({
       dot.className =
         "relative h-3.5 w-3.5 rounded-full border-2 border-white bg-primary shadow-md user-location-pulse";
 
+      // Navigation arrow: a filled chevron with a white border, in the same
+      // --primary token as the dot. Hidden until navigation starts. One inline
+      // transform (centering + rotation), same reason as the cone above.
+      const arrow = document.createElement("div");
+      arrow.className =
+        "absolute left-1/2 top-1/2 h-8 w-8 pointer-events-none opacity-0 transition-opacity duration-300";
+      arrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
+      arrow.style.transformOrigin = "center";
+      arrow.style.filter = "drop-shadow(0 1px 2px rgba(0,0,0,0.35))";
+      arrow.innerHTML =
+        '<svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true"><path d="M12 2.5 20.5 21 12 16.5 3.5 21Z" stroke="white" stroke-width="2" stroke-linejoin="round" style="fill:hsl(var(--primary))"/></svg>';
+      userMarkerDotRef.current = dot;
+      userMarkerArrowRef.current = arrow;
+
       wrapper.appendChild(cone);
       wrapper.appendChild(dot);
+      wrapper.appendChild(arrow);
 
       userMarkerRef.current = new maplibregl.Marker({ element: wrapper })
         .setLngLat([dotPosition.longitude, dotPosition.latitude])
@@ -1869,7 +1931,8 @@ export function DiscoverMap({
     // stale or fabricated direction.
     userHeadingRef.current =
       typeof userLocation.heading === "number" && !Number.isNaN(userLocation.heading) ? userLocation.heading : null;
-    applyConeRotation();
+    navArrowBearingRef.current = navigating && tripProgress ? tripProgress.bearingAheadDegrees : null;
+    applyMarkerRotation();
     // customFrom is a dependency so the effect also runs once when a From
     // is *cleared* (Cancel): with the guard now open, and isFirstFix long
     // since true, it takes the isExplicitRecenter path only if a locate
@@ -1889,7 +1952,8 @@ export function DiscoverMap({
   // camera eases to the snapped position, turned to the bearing of the route
   // ahead (heading-up) with the person a little below center, or kept north-up
   // after a compass tap. This is a separate path from the recenter effect
-  // above, which keeps standing down during directions.
+  // above, which keeps standing down during directions. Driving also tilts the
+  // camera (the chase view, CHASE_PITCH); the other modes stay flat.
   //
   // Zoom is applied once when following starts (or resumes), not on every
   // tick, so a pinch zoom is respected until Recenter. Dragging or turning the
@@ -1907,9 +1971,18 @@ export function DiscoverMap({
       return;
     }
     if (wasNavigatingRef.current) {
-      // Navigation ended: put the map back to north up.
+      // Navigation ended: put the map back to north up and flat, then take
+      // tilt away again. maxPitch only drops once the map is actually flat,
+      // so it never snaps the view; if another move interrupts this one the
+      // pitch is not flat yet and maxPitch simply stays until next time.
       wasNavigatingRef.current = false;
-      mapRef.current?.easeTo({ bearing: 0 });
+      const map = mapRef.current;
+      if (map) {
+        map.easeTo({ bearing: 0, pitch: 0 });
+        map.once("moveend", () => {
+          if (map.getPitch() < 0.5) map.setMaxPitch(0);
+        });
+      }
     }
   }, [navigating]);
 
@@ -1926,9 +1999,11 @@ export function DiscoverMap({
     };
     mapInstance.on("dragstart", stopFollowing);
     mapInstance.on("rotatestart", stopFollowing);
+    mapInstance.on("pitchstart", stopFollowing);
     return () => {
       mapInstance.off("dragstart", stopFollowing);
       mapInstance.off("rotatestart", stopFollowing);
+      mapInstance.off("pitchstart", stopFollowing);
     };
   }, [mapInstance, navigating, setFollowing]);
 
@@ -1938,15 +2013,22 @@ export function DiscoverMap({
     const target = tripProgress.snappedPosition;
     // map-bounds-plan.md: grow first, so the camera is not clamped to the old box.
     growIfNeeded([target]);
+    // Driving, heading-up: tilted chase camera. North up (compass tap) goes
+    // back to a flat top-down view, as do bike and walking.
+    const chase = selectedMode === "car" && !northUp;
+    if (chase && map.getMaxPitch() < CHASE_PITCH) map.setMaxPitch(CHASE_PITCH);
+    let lookahead = 0;
+    if (!northUp) lookahead = chase ? CHASE_LOOKAHEAD_PX : FOLLOW_LOOKAHEAD_PX;
     const options: Parameters<maplibregl.Map["easeTo"]>[0] = {
       center: [target.longitude, target.latitude],
       bearing: northUp ? 0 : tripProgress.bearingAheadDegrees,
-      offset: northUp ? [0, 0] : [0, FOLLOW_LOOKAHEAD_PX],
+      pitch: chase ? CHASE_PITCH : 0,
+      offset: [0, lookahead],
       duration: FOLLOW_EASE_MS,
       easing: (t: number) => t,
     };
     if (followZoomPendingRef.current) {
-      options.zoom = FOLLOW_ZOOM[selectedMode];
+      options.zoom = chase ? CHASE_ZOOM : FOLLOW_ZOOM[selectedMode];
       followZoomPendingRef.current = false;
     }
     map.easeTo(options);
@@ -1960,6 +2042,9 @@ export function DiscoverMap({
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
       userMarkerConeRef.current = null;
+      userMarkerDotRef.current = null;
+      userMarkerArrowRef.current = null;
+      markerMapAlignedRef.current = false;
     };
   }, []);
 
