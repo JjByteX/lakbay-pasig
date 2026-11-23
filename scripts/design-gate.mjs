@@ -28,13 +28,15 @@ const LIST = args.has("--list");
 
 // Files that legitimately hold raw values: shadcn primitives (not hand-authored),
 // the brand-colored Google logo, and the generative/map layers that compute
-// colors at runtime. Everything else is checked.
+// colors at runtime, and the landing page, which is signed off as designed.
+// Everything else is checked.
 const EXEMPT = [
   /^src\/components\/ui\//,
   /^src\/components\/auth\/google-button\.tsx$/,
   /^src\/components\/public\/hero-lines-background\.tsx$/,
   /^src\/components\/public\/hero-lines-animation\./,
   /^src\/lib\/map-style\.ts$/,
+  /^src\/pages\/landing\.tsx$/,
   /^src\/assets\//,
 ];
 

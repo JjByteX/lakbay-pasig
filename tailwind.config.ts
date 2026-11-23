@@ -180,6 +180,7 @@ export default {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
+        brick: "hsl(var(--brand-brick))",
       },
       borderRadius: {
         lg: "var(--radius)",

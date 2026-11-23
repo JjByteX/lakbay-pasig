@@ -317,15 +317,12 @@ function useContainerWidth(ref: React.RefObject<HTMLElement | null>) {
 // white because it sits on a photo, not on the theme. Both layers ignore the
 // pointer so drag and click still reach the tile. Spans only: HeroTile is a
 // button, where a <p> or <div> is invalid HTML.
-const BLUR_MASK = "linear-gradient(to top, black 0%, transparent 100%)";
-
 function CaptionOverlay({ caption }: Readonly<{ caption: string }>) {
   return (
     <>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 backdrop-blur-[3px]"
-        style={{ WebkitMaskImage: BLUR_MASK, maskImage: BLUR_MASK }}
+        className="mask-fade-up pointer-events-none absolute inset-x-0 bottom-0 h-2/5 backdrop-blur-[3px]"
       />
       <span
         aria-hidden="true"

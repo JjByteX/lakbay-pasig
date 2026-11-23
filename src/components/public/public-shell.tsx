@@ -1019,6 +1019,15 @@ function MobileShell({
   // While offline the notice sits under the header and the content moves down
   // by its height, so no page needs to know about it.
   const online = useOnline();
+  // While a Directions session is open on the Discover map, the header (search
+  // row and filter handle) is hidden: the directions panel has its own From
+  // picker and Cancel, and the navigation banner replaces the top of the
+  // screen, so the search row only costs the map 56px. The session is
+  // shell-owned and survives leaving Discover, so this is keyed on the route
+  // too: any other page gets its header back. The bottom nav stays.
+  const { directionsPanelResult, navigating } = useDirections();
+  const onDiscoverMap = location.pathname === "/discover" || location.pathname === "/discover/";
+  const hideHeader = onDiscoverMap && (directionsPanelResult !== null || navigating);
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
@@ -1032,6 +1041,7 @@ function MobileShell({
           other route never registers filter content, so
           HeaderFilterArea renders nothing and the header's height
           there is exactly the search row's own height. */}
+      {!hideHeader && (
       <header className="fixed inset-x-0 top-0 z-40 flex flex-col bg-background px-4">
         <div className="mx-auto flex h-14 w-full max-w-md shrink-0 items-center gap-2">
           {/* Logo: always visible top-left on every tab including
@@ -1073,6 +1083,7 @@ function MobileShell({
         </div>
         <HeaderFilterArea content={discoverFilters} />
       </header>
+      )}
       {/* Fixed top-14, the header's own resting (closed) height. The
           map/list underneath never moves or resizes as the header's
           filter area opens -- the header simply grows over top of
@@ -1082,13 +1093,15 @@ function MobileShell({
           whether or not the page scrolls, so a tab that is taller than the
           screen (a Products grid) doesn't shrink the page and shift the
           centred content sideways when it appears. */}
-      <OfflineNotice className="fixed inset-x-0 top-14 z-30" />
+      <OfflineNotice className={cn("fixed inset-x-0 z-30", hideHeader ? "top-0" : "top-14")} />
       <main
         className={cn(
           // bottom-12 matches BottomNav's h-12; bottom-16 left a 1rem gap
           // between the map and the nav.
           "fixed inset-x-0 bottom-12",
-          online ? "top-14" : "top-[calc(3.5rem+var(--offline-notice-height))]",
+          // No header while directions are open: the map starts at the top.
+          online && (hideHeader ? "top-0" : "top-14"),
+          !online && (hideHeader ? "top-[var(--offline-notice-height)]" : "top-[calc(3.5rem+var(--offline-notice-height))]"),
           pagerIndex === -1 ? "overflow-y-auto [scrollbar-gutter:stable]" : "overflow-hidden",
         )}
       >
